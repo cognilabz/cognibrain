@@ -1,0 +1,88 @@
+{
+  "name": "cognibrain",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "TypeScript memory layer for inspectable AI-agent recall and benchmark proof.",
+  "bin": {
+    "cognibrain": "./bin/cognibrain.mjs"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "src/",
+    "templates/",
+    "docs/",
+    "docker/",
+    ".env.example",
+    "bootstrap.sh",
+    "CONTRIBUTING.md",
+    "Makefile",
+    "index.html",
+    "vite.config.ts",
+    "tsconfig.json",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "PRODUCT.md",
+    "DESIGN.md"
+  ],
+  "scripts": {
+    "dev": "tsx src/api/server.ts",
+    "dashboard": "vite --host 0.0.0.0",
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "eval": "tsx src/eval/run.ts",
+    "benchmark:locomo": "tsx src/eval/locomo.ts",
+    "benchmark:longmemeval": "tsx src/eval/longmemeval.ts",
+    "benchmark:beam": "tsx src/eval/beam.ts",
+    "benchmark:beam:500k": "tsx src/eval/beam.ts --split 500K --top-k 20 --out artifacts/beam-500k-report.json",
+    "benchmark:market": "tsx src/eval/marketGate.ts",
+    "benchmark:certified": "npm run benchmark:locomo -- --top-k 20 && npm run benchmark:longmemeval -- --top-k 20 && npm run benchmark:beam -- --split 100K --top-k 20 && npm run benchmark:beam:500k && npm run benchmark:market",
+    "verify": "npm run test && npm run eval && npm run build",
+    "cli": "tsx src/cli/memctl.ts",
+    "mcp": "tsx src/connectors/mcpServer.ts",
+    "doctor": "node bin/cognibrain.mjs doctor",
+    "doctor:publish": "node bin/cognibrain.mjs doctor --publish",
+    "setup": "node bin/cognibrain.mjs setup",
+    "clean": "node bin/cognibrain.mjs clean",
+    "start:local": "node scripts/start-local.mjs",
+    "start:daemon": "node scripts/start-local.mjs --daemon",
+    "stop:local": "node scripts/start-local.mjs --stop",
+    "status:local": "node scripts/start-local.mjs --status",
+    "install:codex-skill": "node scripts/install-codex-skill.mjs"
+  },
+  "keywords": [
+    "memory",
+    "agents",
+    "cognilabz",
+    "cognibrain",
+    "coding-harness",
+    "retrieval",
+    "agent-memory",
+    "typescript"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^8.0.14",
+    "zod": "^3.25.76",
+    "tsx": "^4.20.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "@types/react": "^18.3.27",
+    "@types/react-dom": "^18.3.7",
+    "playwright": "^1.60.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7"
+  }
+}

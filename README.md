@@ -1,0 +1,294 @@
+<p align="center">
+  <img src="docs/assets/cognilabz-logo.png" alt="Cognilabz logo" width="96" height="96">
+</p>
+
+<h1 align="center">cognibrain</h1>
+
+<p align="center">
+  <strong>Inspectable memory infrastructure for AI agents.</strong>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#proof">Proof</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#documentation">Documentation</a>
+</p>
+
+cognibrain is a local-first TypeScript memory layer for AI agents that need durable context without opaque recall. It stores memories with source quality, trust, citations, lifecycle state, and retrieval evidence so teams can see why an agent remembers something before that memory influences real work.
+
+The project includes the memory engine, HTTP API, CLI, MCP connector, harness hook, dashboard, benchmark suite, and a self-maintenance loop called `dream`.
+
+![cognibrain desktop dashboard](docs/assets/dashboard-desktop.png)
+
+![cognibrain mobile dashboard](docs/assets/dashboard-mobile.png)
+
+## Interface Tour
+
+| Memory workbench | Recall QA |
+| --- | --- |
+| ![cognibrain memory workbench](docs/assets/dashboard-workbench.png) | ![cognibrain recall QA](docs/assets/dashboard-recall.png) |
+
+| Dream cycle | Benchmark proof |
+| --- | --- |
+| ![cognibrain dream cycle](docs/assets/dashboard-lifecycle.png) | ![cognibrain benchmark proof](docs/assets/dashboard-benchmarks.png) |
+
+## Why cognibrain
+
+Agent memory often fails in one of two ways: it is either a simple vector search that misses time, trust, and contradictions, or a vague long-term summary that cannot be audited. cognibrain is built for operational memory: compact enough to use, structured enough to inspect, and measurable enough to improve.
+
+It is designed for teams that care about:
+
+- source-aware recall instead of unqualified chat-history reuse,
+- ranked evidence with citations and trust signals,
+- lifecycle maintenance for stale or contradictory facts,
+- clear integration surfaces for coding agents and AI workflows,
+- reproducible benchmark gates instead of unsupported memory claims.
+
+## Dashboard
+
+The dashboard is a working inspection surface, not a decorative demo. Each section has a purpose:
+
+| Section | Why it exists |
+| --- | --- |
+| Health metrics | Shows whether the memory store is fresh, trusted, and active. |
+| Recall QA | Lets a user test the exact context an agent would receive. |
+| Dream cycle | Proves memory hygiene by summarizing, fading, reflecting, and reorganizing facts. |
+| Ranked evidence | Exposes score, citation, and trust for each retrieved memory. |
+| Benchmark evidence | Keeps local and public market proof visible. |
+| Artifact inspector | Lets benchmark JSON be checked without leaving the UI. |
+
+## Quick Start
+
+Requirements:
+
+- Node.js 20 or newer
+- npm
+
+One command from this checkout:
+
+```bash
+./bootstrap.sh --all
+```
+
+Or use the CLI directly:
+
+```bash
+npm install
+./bin/cognibrain.mjs setup --all-harnesses
+```
+
+After publishing the package, the same one-click path is:
+
+```bash
+npx cognibrain setup --all-harnesses
+```
+
+`setup` installs the Codex Skill, optionally writes MCP configs for Codex, Claude, Cursor, and VS Code, starts the API plus dashboard, and runs `doctor`.
+
+Then open the printed dashboard URL. Runtime and publish helpers:
+
+```bash
+./bin/cognibrain.mjs status
+./bin/cognibrain.mjs doctor --publish
+./bin/cognibrain.mjs stop
+./bin/cognibrain.mjs skill install
+./bin/cognibrain.mjs clean
+```
+
+## Usage
+
+Add a memory:
+
+```bash
+./bin/cognibrain.mjs memory add "Project Atlas uses TypeScript for all harness components."
+```
+
+Search memory:
+
+```bash
+./bin/cognibrain.mjs memory search "What language does Atlas use?"
+```
+
+Run the maintenance cycle:
+
+```bash
+./bin/cognibrain.mjs memory dream
+```
+
+Check health:
+
+```bash
+./bin/cognibrain.mjs memory health
+```
+
+Check automatic maintenance:
+
+```bash
+./bin/cognibrain.mjs memory maintenance
+```
+
+## API
+
+Create a memory:
+
+```bash
+curl -X POST http://localhost:8787/memories \
+  -H "content-type: application/json" \
+  -d '{
+    "userId": "dev",
+    "content": "Project Atlas uses TypeScript for all harness components.",
+    "source": {"kind": "human", "confidence": 0.96},
+    "tags": ["project", "typescript"]
+  }'
+```
+
+Search:
+
+```bash
+curl -X POST http://localhost:8787/search \
+  -H "content-type: application/json" \
+  -d '{"userId": "dev", "query": "What language should Atlas use?", "limit": 5}'
+```
+
+Dream:
+
+```bash
+curl -X POST http://localhost:8787/dream \
+  -H "content-type: application/json" \
+  -d '{"userId": "dev"}'
+```
+
+## Memory Lifecycle
+
+The `dream` cycle is the self-maintenance loop for the memory store:
+
+- Rethink repeated or contradictory memories.
+- Reevaluate source confidence, usage, and remaining issues.
+- Summarize repeated themes into auditable reflection memories.
+- Fade stale low-utility memories.
+- Reflect on contradictions and demote weaker claims.
+- Reorganize procedures, transcripts, and stable facts into better layers.
+
+Pinned memories are never faded or archived.
+
+## Connectors
+
+cognibrain exposes four integration surfaces:
+
+- HTTP API for apps and services,
+- CLI for local scripts,
+- TypeScript harness hook for direct agent runtimes,
+- stdio MCP server for MCP-compatible tools.
+
+Start MCP:
+
+```bash
+./bin/cognibrain.mjs mcp
+```
+
+Available MCP tools:
+
+- `memory_add`
+- `memory_search`
+- `memory_context_pack`
+- `memory_list`
+- `memory_reflect`
+- `memory_dream`
+- `memory_health`
+- `memory_maintenance_status`
+
+Connector templates are included for Claude Code, Codex, GitHub Copilot, and Cursor under `templates/`.
+
+## Proof
+
+Local verification:
+
+```bash
+npm run verify
+```
+
+Certified benchmark gate:
+
+```bash
+npm run benchmark:certified
+```
+
+Public market-claim gate:
+
+```bash
+npm run benchmark:market -- --competitors docs/public-market-claims.json --out artifacts/market-gate-public.json
+```
+
+Latest checked evidence:
+
+| Dataset | cognibrain | Result |
+| --- | ---: | --- |
+| LoCoMo | `1061/1536`, `69.08%` | Beats best included baseline `63.87%` |
+| LongMemEval-S | `497/500`, `99.40%` | Beats best included baseline `99.00%` |
+| BEAM 100K | `386/400`, `96.50%` | Beats Graphonomous public `95.0%` |
+| BEAM 500K | `683/700`, `97.57%` | Beats Graphonomous public `96.9%` |
+
+The public market gate is a public-claim comparison, not a vendor-signed rerun. Stronger commercial proof should import vendor artifacts with the same dataset, metric, top-K, and budget.
+
+## Architecture
+
+```text
+src/core/          Memory model, store, retrieval, reflection, health
+src/api/           Node HTTP API and service facade
+src/cli/           memctl command line interface
+src/connectors/    Harness hook, MCP handlers, MCP server
+src/dashboard/     React dashboard
+src/eval/          Benchmark runners, fixtures, baselines, market gate
+tests/             Vitest tests for core behavior and evaluation proof
+templates/         Connector starter templates
+docs/              Setup, API, lifecycle, connector, and benchmark docs
+docker/            Container and compose files
+```
+
+## Documentation
+
+- [API Reference](docs/api-reference.md)
+- [Configuration](docs/configuration.md)
+- [Integration Guide](docs/integration-guide.md)
+- [Memory Lifecycle](docs/lifecycle.md)
+- [Connectors](docs/connectors.md)
+- [Benchmarking](docs/benchmarking.md)
+- [Market Comparison](docs/market-comparison.md)
+- [Advanced Features](docs/advanced-features.md)
+- [Roadmap](docs/roadmap.md)
+
+## Open-Source Readiness
+
+This repository is prepared as a public Cognilabz project:
+
+- MIT license,
+- reproducible install and verification commands,
+- CI workflow,
+- Docker starter files,
+- contribution guide,
+- security policy,
+- dashboard screenshots,
+- generated benchmark artifacts kept out of source control under `artifacts/`.
+
+## Contributing
+
+Start with:
+
+```bash
+npm install
+npm run verify
+```
+
+Before opening a change, run:
+
+```bash
+npm run test
+npm run build
+```
+
+For benchmark-related changes, run the relevant benchmark command and update documentation only from generated artifacts.
+
+## Safety
+
+Do not store secrets, private keys, raw credentials, medical records, or sensitive transcripts unless your project has an explicit retention policy. Connectors should default to project-local scope and explicit user consent for durable storage.

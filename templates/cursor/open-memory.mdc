@@ -1,0 +1,16 @@
+---
+description: Use cognibrain for durable project and user memory.
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+Before long-running coding tasks, query cognibrain through MCP with `memory_context_pack`.
+
+Start the local runtime with `./bin/cognibrain.mjs start` when API or dashboard access is needed. Inspect it with `./bin/cognibrain.mjs status`.
+
+Use returned memories as source-backed hints. Verify current code, tests, and benchmark artifacts before acting on stale or drift-prone facts.
+
+After durable discoveries, user corrections, connector decisions, or benchmark results, record them with `memory_add`.
+
+Use `memory_maintenance_status` to check automatic dream state. Run `memory_dream` after major sessions, imports, handoff, or when contradictory memories appear.

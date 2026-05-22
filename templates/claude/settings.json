@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /ABSOLUTE/PATH/TO/cognibrain/bin/cognibrain.mjs start >/dev/null 2>&1; node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{let p=d;try{const j=JSON.parse(d);p=j.prompt||j.userPrompt||j.message||d}catch{};require('child_process').spawnSync(process.execPath,['/ABSOLUTE/PATH/TO/cognibrain/bin/cognibrain.mjs','memory','search',p],{stdio:'inherit'})})\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /ABSOLUTE/PATH/TO/cognibrain/bin/cognibrain.mjs memory maintenance >&2"
+          }
+        ]
+      }
+    ]
+  }
+}

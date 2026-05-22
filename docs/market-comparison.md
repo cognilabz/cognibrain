@@ -50,7 +50,7 @@ Public market material should be treated as research context until normalized in
 
 - Letta's strongest product idea is a memory hierarchy: always-visible memory blocks for stable state and on-demand archival memory for long-term semantic search. cognibrain should keep its context packs compact like memory blocks while persisting the larger store outside prompt context.
 - Zep and Graphiti make temporal knowledge graphs the center of memory, especially for changing relationships and historical context. cognibrain already uses entity and graph signals in retrieval; the next step is explicit edge storage with validity windows.
-- Mem0's graph memory layers nodes and edges next to embeddings so retrieval can stitch people, places, and events together. cognibrain should keep its local-first provenance model but add a write-time entity-link evolution pass.
+- Mem0's current open-source direction emphasizes ADD-only extraction, hybrid search, and built-in entity linking instead of a separate graph-store dependency. cognibrain now follows that lesson locally by extracting proper nouns, paths, quoted phrases, and lowercase compound entities on every write.
 - LangGraph and LangMem frame long-term memory as semantic, episodic, and procedural state with stores and background consolidation. cognibrain now matches that shape with layers, CLI/API persistence, and automatic dream maintenance.
 - Generative Agents and A-MEM point to the same behavioral lesson: memory should not be an append-only vector pile. It should retrieve by multiple signals, periodically reflect, and evolve links or summaries as new evidence arrives.
 - Mem0 publishes a benchmark repository covering LoCoMo, LongMemEval, and BEAM, and its public research page reports LoCoMo, LongMemEval, and BEAM scores for its token-efficient memory algorithm.
@@ -62,7 +62,7 @@ Public market material should be treated as research context until normalized in
 ## Next Evidence Work
 
 1. Add explicit graph edges with temporal validity and contradiction supersession.
-2. Add a write-time note evolution pass that updates tags, entities, and links on related memories.
+2. Add a write-time note evolution pass that updates tags and links on related memories, beyond the current write-time entity extraction.
 3. Add full answer-generation evaluators for LoCoMo, LongMemEval, and BEAM.
 4. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
 5. Import vendor artifacts or local vendor reruns only when their dataset, metric, and budget match.
@@ -74,9 +74,9 @@ Public market material should be treated as research context until normalized in
 
 - Mem0 benchmark repository: https://github.com/mem0ai/memory-benchmarks
 - Mem0 research page: https://mem0.ai/research-3
-- Mem0 Graph Memory docs: https://docs.mem0.ai/open-source/features/graph-memory
+- Mem0 v3 memory algorithm migration: https://docs.mem0.ai/migration/oss-v2-to-v3
 - Zep benchmark page: https://www.getzep.com/ai-memory/benchmark
-- Zep Graph Overview: https://help.getzep.com/groups
+- Zep Graph Overview: https://help.getzep.com/v2/understanding-the-graph
 - Graphiti docs: https://docs.falkordb.com/agentic-memory/graphiti.html
 - Letta memory blocks: https://docs.letta.com/guides/agents/memory-blocks/
 - Letta archival memory: https://docs.letta.com/guides/agents/archival-memory

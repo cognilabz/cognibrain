@@ -21,9 +21,10 @@ export class RetrievalEngine {
       return true;
     });
 
-    const graphBoosts = this.graphBoosts(candidates, queryTokens);
+    const queryText = queryTokens.join(" ");
+    const graphBoosts = this.graphBoosts(candidates, queryTokens, queryText);
     const results = candidates
-      .map((memory) => this.score(memory, queryTokens, queryEntities, now, graphBoosts.get(memory.id) ?? 0))
+      .map((memory) => this.score(memory, queryTokens, queryEntities, queryText, now, graphBoosts.get(memory.id) ?? 0))
       .filter((result) => result.score > 0.05 && relevanceEvidence(result) > 0.08)
       .sort((a, b) => b.score - a.score)
       .filter((result, _index, all) => !isSuppressedContradiction(result, all))
@@ -51,13 +52,14 @@ export class RetrievalEngine {
     memory: Memory,
     queryTokens: string[],
     queryEntities: Set<string>,
+    queryText: string,
     now: Date,
     graph: number
   ): SearchResult {
-    const memoryTokens = tokenize(`${memory.content} ${memory.tags.join(" ")} ${memory.entities.join(" ")}`);
+    const memoryTokens = tokenize(`${memory.content} ${memory.tags.join(" ")}`);
     const semantic = cosineLike(queryTokens, memoryTokens);
     const keyword = keywordCoverage(queryTokens, memoryTokens);
-    const entityHits = memory.entities.filter((entity) => queryEntities.has(entity) || queryTokens.includes(entity)).length;
+    const entityHits = memory.entities.filter((entity) => entityMatchesQuery(entity, queryEntities, queryText)).length;
     const entity = memory.entities.length ? clamp(entityHits / Math.min(4, memory.entities.length)) : 0;
     const ageDays = Math.max(0, (now.getTime() - memory.createdAt.getTime()) / 86_400_000);
     const temporal = memory.pinned ? 1 : Math.exp(-ageDays / 180);
@@ -82,11 +84,18 @@ export class RetrievalEngine {
     };
   }
 
-  private graphBoosts(candidates: Memory[], queryTokens: string[]): Map<string, number> {
+  private graphBoosts(candidates: Memory[], queryTokens: string[], queryText: string): Map<string, number> {
     const boosts = new Map<string, number>();
     const entityFrequency = new Map<string, number>();
+    const entityToMemoryIds = new Map<string, string[]>();
+    const queryEntities = new Set(queryTokens);
     for (const memory of candidates) {
-      for (const entity of new Set(memory.entities)) entityFrequency.set(entity, (entityFrequency.get(entity) ?? 0) + 1);
+      for (const entity of new Set(memory.entities)) {
+        entityFrequency.set(entity, (entityFrequency.get(entity) ?? 0) + 1);
+        const ids = entityToMemoryIds.get(entity) ?? [];
+        ids.push(memory.id);
+        entityToMemoryIds.set(entity, ids);
+      }
     }
     const commonEntityThreshold = Math.max(3, Math.ceil(candidates.length * 0.12));
     const matched = candidates.filter((memory) => {
@@ -94,15 +103,31 @@ export class RetrievalEngine {
       return keywordCoverage(queryTokens, tokens) > 0;
     });
     for (const direct of matched) {
-      const directEntities = new Set(direct.entities.filter((entity) => (entityFrequency.get(entity) ?? 0) <= commonEntityThreshold));
-      for (const memory of candidates) {
-        if (memory.id === direct.id) continue;
-        const overlap = memory.entities.filter((entity) => directEntities.has(entity)).length;
-        if (overlap > 0) boosts.set(memory.id, Math.max(boosts.get(memory.id) ?? 0, clamp(overlap / 3)));
+      const linkedCounts = new Map<string, number>();
+      for (const entity of direct.entities) {
+        if ((entityFrequency.get(entity) ?? 0) > commonEntityThreshold) continue;
+        if (isCompoundEntity(entity) && !entityMatchesQuery(entity, queryEntities, queryText)) continue;
+        for (const id of entityToMemoryIds.get(entity) ?? []) {
+          if (id === direct.id) continue;
+          linkedCounts.set(id, (linkedCounts.get(id) ?? 0) + 1);
+        }
+      }
+      for (const [id, count] of linkedCounts) {
+        boosts.set(id, Math.max(boosts.get(id) ?? 0, clamp(count / 3)));
       }
     }
     return boosts;
   }
+}
+
+function entityMatchesQuery(entity: string, queryEntities: Set<string>, queryText: string): boolean {
+  if (queryEntities.has(entity) || queryText.includes(entity)) return true;
+  const entityTokens = tokenize(entity);
+  return entityTokens.length === 1 && queryEntities.has(entityTokens[0]);
+}
+
+function isCompoundEntity(entity: string): boolean {
+  return /\s/.test(entity.trim());
 }
 
 function relevanceEvidence(result: SearchResult): number {

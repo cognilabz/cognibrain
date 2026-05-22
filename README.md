@@ -15,9 +15,9 @@
   <a href="#documentation">Documentation</a>
 </p>
 
-cognibrain is a local-first TypeScript memory layer for AI agents that need durable context without opaque recall. It stores memories with source quality, trust, citations, lifecycle state, and retrieval evidence so teams can see why an agent remembers something before that memory influences real work.
+cognibrain is a local-first TypeScript memory platform for AI agents that need durable context without opaque recall. It stores memories with source quality, trust, citations, lifecycle state, and retrieval evidence so teams can see why an agent remembers something before that memory influences real work.
 
-The project includes the memory engine, HTTP API, CLI, MCP connector, harness hook, dashboard, benchmark suite, and a self-maintenance loop called `dream`.
+The project includes the memory engine, HTTP API, CLI, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
 
 ![cognibrain desktop dashboard](docs/assets/dashboard-desktop.png)
 
@@ -40,6 +40,8 @@ Agent memory often fails in one of two ways: it is either a simple vector search
 It is designed for teams that care about:
 
 - source-aware recall instead of unqualified chat-history reuse,
+- a platform/operator split: install and run the platform once, then inspect what the operator lets into context,
+- zero-dependency entity linking from proper nouns, paths, quoted phrases, and compound terms,
 - ranked evidence with citations and trust signals,
 - lifecycle maintenance for stale or contradictory facts,
 - clear integration surfaces for coding agents and AI workflows,
@@ -47,10 +49,13 @@ It is designed for teams that care about:
 
 ## Dashboard
 
-The dashboard is a working inspection surface, not a decorative demo. Each section has a purpose:
+The dashboard is a working inspection surface, not a decorative demo. It presents cognibrain as a platform runtime plus an operator gate:
 
 | Section | Why it exists |
 | --- | --- |
+| Operator gate | Shows whether context is ready before an agent can use it. |
+| Platform runtime | Shows that CLI, HTTP, dashboard, MCP, and templates run from one local package. |
+| Memory advantage | Explains the current USP: entity-linked hybrid recall plus dream maintenance. |
 | Health metrics | Shows whether the memory store is fresh, trusted, and active. |
 | Recall QA | Lets a user test the exact context an agent would receive. |
 | Dream cycle | Proves memory hygiene by summarizing, fading, reflecting, and reorganizing facts. |
@@ -174,7 +179,7 @@ Pinned memories are never faded or archived.
 
 ## Connectors
 
-cognibrain exposes four integration surfaces:
+cognibrain exposes four integration surfaces. The CLI is the primary install and runtime surface; MCP is available for compatible agent clients without making MCP the only way to operate the platform.
 
 - HTTP API for apps and services,
 - CLI for local scripts,
@@ -224,7 +229,7 @@ Latest checked evidence:
 
 | Dataset | cognibrain | Result |
 | --- | ---: | --- |
-| LoCoMo | `1061/1536`, `69.08%` | Beats best included baseline `63.87%` |
+| LoCoMo | `1095/1536`, `71.29%` | Beats best included baseline `63.87%` |
 | LongMemEval-S | `497/500`, `99.40%` | Beats best included baseline `99.00%` |
 | BEAM 100K | `386/400`, `96.50%` | Beats Graphonomous public `95.0%` |
 | BEAM 500K | `683/700`, `97.57%` | Beats Graphonomous public `96.9%` |

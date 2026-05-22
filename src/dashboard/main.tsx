@@ -1,18 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  Activity,
   Archive,
   BarChart3,
   CheckCircle2,
+  Cpu,
   Database,
   FileJson,
   GitBranch,
   ListFilter,
+  Network,
   Pin,
   Plus,
   Search,
   ShieldCheck,
   Sparkles,
+  Terminal,
   Trash2
 } from "lucide-react";
 import {
@@ -36,11 +40,13 @@ type RuntimeStatus = {
 };
 
 const viewItems: Array<{ id: ViewId; label: string; icon: React.ElementType; note: string }> = [
-  { id: "memories", label: "Memories", icon: Database, note: "Browse and clean stored facts" },
-  { id: "recall", label: "Recall QA", icon: Search, note: "Inspect context before injection" },
-  { id: "dream", label: "Dream Cycle", icon: Sparkles, note: "Run hygiene and see actions" },
-  { id: "proof", label: "Proof", icon: BarChart3, note: "Benchmarks and artifacts" }
+  { id: "memories", label: "Store", icon: Database, note: "Inspect facts" },
+  { id: "recall", label: "Recall", icon: Search, note: "Preview context" },
+  { id: "dream", label: "Dream", icon: Sparkles, note: "Repair memory" },
+  { id: "proof", label: "Proof", icon: BarChart3, note: "Verify claims" }
 ];
+
+const logoUrl = new URL("../../docs/assets/cognilabz-logo.png", import.meta.url).href;
 
 const seedMemories: MemoryInput[] = [
   {
@@ -111,10 +117,10 @@ const certifiedBenchmarks = [
   {
     dataset: "LoCoMo",
     metric: "evidence recall@20",
-    ours: "1020/1536",
-    accuracy: 66.41,
-    baseline: "keyword-only 944/1536",
-    margin: 4.95,
+    ours: "1095/1536",
+    accuracy: 71.29,
+    baseline: "best included 981/1536",
+    margin: 7.42,
     artifact: "artifacts/locomo-report.json"
   },
   {
@@ -131,8 +137,8 @@ const certifiedBenchmarks = [
     metric: "retrieval nugget score@20",
     ours: "386/400",
     accuracy: 96.5,
-    baseline: "keyword-only 328/400",
-    margin: 14.5,
+    baseline: "Graphonomous public 95.0%",
+    margin: 1.5,
     artifact: "artifacts/beam-report.json"
   },
   {
@@ -140,8 +146,8 @@ const certifiedBenchmarks = [
     metric: "retrieval nugget score@20",
     ours: "683/700",
     accuracy: 97.57,
-    baseline: "keyword-only 554/700",
-    margin: 18.43,
+    baseline: "Graphonomous public 96.9%",
+    margin: 0.67,
     artifact: "artifacts/beam-500k-report.json"
   }
 ];
@@ -157,6 +163,12 @@ const beamCategories = [
   ["preference", "69/70"],
   ["summarization", "70/70"],
   ["temporal", "65/70"]
+];
+
+const platformSignals = [
+  { label: "CLI", value: "setup installs skill + runtime", icon: Terminal },
+  { label: "API", value: "HTTP and MCP share one store", icon: Network },
+  { label: "Dream", value: "automatic after writes", icon: Sparkles }
 ];
 
 function App() {
@@ -279,12 +291,12 @@ function App() {
 
   return (
     <main className="app-shell" data-version={version}>
-      <aside className="sidebar">
+      <header className="app-topbar">
         <div className="brand">
-          <img className="brand-mark" src="/docs/assets/cognilabz-logo.png" alt="cognibrain logo" />
+          <img className="brand-mark" src={logoUrl} alt="cognibrain logo" />
           <div>
             <strong>cognibrain</strong>
-            <span>memory console</span>
+            <span>operator console</span>
           </div>
         </div>
 
@@ -300,22 +312,16 @@ function App() {
           ))}
         </nav>
 
-        <div className="side-proof">
-          <span>Store Health</span>
-          <strong>{Math.round(health.healthScore * 100)}% ready</strong>
-          <p>{health.active} active, {health.archived} archived, {reviewCount} need review.</p>
-          <small><ShieldCheck size={14} /> Context gated before use</small>
-          <small className={`runtime-status ${runtime.state}`}><GitBranch size={14} /> API {runtime.label}</small>
-          {runtime.maintenance ? (
-            <small><Sparkles size={14} /> Dream auto {runtime.maintenance.enabled ? "on" : "off"} · {runtime.maintenance.writeThreshold} writes</small>
-          ) : null}
+        <div className={`runtime-chip ${runtime.state}`}>
+          <GitBranch size={15} />
+          <span>API {runtime.label}</span>
         </div>
-      </aside>
+      </header>
 
       <section className="workspace">
         <header className="topbar">
           <div>
-            <span className="kicker">local-first agent memory</span>
+            <span className="kicker">platform + operator memory control</span>
             <h1>{viewTitle(view)}</h1>
             <p>{viewSubtitle(view)}</p>
           </div>
@@ -324,6 +330,51 @@ function App() {
             <button onClick={runDreamCycle}><Sparkles size={17} /> Run dream cycle</button>
           </div>
         </header>
+
+        <section className="operator-deck" aria-label="Platform and operator state">
+          <article className="operator-card operator-primary">
+            <div className="card-heading">
+              <ShieldCheck size={18} />
+              <span>Operator gate</span>
+            </div>
+            <strong>{Math.round(health.healthScore * 100)}% ready for context</strong>
+            <p>{health.active} active memories, {reviewCount} need review. Context is inspected before it reaches an agent.</p>
+            <div className="operator-flow" aria-label="Operator workflow">
+              <span>Capture</span>
+              <span>Rank</span>
+              <span>Dream</span>
+              <span>Inject</span>
+            </div>
+          </article>
+
+          <article className="operator-card">
+            <div className="card-heading">
+              <Cpu size={18} />
+              <span>Platform runtime</span>
+            </div>
+            <strong>{runtime.maintenance?.enabled === false ? "manual dreams" : "auto-dream online"}</strong>
+            <p>CLI, HTTP, dashboard, MCP, and connector templates run from one local package.</p>
+            <div className="signal-stack">
+              {platformSignals.map(({ label, value, icon: Icon }) => (
+                <span key={label}><Icon size={14} /> {label}: {value}</span>
+              ))}
+            </div>
+          </article>
+
+          <article className="operator-card">
+            <div className="card-heading">
+              <Activity size={18} />
+              <span>Memory advantage</span>
+            </div>
+            <strong>entity-linked recall loop</strong>
+            <p>Hybrid retrieval now links lowercase compound entities, trust, time, source quality, and dream actions.</p>
+            <div className="signal-stack">
+              <span><Network size={14} /> entity links</span>
+              <span><ShieldCheck size={14} /> source gates</span>
+              <span><BarChart3 size={14} /> benchmark proof</span>
+            </div>
+          </article>
+        </section>
 
         <section className="metrics" aria-label="Memory health metrics">
           <Metric label="Active" value={String(health.active)} />

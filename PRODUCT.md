@@ -14,7 +14,7 @@ product
 
 ## Product Purpose
 
-cognibrain is a local-first memory workbench for AI agents. It helps technical teams inspect what an agent remembers, why that context was retrieved, whether memory hygiene is healthy, and whether benchmark proof supports production use.
+cognibrain is a local-first memory platform and operator console for AI agents. It helps technical teams inspect what an agent remembers, why that context was retrieved, whether memory hygiene is healthy, and whether benchmark proof supports production use.
 
 ## Users
 
@@ -24,7 +24,7 @@ cognibrain is a local-first memory workbench for AI agents. It helps technical t
 
 ## Primary Job
 
-Show whether agent memory is safe and useful enough to inject into a real workflow.
+Show whether agent memory is safe and useful enough to inject into a real workflow, and make the platform/operator boundary obvious.
 
 ## Design Principles
 

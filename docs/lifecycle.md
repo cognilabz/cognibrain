@@ -5,7 +5,7 @@ cognibrain treats memory as a living store, not a pile of notes. The lifecycle l
 ## Plain-English Model
 
 - Store: save durable facts with source and confidence.
-- Retrieve: find relevant memories with multiple signals, not vector similarity alone.
+- Retrieve: find relevant memories with multiple signals, not vector similarity alone, including zero-dependency entity links.
 - Evaluate: check whether memories are fresh, trusted, useful, and supported.
 - Rethink: compare contradictory claims and keep the better-supported one.
 - Summarize: create compact reflection memories from repeated themes.

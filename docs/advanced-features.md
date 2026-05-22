@@ -2,7 +2,11 @@
 
 ## Multi-Signal Retrieval
 
-Retrieval combines semantic token overlap, keyword coverage, entity matches, temporal decay, trust, and graph reachability. A result must have actual relevance evidence; trust and recency alone cannot inject unrelated memories.
+Retrieval combines semantic token overlap, keyword coverage, entity matches, temporal decay, trust, and graph reachability. Entity extraction is zero-dependency: every write links proper nouns, paths, quoted phrases, and lowercase compound terms such as `operator gate` or `dream cycle`. Query-time entity matching boosts exact compound phrases without letting random transcript words become graph edges, so the graph stays useful without requiring an external graph database.
+
+Benchmark runners use the same principle: lexical anchors keep factual recall stable, while fused retrieval reserves part of the top-K for graph and semantic hits that keyword-only ranking would otherwise block.
+
+A result must have actual relevance evidence; trust and recency alone cannot inject unrelated memories.
 
 ## Trust and Provenance
 
@@ -30,4 +34,4 @@ Pinned memories are never faded or archived. Reflection summaries include `summa
 
 ## Dashboard
 
-The dashboard is the local inspection UI for the API-backed memory store. It shows health, ranked evidence, trust meters, automatic dream status, and reflection controls.
+The dashboard is the local operator UI for the API-backed memory platform. It shows the platform runtime, operator gate, ranked evidence, trust meters, automatic dream status, reflection controls, and benchmark proof.

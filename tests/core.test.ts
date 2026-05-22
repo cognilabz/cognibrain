@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize } from "../src/core";
+import { MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities } from "../src/core";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { MemoryService } from "../src/api/service";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
@@ -53,6 +53,22 @@ describe("TypeScript memory core", () => {
     });
 
     expect(results[0].memory.content).toContain("sunset over a lake");
+  });
+
+  it("extracts lowercase compound entities for zero-dependency entity linking", () => {
+    const entities = extractEntities("The operator gate blocks transcript injection until human verification.");
+    expect(entities).toContain("operator gate");
+    expect(entities).toContain("transcript injection");
+
+    const store = new MemoryStore();
+    store.add({
+      userId: "u1",
+      content: "The operator gate blocks transcript injection until human verification.",
+      source: { kind: "human", confidence: 0.96 }
+    });
+    const results = new RetrievalEngine(store).search({ userId: "u1", query: "What does the operator gate do?", limit: 1 });
+    expect(results[0].memory.content).toContain("blocks transcript injection");
+    expect(results[0].signals.entity).toBeGreaterThan(0);
   });
 
   it("demotes low-trust contradictions during reflection", () => {

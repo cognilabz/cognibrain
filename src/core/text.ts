@@ -47,10 +47,58 @@ export function unique<T>(values: T[]): T[] {
 
 export function extractEntities(text: string): string[] {
   const explicit = text.match(/`([^`]+)`/g)?.map((value) => value.replace(/`/g, "")) ?? [];
+  const quoted = text.match(/["']([^"']+)["']/g)?.map((value) => value.replace(/["']/g, "")) ?? [];
   const capitalized = text.match(/\b[A-Z][A-Za-z0-9_-]{2,}\b/g) ?? [];
   const paths = text.match(/(?:\/|\b)[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+/g) ?? [];
-  return unique([...explicit, ...capitalized, ...paths].map((value) => value.toLowerCase()));
+  return unique([...explicit, ...quoted, ...capitalized, ...paths, ...compoundEntities(text)].map(cleanEntity).filter(Boolean));
 }
+
+function compoundEntities(text: string): string[] {
+  const tokens = unique(entityTokens(text));
+  const phrases: string[] = [];
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    phrases.push(`${tokens[index]} ${tokens[index + 1]}`);
+    if (index < tokens.length - 2) phrases.push(`${tokens[index]} ${tokens[index + 1]} ${tokens[index + 2]}`);
+  }
+  return phrases.slice(0, 12);
+}
+
+function cleanEntity(value: string): string {
+  const cleaned = value.toLowerCase().replace(/\s+/g, " ").trim();
+  if (cleaned.length < 3 || STOP_WORDS.has(cleaned) || GENERIC_ENTITY_TOKENS.has(cleaned)) return "";
+  return cleaned;
+}
+
+function entityTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/\bde-stress\b/g, "destress")
+    .replace(/[_./:-]+/g, " ")
+    .replace(/[^a-z0-9äöüß\-]+/gi, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 3 && !/^\d+$/.test(token) && !STOP_WORDS.has(token) && !GENERIC_ENTITY_TOKENS.has(token));
+}
+
+const GENERIC_ENTITY_TOKENS = new Set([
+  "agent",
+  "agents",
+  "memory",
+  "memories",
+  "project",
+  "should",
+  "would",
+  "could",
+  "said",
+  "says",
+  "caption",
+  "conversation",
+  "participants",
+  "session",
+  "summary",
+  "before",
+  "after"
+]);
 
 export function cosineLike(a: string[], b: string[]): number {
   if (a.length === 0 || b.length === 0) return 0;

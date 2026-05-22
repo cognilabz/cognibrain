@@ -123,7 +123,7 @@ Do not claim market leadership from a synthetic suite alone. Use `artifacts/loco
 Latest full no-answer-leak run:
 
 ```text
-cognibrain: 1061/1536 evidence recall@20 = 69.08%
+cognibrain: 1095/1536 evidence recall@20 = 71.29%
 Best included baseline: 981/1536 evidence recall@20 = 63.87%
 ```
 
@@ -193,7 +193,7 @@ The largest remaining BEAM weaknesses are information extraction, temporal reaso
 Latest combined artifact: `artifacts/market-gate.json`
 
 ```text
-LoCoMo: +4.95 percentage points over best included baseline
+LoCoMo: +7.42 percentage points over best included baseline
 LongMemEval-S: +0.40 percentage points over best included baseline
 BEAM 100K: +14.50 percentage points over best included baseline
 BEAM 500K: +18.43 percentage points over best included baseline

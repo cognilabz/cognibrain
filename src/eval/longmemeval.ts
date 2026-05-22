@@ -199,7 +199,8 @@ function evidenceSearch(retrieval: RetrievalEngine, memories: Memory[], query: s
   const openMemoryResults = retrieval.search({ userId, query, limit: poolSize });
   const keywordResults = keywordOnly(memories)(query, poolSize);
   const fused = reciprocalRankFusion(openMemoryResults, keywordResults, limit);
-  return lexicalFloor(keywordResults.slice(0, limit), fused, limit);
+  const lexicalAnchorCount = Math.max(1, Math.ceil(limit * 0.75));
+  return lexicalFloor(keywordResults.slice(0, lexicalAnchorCount), fused, limit);
 }
 
 function chooseRetrievalStrategy(query: string): "lexical" | "semantic" | "vector" {

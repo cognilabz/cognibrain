@@ -31,6 +31,7 @@ Environment variables:
 | `MEMORY_DREAM_INTERVAL_HOURS` | `6` | Interval for due background dream checks after new writes |
 | `MEMORY_DREAM_WRITE_THRESHOLD` | `12` | Number of writes for a user before automatic dream runs |
 | `MEMORY_DREAM_CHECK_INTERVAL_MINUTES` | `15` | API server interval for scanning due dream cycles |
+| `MEMORY_REDACTION_MODE` | `redact` | `redact`, `reject`, `archive`, or `off` for sensitive-memory handling |
 | `MEMORY_DEFAULT_TOKEN_BUDGET` | `900` | Suggested context budget for harness connectors |
 | `MEMORY_NEVER_STORE_SECRETS` | `true` | Policy flag host connectors should honor before writing memories |
 
@@ -48,6 +49,10 @@ Recommended:
 - `layer`: `working`, `episodic`, `long_term`, `procedural`, `reflection`
 - `source.kind`: `human`, `reviewed_code`, `tool`, `agent`, `transcript`, `import`
 - `source.confidence`: number from `0` to `1`
+- scope: `sessionId`, `appId`, `orgId`, `projectId`, `deviceId`, `runId`
+- `consent.visibility`: `private`, `user`, `org`, or `public`
+- `relations`: typed links such as `calls`, `imports`, `depends_on`, `supersedes`
+- `temporal`: `eventAt`, `validFrom`, `validUntil`, `lastConfirmedAt`, `verificationDueAt`
 - `tags`
 - `entities`
 - `metadata`
@@ -62,9 +67,19 @@ The current ranker combines:
 - temporal decay,
 - trust and importance,
 - graph boost through shared entities,
+- typed relationship hints,
+- access frequency,
 - evidence gating so trust alone cannot retrieve unrelated memories.
 
-The next configuration step is to expose these weights through a `memory.config.json` file. Until then, ranker weights live in `src/core/retrieval.ts`.
+The default benchmarked profile is semantic `0.26`, keyword `0.24`, entity `0.16`, temporal `0.08`, trust `0.18`, graph `0.06`, and access `0.02`. API search requests and service constructors can pass weight overrides; values are normalized before scoring.
+
+The learned-weight path starts from feedback events. Use `memory feedback <id> helpful`, `wrong`, `always_include`, or `never_include` to change bounded trust and importance. Future learned profiles can use the same event stream to tune per-user or per-organization weights.
+
+## Privacy And Retention
+
+The default redaction layer catches common API keys, tokens, private keys, credentials, high-entropy tokens, and email addresses. `redact` preserves useful context while replacing sensitive spans. `reject` blocks the write. `archive` stores the redacted memory and archives it immediately.
+
+Consent metadata controls retrieval visibility. Private memories are excluded unless a caller explicitly asks for private memory; org-visible memories remain scoped to the matching organization. Retention dates are respected by search and can be paired with export/delete APIs.
 
 ## Dream Cycle Policy
 

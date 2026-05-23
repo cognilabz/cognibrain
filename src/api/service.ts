@@ -1,7 +1,28 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { MemoryStore, ReflectionEngine, RetrievalEngine, healthReport } from "../core";
-import type { Memory, MemoryInput, SearchOptions } from "../core";
+import {
+  applyRedactionPolicy,
+  extractAddOnlyMemories,
+  healthReport,
+  MemoryStore,
+  normalizeLifecyclePolicy,
+  normalizeRetrievalWeights,
+  ReflectionEngine,
+  RetrievalEngine,
+  type LifecyclePolicy,
+  type RedactionPolicy,
+  type DomainModule
+} from "../core";
+import type {
+  ExtractionReport,
+  FeedbackEvent,
+  Memory,
+  MemoryExtractionEvent,
+  MemoryInput,
+  MetricsReport,
+  RetrievalWeights,
+  SearchOptions
+} from "../core";
 
 export interface MemoryServiceOptions {
   persistencePath?: string;
@@ -10,6 +31,10 @@ export interface MemoryServiceOptions {
     intervalHours?: number;
     writeThreshold?: number;
   };
+  retrievalWeights?: Partial<RetrievalWeights>;
+  lifecyclePolicy?: Partial<LifecyclePolicy>;
+  redactionPolicy?: RedactionPolicy;
+  domainModule?: DomainModule;
 }
 
 export interface MemoryMaintenanceStatus {
@@ -20,21 +45,36 @@ export interface MemoryMaintenanceStatus {
 }
 
 interface PersistedMemoryFile {
-  version: 1;
+  version: 1 | 2;
   memories: Memory[];
   maintenance: {
     users: Record<string, { lastDreamAt?: string; writesSinceDream: number }>;
   };
+  metrics?: MetricsReport;
+  feedback?: FeedbackEvent[];
 }
 
 export class MemoryService {
   readonly store = new MemoryStore();
-  readonly retrieval = new RetrievalEngine(this.store);
-  readonly reflection = new ReflectionEngine(this.store);
+  readonly retrieval: RetrievalEngine;
+  readonly reflection: ReflectionEngine;
 
   private readonly persistencePath?: string;
   private readonly autoDream: Required<NonNullable<MemoryServiceOptions["autoDream"]>>;
+  private readonly redactionPolicy: RedactionPolicy;
+  private readonly domainModule?: DomainModule;
   private maintenance: PersistedMemoryFile["maintenance"] = { users: {} };
+  private feedbackEvents: FeedbackEvent[] = [];
+  private metrics: MetricsReport = {
+    memoriesAdded: 0,
+    searches: 0,
+    feedback: 0,
+    dreams: 0,
+    contradictionsResolved: 0,
+    noHitSearches: 0,
+    averageSearchResults: 0,
+    averageQualityScore: 1
+  };
   private dreaming = false;
 
   constructor(options: MemoryServiceOptions = {}) {
@@ -44,13 +84,40 @@ export class MemoryService {
       intervalHours: options.autoDream?.intervalHours ?? 6,
       writeThreshold: options.autoDream?.writeThreshold ?? 12
     };
+    this.domainModule = options.domainModule;
+    this.redactionPolicy = options.redactionPolicy ?? options.domainModule?.redactionPolicy ?? { mode: process.env.MEMORY_REDACTION_MODE === "off" ? "off" : "redact" };
+    this.retrieval = new RetrievalEngine(this.store, normalizeRetrievalWeights({ ...options.domainModule?.retrievalWeights, ...options.retrievalWeights }));
+    this.reflection = new ReflectionEngine(this.store, normalizeLifecyclePolicy({ ...options.domainModule?.lifecyclePolicy, ...options.lifecyclePolicy }));
     this.load();
   }
 
   add(input: MemoryInput) {
-    const memory = this.store.add(input);
+    const enriched = this.domainModule?.enrich ? this.domainModule.enrich(input) : input;
+    const checked = applyRedactionPolicy(enriched, this.redactionPolicy);
+    if (checked.rejected || !checked.input) {
+      throw new Error(`Memory rejected by redaction policy: ${checked.matches.map((match) => match.detector).join(", ")}`);
+    }
+    const memory = this.store.add(checked.input);
+    if (memory.metadata.archivedOnWrite) this.store.archive(memory.id);
+    this.metrics.memoriesAdded += 1;
     this.afterWrite(memory.userId);
     return memory;
+  }
+
+  extract(
+    events: MemoryExtractionEvent[],
+    scope: Pick<MemoryInput, "userId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId" | "runId">
+  ): ExtractionReport {
+    const inputs = extractAddOnlyMemories(events, scope);
+    const memories = inputs.map((input) => this.add(input));
+    const entityLinks: Record<string, string[]> = {};
+    for (const memory of memories) {
+      for (const entity of memory.entities) {
+        entityLinks[entity] ??= [];
+        entityLinks[entity].push(memory.id);
+      }
+    }
+    return { memories, entityLinks };
   }
 
   list(userId?: string) {
@@ -75,11 +142,17 @@ export class MemoryService {
   }
 
   search(options: SearchOptions) {
-    return this.retrieval.search(options);
+    const results = this.retrieval.search(options);
+    this.metrics.searches += 1;
+    this.metrics.noHitSearches += results.length === 0 ? 1 : 0;
+    this.metrics.averageSearchResults = rollingAverage(this.metrics.averageSearchResults, results.length, this.metrics.searches);
+    this.persist();
+    return results;
   }
 
   reflect(userId: string) {
     const report = this.reflection.run(userId);
+    this.recordDream(report.lifecycle.qualityScore, report.contradictions.length);
     this.markDreamed(userId);
     this.persist();
     return report;
@@ -87,9 +160,49 @@ export class MemoryService {
 
   dream(userId: string) {
     const report = this.reflection.run(userId);
+    this.recordDream(report.lifecycle.qualityScore, report.contradictions.length);
     this.markDreamed(userId);
     this.persist();
     return report;
+  }
+
+  feedback(event: FeedbackEvent): Memory {
+    const memory = this.store.get(event.memoryId);
+    const timestamp = event.timestamp ? new Date(event.timestamp).toISOString() : new Date().toISOString();
+    const delta = feedbackDelta(event.kind);
+    const updated = this.store.update(event.memoryId, {
+      trust: clamp01(memory.trust + delta.trust),
+      importance: clamp01(memory.importance + delta.importance),
+      pinned: event.kind === "always_include" ? true : memory.pinned,
+      consent:
+        event.kind === "private"
+          ? { ...memory.consent, visibility: "private" }
+          : event.kind === "shareable"
+            ? { ...memory.consent, visibility: "org" }
+            : memory.consent,
+      metadata: {
+        feedback: [...((memory.metadata.feedback as unknown[]) ?? []), { ...event, timestamp }]
+      }
+    });
+    this.feedbackEvents.push({ ...event, timestamp });
+    this.metrics.feedback += 1;
+    this.persist();
+    return updated;
+  }
+
+  exportUser(userId: string): Memory[] {
+    return this.store.list(userId);
+  }
+
+  deleteUser(userId: string): number {
+    const memories = this.store.list(userId);
+    for (const memory of memories) this.store.delete(memory.id);
+    this.persist();
+    return memories.length;
+  }
+
+  metricsReport(): MetricsReport {
+    return { ...this.metrics };
   }
 
   health(userId?: string) {
@@ -127,11 +240,18 @@ export class MemoryService {
     if (this.dreaming) return;
     this.dreaming = true;
     try {
-      this.reflection.run(userId);
+      const report = this.reflection.run(userId);
+      this.recordDream(report.lifecycle.qualityScore, report.contradictions.length);
       this.markDreamed(userId);
     } finally {
       this.dreaming = false;
     }
+  }
+
+  private recordDream(qualityScore: number, contradictions: number): void {
+    this.metrics.dreams += 1;
+    this.metrics.contradictionsResolved += contradictions;
+    this.metrics.averageQualityScore = rollingAverage(this.metrics.averageQualityScore, qualityScore, this.metrics.dreams);
   }
 
   private isDreamDue(userId: string, now = new Date()): boolean {
@@ -155,12 +275,16 @@ export class MemoryService {
 
   private load(): void {
     if (!this.persistencePath || !existsSync(this.persistencePath)) return;
-    const raw = JSON.parse(readFileSync(this.persistencePath, "utf8")) as PersistedMemoryFile | MemoryInput[];
+    const contents = readFileSync(this.persistencePath, "utf8").trim();
+    if (!contents) return;
+    const raw = JSON.parse(contents) as PersistedMemoryFile | MemoryInput[];
     if (Array.isArray(raw)) {
       this.store.seed(raw);
       return;
     }
     this.maintenance = raw.maintenance ?? { users: {} };
+    this.metrics = raw.metrics ?? this.metrics;
+    this.feedbackEvents = raw.feedback ?? [];
     this.store.import(raw.memories ?? []);
   }
 
@@ -168,9 +292,11 @@ export class MemoryService {
     if (!this.persistencePath) return;
     mkdirSync(dirname(this.persistencePath), { recursive: true });
     const payload: PersistedMemoryFile = {
-      version: 1,
+      version: 2,
       memories: this.store.export(),
-      maintenance: this.maintenance
+      maintenance: this.maintenance,
+      metrics: this.metrics,
+      feedback: this.feedbackEvents
     };
     const tempPath = `${this.persistencePath}.${process.pid}.tmp`;
     writeFileSync(tempPath, JSON.stringify(payload, null, 2));
@@ -187,8 +313,39 @@ export function createDefaultMemoryService() {
       enabled: autoDreamEnabled,
       intervalHours: Number(process.env.MEMORY_DREAM_INTERVAL_HOURS ?? 6),
       writeThreshold: Number(process.env.MEMORY_DREAM_WRITE_THRESHOLD ?? 12)
-    }
+    },
+    redactionPolicy: { mode: redactionModeFromEnv(process.env.MEMORY_REDACTION_MODE) }
   });
+}
+
+function redactionModeFromEnv(value: string | undefined): RedactionPolicy["mode"] {
+  if (value === "off" || value === "reject" || value === "archive") return value;
+  return "redact";
+}
+
+function feedbackDelta(kind: FeedbackEvent["kind"]): { trust: number; importance: number } {
+  switch (kind) {
+    case "helpful":
+      return { trust: 0.04, importance: 0.06 };
+    case "always_include":
+      return { trust: 0.06, importance: 0.12 };
+    case "wrong":
+      return { trust: -0.18, importance: -0.08 };
+    case "stale":
+      return { trust: -0.1, importance: -0.04 };
+    case "never_include":
+      return { trust: -0.25, importance: -0.18 };
+    default:
+      return { trust: 0, importance: 0 };
+  }
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function rollingAverage(current: number, sample: number, count: number): number {
+  return current + (sample - current) / Math.max(1, count);
 }
 
 export const defaultService = createDefaultMemoryService();

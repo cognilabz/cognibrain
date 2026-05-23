@@ -360,6 +360,23 @@ button:disabled {
   gap: 7px;
 }
 
+.capability-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.capability-strip span {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--ink-soft);
+  padding: 7px 9px;
+  font-size: 12px;
+  font-weight: 760;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

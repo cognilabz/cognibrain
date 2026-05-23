@@ -3,13 +3,17 @@ import { estimateTokens, type MemoryInput, type SearchResult } from "../core";
 export interface HarnessContext {
   userId: string;
   agentId?: string;
+  sessionId?: string;
+  appId?: string;
+  orgId?: string;
+  projectId?: string;
   prompt: string;
   metadata?: Record<string, unknown>;
 }
 
 export interface MemoryApi {
   add(input: MemoryInput): unknown;
-  search(input: { userId: string; agentId?: string; query: string; limit: number }): SearchResult[];
+  search(input: { userId: string; agentId?: string; sessionId?: string; appId?: string; orgId?: string; projectId?: string; query: string; limit: number }): SearchResult[];
 }
 
 export class HarnessMemoryHook {
@@ -22,6 +26,10 @@ export class HarnessMemoryHook {
     const memories = this.memory.search({
       userId: context.userId,
       agentId: context.agentId,
+      sessionId: context.sessionId,
+      appId: context.appId,
+      orgId: context.orgId,
+      projectId: context.projectId,
       query: context.prompt,
       limit: this.options.maxMemories ?? 6
     });
@@ -34,6 +42,10 @@ export class HarnessMemoryHook {
     this.memory.add({
       userId: context.userId,
       agentId: context.agentId,
+      sessionId: context.sessionId,
+      appId: context.appId,
+      orgId: context.orgId,
+      projectId: context.projectId,
       content,
       type: "episodic",
       layer: "episodic",

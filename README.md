@@ -115,6 +115,19 @@ Search memory:
 ./bin/cognibrain.mjs memory search "What language does Atlas use?"
 ```
 
+Extract add-only memories from an event or conversation:
+
+```bash
+./bin/cognibrain.mjs memory extract "Atlas now uses Redis for cache. Verified npm test passed."
+```
+
+Give retrieval feedback:
+
+```bash
+./bin/cognibrain.mjs memory feedback <memory-id> helpful
+./bin/cognibrain.mjs memory metrics
+```
+
 Run the maintenance cycle:
 
 ```bash
@@ -153,7 +166,7 @@ Search:
 ```bash
 curl -X POST http://localhost:8787/search \
   -H "content-type: application/json" \
-  -d '{"userId": "dev", "query": "What language should Atlas use?", "limit": 5}'
+  -d '{"userId": "dev", "appId": "codex", "query": "What language should Atlas use?", "limit": 5}'
 ```
 
 Dream:
@@ -176,6 +189,8 @@ The `dream` cycle is the self-maintenance loop for the memory store:
 - Reorganize procedures, transcripts, and stable facts into better layers.
 
 Pinned memories are never faded or archived.
+
+The current runtime also supports configurable retrieval weights, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), privacy consent flags, secret redaction, typed relations, add-only extraction, feedback-based trust/importance updates, local metrics, and export/delete APIs.
 
 ## Connectors
 

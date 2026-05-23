@@ -167,8 +167,17 @@ const beamCategories = [
 
 const platformSignals = [
   { label: "CLI", value: "setup installs skill + runtime", icon: Terminal },
-  { label: "API", value: "HTTP and MCP share one store", icon: Network },
-  { label: "Dream", value: "automatic after writes", icon: Sparkles }
+  { label: "API", value: "scoped HTTP and MCP store", icon: Network },
+  { label: "Dream", value: "staleness and pattern maintenance", icon: Sparkles }
+];
+
+const operatorControls = [
+  "configurable weights",
+  "privacy redaction",
+  "scope filters",
+  "feedback learning",
+  "graph paths",
+  "time review"
 ];
 
 function App() {
@@ -367,13 +376,19 @@ function App() {
               <span>Memory advantage</span>
             </div>
             <strong>entity-linked recall loop</strong>
-            <p>Hybrid retrieval now links lowercase compound entities, trust, time, source quality, and dream actions.</p>
+            <p>Hybrid retrieval links entities, typed relations, time, trust, source quality, feedback, and dream actions.</p>
             <div className="signal-stack">
               <span><Network size={14} /> entity links</span>
               <span><ShieldCheck size={14} /> source gates</span>
               <span><BarChart3 size={14} /> benchmark proof</span>
             </div>
           </article>
+        </section>
+
+        <section className="capability-strip" aria-label="Operator controls">
+          {operatorControls.map((control) => (
+            <span key={control}>{control}</span>
+          ))}
         </section>
 
         <section className="metrics" aria-label="Memory health metrics">
@@ -501,7 +516,10 @@ function MemoryView({
               <div><dt>Trust</dt><dd>{selectedMemory.trust.toFixed(2)}</dd></div>
               <div><dt>Source</dt><dd>{selectedMemory.source.kind}</dd></div>
               <div><dt>Layer</dt><dd>{selectedMemory.layer}</dd></div>
+              <div><dt>Scope</dt><dd>{scopeLabel(selectedMemory)}</dd></div>
+              <div><dt>Consent</dt><dd>{selectedMemory.consent.visibility}</dd></div>
               <div><dt>Tags</dt><dd>{selectedMemory.tags.join(", ") || "none"}</dd></div>
+              <div><dt>Relations</dt><dd>{selectedMemory.relations.map((relation) => relation.type).join(", ") || "none"}</dd></div>
               <div><dt>Age</dt><dd>{ageLabel(selectedMemory.createdAt)}</dd></div>
             </dl>
             <p className="reason">{reviewReason(selectedMemory)}</p>
@@ -557,6 +575,7 @@ function RecallView({
               <span>{result.score.toFixed(2)}</span>
               <strong>{result.memory.content}</strong>
               <small>{result.citation} · trust {result.memory.trust.toFixed(2)} · stale={String(result.stale)}</small>
+              <small>{(result.explanation ?? []).join(" · ")}</small>
             </button>
           ))}
         </div>
@@ -575,6 +594,8 @@ function RecallView({
               <span>semantic {result.signals.semantic.toFixed(2)}</span>
               <span>keyword {result.signals.keyword.toFixed(2)}</span>
               <span>trust {result.signals.trust.toFixed(2)}</span>
+              <span>graph {result.signals.graph.toFixed(2)}</span>
+              <span>{result.decision ?? "include"}</span>
               <p>{result.memory.content}</p>
             </article>
           ))}
@@ -711,7 +732,7 @@ function MemoryMini({ memory }: { memory: Memory }) {
     <article className="memory-mini">
       <strong>{shortId(memory)}</strong>
       <p>{memory.content}</p>
-      <small>{memory.source.kind} · trust {memory.trust.toFixed(2)} · {memory.layer}</small>
+      <small>{memory.source.kind} · trust {memory.trust.toFixed(2)} · {memory.layer} · {memory.consent.visibility}</small>
     </article>
   );
 }
@@ -795,6 +816,10 @@ function itemLabel(item: MemoryFilter): string {
 
 function shortId(memory: Memory): string {
   return memory.id.slice(0, 8);
+}
+
+function scopeLabel(memory: Memory): string {
+  return [memory.orgId, memory.appId, memory.sessionId, memory.projectId].filter(Boolean).join(" / ") || "user";
 }
 
 function ageLabel(date: Date): string {

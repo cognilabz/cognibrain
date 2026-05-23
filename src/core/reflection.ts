@@ -1,15 +1,25 @@
 import type { Memory, ReflectionReport } from "./types";
 import { tokenize } from "./text";
 import { clamp, MemoryStore } from "./store";
+import { DEFAULT_LIFECYCLE_POLICY, normalizeLifecyclePolicy, type LifecyclePolicy } from "./config";
 
 export class ReflectionEngine {
-  constructor(private readonly store: MemoryStore) {}
+  private readonly policy: LifecyclePolicy;
+
+  constructor(private readonly store: MemoryStore, policy: Partial<LifecyclePolicy> = DEFAULT_LIFECYCLE_POLICY) {
+    this.policy = normalizeLifecyclePolicy(policy);
+  }
 
   run(userId: string, now = new Date()): ReflectionReport {
     const memories = this.store.list(userId).filter((memory) => !memory.archivedAt);
     const contradictions = this.resolveContradictions(memories);
     const faded = this.fadeLowUtility(memories, now);
-    const created = this.summarizeClusters(userId, this.activeMemories(userId), now);
+    const stale = this.scheduleStalenessReview(this.activeMemories(userId), now);
+    const created = [
+      ...this.summarizeClusters(userId, this.activeMemories(userId), now),
+      ...this.summarizeTemporalPeriods(userId, this.activeMemories(userId), now),
+      ...this.extractBehavioralPatterns(userId, this.activeMemories(userId), now)
+    ];
     const reorganized = this.reorganizeMemories(this.activeMemories(userId), now);
     const activeAfter = this.activeMemories(userId);
     const evaluation = evaluateMemoryQuality(activeAfter, now);
@@ -28,6 +38,7 @@ export class ReflectionEngine {
         issues: evaluation.issues,
         actions: [
           ...contradictions.map((item) => `resolved contradiction by keeping ${item.kept.id}`),
+          ...stale.map((memory) => `scheduled stale memory verification ${memory.id}`),
           ...faded.faded.map((memory) => `faded stale low-utility memory ${memory.id}`),
           ...faded.archived.map((memory) => `archived stale low-utility memory ${memory.id}`),
           ...created.map((memory) => `created reflection summary ${memory.id}`),
@@ -49,12 +60,12 @@ export class ReflectionEngine {
       const current = this.store.get(memory.id);
       if (current.archivedAt || current.pinned) continue;
       const ageDays = (now.getTime() - memory.createdAt.getTime()) / 86_400_000;
-      const recentUseBoost = Math.log1p(memory.accessCount) / 10;
+      const recentUseBoost = Math.log1p(memory.accessCount) / this.policy.accessBoostDivisor;
       const utility = memory.trust * memory.importance + recentUseBoost;
-      if (ageDays > 45 && utility < 0.5) {
+      if (ageDays > this.policy.fadeAfterDays && utility < this.policy.fadeUtilityThreshold) {
         const updated = this.store.update(memory.id, {
-          trust: clamp(memory.trust - Math.min(0.18, ageDays / 900)),
-          importance: clamp(memory.importance - Math.min(0.14, ageDays / 1200)),
+          trust: clamp(memory.trust - Math.min(0.18, ageDays / this.policy.trustDecayRate)),
+          importance: clamp(memory.importance - Math.min(0.14, ageDays / this.policy.importanceDecayRate)),
           metadata: { fadedAt: now.toISOString(), fadeReason: "stale low-utility memory" }
         });
         demoted.push(updated);
@@ -62,7 +73,7 @@ export class ReflectionEngine {
       }
       const refreshed = this.store.get(memory.id);
       const refreshedUtility = refreshed.trust * refreshed.importance + recentUseBoost;
-      if (ageDays > 90 && refreshedUtility < 0.34) {
+      if (ageDays > this.policy.archiveAfterDays && refreshedUtility < this.policy.archiveUtilityThreshold) {
         const archivedMemory = this.store.archive(memory.id);
         demoted.push(archivedMemory);
         archived.push(archivedMemory);
@@ -71,7 +82,36 @@ export class ReflectionEngine {
     return { demoted: uniqueMemories(demoted), faded, archived };
   }
 
-  private resolveContradictions(memories: Memory[]): Array<{ kept: Memory; demoted: Memory; reason: string }> {
+  private scheduleStalenessReview(memories: Memory[], now: Date): Memory[] {
+    const scheduled: Memory[] = [];
+    for (const memory of memories) {
+      if (memory.pinned || memory.archivedAt || memory.temporal.verificationDueAt) continue;
+      const lastConfirmed = memory.temporal.lastConfirmedAt ? new Date(memory.temporal.lastConfirmedAt) : memory.createdAt;
+      const ageDays = (now.getTime() - lastConfirmed.getTime()) / 86_400_000;
+      const hasCurrentLanguage = /\b(current|currently|now|active|latest|today|tomorrow|yesterday)\b/i.test(memory.content);
+      const hasContradictionMarker = typeof memory.metadata.contradiction === "string";
+      if ((hasCurrentLanguage && ageDays > this.policy.verificationAfterDays) || hasContradictionMarker) {
+        scheduled.push(
+          this.store.update(memory.id, {
+            temporal: {
+              ...memory.temporal,
+              stalenessRisk: clamp((memory.temporal.stalenessRisk ?? 0.2) + (hasContradictionMarker ? 0.5 : 0.25)),
+              verificationDueAt: now.toISOString()
+            },
+            metadata: {
+              staleness: {
+                reason: hasContradictionMarker ? "contradiction-marker" : "time-sensitive-language",
+                scheduledAt: now.toISOString()
+              }
+            }
+          })
+        );
+      }
+    }
+    return scheduled;
+  }
+
+  private resolveContradictions(memories: Memory[]): ReflectionReport["contradictions"] {
     const buckets = new Map<string, Memory[]>();
     for (const memory of memories) {
       const key = contradictionKey(memory.content);
@@ -81,7 +121,7 @@ export class ReflectionEngine {
       buckets.set(key, group);
     }
 
-    const resolved: Array<{ kept: Memory; demoted: Memory; reason: string }> = [];
+    const resolved: ReflectionReport["contradictions"] = [];
     for (const group of buckets.values()) {
       if (group.length < 2) continue;
       const ranked = [...group].sort((a, b) => evidenceWeight(b) - evidenceWeight(a));
@@ -93,7 +133,13 @@ export class ReflectionEngine {
           metadata: { contradiction: `Superseded by ${kept.id}` }
         });
         if (demoted.trust < 0.4) this.store.archive(demoted.id);
-        resolved.push({ kept, demoted: this.store.get(demoted.id), reason: "lower trust or older contradictory claim" });
+        resolved.push({
+          kept,
+          demoted: this.store.get(demoted.id),
+          reason: "lower trust or older contradictory claim",
+          detector: "pattern",
+          confidence: 0.78
+        });
       }
     }
     return resolved;
@@ -133,6 +179,81 @@ export class ReflectionEngine {
             summaryOf: group.map((memory) => memory.id),
             dreamedAt: now.toISOString(),
             dreamJob: "cluster-summary"
+          }
+        })
+      );
+    }
+    return created;
+  }
+
+  private summarizeTemporalPeriods(userId: string, memories: Memory[], now: Date): Memory[] {
+    const periods = new Map<string, Memory[]>();
+    for (const memory of memories) {
+      if (memory.layer === "reflection" || memory.archivedAt) continue;
+      const eventAt = memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt;
+      const key = `${eventAt.getUTCFullYear()}-${String(eventAt.getUTCMonth() + 1).padStart(2, "0")}`;
+      const group = periods.get(key) ?? [];
+      group.push(memory);
+      periods.set(key, group);
+    }
+    const created: Memory[] = [];
+    for (const [period, group] of periods) {
+      if (group.length < 4) continue;
+      const existing = memories.some((memory) => memory.layer === "reflection" && memory.metadata.period === period);
+      if (existing) continue;
+      created.push(
+        this.store.add({
+          userId,
+          content: `Temporal summary for ${period}: ${group.slice(0, 4).map((memory) => memory.content.replace(/\s+/g, " ").slice(0, 90)).join(" | ")}`,
+          type: "reference",
+          layer: "reflection",
+          source: { kind: "agent", confidence: 0.68 },
+          tags: ["reflection", "temporal", period],
+          metadata: {
+            period,
+            summaryOf: group.map((memory) => memory.id),
+            dreamedAt: now.toISOString(),
+            dreamJob: "temporal-summary"
+          }
+        })
+      );
+    }
+    return created;
+  }
+
+  private extractBehavioralPatterns(userId: string, memories: Memory[], now: Date): Memory[] {
+    const groups = new Map<string, Memory[]>();
+    for (const memory of memories) {
+      if (memory.layer === "reflection" || memory.archivedAt) continue;
+      const content = memory.content.toLowerCase();
+      if (!/\b(prefers|orders|uses|runs|chooses|likes|asks|works)\b/.test(content)) continue;
+      const theme = pickTheme(memory);
+      if (!theme) continue;
+      const group = groups.get(theme) ?? [];
+      group.push(memory);
+      groups.set(theme, group);
+    }
+    const created: Memory[] = [];
+    for (const [theme, group] of groups) {
+      if (group.length < 3) continue;
+      const existing = memories.some((memory) => memory.layer === "reflection" && memory.metadata.pattern === theme);
+      if (existing) continue;
+      created.push(
+        this.store.add({
+          userId,
+          content: `Behavioral pattern for ${theme}: repeated evidence across ${group.length} memories suggests a stable preference or habit.`,
+          type: "reference",
+          layer: "reflection",
+          source: { kind: "agent", confidence: 0.66 },
+          tags: ["reflection", "pattern", theme],
+          entities: [theme],
+          metadata: {
+            pattern: theme,
+            supportCount: group.length,
+            confidence: Math.min(0.9, 0.45 + group.length * 0.1),
+            summaryOf: group.map((memory) => memory.id),
+            dreamedAt: now.toISOString(),
+            dreamJob: "behavior-pattern"
           }
         })
       );

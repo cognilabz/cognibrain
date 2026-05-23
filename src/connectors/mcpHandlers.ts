@@ -5,6 +5,10 @@ export interface MemoryAddArgs {
   userId: string;
   content: string;
   agentId?: string;
+  sessionId?: string;
+  appId?: string;
+  orgId?: string;
+  projectId?: string;
   type?: MemoryInput["type"];
   layer?: MemoryInput["layer"];
   sourceKind?: Provenance["kind"];
@@ -19,6 +23,10 @@ export interface MemorySearchArgs {
   userId: string;
   query: string;
   agentId?: string;
+  sessionId?: string;
+  appId?: string;
+  orgId?: string;
+  projectId?: string;
   limit?: number;
   includeArchived?: boolean;
 }
@@ -47,6 +55,10 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
         service.add({
           userId: args.userId,
           agentId: args.agentId,
+          sessionId: args.sessionId,
+          appId: args.appId,
+          orgId: args.orgId,
+          projectId: args.projectId,
           content: args.content,
           type: args.type,
           layer: args.layer,
@@ -66,6 +78,10 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
       const results = service.search({
         userId: args.userId,
         agentId: args.agentId,
+        sessionId: args.sessionId,
+        appId: args.appId,
+        orgId: args.orgId,
+        projectId: args.projectId,
         query: args.query,
         limit: args.limit ?? 8,
         includeArchived: args.includeArchived
@@ -77,6 +93,10 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
       const results = service.search({
         userId: args.userId,
         agentId: args.agentId,
+        sessionId: args.sessionId,
+        appId: args.appId,
+        orgId: args.orgId,
+        projectId: args.projectId,
         query: args.query,
         limit: args.limit ?? 8,
         includeArchived: args.includeArchived

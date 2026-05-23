@@ -71,6 +71,82 @@ describe("TypeScript memory core", () => {
     expect(results[0].signals.entity).toBeGreaterThan(0);
   });
 
+  it("supports configurable retrieval weights", () => {
+    const store = new MemoryStore();
+    store.add({
+      userId: "u1",
+      content: "Old trusted Atlas memory mentions release policy.",
+      source: { kind: "human", confidence: 0.98 },
+      timestamp: "2025-01-01T00:00:00.000Z"
+    });
+    store.add({
+      userId: "u1",
+      content: "Fresh low-trust Atlas note mentions release policy.",
+      source: { kind: "agent", confidence: 0.45 },
+      timestamp: "2026-05-01T00:00:00.000Z"
+    });
+
+    const trustFirst = new RetrievalEngine(store, { trust: 1, temporal: 0, semantic: 0, keyword: 0, entity: 0, graph: 0, access: 0 }).search({
+      userId: "u1",
+      query: "Atlas release policy",
+      now: new Date("2026-05-02T00:00:00.000Z")
+    });
+    const recencyFirst = new RetrievalEngine(store, { trust: 0, temporal: 1, semantic: 0, keyword: 0, entity: 0, graph: 0, access: 0 }).search({
+      userId: "u1",
+      query: "Atlas release policy",
+      now: new Date("2026-05-02T00:00:00.000Z")
+    });
+
+    expect(trustFirst[0].memory.content).toContain("Old trusted");
+    expect(recencyFirst[0].memory.content).toContain("Fresh low-trust");
+  });
+
+  it("keeps scoped and private memories out of unrelated retrieval", () => {
+    const store = new MemoryStore();
+    store.add({
+      userId: "u1",
+      sessionId: "s1",
+      appId: "app-a",
+      content: "Session s1 uses the private launch checklist.",
+      consent: { visibility: "private" },
+      source: { kind: "human", confidence: 0.96 }
+    });
+    store.add({
+      userId: "u1",
+      sessionId: "s2",
+      appId: "app-a",
+      content: "Session s2 uses the public launch checklist.",
+      source: { kind: "human", confidence: 0.96 }
+    });
+    const retrieval = new RetrievalEngine(store);
+    expect(retrieval.search({ userId: "u1", appId: "app-a", query: "launch checklist", includePrivate: false })).toHaveLength(1);
+    expect(retrieval.search({ userId: "u1", sessionId: "s1", query: "private launch checklist", includePrivate: true })[0].memory.content).toContain("private");
+  });
+
+  it("enforces org visibility and retention before retrieval", () => {
+    const store = new MemoryStore();
+    store.add({
+      userId: "u1",
+      orgId: "org-a",
+      content: "Org A uses the shared rollout calendar.",
+      consent: { visibility: "org" },
+      source: { kind: "human", confidence: 0.96 }
+    });
+    store.add({
+      userId: "u1",
+      content: "Expired memory mentions the rollout calendar.",
+      consent: { visibility: "user", retentionUntil: "2026-01-01T00:00:00.000Z" },
+      source: { kind: "human", confidence: 0.96 },
+      timestamp: "2025-12-01T00:00:00.000Z"
+    });
+
+    const retrieval = new RetrievalEngine(store);
+    const now = new Date("2026-02-01T00:00:00.000Z");
+    expect(retrieval.search({ userId: "u1", query: "rollout calendar", now })).toHaveLength(0);
+    expect(retrieval.search({ userId: "u1", orgId: "org-b", query: "rollout calendar", now })).toHaveLength(0);
+    expect(retrieval.search({ userId: "u1", orgId: "org-a", query: "rollout calendar", now })[0].memory.content).toContain("Org A");
+  });
+
   it("demotes low-trust contradictions during reflection", () => {
     const store = new MemoryStore();
     store.add({ userId: "u1", content: "Mira prefers verbose reports.", source: { kind: "agent", confidence: 0.4 } });
@@ -79,6 +155,37 @@ describe("TypeScript memory core", () => {
     expect(report.contradictions.length).toBeGreaterThan(0);
     expect(store.list("u1").some((memory) => memory.trust < 0.5 || memory.archivedAt)).toBe(true);
     expect(report.lifecycle.qualityScore).toBeGreaterThan(0);
+  });
+
+  it("schedules verification for time-sensitive stale memories", () => {
+    const store = new MemoryStore();
+    store.add({
+      userId: "u1",
+      content: "The current target repo is /old/path.",
+      source: { kind: "human", confidence: 0.95 },
+      timestamp: "2026-01-01T00:00:00.000Z",
+      temporal: { lastConfirmedAt: "2026-01-01T00:00:00.000Z" }
+    });
+    const report = new ReflectionEngine(store, { verificationAfterDays: 10 }).run("u1", new Date("2026-02-01T00:00:00.000Z"));
+    const memory = store.list("u1")[0];
+    expect(memory.temporal.verificationDueAt).toBeDefined();
+    expect(report.lifecycle.actions.some((action) => action.includes("scheduled stale memory verification"))).toBe(true);
+  });
+
+  it("creates temporal and behavioral reflection memories from repeated evidence", () => {
+    const store = new MemoryStore();
+    for (const day of [1, 2, 3, 4]) {
+      store.add({
+        userId: "u1",
+        content: `Mira prefers Thai food on Friday observation ${day}.`,
+        source: { kind: "human", confidence: 0.94 },
+        tags: ["preference", "mira"],
+        timestamp: `2026-05-0${day}T12:00:00.000Z`
+      });
+    }
+    const report = new ReflectionEngine(store).run("u1", new Date("2026-05-23T00:00:00.000Z"));
+    expect(report.created.some((memory) => memory.metadata.dreamJob === "temporal-summary")).toBe(true);
+    expect(report.created.some((memory) => memory.metadata.dreamJob === "behavior-pattern")).toBe(true);
   });
 
   it("runs a full dream lifecycle: summarize, fade, archive, reevaluate, and reorganize", () => {
@@ -212,6 +319,33 @@ describe("TypeScript memory core", () => {
 
     const maintenance = handlers.maintenance();
     expect(maintenance.enabled).toBe(false);
+  });
+
+  it("redacts sensitive writes, extracts add-only facts, records feedback, and reports metrics", () => {
+    const service = new MemoryService({ redactionPolicy: { mode: "redact" } });
+    const secret = service.add({
+      userId: "u1",
+      content: "Use token ghp_abcdefghijklmnopqrstuvwxyz123456 for tests.",
+      source: { kind: "human", confidence: 0.95 }
+    });
+    expect(secret.content).toContain("[redacted:github-token]");
+    expect(secret.metadata.privacy).toBeDefined();
+
+    const extracted = service.extract(
+      [
+        { role: "user", content: "Atlas now uses Redis for cache. The API calls /v1/cache." },
+        { role: "tool", content: "Verified npm test passed for Atlas." }
+      ],
+      { userId: "u1", sessionId: "s1", appId: "app-a" }
+    );
+    expect(extracted.memories.length).toBeGreaterThan(1);
+    expect(Object.keys(extracted.entityLinks).length).toBeGreaterThan(0);
+
+    const before = extracted.memories[0].importance;
+    const updated = service.feedback({ memoryId: extracted.memories[0].id, kind: "helpful", userId: "u1" });
+    expect(updated.importance).toBeGreaterThan(before);
+    expect(service.metricsReport().feedback).toBe(1);
+    expect(service.exportUser("u1").length).toBeGreaterThan(0);
   });
 
   it("persists memories and maintenance state across service restarts", () => {

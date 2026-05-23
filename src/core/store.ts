@@ -1,5 +1,6 @@
 import type { Memory, MemoryInput, Provenance } from "./types";
 import { extractEntities, tokenize, unique } from "./text";
+import { DEFAULT_CONSENT } from "./config";
 
 const DEFAULT_SOURCE: Provenance = {
   kind: "agent",
@@ -27,12 +28,21 @@ export class MemoryStore {
       id: makeId(),
       userId: input.userId,
       agentId: input.agentId,
+      sessionId: input.sessionId,
+      appId: input.appId,
+      orgId: input.orgId,
+      projectId: input.projectId,
+      deviceId: input.deviceId,
+      runId: input.runId,
       content: input.content.trim(),
       type: input.type ?? "project",
       layer: input.layer ?? "long_term",
       source,
       tags,
       entities,
+      relations: uniqueRelations(input.relations ?? relationHints(input.content, entities)),
+      consent: normalizeConsent(input.consent),
+      temporal: normalizeTemporal({ ...(input.temporal ?? {}), eventAt: input.temporal?.eventAt ?? input.timestamp }),
       pinned: input.pinned ?? false,
       metadata: input.metadata ?? {},
       createdAt: now,
@@ -53,11 +63,20 @@ export class MemoryStore {
       content,
       userId: patch.userId ?? memory.userId,
       agentId: patch.agentId ?? memory.agentId,
+      sessionId: patch.sessionId ?? memory.sessionId,
+      appId: patch.appId ?? memory.appId,
+      orgId: patch.orgId ?? memory.orgId,
+      projectId: patch.projectId ?? memory.projectId,
+      deviceId: patch.deviceId ?? memory.deviceId,
+      runId: patch.runId ?? memory.runId,
       type: patch.type ?? memory.type,
       layer: patch.layer ?? memory.layer,
       source: patch.source ?? memory.source,
       tags: patch.tags ? unique(patch.tags) : memory.tags,
       entities: patch.entities ? unique([...patch.entities, ...extractEntities(content)]) : memory.entities,
+      relations: patch.relations ? uniqueRelations(patch.relations) : memory.relations,
+      consent: patch.consent ? normalizeConsent({ ...memory.consent, ...patch.consent }) : memory.consent,
+      temporal: patch.temporal ? normalizeTemporal({ ...memory.temporal, ...patch.temporal }) : memory.temporal,
       pinned: patch.pinned ?? memory.pinned,
       metadata: patch.metadata ? { ...memory.metadata, ...patch.metadata } : memory.metadata,
       trust: patch.trust ?? memory.trust,
@@ -113,7 +132,10 @@ export class MemoryStore {
       createdAt: new Date(memory.createdAt),
       updatedAt: new Date(memory.updatedAt),
       lastAccessedAt: memory.lastAccessedAt ? new Date(memory.lastAccessedAt) : undefined,
-      archivedAt: memory.archivedAt ? new Date(memory.archivedAt) : undefined
+      archivedAt: memory.archivedAt ? new Date(memory.archivedAt) : undefined,
+      consent: normalizeConsent(memory.consent),
+      temporal: normalizeTemporal(memory.temporal),
+      relations: uniqueRelations(memory.relations ?? [])
     }));
     for (const memory of restored) this.memories.set(memory.id, memory);
     return restored;
@@ -133,6 +155,46 @@ export class MemoryStore {
     const sourceBoost = source.kind === "human" || source.kind === "reviewed_code" ? 0.15 : 0;
     return clamp(0.35 + density * 0.32 + tagBoost + sourceBoost);
   }
+}
+
+function normalizeConsent(consent: Partial<Memory["consent"]> | undefined): Memory["consent"] {
+  return {
+    ...DEFAULT_CONSENT,
+    ...(consent ?? {}),
+    retentionUntil: consent?.retentionUntil ? new Date(consent.retentionUntil) : consent?.retentionUntil
+  };
+}
+
+function normalizeTemporal(temporal: Partial<Memory["temporal"]> | undefined): Memory["temporal"] {
+  return {
+    ...(temporal ?? {}),
+    eventAt: temporal?.eventAt ? new Date(temporal.eventAt) : undefined,
+    validFrom: temporal?.validFrom ? new Date(temporal.validFrom) : undefined,
+    validUntil: temporal?.validUntil ? new Date(temporal.validUntil) : undefined,
+    supersededAt: temporal?.supersededAt ? new Date(temporal.supersededAt) : undefined,
+    lastConfirmedAt: temporal?.lastConfirmedAt ? new Date(temporal.lastConfirmedAt) : undefined,
+    verificationDueAt: temporal?.verificationDueAt ? new Date(temporal.verificationDueAt) : undefined
+  };
+}
+
+function uniqueRelations(relations: Memory["relations"]): Memory["relations"] {
+  const seen = new Set<string>();
+  return relations.filter((relation) => {
+    const key = `${relation.type}:${relation.targetId ?? ""}:${relation.targetEntity ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function relationHints(content: string, entities: string[]): Memory["relations"] {
+  const lower = content.toLowerCase();
+  const relations: Memory["relations"] = [];
+  const targets = entities.slice(0, 4);
+  if (/\b(imports?|from)\b/.test(lower)) for (const targetEntity of targets) relations.push({ type: "imports", targetEntity, confidence: 0.6 });
+  if (/\b(calls?|endpoint|api|request)\b/.test(lower)) for (const targetEntity of targets) relations.push({ type: "calls", targetEntity, confidence: 0.6 });
+  if (/\b(depends on|requires|uses)\b/.test(lower)) for (const targetEntity of targets) relations.push({ type: "depends_on", targetEntity, confidence: 0.6 });
+  return relations;
 }
 
 function makeId(): string {

@@ -20,6 +20,10 @@ export function createOpenMemoryMcpServer(service = createDefaultMemoryService()
         userId: z.string().min(1),
         content: z.string().min(1),
         agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
         type: z.enum(["user", "feedback", "project", "reference", "episodic", "procedural"]).optional(),
         layer: z.enum(["working", "episodic", "long_term", "procedural", "reflection"]).optional(),
         sourceKind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]).optional(),
@@ -42,6 +46,10 @@ export function createOpenMemoryMcpServer(service = createDefaultMemoryService()
         userId: z.string().min(1),
         query: z.string().min(1),
         agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
         limit: z.number().int().positive().max(50).optional(),
         includeArchived: z.boolean().optional()
       }
@@ -58,6 +66,10 @@ export function createOpenMemoryMcpServer(service = createDefaultMemoryService()
         userId: z.string().min(1),
         query: z.string().min(1),
         agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
         limit: z.number().int().positive().max(50).optional(),
         includeArchived: z.boolean().optional(),
         tokenBudget: z.number().int().positive().max(8000).optional()

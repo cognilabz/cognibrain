@@ -4,3 +4,7 @@ export * from "./retrieval";
 export * from "./reflection";
 export * from "./health";
 export * from "./text";
+export * from "./config";
+export * from "./privacy";
+export * from "./extraction";
+export * from "./domain";

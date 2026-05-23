@@ -15,6 +15,11 @@
 - Combined certified market gate for public benchmark baseline superiority
 - Public BEAM market-claim artifact for reproducible same-benchmark landscape comparison
 - Public documentation for setup, API, integration, configuration, connectors, and benchmarks
+- JSON-command provider adapter for reranking, verification, contradiction classification, and reflection summaries
+- Config-file retrieval profiles plus feedback/training-sample learning
+- Canonical entity registry, typed graph report, encrypted sensitive-memory mode, and dashboard tuning controls
+- Streamable HTTP MCP server mode for remote/shared clients
+- Pluggable persistence with atomic JSON snapshots and append-only JSONL durable audit mode
 
 ## Next
 
@@ -23,12 +28,10 @@
 3. Full answer-generation benchmark layer for BEAM.
 4. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
 5. Improve LoCoMo category 3 multi-hop evidence recall.
-6. Import format adapters for directly comparable vendor artifacts.
-7. Streamable HTTP MCP server for remote/shared deployments.
-8. Durable storage backend.
-9. Configurable retrieval weights.
-10. Dashboard result browser for benchmark artifacts.
-11. Connector packages for Claude Code, Codex, Copilot, and Cursor.
+6. Import more directly comparable vendor artifacts and normalize per-question outputs.
+7. SQLite and Postgres adapters behind the persistence boundary.
+8. Dashboard result browser for historical benchmark artifacts.
+9. Connector packages for Claude Code, Codex, Copilot, and Cursor.
 
 ## Completion Bar
 

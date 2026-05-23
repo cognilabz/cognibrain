@@ -1,7 +1,14 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { applyRedactionPolicy, type RedactionPolicy } from "../core/privacy";
+import { createJsonCommandIntelligenceFromEnv } from "../core/providers";
+import { loadRuntimeConfig } from "../core/runtimeConfig";
 import {
-  applyRedactionPolicy,
+  createPersistenceFromEnv,
+  JsonFilePersistenceAdapter,
+  type MemoryPersistenceAdapter,
+  type PersistedMemoryFile
+} from "./persistence";
+import {
+  EntityRegistry,
   extractAddOnlyMemories,
   healthReport,
   IdentityResolver,
@@ -12,13 +19,15 @@ import {
   ReflectionEngine,
   RetrievalEngine,
   type LifecyclePolicy,
-  type RedactionPolicy,
   type DomainModule
 } from "../core";
 import type {
   DomainEvaluationReport,
+  ContradictionDetector,
+  EntityRecord,
   ExtractionReport,
   FeedbackEvent,
+  GraphReport,
   IdentityLink,
   LearnedProfileReport,
   Memory,
@@ -26,13 +35,16 @@ import type {
   MemoryInput,
   MetricsReport,
   RetrievalProfile,
+  RetrievalTrainingSample,
   RetrievalWeights,
   SearchOptions,
+  ReflectionSummarizer,
   TimelineReport
 } from "../core";
 
 export interface MemoryServiceOptions {
   persistencePath?: string;
+  persistence?: MemoryPersistenceAdapter;
   autoDream?: {
     enabled?: boolean;
     intervalHours?: number;
@@ -42,6 +54,14 @@ export interface MemoryServiceOptions {
   lifecyclePolicy?: Partial<LifecyclePolicy>;
   redactionPolicy?: RedactionPolicy;
   domainModule?: DomainModule;
+  configPath?: string;
+  entityAliases?: Record<string, string[]>;
+  intelligence?: {
+    reranker?: SearchOptions["reranker"];
+    verifier?: SearchOptions["verifier"];
+    contradictionDetector?: ContradictionDetector;
+    summarizer?: ReflectionSummarizer;
+  };
 }
 
 export interface MemoryMaintenanceStatus {
@@ -51,26 +71,14 @@ export interface MemoryMaintenanceStatus {
   users: Record<string, { lastDreamAt?: string; writesSinceDream: number }>;
 }
 
-interface PersistedMemoryFile {
-  version: 1 | 2;
-  memories: Memory[];
-  maintenance: {
-    users: Record<string, { lastDreamAt?: string; writesSinceDream: number }>;
-  };
-  metrics?: MetricsReport;
-  feedback?: FeedbackEvent[];
-  retrievalProfiles?: RetrievalProfile[];
-  identityLinks?: IdentityLink[];
-  domainEvaluations?: DomainEvaluationReport[];
-}
-
 export class MemoryService {
   readonly store = new MemoryStore();
   readonly retrieval: RetrievalEngine;
   readonly reflection: ReflectionEngine;
   readonly identities = new IdentityResolver();
+  readonly entities: EntityRegistry;
 
-  private readonly persistencePath?: string;
+  private readonly persistence?: MemoryPersistenceAdapter;
   private readonly autoDream: Required<NonNullable<MemoryServiceOptions["autoDream"]>>;
   private readonly redactionPolicy: RedactionPolicy;
   private readonly domainModule?: DomainModule;
@@ -78,6 +86,7 @@ export class MemoryService {
   private feedbackEvents: FeedbackEvent[] = [];
   private retrievalProfiles = new Map<string, RetrievalProfile>();
   private domainEvaluations: DomainEvaluationReport[] = [];
+  private trainingSamples: RetrievalTrainingSample[] = [];
   private searchEvents: Array<{
     timestamp: string;
     userId: string;
@@ -102,15 +111,18 @@ export class MemoryService {
   private dreaming = false;
 
   constructor(options: MemoryServiceOptions = {}) {
-    this.persistencePath = options.persistencePath ? resolve(options.persistencePath) : undefined;
+    const runtimeConfig = loadRuntimeConfig(options.configPath);
+    this.persistence = options.persistence ?? (options.persistencePath ? new JsonFilePersistenceAdapter(options.persistencePath) : undefined);
     this.autoDream = {
       enabled: options.autoDream?.enabled ?? false,
       intervalHours: options.autoDream?.intervalHours ?? 6,
       writeThreshold: options.autoDream?.writeThreshold ?? 12
     };
     this.domainModule = options.domainModule;
-    this.redactionPolicy = options.redactionPolicy ?? options.domainModule?.redactionPolicy ?? { mode: process.env.MEMORY_REDACTION_MODE === "off" ? "off" : "redact" };
-    const defaultWeights = normalizeRetrievalWeights({ ...options.domainModule?.retrievalWeights, ...options.retrievalWeights });
+    const provider = options.intelligence ?? providerFromEnv();
+    this.redactionPolicy = options.redactionPolicy ?? runtimeConfig.redactionPolicy ?? options.domainModule?.redactionPolicy ?? { mode: redactionModeFromEnv(process.env.MEMORY_REDACTION_MODE), encryptionKey: process.env.MEMORY_ENCRYPTION_KEY };
+    this.entities = new EntityRegistry({ ...(runtimeConfig.entityAliases ?? {}), ...(options.domainModule?.aliases ?? {}), ...(options.entityAliases ?? {}) });
+    const defaultWeights = normalizeRetrievalWeights({ ...runtimeConfig.retrievalWeights, ...options.domainModule?.retrievalWeights, ...options.retrievalWeights });
     this.retrievalProfiles.set("default", {
       id: "default",
       label: "Default benchmark profile",
@@ -118,10 +130,20 @@ export class MemoryService {
       updatedAt: new Date().toISOString(),
       provenance: "constructor"
     });
+    for (const profile of runtimeConfig.retrievalProfiles ?? []) this.retrievalProfiles.set(profile.id, { ...profile, weights: normalizeRetrievalWeights(profile.weights) });
     this.retrieval = new RetrievalEngine(this.store, defaultWeights);
-    this.reflection = new ReflectionEngine(this.store, normalizeLifecyclePolicy({ ...options.domainModule?.lifecyclePolicy, ...options.lifecyclePolicy }));
+    this.reflection = new ReflectionEngine(this.store, {
+      ...normalizeLifecyclePolicy({ ...runtimeConfig.lifecyclePolicy, ...options.domainModule?.lifecyclePolicy, ...options.lifecyclePolicy }),
+      contradictionDetector: provider.contradictionDetector,
+      summarizer: provider.summarizer
+    });
+    this.defaultReranker = provider.reranker;
+    this.defaultVerifier = provider.verifier;
     this.load();
   }
+
+  private readonly defaultReranker?: SearchOptions["reranker"];
+  private readonly defaultVerifier?: SearchOptions["verifier"];
 
   add(input: MemoryInput) {
     const enriched = this.domainModule?.enrich ? this.domainModule.enrich(input) : input;
@@ -129,7 +151,7 @@ export class MemoryService {
     if (checked.rejected || !checked.input) {
       throw new Error(`Memory rejected by redaction policy: ${checked.matches.map((match) => match.detector).join(", ")}`);
     }
-    const memory = this.store.add(checked.input);
+    const memory = this.entities.ingest(this.store.add(checked.input));
     if (memory.metadata.archivedOnWrite) this.store.archive(memory.id);
     this.metrics.memoriesAdded += 1;
     this.afterWrite(memory.userId);
@@ -184,7 +206,9 @@ export class MemoryService {
     const results = this.retrieval.search({
       ...options,
       linkedUserIds,
-      weights: options.weights ?? profile?.weights
+      weights: options.weights ?? profile?.weights,
+      reranker: options.reranker ?? this.defaultReranker,
+      verifier: options.verifier ?? this.defaultVerifier
     });
     this.metrics.searches += 1;
     this.metrics.noHitSearches += results.length === 0 ? 1 : 0;
@@ -235,9 +259,15 @@ export class MemoryService {
             ? { ...memory.consent, visibility: "org" }
             : memory.consent,
       metadata: {
-        feedback: [...((memory.metadata.feedback as unknown[]) ?? []), { ...event, timestamp }]
+        feedback: [...((memory.metadata.feedback as unknown[]) ?? []), { ...event, timestamp }],
+        ...(event.kind === "approve_pattern"
+          ? { patternReview: { status: "approved", reviewedAt: timestamp, note: event.note } }
+          : event.kind === "reject_pattern"
+            ? { patternReview: { status: "rejected", reviewedAt: timestamp, note: event.note } }
+            : {})
       }
     });
+    if (event.kind === "reject_pattern") this.store.archive(event.memoryId);
     this.feedbackEvents.push({ ...event, timestamp });
     this.metrics.feedback += 1;
     this.persist();
@@ -257,6 +287,13 @@ export class MemoryService {
 
   metricsReport(): MetricsReport {
     return { ...this.metrics, sessions: { ...(this.metrics.sessions ?? {}) }, dreamActions: { ...(this.metrics.dreamActions ?? {}) } };
+  }
+
+  addTrainingSample(sample: RetrievalTrainingSample): RetrievalTrainingSample {
+    const saved = { ...sample, timestamp: sample.timestamp ?? new Date().toISOString() };
+    this.trainingSamples.push(saved);
+    this.persist();
+    return saved;
   }
 
   setRetrievalProfile(profile: Omit<RetrievalProfile, "updatedAt" | "weights"> & { weights: Partial<RetrievalWeights>; updatedAt?: string }): RetrievalProfile {
@@ -289,7 +326,15 @@ export class MemoryService {
       bucket.temporal = (bucket.temporal ?? 0) + (memory.lastAccessedAt ? 0.6 : 0.2);
       bucket.access = (bucket.access ?? 0) + Math.min(1, Math.log1p(memory.accessCount) / 4);
     }
+    for (const sample of this.trainingSamples) {
+      const bucket = sample.outcome === "helpful" || sample.outcome === "accepted" ? positiveSignals : negativeSignals;
+      samples += 1;
+      for (const key of Object.keys(baseSignalTemplate()) as Array<keyof RetrievalWeights>) {
+        bucket[key] = (bucket[key] ?? 0) + (sample.signals?.[key] ?? 0);
+      }
+    }
     const base = this.retrievalProfiles.get("default")?.weights ?? normalizeRetrievalWeights();
+    const lossBefore = profileLoss(base, this.trainingSamples);
     const learned = { ...base };
     if (samples) {
       for (const key of Object.keys(base) as Array<keyof RetrievalWeights>) {
@@ -305,7 +350,7 @@ export class MemoryService {
       benchmarkDelta: 0,
       provenance: "feedback coordinate update"
     });
-    return { profile, samples, positiveSignals, negativeSignals };
+    return { profile, samples, positiveSignals, negativeSignals, lossBefore, lossAfter: profileLoss(profile.weights, this.trainingSamples) };
   }
 
   linkIdentity(primaryUserId: string, linkedUserId: string, consentToken: string, consent: IdentityLink["consent"] = "user"): IdentityLink {
@@ -333,18 +378,17 @@ export class MemoryService {
         entities: memory.entities
       }))
       .sort((a, b) => new Date(a.eventAt).getTime() - new Date(b.eventAt).getTime());
-    const periods = new Map<string, string[]>();
-    for (const event of events) {
-      const date = new Date(event.eventAt);
-      const period = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-      periods.set(period, [...(periods.get(period) ?? []), event.memoryId]);
-    }
     const summaries = new Map(memories.filter((memory) => memory.metadata.period).map((memory) => [String(memory.metadata.period), memory.content]));
     return {
       userId,
       events,
-      periods: [...periods.entries()].map(([period, memoryIds]) => ({ period, memoryIds, summary: summaries.get(period) }))
+      periods: groupedPeriods(events, summaries)
     };
+  }
+
+  graph(userId?: string): GraphReport {
+    const memories = this.store.list(userId).filter((memory) => !memory.archivedAt);
+    return this.entities.graph(memories);
   }
 
   lifecyclePreview(userId: string, policy?: Partial<LifecyclePolicy>) {
@@ -476,10 +520,8 @@ export class MemoryService {
   }
 
   private load(): void {
-    if (!this.persistencePath || !existsSync(this.persistencePath)) return;
-    const contents = readFileSync(this.persistencePath, "utf8").trim();
-    if (!contents) return;
-    const raw = JSON.parse(contents) as PersistedMemoryFile | MemoryInput[];
+    const raw = this.persistence?.load();
+    if (!raw) return;
     if (Array.isArray(raw)) {
       this.store.seed(raw);
       return;
@@ -499,12 +541,14 @@ export class MemoryService {
     }
     this.identities.import(raw.identityLinks ?? []);
     this.domainEvaluations = raw.domainEvaluations ?? [];
+    this.entities.import(raw.entityRecords ?? []);
+    this.trainingSamples = raw.trainingSamples ?? [];
     this.store.import(raw.memories ?? []);
+    for (const memory of this.store.list()) this.entities.ingest(memory);
   }
 
   private persist(): void {
-    if (!this.persistencePath) return;
-    mkdirSync(dirname(this.persistencePath), { recursive: true });
+    if (!this.persistence) return;
     const payload: PersistedMemoryFile = {
       version: 2,
       memories: this.store.export(),
@@ -513,11 +557,11 @@ export class MemoryService {
       feedback: this.feedbackEvents,
       retrievalProfiles: [...this.retrievalProfiles.values()],
       identityLinks: this.identities.export(),
-      domainEvaluations: this.domainEvaluations
+      domainEvaluations: this.domainEvaluations,
+      entityRecords: this.entities.export(),
+      trainingSamples: this.trainingSamples
     };
-    const tempPath = `${this.persistencePath}.${process.pid}.tmp`;
-    writeFileSync(tempPath, JSON.stringify(payload, null, 2));
-    renameSync(tempPath, this.persistencePath);
+    this.persistence.save(payload);
   }
 }
 
@@ -525,18 +569,19 @@ export function createDefaultMemoryService() {
   const persistencePath = process.env.NODE_ENV === "test" ? undefined : process.env.MEMORY_DB_PATH ?? ".memory-harness.json";
   const autoDreamEnabled = process.env.MEMORY_AUTO_DREAM !== "false";
   return new MemoryService({
-    persistencePath,
+    persistence: persistencePath ? createPersistenceFromEnv(persistencePath) : undefined,
     autoDream: {
       enabled: autoDreamEnabled,
       intervalHours: Number(process.env.MEMORY_DREAM_INTERVAL_HOURS ?? 6),
       writeThreshold: Number(process.env.MEMORY_DREAM_WRITE_THRESHOLD ?? 12)
     },
-    redactionPolicy: { mode: redactionModeFromEnv(process.env.MEMORY_REDACTION_MODE) }
+    configPath: process.env.MEMORY_CONFIG_PATH,
+    redactionPolicy: { mode: redactionModeFromEnv(process.env.MEMORY_REDACTION_MODE), encryptionKey: process.env.MEMORY_ENCRYPTION_KEY }
   });
 }
 
 function redactionModeFromEnv(value: string | undefined): RedactionPolicy["mode"] {
-  if (value === "off" || value === "reject" || value === "archive") return value;
+  if (value === "off" || value === "reject" || value === "archive" || value === "encrypt") return value;
   return "redact";
 }
 
@@ -595,6 +640,71 @@ function linkStateChange(input: MemoryInput, existing: Memory[]): MemoryInput {
     relations: [...(input.relations ?? []), { type: relationType, targetId: prior.id, targetEntity: subject, confidence: 0.62 }],
     temporal: { ...(input.temporal ?? {}), validFrom: input.timestamp ?? new Date().toISOString() }
   };
+}
+
+function providerFromEnv(): NonNullable<MemoryServiceOptions["intelligence"]> {
+  const provider = createJsonCommandIntelligenceFromEnv();
+  if (!provider) return {};
+  return {
+    reranker: provider,
+    verifier: provider,
+    contradictionDetector: provider,
+    summarizer: provider
+  };
+}
+
+function baseSignalTemplate(): RetrievalWeights {
+  return normalizeRetrievalWeights();
+}
+
+function profileLoss(weights: RetrievalWeights, samples: RetrievalTrainingSample[]): number | undefined {
+  if (!samples.length) return undefined;
+  let total = 0;
+  for (const sample of samples) {
+    const score = dot(weights, sample.signals ?? {});
+    const target = sample.outcome === "helpful" || sample.outcome === "accepted" ? 1 : 0;
+    total += (target - score) ** 2;
+  }
+  return total / samples.length;
+}
+
+function dot(weights: RetrievalWeights, signals: Partial<RetrievalWeights>): number {
+  return (Object.keys(weights) as Array<keyof RetrievalWeights>).reduce((sum, key) => sum + weights[key] * (signals[key] ?? 0), 0);
+}
+
+function groupedPeriods(events: TimelineReport["events"], summaries: Map<string, string>): TimelineReport["periods"] {
+  const groups = new Map<string, TimelineReport["periods"][number]>();
+  for (const event of events) {
+    const date = new Date(event.eventAt);
+    for (const [granularity, period] of [
+      ["day", isoDay(date)],
+      ["week", isoWeek(date)],
+      ["month", isoMonth(date)]
+    ] as const) {
+      const key = `${granularity}:${period}`;
+      const current = groups.get(key) ?? { granularity, period, memoryIds: [], summary: summaries.get(period) };
+      current.memoryIds.push(event.memoryId);
+      groups.set(key, current);
+    }
+  }
+  return [...groups.values()].sort((a, b) => a.period.localeCompare(b.period) || a.granularity.localeCompare(b.granularity));
+}
+
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function isoMonth(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function isoWeek(date: Date): string {
+  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = copy.getUTCDay() || 7;
+  copy.setUTCDate(copy.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(copy.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((copy.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${copy.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
 export const defaultService = createDefaultMemoryService();

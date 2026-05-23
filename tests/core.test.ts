@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CODING_DOMAIN_MODULE, MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities } from "../src/core";
+import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { MemoryService } from "../src/api/service";
+import { AppendOnlyLogPersistenceAdapter } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
 
 describe("TypeScript memory core", () => {
@@ -225,6 +227,32 @@ describe("TypeScript memory core", () => {
     expect(summary?.metadata.summaryOf).toHaveLength(3);
   });
 
+  it("uses a JSON command provider for reranking, verification, contradiction classification, and summaries", () => {
+    const script = `
+      const fs = require("node:fs");
+      const input = JSON.parse(fs.readFileSync(0, "utf8"));
+      if (input.task === "rerank") console.log(JSON.stringify({ ranking: input.results.map((item) => item.id).reverse() }));
+      if (input.task === "verify") console.log(JSON.stringify({ decisions: [{ id: input.results[0].id, decision: "warn", reason: "provider warning" }] }));
+      if (input.task === "contradiction") console.log(JSON.stringify({ label: "contradiction", confidence: 0.88, reason: "provider contradiction" }));
+      if (input.task === "summarize") console.log(JSON.stringify({ content: "Atlas provider summary from external intelligence.", confidence: 0.81 }));
+    `;
+    const provider = new JsonCommandMemoryIntelligence({ command: process.execPath, args: ["-e", script] });
+    const service = new MemoryService({
+      intelligence: { reranker: provider, verifier: provider, contradictionDetector: provider, summarizer: provider }
+    });
+    service.add({ userId: "u1", content: "Atlas first cache note.", tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
+    service.add({ userId: "u1", content: "Atlas second cache note.", tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
+    service.add({ userId: "u1", content: "Atlas third cache note.", tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
+
+    const search = service.search({ userId: "u1", query: "Atlas cache", limit: 2 });
+    expect(search[0].decision).toBe("warn");
+    expect(search[0].explanation?.join(" ")).toContain("provider verify");
+
+    const report = service.dream("u1");
+    expect(report.contradictions[0]?.reason).toBe("provider contradiction");
+    expect(report.created.some((memory) => memory.content.includes("provider summary"))).toBe(true);
+  });
+
   it("schedules verification for time-sensitive stale memories", () => {
     const store = new MemoryStore();
     store.add({
@@ -416,6 +444,18 @@ describe("TypeScript memory core", () => {
     expect(service.exportUser("u1").length).toBeGreaterThan(0);
   });
 
+  it("encrypts sensitive writes when encryption mode is configured", () => {
+    const service = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "test-key-with-enough-length" } });
+    const memory = service.add({
+      userId: "u1",
+      content: "The password=supersecret token should not be stored in plaintext.",
+      source: { kind: "human", confidence: 0.95 }
+    });
+    expect(memory.content).toContain("[encrypted:aes-256-gcm:");
+    expect(memory.content).not.toContain("supersecret");
+    expect(memory.metadata.privacy).toMatchObject({ encrypted: true, action: "encrypt" });
+  });
+
   it("manages retrieval profiles and learns a bounded profile from feedback", () => {
     const service = new MemoryService();
     const memory = service.add({
@@ -425,10 +465,39 @@ describe("TypeScript memory core", () => {
       source: { kind: "human", confidence: 0.96 }
     });
     service.feedback({ memoryId: memory.id, kind: "helpful", userId: "u1" });
+    service.addTrainingSample({
+      userId: "u1",
+      query: "Atlas Redis",
+      selectedMemoryId: memory.id,
+      outcome: "accepted",
+      signals: { entity: 1, trust: 0.9, keyword: 0.5 }
+    });
     const learned = service.learnRetrievalProfile("team-learned");
-    expect(learned.samples).toBe(1);
+    expect(learned.samples).toBe(2);
+    expect(learned.lossBefore).toBeDefined();
+    expect(learned.lossAfter).toBeDefined();
     expect(learned.profile.weights.trust).toBeGreaterThan(0);
     expect(service.getRetrievalProfiles().some((profile) => profile.id === "team-learned")).toBe(true);
+  });
+
+  it("loads retrieval profiles and aliases from runtime config", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-config-"));
+    try {
+      const configPath = join(dir, "memory.config.json");
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          retrievalProfiles: [{ id: "fresh", label: "Fresh", weights: { temporal: 1 }, updatedAt: "2026-01-01T00:00:00.000Z" }],
+          entityAliases: { redis: ["cache database"] }
+        })
+      );
+      const service = new MemoryService({ configPath });
+      expect(service.getRetrievalProfiles().some((profile) => profile.id === "fresh")).toBe(true);
+      const memory = service.add({ userId: "u1", content: "Atlas uses cache database.", entities: ["cache database"], source: { kind: "human", confidence: 0.96 } });
+      expect(memory.entities).toContain("redis");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("links identities only with explicit consent and supports cross-session recall", () => {
@@ -448,6 +517,36 @@ describe("TypeScript memory core", () => {
     const timeline = service.timeline("u1");
     expect(timeline.periods.map((period) => period.period)).toContain("2026-01");
     expect(timeline.periods.map((period) => period.period)).toContain("2026-03");
+    expect(timeline.periods.some((period) => period.granularity === "day")).toBe(true);
+    expect(timeline.periods.some((period) => period.granularity === "week")).toBe(true);
+  });
+
+  it("exposes canonical entity and typed graph reports", () => {
+    const service = new MemoryService({ entityAliases: { redis: ["cache database"] } });
+    const memory = service.add({
+      userId: "u1",
+      content: "CacheClient calls cache database through GET /v1/cache.",
+      entities: ["cache database", "cacheclient"],
+      relations: [{ type: "calls", sourceEntity: "cacheclient", targetEntity: "cache database", confidence: 0.8 }],
+      source: { kind: "reviewed_code", confidence: 0.96 }
+    });
+    const graph = service.graph("u1");
+    expect(graph.entities.some((entity) => entity.canonical === "redis" && entity.memoryIds.includes(memory.id))).toBe(true);
+    expect(graph.edges.some((edge) => edge.type === "calls" && edge.targetEntity === "redis")).toBe(true);
+  });
+
+  it("keeps inferred behavioral patterns pending until feedback approves or rejects them", () => {
+    const service = new MemoryService();
+    for (const day of [1, 2, 3]) {
+      service.add({ userId: "u1", content: `Mira prefers Thai food Friday ${day}.`, tags: ["mira"], source: { kind: "human", confidence: 0.95 } });
+    }
+    const report = service.dream("u1");
+    const pattern = report.created.find((memory) => memory.metadata.dreamJob === "behavior-pattern");
+    expect(pattern?.metadata.patternReview).toMatchObject({ status: "pending" });
+    const approved = service.feedback({ memoryId: pattern!.id, kind: "approve_pattern", userId: "u1" });
+    expect(approved.metadata.patternReview).toMatchObject({ status: "approved" });
+    service.feedback({ memoryId: pattern!.id, kind: "reject_pattern", userId: "u1" });
+    expect(service.get(pattern!.id).archivedAt).toBeDefined();
   });
 
   it("previews lifecycle policy and protects configured sources", () => {
@@ -511,6 +610,37 @@ describe("TypeScript memory core", () => {
       const reloaded = new MemoryService({ persistencePath: dbPath });
       expect(reloaded.search({ userId: "u1", query: "What should run before releasing?", limit: 1 })[0].memory.content).toContain("build");
       expect(reloaded.maintenanceStatus().users.u1.lastDreamAt).toBe(status.lastDreamAt);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("supports an append-only durable persistence backend", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-log-"));
+    try {
+      const logPath = join(dir, "memory.jsonl");
+      const service = new MemoryService({
+        persistence: new AppendOnlyLogPersistenceAdapter(logPath)
+      });
+
+      service.add({
+        userId: "u1",
+        content: "Durable backends keep memory snapshots in an append-only audit log.",
+        source: { kind: "human", confidence: 0.97 }
+      });
+      service.addTrainingSample({
+        userId: "u1",
+        query: "durable memory backend",
+        selectedMemoryId: service.list("u1")[0].id,
+        outcome: "helpful",
+        signals: { trust: 1, keyword: 0.8 }
+      });
+
+      const reloaded = new MemoryService({
+        persistence: new AppendOnlyLogPersistenceAdapter(logPath)
+      });
+      expect(reloaded.search({ userId: "u1", query: "audit log backend", limit: 1 })[0].memory.content).toContain("append-only");
+      expect(reloaded.learnRetrievalProfile().samples).toBe(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -25,6 +25,7 @@ import {
   ReflectionEngine,
   healthReport,
   type Memory,
+  type FeedbackKind,
   type MemoryInput,
   type MetricsReport,
   type ReflectionReport,
@@ -191,6 +192,8 @@ function App() {
   const [artifactText, setArtifactText] = useState("");
   const [lastCycle, setLastCycle] = useState<ReflectionReport | null>(null);
   const [lastClean, setLastClean] = useState<string[]>([]);
+  const [retrievalWeights, setRetrievalWeights] = useState({ semantic: 0.26, keyword: 0.24, entity: 0.16, temporal: 0.08, trust: 0.18, graph: 0.06, access: 0.02 });
+  const [lifecyclePolicy, setLifecyclePolicy] = useState({ fadeAfterDays: 45, archiveAfterDays: 90 });
   const [version, setVersion] = useState(0);
   const apiUrl = useMemo(getApiUrl, []);
   const [runtime, setRuntime] = useState<RuntimeStatus>({ state: "checking", label: "checking" });
@@ -205,7 +208,7 @@ function App() {
   const health = healthReport(store, "demo");
   const filteredMemories = filterMemories(memories, filter);
   const selectedMemory = selectedId ? findMemory(memories, selectedId) : filteredMemories[0] ?? memories[0] ?? null;
-  const results = retrieval.search({ userId: "demo", query, limit: 5 });
+  const results = retrieval.search({ userId: "demo", query, limit: 5, weights: retrievalWeights });
   const artifactSummary = useMemo(() => summarizeArtifact(artifactText), [artifactText]);
   const reviewCount = memories.filter(needsReview).length;
 
@@ -283,6 +286,31 @@ function App() {
     refresh(updated.id);
   }
 
+  function applyFeedback(memory: Memory, kind: FeedbackKind) {
+    const delta =
+      kind === "helpful" ? { trust: 0.04, importance: 0.06 } :
+      kind === "wrong" ? { trust: -0.18, importance: -0.08 } :
+      kind === "always_include" ? { trust: 0.06, importance: 0.12 } :
+      kind === "never_include" ? { trust: -0.25, importance: -0.18 } :
+      kind === "approve_pattern" ? { trust: 0.08, importance: 0.1 } :
+      kind === "reject_pattern" ? { trust: -0.22, importance: -0.18 } :
+      { trust: 0, importance: 0 };
+    const updated = store.update(memory.id, {
+      trust: clamp01(memory.trust + delta.trust),
+      importance: clamp01(memory.importance + delta.importance),
+      pinned: kind === "always_include" || kind === "approve_pattern" ? true : memory.pinned,
+      tags: kind === "wrong" || kind === "never_include" ? Array.from(new Set([...memory.tags, "needs-review"])) : memory.tags,
+      metadata: {
+        feedback: [...((memory.metadata.feedback as unknown[]) ?? []), { kind, timestamp: new Date().toISOString() }],
+        ...(kind === "approve_pattern" ? { patternReview: { status: "approved", reviewedAt: new Date().toISOString() } } : {}),
+        ...(kind === "reject_pattern" ? { patternReview: { status: "rejected", reviewedAt: new Date().toISOString() } } : {})
+      }
+    });
+    if (kind === "reject_pattern" || kind === "never_include") store.archive(updated.id);
+    setLastClean([`Recorded ${kind.replace("_", " ")} feedback for ${shortId(updated)}.`]);
+    refresh(updated.id);
+  }
+
   function cleanRiskyMemories() {
     const candidates = store.list("demo").filter((memory) => !memory.archivedAt && !memory.pinned && needsReview(memory));
     const actions = candidates.map((memory) => {
@@ -294,7 +322,7 @@ function App() {
   }
 
   function runDreamCycle() {
-    const report = reflection.run("demo");
+    const report = new ReflectionEngine(store, lifecyclePolicy).run("demo");
     setLastCycle(report);
     setLastClean(report.lifecycle.actions.length ? report.lifecycle.actions : ["Dream cycle evaluated memory quality. No structural action was needed."]);
     setFilter("all");
@@ -418,6 +446,7 @@ function App() {
             deleteMemory={deleteMemory}
             verifyMemory={verifyMemory}
             togglePin={togglePin}
+            applyFeedback={applyFeedback}
             lastClean={lastClean}
           />
         ) : null}
@@ -427,7 +456,16 @@ function App() {
         ) : null}
 
         {view === "dream" ? (
-          <DreamView report={lastCycle} memories={memories} runDreamCycle={runDreamCycle} lastClean={lastClean} />
+          <DreamView
+            report={lastCycle}
+            memories={memories}
+            runDreamCycle={runDreamCycle}
+            lastClean={lastClean}
+            retrievalWeights={retrievalWeights}
+            setRetrievalWeights={setRetrievalWeights}
+            lifecyclePolicy={lifecyclePolicy}
+            setLifecyclePolicy={setLifecyclePolicy}
+          />
         ) : null}
 
         {view === "proof" ? (
@@ -456,6 +494,7 @@ function MemoryView({
   deleteMemory,
   verifyMemory,
   togglePin,
+  applyFeedback,
   lastClean
 }: {
   filter: MemoryFilter;
@@ -470,6 +509,7 @@ function MemoryView({
   deleteMemory: (memory: Memory) => void;
   verifyMemory: (memory: Memory) => void;
   togglePin: (memory: Memory) => void;
+  applyFeedback: (memory: Memory, kind: FeedbackKind) => void;
   lastClean: string[];
 }) {
   return (
@@ -534,6 +574,18 @@ function MemoryView({
               <button className="secondary-action" onClick={() => togglePin(selectedMemory)}><Pin size={16} /> {selectedMemory.pinned ? "Unpin" : "Pin"}</button>
               <button className="secondary-action" onClick={() => archiveMemory(selectedMemory)} disabled={Boolean(selectedMemory.archivedAt)}><Archive size={16} /> Archive</button>
               <button className="danger-action" onClick={() => deleteMemory(selectedMemory)}><Trash2 size={16} /> Delete</button>
+            </div>
+            <div className="feedback-grid" aria-label="Memory feedback">
+              <button className="secondary-action" onClick={() => applyFeedback(selectedMemory, "helpful")}><CheckCircle2 size={15} /> Helpful</button>
+              <button className="secondary-action" onClick={() => applyFeedback(selectedMemory, "wrong")}><ShieldCheck size={15} /> Wrong</button>
+              <button className="secondary-action" onClick={() => applyFeedback(selectedMemory, "always_include")}><Pin size={15} /> Always</button>
+              <button className="secondary-action" onClick={() => applyFeedback(selectedMemory, "never_include")}><Archive size={15} /> Never</button>
+              {selectedMemory.metadata.patternReview ? (
+                <>
+                  <button className="secondary-action" onClick={() => applyFeedback(selectedMemory, "approve_pattern")}><CheckCircle2 size={15} /> Approve</button>
+                  <button className="danger-action" onClick={() => applyFeedback(selectedMemory, "reject_pattern")}><Trash2 size={15} /> Reject</button>
+                </>
+              ) : null}
             </div>
           </article>
         ) : null}
@@ -616,12 +668,20 @@ function DreamView({
   report,
   memories,
   runDreamCycle,
-  lastClean
+  lastClean,
+  retrievalWeights,
+  setRetrievalWeights,
+  lifecyclePolicy,
+  setLifecyclePolicy
 }: {
   report: ReflectionReport | null;
   memories: Memory[];
   runDreamCycle: () => void;
   lastClean: string[];
+  retrievalWeights: Record<string, number>;
+  setRetrievalWeights: React.Dispatch<React.SetStateAction<{ semantic: number; keyword: number; entity: number; temporal: number; trust: number; graph: number; access: number }>>;
+  lifecyclePolicy: { fadeAfterDays: number; archiveAfterDays: number };
+  setLifecyclePolicy: React.Dispatch<React.SetStateAction<{ fadeAfterDays: number; archiveAfterDays: number }>>;
 }) {
   const lifecycle = report?.lifecycle;
   return (
@@ -649,6 +709,55 @@ function DreamView({
           ))}
         </div>
         <ActionLog actions={lastClean} empty="Run the dream cycle to see exact memory operations." />
+      </div>
+      <div className="panel tuning-panel">
+        <div className="panel-title">
+          <div>
+            <h2>Operator Tuning</h2>
+            <p>Adjust recall and lifecycle pressure before running the next maintenance pass.</p>
+          </div>
+          <ShieldCheck size={18} />
+        </div>
+        <div className="slider-grid">
+          {(["semantic", "keyword", "entity", "temporal", "trust", "graph", "access"] as const).map((key) => (
+            <label key={key}>
+              <span>{key}</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={retrievalWeights[key]}
+                onChange={(event) => setRetrievalWeights((weights) => ({ ...weights, [key]: Number(event.target.value) }))}
+              />
+              <b>{retrievalWeights[key].toFixed(2)}</b>
+            </label>
+          ))}
+          <label>
+            <span>fade days</span>
+            <input
+              type="range"
+              min="7"
+              max="180"
+              step="1"
+              value={lifecyclePolicy.fadeAfterDays}
+              onChange={(event) => setLifecyclePolicy((policy) => ({ ...policy, fadeAfterDays: Number(event.target.value) }))}
+            />
+            <b>{lifecyclePolicy.fadeAfterDays}</b>
+          </label>
+          <label>
+            <span>archive days</span>
+            <input
+              type="range"
+              min="14"
+              max="365"
+              step="1"
+              value={lifecyclePolicy.archiveAfterDays}
+              onChange={(event) => setLifecyclePolicy((policy) => ({ ...policy, archiveAfterDays: Number(event.target.value) }))}
+            />
+            <b>{lifecyclePolicy.archiveAfterDays}</b>
+          </label>
+        </div>
       </div>
       <div className="panel">
         <div className="panel-title">
@@ -713,6 +822,18 @@ function ProofView({
               <div key={label} className="ability-row">
                 <span>{label}</span>
                 <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="panel">
+          <h2><BarChart3 size={17} /> Proof Trend</h2>
+          <div className="trend-list">
+            {certifiedBenchmarks.map((benchmark) => (
+              <div key={benchmark.dataset} className="trend-row">
+                <span>{benchmark.dataset}</span>
+                <meter min={0} max={100} value={benchmark.accuracy} />
+                <strong>+{benchmark.margin.toFixed(2)}pp</strong>
               </div>
             ))}
           </div>
@@ -816,13 +937,17 @@ function filterMemories(memories: Memory[], filter: MemoryFilter): Memory[] {
 }
 
 function needsReview(memory: Memory): boolean {
-  return !memory.archivedAt && (memory.trust < 0.55 || memory.source.kind === "transcript" || memory.tags.includes("needs-review"));
+  const patternReview = memory.metadata.patternReview as { status?: string } | undefined;
+  const privacy = memory.metadata.privacy as { action?: string } | undefined;
+  return !memory.archivedAt && (memory.trust < 0.55 || memory.source.kind === "transcript" || memory.tags.includes("needs-review") || patternReview?.status === "pending" || privacy?.action === "encrypt");
 }
 
 function reviewReason(memory: Memory): string {
   if (memory.archivedAt) return "This memory is archived and will not be injected.";
   if (memory.pinned) return "Pinned memory. It will survive cleanup unless explicitly changed.";
   if (memory.source.kind === "transcript") return "Transcript source: verify with a human before injecting.";
+  if ((memory.metadata.patternReview as { status?: string } | undefined)?.status === "pending") return "Inferred behavioral pattern: approve before treating it as stable.";
+  if ((memory.metadata.privacy as { action?: string } | undefined)?.action === "encrypt") return "Encrypted sensitive memory: review policy before use.";
   if (memory.trust < 0.55) return "Low trust: archive, verify, or replace with better evidence.";
   if (memory.tags.includes("needs-review")) return "Tagged for review.";
   return "Ready for context injection.";
@@ -853,6 +978,10 @@ function daysAgo(days: number): Date {
 
 function findMemory(memories: Memory[], id: string): Memory | null {
   return memories.find((memory) => memory.id === id) ?? null;
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 function viewTitle(view: ViewId): string {

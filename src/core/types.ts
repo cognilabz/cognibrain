@@ -15,7 +15,16 @@ export type RelationType =
   | "suggested_by"
   | "executed_by";
 export type ConsentVisibility = "private" | "user" | "org" | "public";
-export type FeedbackKind = "helpful" | "wrong" | "stale" | "always_include" | "never_include" | "private" | "shareable";
+export type FeedbackKind =
+  | "helpful"
+  | "wrong"
+  | "stale"
+  | "always_include"
+  | "never_include"
+  | "private"
+  | "shareable"
+  | "approve_pattern"
+  | "reject_pattern";
 
 export interface Provenance {
   kind: SourceKind;
@@ -46,10 +55,14 @@ export interface ConsentPolicy {
 
 export interface MemoryRelation {
   type: RelationType;
+  sourceEntity?: string;
   targetId?: string;
   targetEntity?: string;
+  direction?: "out" | "in" | "undirected";
   confidence?: number;
   evidence?: string;
+  validFrom?: Date | string;
+  validUntil?: Date | string;
 }
 
 export interface TemporalMetadata {
@@ -192,6 +205,19 @@ export interface LearnedProfileReport {
   samples: number;
   positiveSignals: Partial<RetrievalWeights>;
   negativeSignals: Partial<RetrievalWeights>;
+  lossBefore?: number;
+  lossAfter?: number;
+}
+
+export interface RetrievalTrainingSample {
+  query: string;
+  userId: string;
+  selectedMemoryId?: string;
+  rejectedMemoryIds?: string[];
+  profileId?: string;
+  signals?: Partial<RetrievalWeights>;
+  outcome: "helpful" | "wrong" | "accepted" | "rejected";
+  timestamp?: Date | string;
 }
 
 export interface ContextVerifier {
@@ -250,7 +276,31 @@ export interface TimelineReport {
     supersededAt?: Date | string;
     entities: string[];
   }>;
-  periods: Array<{ period: string; memoryIds: string[]; summary?: string }>;
+  periods: Array<{ period: string; granularity: "day" | "week" | "month"; memoryIds: string[]; summary?: string }>;
+}
+
+export interface EntityRecord {
+  id: string;
+  canonical: string;
+  aliases: string[];
+  memoryIds: string[];
+  firstSeenAt: Date | string;
+  lastSeenAt: Date | string;
+}
+
+export interface GraphReport {
+  entities: EntityRecord[];
+  edges: Array<{
+    sourceMemoryId: string;
+    sourceEntity?: string;
+    targetMemoryId?: string;
+    targetEntity?: string;
+    type: RelationType;
+    direction?: "out" | "in" | "undirected";
+    confidence: number;
+    validFrom?: Date | string;
+    validUntil?: Date | string;
+  }>;
 }
 
 export interface DomainEvaluationCase {

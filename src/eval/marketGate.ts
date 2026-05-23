@@ -97,9 +97,47 @@ function readReport(path: string): BenchmarkReport {
 
 function readCompetitors(path: string): CompetitorArtifact {
   if (!existsSync(path)) throw new Error(`Missing competitor artifact: ${path}`);
-  const artifact = JSON.parse(readFileSync(path, "utf8")) as CompetitorArtifact;
+  const artifact = normalizeCompetitorArtifact(JSON.parse(readFileSync(path, "utf8")));
   if (!Array.isArray(artifact.competitors)) throw new Error(`Invalid competitor artifact: ${path}`);
   return artifact;
+}
+
+function normalizeCompetitorArtifact(raw: unknown): CompetitorArtifact {
+  if (isRecord(raw) && Array.isArray(raw.competitors)) return raw as unknown as CompetitorArtifact;
+  const rows = Array.isArray(raw)
+    ? raw
+    : isRecord(raw) && Array.isArray(raw.results)
+      ? raw.results
+      : isRecord(raw) && Array.isArray(raw.benchmarks)
+        ? raw.benchmarks
+        : [];
+  const byCompetitor = new Map<string, CompetitorBenchmarkResult[]>();
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const dataset = stringField(row.dataset ?? row.benchmark ?? row.name);
+    const metric = stringField(row.metric ?? row.eval_metric ?? row.evaluationMetric);
+    const accuracy = numberField(row.accuracy ?? row.score ?? row.recall ?? row.f1);
+    if (!dataset || !metric || accuracy === undefined) continue;
+    const competitor = stringField(row.competitor ?? row.provider ?? row.system ?? row.method) ?? "imported-vendor";
+    byCompetitor.set(competitor, [
+      ...(byCompetitor.get(competitor) ?? []),
+      {
+        dataset,
+        metric,
+        accuracy,
+        correct: numberField(row.correct),
+        total: numberField(row.total),
+        topK: numberField(row.topK ?? row.top_k ?? row.k),
+        meanTokens: numberField(row.meanTokens ?? row.mean_tokens),
+        comparable: row.comparable === true,
+        notes: stringField(row.notes)
+      }
+    ]);
+  }
+  return {
+    generatedAt: isRecord(raw) ? stringField(raw.generatedAt ?? raw.generated_at) : undefined,
+    competitors: [...byCompetitor.entries()].map(([name, benchmarks]) => ({ name, benchmarks }))
+  };
 }
 
 function summarizeBenchmark(report: BenchmarkReport, fallbackDataset: string): GateBenchmarkSummary {
@@ -171,6 +209,18 @@ function compareCompetitors(benchmarks: GateBenchmarkSummary[], artifact?: Compe
       : "At least one imported comparable competitor result is not beaten.",
     comparisons
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function stringField(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function numberField(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

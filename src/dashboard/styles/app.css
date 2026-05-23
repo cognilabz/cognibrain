@@ -232,7 +232,8 @@ button:disabled {
 }
 
 .topbar-actions,
-.detail-actions {
+.detail-actions,
+.feedback-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -442,7 +443,8 @@ button:disabled {
 
 .topbar-actions > button,
 .panel-title > button,
-.detail-actions > button {
+.detail-actions > button,
+.feedback-grid > button {
   white-space: nowrap;
 }
 
@@ -678,6 +680,12 @@ textarea {
   padding-top: 18px;
 }
 
+.feedback-grid {
+  justify-content: flex-start;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
 .action-log,
 .output-group {
   display: grid;
@@ -803,7 +811,9 @@ textarea {
 }
 
 .ability-list,
-.artifact-summary {
+.artifact-summary,
+.trend-list,
+.slider-grid {
   display: grid;
   gap: 6px;
   margin-top: 12px;
@@ -819,6 +829,31 @@ textarea {
 
 .ability-row:first-child {
   border-top: 0;
+}
+
+.slider-grid label,
+.trend-row {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr) 48px;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.slider-grid input[type="range"] {
+  padding: 0;
+}
+
+.slider-grid b,
+.trend-row strong {
+  color: var(--ink);
+  text-align: right;
+  font-size: 12px;
+}
+
+.trend-row span {
+  font-weight: 760;
 }
 
 button:focus-visible,

@@ -19,7 +19,7 @@ Direct market leadership is strongest when competitor results are imported with 
 
 ## Competitor Artifact Format
 
-Use `docs/market-claims.sample.json` as the schema shape. A competitor result can be used for a direct gate only when all of these are true:
+Use `docs/market-claims.sample.json` as the canonical schema shape. The importer also accepts simple row arrays or `results`/`benchmarks` arrays from vendor benchmark exports and normalizes fields such as `provider`, `system`, `score`, `recall`, `top_k`, and `mean_tokens`. A competitor result can be used for a direct gate only when all of these are true:
 
 - same dataset,
 - same metric,
@@ -66,7 +66,7 @@ Public market material should be treated as research context until normalized in
 3. Add full answer-generation evaluators for LoCoMo, LongMemEval, and BEAM.
 4. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
 5. Import vendor artifacts or local vendor reruns only when their dataset, metric, and budget match.
-6. Add an adapter for Mem0's open benchmark repository output so local comparable runs can be imported directly.
+6. Expand the generic vendor artifact adapter with per-question importers for Mem0's open benchmark repository output.
 7. Keep retrieval-only and answer-generation claims separate in every artifact and document.
 8. Add a result browser in the dashboard so every failed question can be inspected.
 

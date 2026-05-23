@@ -98,7 +98,7 @@ curl -X POST http://localhost:8787/feedback \
   -d '{"userId":"dev","memoryId":"<id>","kind":"helpful"}'
 ```
 
-Supported feedback kinds are `helpful`, `wrong`, `stale`, `always_include`, `never_include`, `private`, and `shareable`. Feedback updates bounded trust/importance metadata and feeds later retrieval tuning.
+Supported feedback kinds are `helpful`, `wrong`, `stale`, `always_include`, `never_include`, `private`, `shareable`, `approve_pattern`, and `reject_pattern`. Feedback updates bounded trust/importance metadata, handles inferred-pattern review, and feeds later retrieval tuning.
 
 ## Retrieval Profiles
 
@@ -110,9 +110,12 @@ curl -X PUT http://localhost:8787/profiles \
 curl -X POST http://localhost:8787/profiles/learn \
   -H "content-type: application/json" \
   -d '{"id":"learned-coding"}'
+curl -X POST http://localhost:8787/profiles/training-samples \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","query":"Redis cache","outcome":"accepted","signals":{"entity":1,"trust":0.8}}'
 ```
 
-Profiles store normalized weights with provenance. The learning endpoint derives a bounded profile from accumulated feedback events and records the training sample count.
+Profiles store normalized weights with provenance. The learning endpoint derives a bounded profile from accumulated feedback events and labeled training samples, then records sample count and loss metadata.
 
 ## Identity Links And Timelines
 
@@ -121,12 +124,13 @@ curl -X POST http://localhost:8787/identity-links \
   -H "content-type: application/json" \
   -d '{"primaryUserId":"device-b","linkedUserId":"device-a","consentToken":"user-approved-token"}'
 curl http://localhost:8787/timeline/dev
+curl "http://localhost:8787/graph?userId=dev"
 curl -X POST http://localhost:8787/lifecycle/preview \
   -H "content-type: application/json" \
   -d '{"userId":"dev","policy":{"archiveAfterDays":30}}'
 ```
 
-Identity links require an explicit consent token and store only a hash of that token. Timelines expose event time, validity windows, supersession metadata, and period groupings. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
+Identity links require an explicit consent token and store only a hash of that token. Timelines expose event time, validity windows, supersession metadata, and day/week/month period groupings. The graph endpoint exposes canonical entities, aliases, and typed relation edges. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
 
 ## Reflection
 

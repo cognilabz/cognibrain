@@ -107,8 +107,19 @@ const extractSchema = z.object({
 const feedbackSchema = z.object({
   memoryId: z.string().min(1),
   userId: z.string().optional(),
-  kind: z.enum(["helpful", "wrong", "stale", "always_include", "never_include", "private", "shareable"]),
+  kind: z.enum(["helpful", "wrong", "stale", "always_include", "never_include", "private", "shareable", "approve_pattern", "reject_pattern"]),
   note: z.string().optional(),
+  timestamp: z.string().optional()
+});
+
+const trainingSampleSchema = z.object({
+  query: z.string().min(1),
+  userId: z.string().min(1),
+  selectedMemoryId: z.string().optional(),
+  rejectedMemoryIds: z.array(z.string()).optional(),
+  profileId: z.string().optional(),
+  signals: z.record(z.number()).optional(),
+  outcome: z.enum(["helpful", "wrong", "accepted", "rejected"]),
   timestamp: z.string().optional()
 });
 
@@ -173,6 +184,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && url.pathname === "/graph") {
+    send(response, 200, defaultService.graph(url.searchParams.get("userId") ?? undefined));
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/profiles") {
     send(response, 200, defaultService.getRetrievalProfiles());
     return;
@@ -186,6 +202,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (method === "POST" && url.pathname === "/profiles/learn") {
     const body = z.object({ id: z.string().optional(), label: z.string().optional() }).parse(await json(request));
     send(response, 202, defaultService.learnRetrievalProfile(body.id, body.label));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/profiles/training-samples") {
+    send(response, 201, defaultService.addTrainingSample(trainingSampleSchema.parse(await json(request))));
     return;
   }
 

@@ -1,8 +1,10 @@
 import { DEFAULT_CONSENT } from "./config";
 import type { ConsentPolicy, MemoryInput } from "./types";
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
 
 export interface RedactionPolicy {
-  mode: "off" | "redact" | "reject" | "archive";
+  mode: "off" | "redact" | "reject" | "archive" | "encrypt";
+  encryptionKey?: string;
 }
 
 export interface RedactionResult {
@@ -35,6 +37,10 @@ export function applyRedactionPolicy(input: MemoryInput, policy: RedactionPolicy
   if (matches.length && policy.mode === "reject") {
     return { rejected: true, matches };
   }
+  const encrypted = matches.length && policy.mode === "encrypt" ? encryptText(content, policy.encryptionKey ?? process.env.MEMORY_ENCRYPTION_KEY) : undefined;
+  if (matches.length && policy.mode === "encrypt" && !encrypted) {
+    return { rejected: true, matches: [...matches, { detector: "missing-encryption-key", count: 1 }] };
+  }
   const metadata = matches.length
     ? {
         ...input.metadata,
@@ -42,19 +48,43 @@ export function applyRedactionPolicy(input: MemoryInput, policy: RedactionPolicy
           redacted: true,
           action: policy.mode,
           detectors: matches,
-          checkedAt: new Date().toISOString()
+          checkedAt: new Date().toISOString(),
+          ...(encrypted
+            ? {
+                encrypted: true,
+                algorithm: encrypted.algorithm,
+                iv: encrypted.iv,
+                authTag: encrypted.authTag,
+                keyFingerprint: encrypted.keyFingerprint
+              }
+            : {})
         }
       }
     : input.metadata;
   return {
     input: normalizeConsent({
       ...input,
-      content,
+      content: encrypted ? `[encrypted:${encrypted.algorithm}:${encrypted.ciphertext}]` : content,
       metadata,
       ...(matches.length && policy.mode === "archive" ? { metadata: { ...metadata, archivedOnWrite: true } } : {})
     }),
     rejected: false,
     matches
+  };
+}
+
+function encryptText(content: string, key: string | undefined) {
+  if (!key || key.length < 16) return undefined;
+  const normalized = createHash("sha256").update(key).digest();
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", normalized, iv);
+  const ciphertext = Buffer.concat([cipher.update(content, "utf8"), cipher.final()]).toString("base64url");
+  return {
+    algorithm: "aes-256-gcm",
+    ciphertext,
+    iv: iv.toString("base64url"),
+    authTag: cipher.getAuthTag().toString("base64url"),
+    keyFingerprint: createHash("sha256").update(normalized).digest("hex").slice(0, 16)
   };
 }
 

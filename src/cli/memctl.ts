@@ -11,7 +11,8 @@ const service = new MemoryService({
     enabled: process.env.MEMORY_AUTO_DREAM !== "false",
     intervalHours: Number(process.env.MEMORY_DREAM_INTERVAL_HOURS ?? 6),
     writeThreshold: Number(process.env.MEMORY_DREAM_WRITE_THRESHOLD ?? 12)
-  }
+  },
+  configPath: process.env.MEMORY_CONFIG_PATH
 });
 
 const [command, ...args] = process.argv.slice(2);
@@ -75,7 +76,7 @@ switch (command) {
   }
   case "feedback": {
     const [memoryId, kind, ...note] = args;
-    if (!memoryId || !kind) fail("Usage: memctl feedback <memory-id> <helpful|wrong|stale|always_include|never_include|private|shareable> [note]");
+    if (!memoryId || !kind) fail("Usage: memctl feedback <memory-id> <helpful|wrong|stale|always_include|never_include|private|shareable|approve_pattern|reject_pattern> [note]");
     if (!isFeedbackKind(kind)) {
       fail(`Unsupported feedback kind: ${kind}`);
     }
@@ -100,6 +101,24 @@ switch (command) {
     console.log(JSON.stringify(service.learnRetrievalProfile(args[0] ?? "learned"), null, 2));
     break;
   }
+  case "profile-sample": {
+    const [query, outcome, signalsJson] = args;
+    if (!query || !outcome) fail("Usage: memctl profile-sample <query> <helpful|wrong|accepted|rejected> [signals-json]");
+    if (!["helpful", "wrong", "accepted", "rejected"].includes(outcome)) fail(`Unsupported outcome: ${outcome}`);
+    console.log(
+      JSON.stringify(
+        service.addTrainingSample({
+          userId,
+          query,
+          outcome: outcome as "helpful" | "wrong" | "accepted" | "rejected",
+          signals: signalsJson ? JSON.parse(signalsJson) : undefined
+        }),
+        null,
+        2
+      )
+    );
+    break;
+  }
   case "identity-link": {
     const [primaryUserId, linkedUserId, consentToken] = args;
     if (!primaryUserId || !linkedUserId || !consentToken) fail("Usage: memctl identity-link <primary-user-id> <linked-user-id> <consent-token>");
@@ -108,6 +127,10 @@ switch (command) {
   }
   case "timeline": {
     console.log(JSON.stringify(service.timeline(userId), null, 2));
+    break;
+  }
+  case "graph": {
+    console.log(JSON.stringify(service.graph(userId), null, 2));
     break;
   }
   case "lifecycle-preview": {
@@ -123,7 +146,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|identity-link|timeline|lifecycle-preview|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|graph|lifecycle-preview|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -132,5 +155,5 @@ function fail(message: string): never {
 }
 
 function isFeedbackKind(value: string): value is FeedbackKind {
-  return ["helpful", "wrong", "stale", "always_include", "never_include", "private", "shareable"].includes(value);
+  return ["helpful", "wrong", "stale", "always_include", "never_include", "private", "shareable", "approve_pattern", "reject_pattern"].includes(value);
 }

@@ -290,6 +290,7 @@ export class ReflectionEngine {
           metadata: {
             pattern: theme,
             patternType: "behavioral",
+            patternReview: { status: "pending", reason: "inferred behavior requires operator approval" },
             recurrenceWindow: "observed-period",
             supportCount: group.length,
             confidence: Math.min(0.9, 0.45 + group.length * 0.1),

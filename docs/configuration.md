@@ -27,6 +27,8 @@ Environment variables:
 | `NODE_ENV` | unset | Set to `production` in Docker |
 | `COGNIBRAIN_RUNTIME_ROOT` | launch directory | Directory for `.cognibrain/` runtime state and default memory JSON |
 | `MEMORY_DB_PATH` | `.memory-harness.json` | Local API and CLI persistence file |
+| `MEMORY_STORAGE_BACKEND` | `json` | Persistence backend: `json` for atomic snapshot file, `jsonl` for append-only durable snapshots |
+| `MEMORY_EVENT_LOG_PATH` | `.memory-harness.jsonl` | Append-only persistence log when `MEMORY_STORAGE_BACKEND=jsonl` |
 | `MEMORY_AUTO_DREAM` | `true` | Set to `false` to disable automatic dream-cycle maintenance |
 | `MEMORY_DREAM_INTERVAL_HOURS` | `6` | Interval for due background dream checks after new writes |
 | `MEMORY_DREAM_WRITE_THRESHOLD` | `12` | Number of writes for a user before automatic dream runs |
@@ -71,17 +73,17 @@ The current ranker combines:
 - access frequency,
 - evidence gating so trust alone cannot retrieve unrelated memories.
 
-The default benchmarked profile is semantic `0.26`, keyword `0.24`, entity `0.16`, temporal `0.08`, trust `0.18`, graph `0.06`, and access `0.02`. API search requests and service constructors can pass weight overrides; values are normalized before scoring.
+The default benchmarked profile is semantic `0.26`, keyword `0.24`, entity `0.16`, temporal `0.08`, trust `0.18`, graph `0.06`, and access `0.02`. API search requests, service constructors, and `MEMORY_CONFIG_PATH` can pass weight overrides; values are normalized before scoring.
 
-Search can also receive optional reranker and verifier implementations in the TypeScript API. The built-in reranker is deterministic and favors candidates with stronger post-retrieval query coverage before the verifier marks stale or contradiction-tagged results for warning or review. External cross-encoder, LLM, or NLI components can plug into the same interfaces.
+Search can also receive optional reranker and verifier implementations in the TypeScript API. The built-in reranker is deterministic and favors candidates with stronger post-retrieval query coverage before the verifier marks stale or contradiction-tagged results for warning or review. For production adapters, set `MEMORY_INTELLIGENCE_COMMAND` to a JSON-command provider. The command receives stdin JSON with a `task` of `rerank`, `verify`, `contradiction`, or `summarize` and returns JSON decisions. Timeouts fail closed to the deterministic fallback.
 
 Retrieval profiles are stored with normalized weights, optional user/project/app/org/agent scope, provenance, training sample count, and update timestamp. Use `memctl profiles`, `memctl profile-set`, `PUT /profiles`, or `profileId` on search requests to select a policy without editing source code.
 
-The learned-weight path starts from feedback events. Use `memory feedback <id> helpful`, `wrong`, `always_include`, or `never_include` to change bounded trust and importance, then `memctl profile-learn` or `POST /profiles/learn` to save a bounded learned profile with provenance.
+The learned-weight path starts from feedback events and optional labeled training samples. Use `memory feedback <id> helpful`, `wrong`, `always_include`, or `never_include` to change bounded trust and importance, `POST /profiles/training-samples` to add scored retrieval outcomes, then `memctl profile-learn` or `POST /profiles/learn` to save a bounded learned profile with loss metadata.
 
 ## Privacy And Retention
 
-The default redaction layer catches common API keys, tokens, private keys, credentials, high-entropy tokens, and email addresses. `redact` preserves useful context while replacing sensitive spans. `reject` blocks the write. `archive` stores the redacted memory and archives it immediately.
+The default redaction layer catches common API keys, tokens, private keys, credentials, high-entropy tokens, and email addresses. `redact` preserves useful context while replacing sensitive spans. `reject` blocks the write. `archive` stores the redacted memory and archives it immediately. `encrypt` stores an AES-GCM encrypted payload marker and audit metadata; set `MEMORY_ENCRYPTION_KEY` before using it.
 
 Consent metadata controls retrieval visibility. Private memories are excluded unless a caller explicitly asks for private memory; org-visible memories remain scoped to the matching organization. Retention dates are respected by search and can be paired with export/delete APIs.
 
@@ -114,11 +116,19 @@ The cycle never archives pinned memories or memories protected by lifecycle poli
 
 ## MCP Configuration
 
-The local MCP server runs over stdio:
+The local MCP server runs over stdio by default:
 
 ```bash
 ./bin/cognibrain.mjs mcp
 ```
+
+For remote/shared clients that support MCP Streamable HTTP:
+
+```bash
+MCP_PORT=8788 ./bin/cognibrain.mjs mcp --http
+```
+
+The Streamable HTTP endpoint is `/mcp` and runs stateless by default so it can sit behind simple local process managers.
 
 For an MCP client that accepts command-based servers, use:
 
@@ -133,11 +143,22 @@ Templates live under `templates/` for Codex, Claude, Copilot, and Cursor.
 
 ## Data Storage
 
-The local API and CLI persist to `MEMORY_DB_PATH` using an atomic JSON write. Test runs stay in memory unless a test passes an explicit persistence path.
+The local API and CLI persist through a pluggable storage boundary. Test runs stay in memory unless a test passes an explicit persistence adapter or path.
+
+Default mode uses `MEMORY_DB_PATH` with atomic JSON snapshot writes:
+
+```bash
+MEMORY_DB_PATH=.memory-harness.json npm run start:local
+```
+
+Durable audit mode appends each saved snapshot to JSONL and reloads the latest valid snapshot. This avoids rewriting the only copy of the store and gives operators a simple recovery trail:
+
+```bash
+MEMORY_STORAGE_BACKEND=jsonl MEMORY_EVENT_LOG_PATH=.memory-harness.jsonl npm run start:local
+```
 
 Production storage options to add next:
 
 - SQLite for a single-user local daemon,
 - Postgres for team deployment,
-- optional vector index for embeddings,
-- append-only event log for auditability.
+- optional vector index for embeddings.

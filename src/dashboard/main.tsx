@@ -26,6 +26,7 @@ import {
   healthReport,
   type Memory,
   type MemoryInput,
+  type MetricsReport,
   type ReflectionReport,
   type SearchResult
 } from "../core";
@@ -37,6 +38,7 @@ type RuntimeStatus = {
   state: "checking" | "online" | "offline";
   label: string;
   maintenance?: { enabled: boolean; writeThreshold: number; intervalHours: number };
+  metrics?: MetricsReport;
 };
 
 const viewItems: Array<{ id: ViewId; label: string; icon: React.ElementType; note: string }> = [
@@ -216,8 +218,10 @@ function App() {
           fetch(`${apiUrl}/maintenance`)
         ]);
         if (!healthResponse.ok || !maintenanceResponse.ok) throw new Error("runtime unavailable");
+        const metricsResponse = await fetch(`${apiUrl}/metrics`);
         const maintenance = (await maintenanceResponse.json()) as RuntimeStatus["maintenance"];
-        if (!cancelled) setRuntime({ state: "online", label: "online", maintenance });
+        const metrics = metricsResponse.ok ? ((await metricsResponse.json()) as MetricsReport) : undefined;
+        if (!cancelled) setRuntime({ state: "online", label: "online", maintenance, metrics });
       } catch {
         if (!cancelled) setRuntime({ state: "offline", label: "offline" });
       }
@@ -396,6 +400,8 @@ function App() {
           <Metric label="Need review" value={String(reviewCount)} tone={reviewCount ? "warn" : "ok"} />
           <Metric label="Avg trust" value={health.averageTrust.toFixed(2)} />
           <Metric label="Freshness" value={`${Math.round(health.freshness * 100)}%`} />
+          <Metric label="No-hit" value={String(runtime.metrics?.noHitSearches ?? 0)} />
+          <Metric label="Dreams" value={String(runtime.metrics?.dreams ?? 0)} />
         </section>
 
         {view === "memories" ? (
@@ -425,7 +431,7 @@ function App() {
         ) : null}
 
         {view === "proof" ? (
-          <ProofView artifactText={artifactText} setArtifactText={setArtifactText} artifactSummary={artifactSummary} />
+          <ProofView artifactText={artifactText} setArtifactText={setArtifactText} artifactSummary={artifactSummary} metrics={runtime.metrics} />
         ) : null}
       </section>
     </main>
@@ -665,11 +671,13 @@ function DreamView({
 function ProofView({
   artifactText,
   setArtifactText,
-  artifactSummary
+  artifactSummary,
+  metrics
 }: {
   artifactText: string;
   setArtifactText: (value: string) => void;
   artifactSummary: string[];
+  metrics?: MetricsReport;
 }) {
   return (
     <section className="proof-layout">
@@ -689,6 +697,15 @@ function ProofView({
         ))}
       </div>
       <div className="proof-split">
+        <div className="panel">
+          <h2><Activity size={17} /> Runtime Analytics</h2>
+          <div className="ability-list">
+            <div className="ability-row"><span>searches</span><strong>{metrics?.searches ?? 0}</strong></div>
+            <div className="ability-row"><span>no-hit</span><strong>{metrics?.noHitSearches ?? 0}</strong></div>
+            <div className="ability-row"><span>low confidence</span><strong>{metrics?.lowConfidenceSearches ?? 0}</strong></div>
+            <div className="ability-row"><span>benchmark runs</span><strong>{metrics?.benchmarkRuns ?? 0}</strong></div>
+          </div>
+        </div>
         <div className="panel">
           <h2><CheckCircle2 size={17} /> BEAM Ability Breakdown</h2>
           <div className="ability-list">

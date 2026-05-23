@@ -12,11 +12,15 @@ export class RetrievalEngine {
     const now = options.now ?? new Date();
     const queryTokens = tokenize(options.query);
     const queryEntities = new Set(queryTokens);
-    const candidates = this.store.list(options.userId).filter((memory) => {
+    const temporalConstraint = parseTemporalConstraint(options.query, now);
+    const userIds = new Set([options.userId, ...((options as SearchOptions & { linkedUserIds?: string[] }).linkedUserIds ?? [])]);
+    const candidates = this.store.list().filter((memory) => {
+      if (!userIds.has(memory.userId)) return false;
       if (!options.includeArchived && memory.archivedAt) return false;
       if (options.agentId && memory.agentId && memory.agentId !== options.agentId) return false;
       if (!scopeMatches(memory, options)) return false;
       if (!consentAllows(memory, options, now)) return false;
+      if (!temporalAllows(memory, temporalConstraint)) return false;
       if (options.filters?.type && memory.type !== options.filters.type) return false;
       if (options.filters?.layer && memory.layer !== options.filters.layer) return false;
       if (options.filters?.minTrust && memory.trust < options.filters.minTrust) return false;
@@ -48,6 +52,7 @@ export class RetrievalEngine {
     const lines: string[] = [];
     let spent = 0;
     for (const result of results) {
+      if (result.decision === "exclude") continue;
       const stale = result.stale ? " stale=true" : "";
       const decision = result.decision && result.decision !== "include" ? ` decision=${result.decision}` : "";
       const line = `[${result.memory.id}] trust=${result.memory.trust.toFixed(2)} score=${result.score.toFixed(2)}${stale}${decision} ${result.memory.content}`;
@@ -160,6 +165,29 @@ export class RetrievalEngine {
   }
 }
 
+function parseTemporalConstraint(query: string, now: Date): { after?: Date; before?: Date } {
+  const normalized = query.toLowerCase();
+  const iso = normalized.match(/\b(20\d{2})(?:-(\d{2})(?:-(\d{2}))?)?\b/);
+  const date = iso ? new Date(Date.UTC(Number(iso[1]), Number(iso[2] ?? "1") - 1, Number(iso[3] ?? "1"))) : undefined;
+  if (date && /\b(before|vor)\b/.test(normalized)) return { before: date };
+  if (date && /\b(after|since|nach|seit)\b/.test(normalized)) return { after: date };
+  if (/\blast week|letzte woche\b/.test(normalized)) {
+    const before = new Date(now);
+    const after = new Date(now);
+    after.setUTCDate(after.getUTCDate() - 7);
+    return { after, before };
+  }
+  return {};
+}
+
+function temporalAllows(memory: Memory, constraint: { after?: Date; before?: Date }): boolean {
+  if (!constraint.after && !constraint.before) return true;
+  const eventAt = memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt;
+  if (constraint.after && eventAt < constraint.after) return false;
+  if (constraint.before && eventAt >= constraint.before) return false;
+  return true;
+}
+
 function entityMatchesQuery(entity: string, queryEntities: Set<string>, queryText: string): boolean {
   if (queryEntities.has(entity) || queryText.includes(entity)) return true;
   const entityTokens = tokenize(entity);
@@ -214,6 +242,9 @@ function heuristicVerify(query: string, results: SearchResult[]): SearchResult[]
     const coverage = keywordCoverage(queryTokens, tokenize(result.memory.content));
     if (result.stale && coverage < 0.2) {
       return { ...result, decision: "warn" as const, explanation: [...(result.explanation ?? []), "stale low-overlap candidate"] };
+    }
+    if (coverage === 0 && result.signals.entity === 0 && result.signals.graph === 0) {
+      return { ...result, decision: "exclude" as const, explanation: [...(result.explanation ?? []), "no direct relevance after verification"] };
     }
     if (typeof result.memory.metadata.contradiction === "string") {
       return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "contradiction marker present"] };

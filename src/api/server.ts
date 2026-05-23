@@ -81,6 +81,8 @@ const searchSchema = z.object({
   limit: z.number().int().positive().max(50).optional(),
   includeArchived: z.boolean().optional(),
   includePrivate: z.boolean().optional(),
+  includeLinkedIdentities: z.boolean().optional(),
+  profileId: z.string().optional(),
   weights: z.record(z.number()).optional()
 });
 
@@ -108,6 +110,32 @@ const feedbackSchema = z.object({
   kind: z.enum(["helpful", "wrong", "stale", "always_include", "never_include", "private", "shareable"]),
   note: z.string().optional(),
   timestamp: z.string().optional()
+});
+
+const retrievalProfileSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  weights: z.record(z.number()),
+  scope: z
+    .object({
+      userId: z.string().optional(),
+      projectId: z.string().optional(),
+      appId: z.string().optional(),
+      orgId: z.string().optional(),
+      agentId: z.string().optional()
+    })
+    .optional(),
+  learned: z.boolean().optional(),
+  trainingSamples: z.number().optional(),
+  benchmarkDelta: z.number().optional(),
+  provenance: z.string().optional()
+});
+
+const identityLinkSchema = z.object({
+  primaryUserId: z.string().min(1),
+  linkedUserId: z.string().min(1),
+  consentToken: z.string().min(8),
+  consent: z.enum(["user", "org"]).optional()
 });
 
 export const server = createServer(async (request, response) => {
@@ -142,6 +170,22 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/metrics") {
     send(response, 200, defaultService.metricsReport());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/profiles") {
+    send(response, 200, defaultService.getRetrievalProfiles());
+    return;
+  }
+
+  if (method === "PUT" && url.pathname === "/profiles") {
+    send(response, 200, defaultService.setRetrievalProfile(retrievalProfileSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/profiles/learn") {
+    const body = z.object({ id: z.string().optional(), label: z.string().optional() }).parse(await json(request));
+    send(response, 202, defaultService.learnRetrievalProfile(body.id, body.label));
     return;
   }
 
@@ -198,6 +242,33 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (method === "POST" && url.pathname === "/feedback") {
     const body = feedbackSchema.parse(await json(request));
     send(response, 202, serialize(defaultService.feedback(body)));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/identity-links") {
+    const body = identityLinkSchema.parse(await json(request));
+    send(response, 201, defaultService.linkIdentity(body.primaryUserId, body.linkedUserId, body.consentToken, body.consent));
+    return;
+  }
+
+  if (method === "DELETE" && parts[0] === "identity-links" && parts[1]) {
+    send(response, 200, defaultService.unlinkIdentity(parts[1]));
+    return;
+  }
+
+  if (method === "GET" && parts[0] === "timeline" && parts[1]) {
+    send(response, 200, defaultService.timeline(parts[1]));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/lifecycle/preview") {
+    const body = z.object({ userId: z.string().min(1), policy: z.record(z.unknown()).optional() }).parse(await json(request));
+    send(response, 200, defaultService.lifecyclePreview(body.userId, body.policy));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/domain/evaluate") {
+    send(response, 202, defaultService.runDomainEvaluation());
     return;
   }
 

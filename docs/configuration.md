@@ -75,13 +75,17 @@ The default benchmarked profile is semantic `0.26`, keyword `0.24`, entity `0.16
 
 Search can also receive optional reranker and verifier implementations in the TypeScript API. The built-in reranker is deterministic and favors candidates with stronger post-retrieval query coverage before the verifier marks stale or contradiction-tagged results for warning or review. External cross-encoder, LLM, or NLI components can plug into the same interfaces.
 
-The learned-weight path starts from feedback events. Use `memory feedback <id> helpful`, `wrong`, `always_include`, or `never_include` to change bounded trust and importance. Future learned profiles can use the same event stream to tune per-user or per-organization weights.
+Retrieval profiles are stored with normalized weights, optional user/project/app/org/agent scope, provenance, training sample count, and update timestamp. Use `memctl profiles`, `memctl profile-set`, `PUT /profiles`, or `profileId` on search requests to select a policy without editing source code.
+
+The learned-weight path starts from feedback events. Use `memory feedback <id> helpful`, `wrong`, `always_include`, or `never_include` to change bounded trust and importance, then `memctl profile-learn` or `POST /profiles/learn` to save a bounded learned profile with provenance.
 
 ## Privacy And Retention
 
 The default redaction layer catches common API keys, tokens, private keys, credentials, high-entropy tokens, and email addresses. `redact` preserves useful context while replacing sensitive spans. `reject` blocks the write. `archive` stores the redacted memory and archives it immediately.
 
 Consent metadata controls retrieval visibility. Private memories are excluded unless a caller explicitly asks for private memory; org-visible memories remain scoped to the matching organization. Retention dates are respected by search and can be paired with export/delete APIs.
+
+Identity links are opt-in. `POST /identity-links` stores only a hash of a consent token and lets callers use `includeLinkedIdentities` during retrieval. Revoked links are ignored.
 
 ## Continuous Benchmarking
 
@@ -106,7 +110,7 @@ Automatic dream runs when a user's write counter reaches `MEMORY_DREAM_WRITE_THR
 - after user corrections or contradiction-heavy work,
 - every 6 to 24 hours for always-on local assistants.
 
-The cycle never archives pinned memories. It fades stale low-utility memories, archives very stale low-utility memories, creates auditable reflection summaries, and reorganizes procedural/transcript memories into more appropriate layers.
+The cycle never archives pinned memories or memories protected by lifecycle policy. It fades stale low-utility memories, archives very stale low-utility memories, creates auditable reflection summaries, revalidates behavioral patterns, and reorganizes procedural/transcript memories into more appropriate layers. `POST /lifecycle/preview` reports keep/fade/archive/protect decisions without mutating state.
 
 ## MCP Configuration
 

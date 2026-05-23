@@ -81,6 +81,8 @@ Search accepts optional scope and retrieval-weight overrides:
   "sessionId": "s1",
   "appId": "codex",
   "scopeMode": "session",
+  "profileId": "coding",
+  "includeLinkedIdentities": true,
   "includePrivate": false,
   "weights": {"temporal": 0.4, "trust": 0.3}
 }
@@ -97,6 +99,34 @@ curl -X POST http://localhost:8787/feedback \
 ```
 
 Supported feedback kinds are `helpful`, `wrong`, `stale`, `always_include`, `never_include`, `private`, and `shareable`. Feedback updates bounded trust/importance metadata and feeds later retrieval tuning.
+
+## Retrieval Profiles
+
+```bash
+curl http://localhost:8787/profiles
+curl -X PUT http://localhost:8787/profiles \
+  -H "content-type: application/json" \
+  -d '{"id":"coding","label":"Coding","weights":{"trust":0.4,"entity":0.3,"graph":0.2,"keyword":0.1}}'
+curl -X POST http://localhost:8787/profiles/learn \
+  -H "content-type: application/json" \
+  -d '{"id":"learned-coding"}'
+```
+
+Profiles store normalized weights with provenance. The learning endpoint derives a bounded profile from accumulated feedback events and records the training sample count.
+
+## Identity Links And Timelines
+
+```bash
+curl -X POST http://localhost:8787/identity-links \
+  -H "content-type: application/json" \
+  -d '{"primaryUserId":"device-b","linkedUserId":"device-a","consentToken":"user-approved-token"}'
+curl http://localhost:8787/timeline/dev
+curl -X POST http://localhost:8787/lifecycle/preview \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","policy":{"archiveAfterDays":30}}'
+```
+
+Identity links require an explicit consent token and store only a hash of that token. Timelines expose event time, validity windows, supersession metadata, and period groupings. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
 
 ## Reflection
 
@@ -146,3 +176,11 @@ curl -X DELETE http://localhost:8787/users/dev/memories
 ```
 
 Metrics are local-first aggregates for searches, no-hit searches, feedback, dreams, and quality score. Export/delete provide the initial GDPR-style memory control surface.
+
+## Domain Evaluation
+
+```bash
+curl -X POST http://localhost:8787/domain/evaluate
+```
+
+When the service is configured with a domain module, this endpoint runs the module's application-level fixtures and records a benchmark metric event.

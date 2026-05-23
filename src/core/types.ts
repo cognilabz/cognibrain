@@ -132,6 +132,9 @@ export interface SearchOptions {
   includeArchived?: boolean;
   weights?: Partial<RetrievalWeights>;
   includePrivate?: boolean;
+  includeLinkedIdentities?: boolean;
+  linkedUserIds?: string[];
+  profileId?: string;
   verifier?: ContextVerifier;
   reranker?: ContextReranker;
   filters?: {
@@ -172,6 +175,25 @@ export interface RetrievalWeights {
   access: number;
 }
 
+export interface RetrievalProfile {
+  id: string;
+  label: string;
+  weights: RetrievalWeights;
+  scope?: Partial<Pick<MemoryScope, "userId" | "projectId" | "appId" | "orgId" | "agentId">>;
+  learned?: boolean;
+  trainingSamples?: number;
+  benchmarkDelta?: number;
+  updatedAt: Date | string;
+  provenance?: string;
+}
+
+export interface LearnedProfileReport {
+  profile: RetrievalProfile;
+  samples: number;
+  positiveSignals: Partial<RetrievalWeights>;
+  negativeSignals: Partial<RetrievalWeights>;
+}
+
 export interface ContextVerifier {
   verify(input: { query: string; results: SearchResult[]; now: Date }): SearchResult[];
 }
@@ -205,6 +227,47 @@ export interface HealthReport {
   coverage: number;
   contradictions: number;
   healthScore: number;
+}
+
+export interface IdentityLink {
+  id: string;
+  primaryUserId: string;
+  linkedUserId: string;
+  hashedSubject: string;
+  consent: "user" | "org";
+  createdAt: Date | string;
+  revokedAt?: Date | string;
+}
+
+export interface TimelineReport {
+  userId: string;
+  events: Array<{
+    memoryId: string;
+    content: string;
+    eventAt: Date | string;
+    validFrom?: Date | string;
+    validUntil?: Date | string;
+    supersededAt?: Date | string;
+    entities: string[];
+  }>;
+  periods: Array<{ period: string; memoryIds: string[]; summary?: string }>;
+}
+
+export interface DomainEvaluationCase {
+  id: string;
+  query: string;
+  expected: string[];
+  memories: MemoryInput[];
+}
+
+export interface DomainEvaluationReport {
+  domainId: string;
+  passed: boolean;
+  accuracy: number;
+  total: number;
+  correct: number;
+  generatedAt: Date | string;
+  details: Array<{ id: string; passed: boolean; retrieved: string[]; expected: string[] }>;
 }
 
 export interface ReflectionReport {
@@ -246,13 +309,20 @@ export interface FeedbackEvent {
 
 export interface MetricsReport {
   memoriesAdded: number;
+  memoriesUpdated?: number;
+  memoriesArchived?: number;
   searches: number;
   feedback: number;
   dreams: number;
   contradictionsResolved: number;
+  contradictionsOpened?: number;
   noHitSearches: number;
+  lowConfidenceSearches?: number;
   averageSearchResults: number;
   averageQualityScore: number;
+  dreamActions?: Record<string, number>;
+  benchmarkRuns?: number;
+  sessions?: Record<string, { searches: number; noHitSearches: number; averageResults: number }>;
 }
 
 export interface BenchmarkCase {

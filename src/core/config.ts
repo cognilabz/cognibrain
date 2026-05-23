@@ -1,4 +1,4 @@
-import type { ConsentPolicy, RetrievalWeights } from "./types";
+import type { ConsentPolicy, MemoryLayer, SourceKind, RetrievalWeights } from "./types";
 
 export const DEFAULT_RETRIEVAL_WEIGHTS: RetrievalWeights = {
   semantic: 0.26,
@@ -19,6 +19,10 @@ export interface LifecyclePolicy {
   importanceDecayRate: number;
   accessBoostDivisor: number;
   verificationAfterDays: number;
+  protectedLayers: MemoryLayer[];
+  protectedTags: string[];
+  protectedSourceKinds: SourceKind[];
+  transcriptArchiveAfterDays: number;
 }
 
 export const DEFAULT_LIFECYCLE_POLICY: LifecyclePolicy = {
@@ -29,7 +33,11 @@ export const DEFAULT_LIFECYCLE_POLICY: LifecyclePolicy = {
   trustDecayRate: 900,
   importanceDecayRate: 1200,
   accessBoostDivisor: 10,
-  verificationAfterDays: 60
+  verificationAfterDays: 60,
+  protectedLayers: ["procedural"],
+  protectedTags: [],
+  protectedSourceKinds: ["reviewed_code"],
+  transcriptArchiveAfterDays: 30
 };
 
 export const DEFAULT_CONSENT: ConsentPolicy = {
@@ -72,7 +80,11 @@ export function normalizeLifecyclePolicy(input?: Partial<LifecyclePolicy>): Life
     trustDecayRate: positive(policy.trustDecayRate, DEFAULT_LIFECYCLE_POLICY.trustDecayRate),
     importanceDecayRate: positive(policy.importanceDecayRate, DEFAULT_LIFECYCLE_POLICY.importanceDecayRate),
     accessBoostDivisor: positive(policy.accessBoostDivisor, DEFAULT_LIFECYCLE_POLICY.accessBoostDivisor),
-    verificationAfterDays: positive(policy.verificationAfterDays, DEFAULT_LIFECYCLE_POLICY.verificationAfterDays)
+    verificationAfterDays: positive(policy.verificationAfterDays, DEFAULT_LIFECYCLE_POLICY.verificationAfterDays),
+    protectedLayers: Array.isArray(policy.protectedLayers) ? policy.protectedLayers : DEFAULT_LIFECYCLE_POLICY.protectedLayers,
+    protectedTags: Array.isArray(policy.protectedTags) ? policy.protectedTags : DEFAULT_LIFECYCLE_POLICY.protectedTags,
+    protectedSourceKinds: Array.isArray(policy.protectedSourceKinds) ? policy.protectedSourceKinds : DEFAULT_LIFECYCLE_POLICY.protectedSourceKinds,
+    transcriptArchiveAfterDays: positive(policy.transcriptArchiveAfterDays, DEFAULT_LIFECYCLE_POLICY.transcriptArchiveAfterDays)
   };
 }
 

@@ -41,7 +41,7 @@ switch (command) {
   case "search": {
     const query = args.join(" ");
     if (!query) fail("Usage: memctl search <query>");
-    const results = service.search({ userId, query, limit: 5 });
+    const results = service.search({ userId, query, limit: 5, profileId: process.env.MEMORY_PROFILE_ID, includeLinkedIdentities: process.env.MEMORY_INCLUDE_LINKED === "true" });
     console.log(
       results
         .map((result, index) => `${index + 1}. ${result.score.toFixed(2)} ${result.memory.content}\n   ${result.citation}`)
@@ -86,6 +86,34 @@ switch (command) {
     console.log(JSON.stringify(service.metricsReport(), null, 2));
     break;
   }
+  case "profiles": {
+    console.log(JSON.stringify(service.getRetrievalProfiles(), null, 2));
+    break;
+  }
+  case "profile-set": {
+    const [id, json] = args;
+    if (!id || !json) fail("Usage: memctl profile-set <id> '<weights-json>'");
+    console.log(JSON.stringify(service.setRetrievalProfile({ id, label: id, weights: JSON.parse(json), provenance: "cli" }), null, 2));
+    break;
+  }
+  case "profile-learn": {
+    console.log(JSON.stringify(service.learnRetrievalProfile(args[0] ?? "learned"), null, 2));
+    break;
+  }
+  case "identity-link": {
+    const [primaryUserId, linkedUserId, consentToken] = args;
+    if (!primaryUserId || !linkedUserId || !consentToken) fail("Usage: memctl identity-link <primary-user-id> <linked-user-id> <consent-token>");
+    console.log(JSON.stringify(service.linkIdentity(primaryUserId, linkedUserId, consentToken), null, 2));
+    break;
+  }
+  case "timeline": {
+    console.log(JSON.stringify(service.timeline(userId), null, 2));
+    break;
+  }
+  case "lifecycle-preview": {
+    console.log(JSON.stringify(service.lifecyclePreview(userId), null, 2));
+    break;
+  }
   case "export": {
     console.log(JSON.stringify(service.exportUser(userId), null, 2));
     break;
@@ -95,7 +123,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|identity-link|timeline|lifecycle-preview|export|delete-user> ...");
 }
 
 function fail(message: string): never {

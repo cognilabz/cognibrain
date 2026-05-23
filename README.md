@@ -190,7 +190,7 @@ The `dream` cycle is the self-maintenance loop for the memory store:
 
 Pinned memories are never faded or archived.
 
-The current runtime also supports configurable retrieval weights, deterministic reranking, optional verifier/summarizer/classifier hooks, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), privacy consent flags, secret redaction, typed relations, add-only extraction, multilingual contradiction checks, feedback-based trust/importance updates, local metrics, and export/delete APIs.
+The current runtime also supports configurable and learned retrieval profiles, deterministic reranking, optional verifier/summarizer/classifier hooks, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), explicit identity links, privacy consent flags, secret redaction, typed relations, deduplicated add-only extraction, temporal timelines, multilingual contradiction checks, feedback-based trust/importance updates, domain evaluations, local metrics, lifecycle preview, and export/delete APIs.
 
 ## Connectors
 

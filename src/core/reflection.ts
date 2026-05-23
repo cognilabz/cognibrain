@@ -27,6 +27,7 @@ export class ReflectionEngine {
       ...this.summarizeTemporalPeriods(userId, this.activeMemories(userId), now),
       ...this.extractBehavioralPatterns(userId, this.activeMemories(userId), now)
     ];
+    const revalidatedPatterns = this.revalidateBehavioralPatterns(this.activeMemories(userId), now);
     const reorganized = this.reorganizeMemories(this.activeMemories(userId), now);
     const activeAfter = this.activeMemories(userId);
     const evaluation = evaluateMemoryQuality(activeAfter, now);
@@ -49,6 +50,7 @@ export class ReflectionEngine {
           ...faded.faded.map((memory) => `faded stale low-utility memory ${memory.id}`),
           ...faded.archived.map((memory) => `archived stale low-utility memory ${memory.id}`),
           ...created.map((memory) => `created reflection summary ${memory.id}`),
+          ...revalidatedPatterns.map((memory) => `revalidated behavioral pattern ${memory.id}`),
           ...reorganized.map((memory) => `reorganized memory ${memory.id} into ${memory.layer}/${memory.type}`)
         ]
       }
@@ -66,10 +68,13 @@ export class ReflectionEngine {
     for (const memory of memories) {
       const current = this.store.get(memory.id);
       if (current.archivedAt || current.pinned) continue;
+      if (this.isProtected(current)) continue;
       const ageDays = (now.getTime() - memory.createdAt.getTime()) / 86_400_000;
       const recentUseBoost = Math.log1p(memory.accessCount) / this.policy.accessBoostDivisor;
       const utility = memory.trust * memory.importance + recentUseBoost;
-      if (ageDays > this.policy.fadeAfterDays && utility < this.policy.fadeUtilityThreshold) {
+      const fadeAfterDays = memory.source.kind === "transcript" ? Math.min(this.policy.fadeAfterDays, this.policy.transcriptArchiveAfterDays / 2) : this.policy.fadeAfterDays;
+      const archiveAfterDays = memory.source.kind === "transcript" ? Math.min(this.policy.archiveAfterDays, this.policy.transcriptArchiveAfterDays) : this.policy.archiveAfterDays;
+      if (ageDays > fadeAfterDays && utility < this.policy.fadeUtilityThreshold) {
         const updated = this.store.update(memory.id, {
           trust: clamp(memory.trust - Math.min(0.18, ageDays / this.policy.trustDecayRate)),
           importance: clamp(memory.importance - Math.min(0.14, ageDays / this.policy.importanceDecayRate)),
@@ -80,7 +85,7 @@ export class ReflectionEngine {
       }
       const refreshed = this.store.get(memory.id);
       const refreshedUtility = refreshed.trust * refreshed.importance + recentUseBoost;
-      if (ageDays > this.policy.archiveAfterDays && refreshedUtility < this.policy.archiveUtilityThreshold) {
+      if (ageDays > archiveAfterDays && refreshedUtility < this.policy.archiveUtilityThreshold) {
         const archivedMemory = this.store.archive(memory.id);
         demoted.push(archivedMemory);
         archived.push(archivedMemory);
@@ -127,6 +132,15 @@ export class ReflectionEngine {
         buckets.set(claim.key, group);
       }
     }
+    for (const pair of this.detectorCandidatePairs(memories)) {
+      const classified = this.contradictionDetector?.classify({ a: pair[0], b: pair[1] });
+      if (!classified || classified.label === "neutral") continue;
+      const key = `external:${pair[0].id}:${pair[1].id}`;
+      buckets.set(key, [
+        { memory: pair[0], claim: { key, value: "a", label: "external", detector: "external", confidence: classified.confidence } },
+        { memory: pair[1], claim: { key, value: classified.label === "contradiction" ? "b" : "a", label: "external", detector: "external", confidence: classified.confidence } }
+      ]);
+    }
 
     const resolved: ReflectionReport["contradictions"] = [];
     for (const group of buckets.values()) {
@@ -143,7 +157,14 @@ export class ReflectionEngine {
           confidence: Math.min(0.92, Math.max(kept.claim.confidence, item.claim.confidence)),
           reason: `${kept.claim.label} differs: ${kept.claim.value} vs ${item.claim.value}`
         };
-        if (classified.label !== "contradiction" || classified.confidence < 0.6) continue;
+        if (classified.label !== "contradiction") continue;
+        if (classified.confidence < 0.6) {
+          this.store.update(memory.id, {
+            temporal: { ...memory.temporal, verificationDueAt: new Date().toISOString(), stalenessRisk: 0.7 },
+            metadata: { contradictionReview: { reason: classified.reason ?? "low confidence contradiction", confidence: classified.confidence } }
+          });
+          continue;
+        }
         const demoted = this.store.update(memory.id, {
           trust: clamp(memory.trust - 0.35),
           metadata: { contradiction: `Superseded by ${kept.memory.id}`, contradictionKey: kept.claim.key }
@@ -181,7 +202,7 @@ export class ReflectionEngine {
         .sort((a, b) => b.trust * b.importance - a.trust * a.importance)
         .slice(0, 3)
         .map((memory) => memory.content.replace(/\s+/g, " ").slice(0, 120));
-      const generated = this.summarizer?.summarize({ theme, memories: group, now });
+      const generated = this.validGeneratedSummary(this.summarizer?.summarize({ theme, memories: group, now }), group);
       created.push(
         this.store.add({
           userId,
@@ -268,9 +289,12 @@ export class ReflectionEngine {
           entities: [theme],
           metadata: {
             pattern: theme,
+            patternType: "behavioral",
+            recurrenceWindow: "observed-period",
             supportCount: group.length,
             confidence: Math.min(0.9, 0.45 + group.length * 0.1),
             summaryOf: group.map((memory) => memory.id),
+            lastObservedAt: latestDate(group).toISOString(),
             dreamedAt: now.toISOString(),
             dreamJob: "behavior-pattern"
           }
@@ -278,6 +302,30 @@ export class ReflectionEngine {
       );
     }
     return created;
+  }
+
+  private revalidateBehavioralPatterns(memories: Memory[], now: Date): Memory[] {
+    const updated: Memory[] = [];
+    const byId = new Map(memories.map((memory) => [memory.id, memory]));
+    for (const pattern of memories) {
+      if (pattern.metadata.dreamJob !== "behavior-pattern" || !Array.isArray(pattern.metadata.summaryOf)) continue;
+      const support = pattern.metadata.summaryOf.map((id) => byId.get(String(id))).filter((memory): memory is Memory => Boolean(memory));
+      const lastObservedAt = support.length ? latestDate(support) : pattern.createdAt;
+      const quietDays = (now.getTime() - lastObservedAt.getTime()) / 86_400_000;
+      if (quietDays < 45) continue;
+      const confidence = Math.max(0.1, Number(pattern.metadata.confidence ?? 0.5) - Math.min(0.3, quietDays / 365));
+      updated.push(
+        this.store.update(pattern.id, {
+          importance: clamp(pattern.importance - Math.min(0.12, quietDays / 900)),
+          metadata: {
+            confidence,
+            lastRevalidatedAt: now.toISOString(),
+            revalidationReason: "support not observed recently"
+          }
+        })
+      );
+    }
+    return updated;
   }
 
   private reorganizeMemories(memories: Memory[], now: Date): Memory[] {
@@ -309,6 +357,46 @@ export class ReflectionEngine {
       }
     }
     return reorganized;
+  }
+
+  private isProtected(memory: Memory): boolean {
+    if (this.policy.protectedLayers.includes(memory.layer)) return true;
+    if (this.policy.protectedSourceKinds.includes(memory.source.kind)) return true;
+    return memory.tags.some((tag) => this.policy.protectedTags.includes(tag));
+  }
+
+  private detectorCandidatePairs(memories: Memory[]): Array<[Memory, Memory]> {
+    if (!this.contradictionDetector) return [];
+    const active = memories.filter((memory) => !memory.archivedAt).slice(0, 80);
+    const pairs: Array<[Memory, Memory]> = [];
+    for (let index = 0; index < active.length; index += 1) {
+      for (let otherIndex = index + 1; otherIndex < active.length; otherIndex += 1) {
+        const a = active[index];
+        const b = active[otherIndex];
+        if (a.userId !== b.userId) continue;
+        if (!sharesEvidenceSurface(a, b)) continue;
+        pairs.push([a, b]);
+      }
+    }
+    return pairs.slice(0, 120);
+  }
+
+  private validGeneratedSummary(
+    generated: ReturnType<NonNullable<ReflectionSummarizer["summarize"]>> | undefined,
+    memories: Memory[]
+  ): ReturnType<NonNullable<ReflectionSummarizer["summarize"]>> | undefined {
+    if (!generated) return undefined;
+    const sourceText = memories.map((memory) => `${memory.content} ${memory.entities.join(" ")}`).join(" ").toLowerCase();
+    const generatedStop = new Set(["generated", "summary", "reflection"]);
+    const unsupported = [...new Set((generated.content.match(/\b[A-Z][A-Za-z0-9_-]{2,}\b/g) ?? []).map((item) => item.toLowerCase()))].filter(
+      (entity) => !generatedStop.has(entity) && !sourceText.includes(entity)
+    );
+    if (!unsupported.length) return generated;
+    return {
+      content: `Reflection summary withheld: generated text introduced unsupported entities (${unsupported.join(", ")}).`,
+      confidence: Math.min(generated.confidence ?? 0.4, 0.4),
+      metadata: { ...(generated.metadata ?? {}), warnings: ["unsupported generated claim"], unsupportedEntities: unsupported }
+    };
   }
 }
 
@@ -410,6 +498,13 @@ function evidenceWeight(memory: Memory): number {
   return memory.trust * 0.55 + memory.importance * 0.25 + memory.source.confidence * 0.2 + memory.createdAt.getTime() / 10 ** 14;
 }
 
+function sharesEvidenceSurface(a: Memory, b: Memory): boolean {
+  const aEntities = new Set(a.entities);
+  if (b.entities.some((entity) => aEntities.has(entity))) return true;
+  const aTags = new Set(a.tags);
+  return b.tags.some((tag) => aTags.has(tag));
+}
+
 function evaluateMemoryQuality(memories: Memory[], now: Date): { qualityScore: number; issues: string[] } {
   const issues: string[] = [];
   const lowTrust = memories.filter((memory) => memory.trust < 0.45);
@@ -439,4 +534,8 @@ function uniqueMemories(memories: Memory[]): Memory[] {
     seen.add(memory.id);
     return true;
   });
+}
+
+function latestDate(memories: Memory[]): Date {
+  return new Date(Math.max(...memories.map((memory) => (memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt).getTime())));
 }

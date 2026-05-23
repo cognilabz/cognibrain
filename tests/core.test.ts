@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities } from "../src/core";
+import { CODING_DOMAIN_MODULE, MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities } from "../src/core";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { MemoryService } from "../src/api/service";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
@@ -414,6 +414,70 @@ describe("TypeScript memory core", () => {
     expect(updated.importance).toBeGreaterThan(before);
     expect(service.metricsReport().feedback).toBe(1);
     expect(service.exportUser("u1").length).toBeGreaterThan(0);
+  });
+
+  it("manages retrieval profiles and learns a bounded profile from feedback", () => {
+    const service = new MemoryService();
+    const memory = service.add({
+      userId: "u1",
+      content: "Atlas Redis cache memory should be trusted.",
+      entities: ["atlas", "redis"],
+      source: { kind: "human", confidence: 0.96 }
+    });
+    service.feedback({ memoryId: memory.id, kind: "helpful", userId: "u1" });
+    const learned = service.learnRetrievalProfile("team-learned");
+    expect(learned.samples).toBe(1);
+    expect(learned.profile.weights.trust).toBeGreaterThan(0);
+    expect(service.getRetrievalProfiles().some((profile) => profile.id === "team-learned")).toBe(true);
+  });
+
+  it("links identities only with explicit consent and supports cross-session recall", () => {
+    const service = new MemoryService();
+    service.add({ userId: "device-a", content: "Returning user prefers simulator proof.", source: { kind: "human", confidence: 0.96 } });
+    expect(service.search({ userId: "device-b", query: "simulator proof" })).toHaveLength(0);
+    service.linkIdentity("device-b", "device-a", "consented-link-token");
+    expect(service.search({ userId: "device-b", query: "simulator proof", includeLinkedIdentities: true })[0].memory.userId).toBe("device-a");
+  });
+
+  it("filters temporal searches and exposes timeline periods", () => {
+    const service = new MemoryService();
+    service.add({ userId: "u1", content: "Atlas used SQLite in January.", source: { kind: "human", confidence: 0.96 }, timestamp: "2026-01-10T00:00:00.000Z" });
+    service.add({ userId: "u1", content: "Atlas used Redis after February.", source: { kind: "human", confidence: 0.96 }, timestamp: "2026-03-10T00:00:00.000Z" });
+    const after = service.search({ userId: "u1", query: "after 2026-02 Atlas used", now: new Date("2026-04-01T00:00:00.000Z") });
+    expect(after[0].memory.content).toContain("Redis");
+    const timeline = service.timeline("u1");
+    expect(timeline.periods.map((period) => period.period)).toContain("2026-01");
+    expect(timeline.periods.map((period) => period.period)).toContain("2026-03");
+  });
+
+  it("previews lifecycle policy and protects configured sources", () => {
+    const service = new MemoryService();
+    service.add({
+      userId: "u1",
+      content: "Reviewed policy should stay protected.",
+      source: { kind: "reviewed_code", confidence: 0.96 },
+      timestamp: "2025-01-01T00:00:00.000Z"
+    });
+    const preview = service.lifecyclePreview("u1", { fadeAfterDays: 1, archiveAfterDays: 2 });
+    expect(preview[0].action).toBe("protect");
+  });
+
+  it("runs domain evaluation hooks for coding modules", () => {
+    const service = new MemoryService({ domainModule: CODING_DOMAIN_MODULE });
+    const report = service.runDomainEvaluation();
+    expect(report.passed).toBe(true);
+    expect(report.domainId).toBe("coding");
+    expect(service.metricsReport().benchmarkRuns).toBe(1);
+  });
+
+  it("deduplicates extracted facts and links state changes additively", () => {
+    const service = new MemoryService();
+    service.add({ userId: "u1", content: "Atlas uses SQLite for cache.", entities: ["atlas"], source: { kind: "human", confidence: 0.95 } });
+    const first = service.extract([{ role: "user", content: "Atlas now uses Redis for cache." }], { userId: "u1" });
+    const second = service.extract([{ role: "user", content: "Atlas now uses Redis for cache." }], { userId: "u1" });
+    expect(first.memories).toHaveLength(1);
+    expect(second.memories).toHaveLength(0);
+    expect(first.memories[0].relations.some((relation) => relation.type === "supersedes")).toBe(true);
   });
 
   it("persists memories and maintenance state across service restarts", () => {

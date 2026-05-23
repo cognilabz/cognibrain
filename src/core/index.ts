@@ -8,3 +8,5 @@ export * from "./config";
 export * from "./privacy";
 export * from "./extraction";
 export * from "./domain";
+export * from "./identity";
+export * from "./evaluation";

@@ -702,6 +702,7 @@ function ProofView({
         </div>
         <div className="panel">
           <h2><FileJson size={17} /> Artifact Inspector</h2>
+          <p>Paste local or CI-uploaded benchmark JSON to inspect proof without leaving the operator console.</p>
           <textarea
             value={artifactText}
             onChange={(event) => setArtifactText(event.target.value)}

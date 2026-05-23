@@ -190,7 +190,7 @@ The `dream` cycle is the self-maintenance loop for the memory store:
 
 Pinned memories are never faded or archived.
 
-The current runtime also supports configurable retrieval weights, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), privacy consent flags, secret redaction, typed relations, add-only extraction, feedback-based trust/importance updates, local metrics, and export/delete APIs.
+The current runtime also supports configurable retrieval weights, deterministic reranking, optional verifier/summarizer/classifier hooks, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), privacy consent flags, secret redaction, typed relations, add-only extraction, multilingual contradiction checks, feedback-based trust/importance updates, local metrics, and export/delete APIs.
 
 ## Connectors
 
@@ -308,6 +308,8 @@ npm run build
 ```
 
 For benchmark-related changes, run the relevant benchmark command and update documentation only from generated artifacts.
+
+CI runs the synthetic evaluation artifact on every push and pull request. Weekly or manually triggered CI runs execute the certified benchmark gate and upload the generated proof artifacts.
 
 ## Safety
 

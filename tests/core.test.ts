@@ -71,6 +71,16 @@ describe("TypeScript memory core", () => {
     expect(results[0].signals.entity).toBeGreaterThan(0);
   });
 
+  it("extracts coding entities and normalizes common multilingual aliases", () => {
+    expect(tokenize("Das Repo nutzt eine Datenbank und CLI modules.")).toContain("repository");
+    expect(tokenize("Das Repo nutzt eine Datenbank und CLI modules.")).toContain("database");
+
+    const entities = extractEntities("POST /v1/cache calls CacheClient.get and imports @scope/pkg.");
+    expect(entities).toContain("post /v1/cache");
+    expect(entities).toContain("cacheclient.get");
+    expect(entities).toContain("@scope/pkg");
+  });
+
   it("supports configurable retrieval weights", () => {
     const store = new MemoryStore();
     store.add({
@@ -99,6 +109,26 @@ describe("TypeScript memory core", () => {
 
     expect(trustFirst[0].memory.content).toContain("Old trusted");
     expect(recencyFirst[0].memory.content).toContain("Fresh low-trust");
+  });
+
+  it("supports optional dynamic reranking before verification", () => {
+    const store = new MemoryStore();
+    store.add({
+      userId: "u1",
+      content: "Atlas stores cache entries in Redis.",
+      source: { kind: "human", confidence: 0.95 },
+      timestamp: "2026-05-01T00:00:00.000Z"
+    });
+    store.add({
+      userId: "u1",
+      content: "Atlas cache policy was discussed recently.",
+      source: { kind: "human", confidence: 0.95 },
+      timestamp: "2026-05-20T00:00:00.000Z"
+    });
+
+    const results = new RetrievalEngine(store).search({ userId: "u1", query: "Redis cache", now: new Date("2026-05-21T00:00:00.000Z") });
+    expect(results[0].memory.content).toContain("Redis");
+    expect(results[0].explanation?.some((item) => item.includes("rerank coverage"))).toBe(true);
   });
 
   it("keeps scoped and private memories out of unrelated retrieval", () => {
@@ -155,6 +185,44 @@ describe("TypeScript memory core", () => {
     expect(report.contradictions.length).toBeGreaterThan(0);
     expect(store.list("u1").some((memory) => memory.trust < 0.5 || memory.archivedAt)).toBe(true);
     expect(report.lifecycle.qualityScore).toBeGreaterThan(0);
+  });
+
+  it("detects multilingual contradictions and supports an external contradiction classifier", () => {
+    const store = new MemoryStore();
+    store.add({ userId: "u1", content: "Mira nutzt Redis fuer Cache.", source: { kind: "agent", confidence: 0.5 } });
+    store.add({ userId: "u1", content: "Mira nutzt Postgres fuer Cache.", source: { kind: "human", confidence: 0.99 } });
+
+    const report = new ReflectionEngine(store, {
+      contradictionDetector: {
+        classify: () => ({ label: "contradiction", confidence: 0.91, reason: "external classifier conflict" })
+      }
+    }).run("u1");
+
+    expect(report.contradictions.length).toBeGreaterThan(0);
+    expect(report.contradictions[0].detector).toBe("external");
+    expect(report.contradictions[0].reason).toBe("external classifier conflict");
+  });
+
+  it("uses optional generated reflection summaries while preserving provenance", () => {
+    const store = new MemoryStore();
+    for (const content of ["Atlas requires API proof.", "Atlas requires browser proof.", "Atlas requires simulator proof."]) {
+      store.add({ userId: "u1", content, tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
+    }
+
+    const report = new ReflectionEngine(store, {
+      summarizer: {
+        summarize: ({ theme }) => ({
+          content: `Generated ${theme} summary with audit-safe provenance.`,
+          confidence: 0.77,
+          metadata: { provider: "test-summarizer" }
+        })
+      }
+    }).run("u1");
+
+    const summary = report.created.find((memory) => memory.metadata.dreamJob === "cluster-summary");
+    expect(summary?.content).toContain("Generated atlas summary");
+    expect(summary?.metadata.summaryMode).toBe("external");
+    expect(summary?.metadata.summaryOf).toHaveLength(3);
   });
 
   it("schedules verification for time-sensitive stale memories", () => {

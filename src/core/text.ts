@@ -15,7 +15,38 @@ const TOKEN_ALIASES = new Map<string, string>([
   ["destress", "relax"],
   ["de-stress", "relax"],
   ["relaxation", "relax"],
-  ["relaxing", "relax"]
+  ["relaxing", "relax"],
+  ["repo", "repository"],
+  ["repos", "repository"],
+  ["repository", "repository"],
+  ["repositories", "repository"],
+  ["api", "api"],
+  ["apis", "api"],
+  ["cli", "cli"],
+  ["cls", "class"],
+  ["fn", "function"],
+  ["func", "function"],
+  ["functions", "function"],
+  ["package", "package"],
+  ["packages", "package"],
+  ["modul", "module"],
+  ["module", "module"],
+  ["modules", "module"],
+  ["datenbank", "database"],
+  ["db", "database"],
+  ["database", "database"],
+  ["speicher", "memory"],
+  ["erinnerung", "memory"],
+  ["nutzt", "use"],
+  ["verwenden", "use"],
+  ["verwendet", "use"],
+  ["benutzt", "use"],
+  ["bevorzugt", "prefer"],
+  ["mag", "like"],
+  ["soll", "should"],
+  ["muss", "must"],
+  ["läuft", "run"],
+  ["laeuft", "run"]
 ]);
 
 export function tokenize(text: string): string[] {
@@ -50,7 +81,10 @@ export function extractEntities(text: string): string[] {
   const quoted = text.match(/["']([^"']+)["']/g)?.map((value) => value.replace(/["']/g, "")) ?? [];
   const capitalized = text.match(/\b[A-Z][A-Za-z0-9_-]{2,}\b/g) ?? [];
   const paths = text.match(/(?:\/|\b)[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+/g) ?? [];
-  return unique([...explicit, ...quoted, ...capitalized, ...paths, ...compoundEntities(text)].map(cleanEntity).filter(Boolean));
+  const codeSymbols = text.match(/\b[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+\b/g) ?? [];
+  const endpoints = text.match(/\b(?:GET|POST|PUT|PATCH|DELETE)\s+\/[A-Za-z0-9_./:-]+|\/v\d+\/[A-Za-z0-9_./:-]+/g) ?? [];
+  const packages = text.match(/@[a-z0-9_.-]+\/[a-z0-9_.-]+|\b[a-z0-9_.-]+\/[a-z0-9_.-]+\b/g) ?? [];
+  return unique([...explicit, ...quoted, ...capitalized, ...paths, ...codeSymbols, ...endpoints, ...packages, ...compoundEntities(text), ...synonymEntities(text)].map(cleanEntity).filter(Boolean));
 }
 
 function compoundEntities(text: string): string[] {
@@ -64,7 +98,7 @@ function compoundEntities(text: string): string[] {
 }
 
 function cleanEntity(value: string): string {
-  const cleaned = value.toLowerCase().replace(/\s+/g, " ").trim();
+  const cleaned = value.toLowerCase().replace(/\s+/g, " ").replace(/[.,;:)]+$/g, "").trim();
   if (cleaned.length < 3 || STOP_WORDS.has(cleaned) || GENERIC_ENTITY_TOKENS.has(cleaned)) return "";
   return cleaned;
 }
@@ -78,6 +112,17 @@ function entityTokens(text: string): string[] {
     .split(/\s+/)
     .map((token) => token.trim())
     .filter((token) => token.length > 3 && !/^\d+$/.test(token) && !STOP_WORDS.has(token) && !GENERIC_ENTITY_TOKENS.has(token));
+}
+
+function synonymEntities(text: string): string[] {
+  const tokens = tokenize(text);
+  const entities: string[] = [];
+  for (const token of tokens) {
+    if (["repository", "api", "cli", "database", "memory", "function", "class", "module", "package"].includes(token)) {
+      entities.push(token);
+    }
+  }
+  return entities;
 }
 
 const GENERIC_ENTITY_TOKENS = new Set([

@@ -37,7 +37,8 @@ export class RetrievalEngine {
       .filter((result, _index, all) => !isSuppressedContradiction(result, all))
       .slice(0, options.limit ?? 8);
 
-    const verified = options.verifier ? options.verifier.verify({ query: options.query, results, now }) : heuristicVerify(options.query, results);
+    const reranked = options.reranker ? options.reranker.rerank({ query: options.query, results, now }) : heuristicRerank(options.query, results);
+    const verified = options.verifier ? options.verifier.verify({ query: options.query, results: reranked, now }) : heuristicVerify(options.query, reranked);
 
     for (const result of verified) this.store.markAccessed(result.memory.id);
     return verified;
@@ -219,6 +220,21 @@ function heuristicVerify(query: string, results: SearchResult[]): SearchResult[]
     }
     return result;
   });
+}
+
+function heuristicRerank(query: string, results: SearchResult[]): SearchResult[] {
+  const queryTokens = tokenize(query);
+  return [...results]
+    .map((result) => {
+      const coverage = keywordCoverage(queryTokens, tokenize(`${result.memory.content} ${result.memory.entities.join(" ")}`));
+      const verifiedScore = clamp(result.score * 0.72 + coverage * 0.18 + result.memory.trust * 0.1);
+      return {
+        ...result,
+        score: verifiedScore,
+        explanation: [...(result.explanation ?? []), `rerank coverage ${coverage.toFixed(2)}`]
+      };
+    })
+    .sort((a, b) => b.score - a.score);
 }
 
 function relevanceEvidence(result: SearchResult): number {

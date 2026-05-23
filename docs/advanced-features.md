@@ -4,7 +4,7 @@
 
 Retrieval combines semantic token overlap, keyword coverage, entity matches, temporal decay, trust, and graph reachability. Entity extraction is zero-dependency: every write links proper nouns, paths, quoted phrases, and lowercase compound terms such as `operator gate` or `dream cycle`. Query-time entity matching boosts exact compound phrases without letting random transcript words become graph edges, so the graph stays useful without requiring an external graph database.
 
-The ranker now accepts configurable weights while preserving the benchmarked default profile. Search results expose signal explanations, graph path hints, and a deterministic context-verification decision. Optional NLI, LLM, or cross-encoder providers can plug into the same verifier interface without becoming required for local install.
+The ranker now accepts configurable weights while preserving the benchmarked default profile. Search results expose signal explanations, graph path hints, and a deterministic context-verification decision. A lightweight rerank pass runs before context verification, and optional NLI, LLM, or cross-encoder providers can plug into the reranker or verifier interfaces without becoming required for local install.
 
 Benchmark runners use the same principle: lexical anchors keep factual recall stable, while fused retrieval reserves part of the top-K for graph and semantic hits that keyword-only ranking would otherwise block.
 
@@ -20,7 +20,7 @@ Each memory can carry `userId`, `agentId`, `sessionId`, `appId`, `orgId`, `proje
 
 The default local service redacts common secrets before storing memory text. Consent metadata supports private, user, org, and public visibility plus retention and delete-on-request policy. Feedback events such as `helpful`, `wrong`, `always_include`, and `never_include` update bounded trust/importance scores and create audit metadata for later learning.
 
-Domain modules can enrich writes, choose default retrieval weights, tune lifecycle policy, and swap the redaction mode. The built-in coding module tags API, CLI, class, test, package, endpoint, and import memories so programming work can lean harder on entity and graph signals without changing the public API.
+Domain modules can enrich writes, choose default retrieval weights, tune lifecycle policy, and swap the redaction mode. The built-in coding module tags API, CLI, class, test, package, endpoint, and import memories so programming work can lean harder on entity and graph signals without changing the public API. Entity extraction also recognizes code symbols, endpoints, package names, repository aliases, and common German/English variants.
 
 ## Typed Relations And Time
 
@@ -36,6 +36,10 @@ Each memory carries a source kind and confidence. Human and reviewed-code source
 
 `ReflectionEngine` runs the maintenance loop. In product language this is the dream cycle: the system rethinks stored memories, reevaluates evidence quality, summarizes repeated themes, fades stale low-utility memories, reflects contradictions, and reorganizes memories into better layers.
 
+Contradiction detection now uses a multilingual claim registry for preferences, tooling, runtime, target repository, and health-negation claims. Optional external contradiction classifiers can override or confirm pairwise decisions, which is the extension point for NLI models.
+
+Reflection summaries remain deterministic by default, but an optional summarizer can generate higher-quality prose. Generated summaries still preserve `summaryOf`, `dreamedAt`, `dreamJob`, and provider metadata so operators can audit the source evidence.
+
 The cycle returns a `lifecycle` report with:
 
 - `evaluated`: active memories inspected,
@@ -50,7 +54,7 @@ Pinned memories are never faded or archived. Reflection summaries include `summa
 
 ## Self-Verification
 
-`npm run eval` runs a synthetic benchmark with single-hop, multi-hop, temporal correction, contradiction, and abstention cases. It compares cognibrain against vector-only, keyword-only, and recency-only baselines and writes `artifacts/evaluation-report.json`.
+`npm run eval` runs a synthetic benchmark with single-hop, multi-hop, temporal correction, contradiction, and abstention cases. It compares cognibrain against vector-only, keyword-only, and recency-only baselines and writes `artifacts/evaluation-report.json`. CI uploads this artifact on every push and pull request. Scheduled and manually triggered CI runs execute `npm run benchmark:certified` and upload the certified market-proof JSON artifacts.
 
 ## Dashboard
 

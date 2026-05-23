@@ -133,6 +133,7 @@ export interface SearchOptions {
   weights?: Partial<RetrievalWeights>;
   includePrivate?: boolean;
   verifier?: ContextVerifier;
+  reranker?: ContextReranker;
   filters?: {
     type?: MemoryType;
     layer?: MemoryLayer;
@@ -173,6 +174,26 @@ export interface RetrievalWeights {
 
 export interface ContextVerifier {
   verify(input: { query: string; results: SearchResult[]; now: Date }): SearchResult[];
+}
+
+export interface ContextReranker {
+  rerank(input: { query: string; results: SearchResult[]; now: Date }): SearchResult[];
+}
+
+export interface ContradictionDetector {
+  classify(input: { a: Memory; b: Memory; key?: string }): {
+    label: "entailment" | "neutral" | "contradiction";
+    confidence: number;
+    reason?: string;
+  };
+}
+
+export interface ReflectionSummarizer {
+  summarize(input: { theme: string; memories: Memory[]; now: Date }): {
+    content: string;
+    confidence?: number;
+    metadata?: Record<string, unknown>;
+  };
 }
 
 export interface HealthReport {

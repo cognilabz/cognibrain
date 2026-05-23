@@ -1,13 +1,20 @@
-import type { Memory, ReflectionReport } from "./types";
+import type { ContradictionDetector, Memory, ReflectionReport, ReflectionSummarizer } from "./types";
 import { tokenize } from "./text";
 import { clamp, MemoryStore } from "./store";
 import { DEFAULT_LIFECYCLE_POLICY, normalizeLifecyclePolicy, type LifecyclePolicy } from "./config";
 
 export class ReflectionEngine {
   private readonly policy: LifecyclePolicy;
+  private readonly contradictionDetector?: ContradictionDetector;
+  private readonly summarizer?: ReflectionSummarizer;
 
-  constructor(private readonly store: MemoryStore, policy: Partial<LifecyclePolicy> = DEFAULT_LIFECYCLE_POLICY) {
-    this.policy = normalizeLifecyclePolicy(policy);
+  constructor(
+    private readonly store: MemoryStore,
+    options: Partial<LifecyclePolicy> & { contradictionDetector?: ContradictionDetector; summarizer?: ReflectionSummarizer } = DEFAULT_LIFECYCLE_POLICY
+  ) {
+    this.policy = normalizeLifecyclePolicy(options);
+    this.contradictionDetector = options.contradictionDetector;
+    this.summarizer = options.summarizer;
   }
 
   run(userId: string, now = new Date()): ReflectionReport {
@@ -112,33 +119,42 @@ export class ReflectionEngine {
   }
 
   private resolveContradictions(memories: Memory[]): ReflectionReport["contradictions"] {
-    const buckets = new Map<string, Memory[]>();
+    const buckets = new Map<string, Array<{ memory: Memory; claim: ContradictionClaim }>>();
     for (const memory of memories) {
-      const key = contradictionKey(memory.content);
-      if (!key) continue;
-      const group = buckets.get(key) ?? [];
-      group.push(memory);
-      buckets.set(key, group);
+      for (const claim of contradictionClaims(memory.content)) {
+        const group = buckets.get(claim.key) ?? [];
+        group.push({ memory, claim });
+        buckets.set(claim.key, group);
+      }
     }
 
     const resolved: ReflectionReport["contradictions"] = [];
     for (const group of buckets.values()) {
       if (group.length < 2) continue;
-      const ranked = [...group].sort((a, b) => evidenceWeight(b) - evidenceWeight(a));
+      const values = new Set(group.map((item) => item.claim.value));
+      if (values.size < 2) continue;
+      const ranked = [...group].sort((a, b) => evidenceWeight(b.memory) - evidenceWeight(a.memory));
       const kept = ranked[0];
-      for (const memory of ranked.slice(1)) {
-        if (memory.id === kept.id || memory.pinned) continue;
+      for (const item of ranked.slice(1)) {
+        const memory = item.memory;
+        if (memory.id === kept.memory.id || memory.pinned) continue;
+        const classified = this.contradictionDetector?.classify({ a: kept.memory, b: memory, key: kept.claim.key }) ?? {
+          label: "contradiction" as const,
+          confidence: Math.min(0.92, Math.max(kept.claim.confidence, item.claim.confidence)),
+          reason: `${kept.claim.label} differs: ${kept.claim.value} vs ${item.claim.value}`
+        };
+        if (classified.label !== "contradiction" || classified.confidence < 0.6) continue;
         const demoted = this.store.update(memory.id, {
           trust: clamp(memory.trust - 0.35),
-          metadata: { contradiction: `Superseded by ${kept.id}` }
+          metadata: { contradiction: `Superseded by ${kept.memory.id}`, contradictionKey: kept.claim.key }
         });
         if (demoted.trust < 0.4) this.store.archive(demoted.id);
         resolved.push({
-          kept,
+          kept: kept.memory,
           demoted: this.store.get(demoted.id),
-          reason: "lower trust or older contradictory claim",
-          detector: "pattern",
-          confidence: 0.78
+          reason: classified.reason ?? "lower trust or older contradictory claim",
+          detector: this.contradictionDetector ? "external" : item.claim.detector,
+          confidence: classified.confidence
         });
       }
     }
@@ -165,20 +181,23 @@ export class ReflectionEngine {
         .sort((a, b) => b.trust * b.importance - a.trust * a.importance)
         .slice(0, 3)
         .map((memory) => memory.content.replace(/\s+/g, " ").slice(0, 120));
+      const generated = this.summarizer?.summarize({ theme, memories: group, now });
       created.push(
         this.store.add({
           userId,
-          content: `Reflection on ${theme}: ${facts.join(" | ")}`,
+          content: generated?.content ?? `Reflection on ${theme}: ${facts.join(" | ")}`,
           type: "reference",
           layer: "reflection",
-          source: { kind: "agent", confidence: 0.7 },
+          source: { kind: "agent", confidence: generated?.confidence ?? 0.7 },
           tags: ["reflection", theme],
           entities: [theme],
           metadata: {
             theme,
             summaryOf: group.map((memory) => memory.id),
             dreamedAt: now.toISOString(),
-            dreamJob: "cluster-summary"
+            dreamJob: "cluster-summary",
+            summaryMode: generated ? "external" : "deterministic",
+            ...(generated?.metadata ?? {})
           }
         })
       );
@@ -299,14 +318,92 @@ function pickTheme(memory: Memory): string | undefined {
     .find((token) => token.length > 3 && !["project", "memory", "should", "would", "could"].includes(token));
 }
 
-function contradictionKey(content: string): string | undefined {
-  const normalized = content.toLowerCase();
-  const health = normalized.match(/\b(?:has|have|does not have|do not have)\s+([a-z0-9_./-]+\s+[a-z0-9_./-]+)/);
-  if (health) return `health:${health[1].replace(/\b(?:pain|issue|problem)\b/g, "").trim()}`;
-  const match = normalized.match(/\b(?:prefers?|uses?|must use|should use|runs on|target repo is)\s+([a-z0-9_./-]+)/);
-  if (!match) return undefined;
-  const subject = normalized.split(match[0])[0].split(/\s+/).slice(-5).join(" ");
-  return `${subject}:${match[0].replace(match[1], "")}`;
+interface ContradictionClaim {
+  key: string;
+  value: string;
+  label: string;
+  detector: string;
+  confidence: number;
+}
+
+const CLAIM_PATTERNS: Array<{
+  label: string;
+  detector: string;
+  pattern: RegExp;
+  key: (match: RegExpMatchArray, normalized: string) => string;
+  value: (match: RegExpMatchArray) => string;
+  confidence: number;
+}> = [
+  {
+    label: "preference",
+    detector: "pattern:preference-multilingual",
+    pattern: /\b(?:prefers?|likes?|bevorzugt|mag)\s+([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,3})/i,
+    key: (match, normalized) => `${subjectBefore(normalized, match[0])}:preference`,
+    value: (match) => normalizeClaimValue(match[1]),
+    confidence: 0.78
+  },
+  {
+    label: "tooling",
+    detector: "pattern:tooling-multilingual",
+    pattern: /\b(?:uses?|should use|must use|nutzt|verwendet|benutzt|soll(?:te)? nutzen|muss nutzen|soll(?:te)? verwenden|muss verwenden)\s+([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,3})/i,
+    key: (match, normalized) => `${subjectBefore(normalized, match[0])}:uses`,
+    value: (match) => normalizeClaimValue(match[1]),
+    confidence: 0.82
+  },
+  {
+    label: "runtime",
+    detector: "pattern:runtime-multilingual",
+    pattern: /\b(?:runs on|läuft auf|laeuft auf)\s+([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,2})/i,
+    key: (match, normalized) => `${subjectBefore(normalized, match[0])}:runs-on`,
+    value: (match) => normalizeClaimValue(match[1]),
+    confidence: 0.82
+  },
+  {
+    label: "target repository",
+    detector: "pattern:target-repo-multilingual",
+    pattern: /\b(?:target repo is|target repository is|ziel repo ist|zielrepository ist|arbeitsrepo ist)\s+([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,2})/i,
+    key: () => "workspace:target-repository",
+    value: (match) => normalizeClaimValue(match[1]),
+    confidence: 0.86
+  },
+  {
+    label: "health",
+    detector: "pattern:health-negation-multilingual",
+    pattern: /(?<!not )\b(?:has|have|hat)\s+(?:kein(?:e|en|er|es)?\s+)?([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,2})/i,
+    key: (match, normalized) => `health:${normalizeClaimValue(match[1]).replace(/\b(?:pain|issue|problem|schmerz|schmerzen|problem)\b/g, "").trim()}`,
+    value: (match) => (/kein|keine|keinen|keiner|keines|does not|do not|no\b/i.test(match[0]) ? "absent" : "present"),
+    confidence: 0.74
+  },
+  {
+    label: "health",
+    detector: "pattern:health-negation-multilingual",
+    pattern: /\b(?:does not have|do not have|has no|have no|ohne)\s+([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,2})/i,
+    key: (match) => `health:${normalizeClaimValue(match[1]).replace(/\b(?:pain|issue|problem|schmerz|schmerzen|problem)\b/g, "").trim()}`,
+    value: () => "absent",
+    confidence: 0.82
+  }
+];
+
+function contradictionClaims(content: string): ContradictionClaim[] {
+  const normalized = content.toLowerCase().replace(/\s+/g, " ").trim();
+  const claims: ContradictionClaim[] = [];
+  for (const rule of CLAIM_PATTERNS) {
+    const match = normalized.match(rule.pattern);
+    if (!match) continue;
+    const key = rule.key(match, normalized).replace(/\s+/g, " ").trim();
+    const value = rule.value(match).replace(/\s+/g, " ").trim();
+    if (!key || !value) continue;
+    claims.push({ key, value, label: rule.label, detector: rule.detector, confidence: rule.confidence });
+  }
+  return claims;
+}
+
+function subjectBefore(normalized: string, phrase: string): string {
+  return normalized.split(phrase)[0].split(/\s+/).filter(Boolean).slice(-5).join(" ") || "user";
+}
+
+function normalizeClaimValue(value: string): string {
+  return tokenize(value).join(" ") || value.toLowerCase().trim();
 }
 
 function evidenceWeight(memory: Memory): number {

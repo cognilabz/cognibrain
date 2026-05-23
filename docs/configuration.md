@@ -73,6 +73,8 @@ The current ranker combines:
 
 The default benchmarked profile is semantic `0.26`, keyword `0.24`, entity `0.16`, temporal `0.08`, trust `0.18`, graph `0.06`, and access `0.02`. API search requests and service constructors can pass weight overrides; values are normalized before scoring.
 
+Search can also receive optional reranker and verifier implementations in the TypeScript API. The built-in reranker is deterministic and favors candidates with stronger post-retrieval query coverage before the verifier marks stale or contradiction-tagged results for warning or review. External cross-encoder, LLM, or NLI components can plug into the same interfaces.
+
 The learned-weight path starts from feedback events. Use `memory feedback <id> helpful`, `wrong`, `always_include`, or `never_include` to change bounded trust and importance. Future learned profiles can use the same event stream to tune per-user or per-organization weights.
 
 ## Privacy And Retention
@@ -80,6 +82,10 @@ The learned-weight path starts from feedback events. Use `memory feedback <id> h
 The default redaction layer catches common API keys, tokens, private keys, credentials, high-entropy tokens, and email addresses. `redact` preserves useful context while replacing sensitive spans. `reject` blocks the write. `archive` stores the redacted memory and archives it immediately.
 
 Consent metadata controls retrieval visibility. Private memories are excluded unless a caller explicitly asks for private memory; org-visible memories remain scoped to the matching organization. Retention dates are respected by search and can be paired with export/delete APIs.
+
+## Continuous Benchmarking
+
+The default CI workflow runs `npm run verify` for each push and pull request, then uploads the synthetic evaluation artifact when available. Weekly and manually triggered workflow runs execute `npm run benchmark:certified` and upload the certified LoCoMo, LongMemEval, BEAM, and market-gate JSON artifacts.
 
 ## Dream Cycle Policy
 

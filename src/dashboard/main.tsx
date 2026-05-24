@@ -22,7 +22,8 @@ import {
   SlidersHorizontal,
   Sparkles,
   Terminal,
-  Trash2
+  Trash2,
+  WifiOff
 } from "lucide-react";
 import {
   MemoryStore,
@@ -49,6 +50,12 @@ type RuntimeStatus = {
   label: string;
   maintenance?: { enabled: boolean; writeThreshold: number; intervalHours: number };
   metrics?: MetricsReport;
+  storage?: { active: string; adapters: Array<{ kind: string; durable: boolean; distributedReady: boolean }> };
+  managed?: {
+    tenants: { total: number; active: number };
+    readiness: Record<string, boolean>;
+    autoscaling: { enabled: boolean; minReplicas: number; maxReplicas: number };
+  };
 };
 type ConnectorHealth = {
   connectorId: string;
@@ -67,6 +74,7 @@ type MarketplaceModuleCard = {
   status: "available" | "installed";
   summary: string;
   manifest: Record<string, unknown>;
+  securityStatus?: string;
 };
 
 const viewItems: Array<{ id: ViewId; label: string; icon: React.ElementType; note: string }> = [
@@ -303,6 +311,8 @@ function App() {
   const apiUrl = useMemo(getApiUrl, []);
   const [runtime, setRuntime] = useState<RuntimeStatus>({ state: "checking", label: "checking" });
   const [connectorHealth, setConnectorHealth] = useState<ConnectorHealth[]>([]);
+  const [installingModuleId, setInstallingModuleId] = useState<string | null>(null);
+  const [marketplaceNotice, setMarketplaceNotice] = useState("Live runtime required for module installation.");
 
   const { store, retrieval, reflection } = useMemo(() => {
     const store = new MemoryStore();
@@ -327,19 +337,30 @@ function App() {
           fetch(`${apiUrl}/maintenance`)
         ]);
         if (!healthResponse.ok || !maintenanceResponse.ok) throw new Error("runtime unavailable");
-        const metricsResponse = await fetch(`${apiUrl}/metrics`);
+        const [metricsResponse, connectorResponse, marketplaceResponse, storageResponse, managedResponse] = await Promise.all([
+          fetch(`${apiUrl}/metrics`),
+          fetch(`${apiUrl}/connectors/health`),
+          fetch(`${apiUrl}/marketplace`),
+          fetch(`${apiUrl}/storage`),
+          fetch(`${apiUrl}/managed/control-plane`)
+        ]);
         const maintenance = (await maintenanceResponse.json()) as RuntimeStatus["maintenance"];
-        const connectorResponse = await fetch(`${apiUrl}/connectors/health`);
         const metrics = metricsResponse.ok ? ((await metricsResponse.json()) as MetricsReport) : undefined;
         const connectors = connectorResponse.ok ? ((await connectorResponse.json()) as ConnectorHealth[]) : [];
+        const liveModules = marketplaceResponse.ok ? ((await marketplaceResponse.json()) as unknown[]) : undefined;
+        const storage = storageResponse.ok ? ((await storageResponse.json()) as RuntimeStatus["storage"]) : undefined;
+        const managed = managedResponse.ok ? ((await managedResponse.json()) as RuntimeStatus["managed"]) : undefined;
         if (!cancelled) {
-          setRuntime({ state: "online", label: "online", maintenance, metrics });
+          setRuntime({ state: "online", label: "online", maintenance, metrics, storage, managed });
           setConnectorHealth(connectors);
+          if (liveModules?.length) setModules(liveModules.map(mapMarketplaceModule));
+          setMarketplaceNotice("Marketplace is backed by the live runtime.");
         }
       } catch {
         if (!cancelled) {
           setRuntime({ state: "offline", label: "offline" });
           setConnectorHealth([]);
+          setMarketplaceNotice("Live runtime unavailable. Module install is disabled until the API is online.");
         }
       }
     }
@@ -458,9 +479,29 @@ function App() {
     setLastClean([`Prepared export with ${store.list("demo").length} memories.`]);
   }
 
-  function installModule(moduleId: string) {
-    setModules((items) => items.map((item) => item.id === moduleId ? { ...item, status: "installed" } : item));
-    setLastClean([`Installed ${moduleId}. The module is ready for setup preview.`]);
+  async function installModule(moduleId: string) {
+    if (runtime.state !== "online") {
+      setMarketplaceNotice("Start the API runtime before installing marketplace modules.");
+      return;
+    }
+    setInstallingModuleId(moduleId);
+    setMarketplaceNotice(`Installing ${moduleId} through the live runtime...`);
+    try {
+      const response = await fetch(`${apiUrl}/marketplace/install`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: moduleId })
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const installed = mapMarketplaceModule(await response.json());
+      setModules((items) => items.map((item) => item.id === moduleId ? installed : item));
+      setLastClean([`Installed ${moduleId} through ${apiUrl}/marketplace/install.`]);
+      setMarketplaceNotice(`${installed.name} is installed in the live runtime.`);
+    } catch (error) {
+      setMarketplaceNotice(error instanceof Error ? error.message : "Marketplace install failed.");
+    } finally {
+      setInstallingModuleId(null);
+    }
   }
 
   function cleanRiskyMemories() {
@@ -545,12 +586,13 @@ function App() {
               <Cpu size={18} />
               <span>Platform runtime</span>
             </div>
-            <strong>{runtime.maintenance?.enabled === false ? "manual dreams" : "auto-dream online"}</strong>
-            <p>CLI, HTTP, dashboard, MCP, and connector templates run from one local package.</p>
+            <strong>{runtime.storage?.active ? `${runtime.storage.active} backend` : runtime.maintenance?.enabled === false ? "manual dreams" : "auto-dream online"}</strong>
+            <p>{runtime.managed ? `${runtime.managed.tenants.total} managed tenants, ${Object.values(runtime.managed.readiness).filter(Boolean).length} readiness checks passing.` : "CLI, HTTP, dashboard, MCP, and connector templates run from one local package."}</p>
             <div className="signal-stack">
               {platformSignals.map(({ label, value, icon: Icon }) => (
                 <span key={label}><Icon size={14} /> {label}: {value}</span>
               ))}
+              {runtime.managed ? <span><ShieldCheck size={14} /> managed: {runtime.managed.autoscaling.enabled ? `${runtime.managed.autoscaling.minReplicas}-${runtime.managed.autoscaling.maxReplicas} replicas` : "fixed capacity"}</span> : null}
             </div>
           </article>
 
@@ -584,6 +626,7 @@ function App() {
           <Metric label="Dreams" value={String(runtime.metrics?.dreams ?? 0)} />
           <Metric label="Connectors" value={String(connectorHealth.length)} />
           <Metric label="Writebacks" value={String(connectorHealth.filter((item) => item.lastWritebackAt).length)} />
+          <Metric label="Tenants" value={String(runtime.managed?.tenants.total ?? 0)} />
         </section>
 
         {view === "memories" ? (
@@ -649,7 +692,7 @@ function App() {
         ) : null}
 
         {view === "marketplace" ? (
-          <MarketplaceView modules={modules} installModule={installModule} />
+          <MarketplaceView modules={modules} installModule={installModule} runtime={runtime} installingModuleId={installingModuleId} notice={marketplaceNotice} />
         ) : null}
 
         {view === "proof" ? (
@@ -663,6 +706,30 @@ function App() {
 function getApiUrl(): string {
   const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
   return (env?.VITE_API_URL ?? "http://localhost:8787").replace(/\/$/, "");
+}
+
+function mapMarketplaceModule(raw: unknown): MarketplaceModuleCard {
+  const item = raw as {
+    id?: string;
+    kind?: MarketplaceModuleCard["kind"];
+    name?: string;
+    version?: string;
+    description?: string;
+    installState?: "available" | "installed";
+    status?: "available" | "installed";
+    manifest?: Record<string, unknown>;
+    security?: { status?: string };
+  };
+  return {
+    id: item.id ?? "unknown-module",
+    kind: item.kind ?? "domain",
+    name: item.name ?? item.id ?? "Unnamed module",
+    version: item.version ?? "0.0.0",
+    status: item.installState ?? item.status ?? "available",
+    summary: item.description ?? "Runtime module from the marketplace API.",
+    manifest: item.manifest ?? {},
+    securityStatus: item.security?.status
+  };
 }
 
 function MemoryView({
@@ -1191,20 +1258,37 @@ function DreamView({
   );
 }
 
-function MarketplaceView({ modules, installModule }: { modules: MarketplaceModuleCard[]; installModule: (moduleId: string) => void }) {
+function MarketplaceView({
+  modules,
+  installModule,
+  runtime,
+  installingModuleId,
+  notice
+}: {
+  modules: MarketplaceModuleCard[];
+  installModule: (moduleId: string) => void | Promise<void>;
+  runtime: RuntimeStatus;
+  installingModuleId: string | null;
+  notice: string;
+}) {
   const [kind, setKind] = useState<"all" | MarketplaceModuleCard["kind"]>("all");
   const [selectedId, setSelectedId] = useState(modules[0]?.id ?? "");
   const filtered = kind === "all" ? modules : modules.filter((module) => module.kind === kind);
   const selected = modules.find((module) => module.id === selectedId) ?? filtered[0] ?? modules[0];
+  const canInstall = runtime.state === "online" && selected?.status !== "installed" && installingModuleId !== selected?.id;
   return (
     <section className="market-layout">
       <div className="panel">
         <div className="panel-title">
           <div>
             <h2>Marketplace Browser</h2>
-            <p>Preview connectors, personas, domain modules, and retrieval profiles before install.</p>
+            <p>{runtime.state === "online" ? "Live modules from the API runtime. Installs mutate the service registry." : "Preview modules are visible, but install is disabled until the API is online."}</p>
           </div>
-          <ShoppingBag size={18} />
+          {runtime.state === "online" ? <ShoppingBag size={18} /> : <WifiOff size={18} />}
+        </div>
+        <div className={`runtime-chip ${runtime.state} market-status`}>
+          <Activity size={14} />
+          <span>{notice}</span>
         </div>
         <div className="segmented compact" role="tablist" aria-label="Marketplace filters">
           {(["all", "connector", "domain", "persona", "retrieval_profile"] as const).map((item) => (
@@ -1217,7 +1301,7 @@ function MarketplaceView({ modules, installModule }: { modules: MarketplaceModul
               <span>{module.kind}</span>
               <strong>{module.name}</strong>
               <small>{module.summary}</small>
-              <em>{module.status}</em>
+              <em>{module.status}{module.securityStatus ? ` / ${module.securityStatus}` : ""}</em>
             </button>
           ))}
         </div>
@@ -1228,12 +1312,12 @@ function MarketplaceView({ modules, installModule }: { modules: MarketplaceModul
             <h2>Install Preview</h2>
             <p>Review manifest shape and runtime effect before enabling a module.</p>
           </div>
-          {selected ? <button disabled={selected.status === "installed"} onClick={() => installModule(selected.id)}><Plus size={16} /> Install</button> : null}
+          {selected ? <button disabled={!canInstall} onClick={() => installModule(selected.id)}><Plus size={16} /> {installingModuleId === selected.id ? "Installing" : selected.status === "installed" ? "Installed" : "Install"}</button> : null}
         </div>
         {selected ? (
           <article className="module-detail">
             <strong>{selected.name}</strong>
-            <span>{selected.kind} · v{selected.version} · {selected.status}</span>
+            <span>{selected.kind} · v{selected.version} · {selected.status}{selected.securityStatus ? ` · ${selected.securityStatus}` : ""}</span>
             <p>{selected.summary}</p>
             <pre>{JSON.stringify(selected.manifest, null, 2)}</pre>
           </article>

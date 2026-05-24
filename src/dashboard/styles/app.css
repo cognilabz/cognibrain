@@ -218,6 +218,14 @@ button:disabled {
   background: oklch(96% 0.035 72);
 }
 
+.market-status {
+  width: 100%;
+  justify-content: flex-start;
+  border-radius: var(--radius);
+  margin-bottom: 14px;
+  white-space: normal;
+}
+
 .workspace {
   width: min(1320px, 100%);
   margin: 0 auto;

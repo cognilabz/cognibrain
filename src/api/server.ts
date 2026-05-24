@@ -278,7 +278,7 @@ const personaSchema = z.object({
 const webhookSchema = z.object({
   id: z.string().optional(),
   url: z.string().url(),
-  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
+  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
   secretRef: z.string().optional()
 });
 
@@ -297,7 +297,23 @@ const marketplaceModuleSchema = z.object({
       risks: z.array(z.string())
     })
     .optional(),
-  manifest: z.record(z.unknown())
+  manifest: z.record(z.unknown()),
+  trustSignals: z.record(z.unknown()).optional()
+});
+
+const marketplaceSubmissionSchema = z.object({
+  module: marketplaceModuleSchema,
+  submitter: z.string().min(1),
+  sourceUrl: z.string().url().optional()
+});
+
+const marketplaceReviewSchema = z.object({
+  reviewer: z.string().min(1),
+  rating: z.number().min(1).max(5),
+  comment: z.string().optional(),
+  approve: z.boolean().optional(),
+  requestChanges: z.boolean().optional(),
+  reject: z.boolean().optional()
 });
 
 const migrationExportSchema = z.object({
@@ -410,7 +426,7 @@ const connectorPollSchema = z.object({
   projectId: z.string().optional()
 });
 
-const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split", "retention.enforce", "security.key.rotate", "privacy.insights"]);
+const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "inference.run", "entity.merge", "entity.split", "retention.enforce", "security.key.rotate", "privacy.insights"]);
 
 const retentionRuleSchema = z.object({
   id: z.string().optional(),
@@ -655,6 +671,41 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (method === "POST" && url.pathname === "/webhooks/deliver") {
     const body = z.object({ fail: z.boolean().optional(), error: z.string().optional(), real: z.boolean().optional() }).parse(await json(request));
     send(response, 202, body.real ? await defaultService.deliverWebhookQueueHttp() : defaultService.deliverWebhookQueue(() => ({ ok: body.fail !== true, error: body.error ?? "simulated delivery failure" })));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/marketplace/submissions") {
+    const status = url.searchParams.get("status") as Parameters<typeof defaultService.listMarketplaceSubmissions>[0] | null;
+    send(response, 200, defaultService.listMarketplaceSubmissions(status ?? undefined));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/marketplace/submissions") {
+    send(response, 202, defaultService.submitMarketplaceModule(marketplaceSubmissionSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/marketplace/scan") {
+    const body = z.object({ submissionId: z.string().min(1) }).parse(await json(request));
+    send(response, 202, defaultService.scanMarketplaceSubmission(body.submissionId));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/marketplace/review") {
+    const body = z.object({ submissionId: z.string().min(1), review: marketplaceReviewSchema }).parse(await json(request));
+    send(response, 202, defaultService.reviewMarketplaceSubmission(body.submissionId, body.review));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/marketplace/publish") {
+    const body = z.object({ submissionId: z.string().min(1) }).parse(await json(request));
+    send(response, 202, defaultService.publishMarketplaceSubmission(body.submissionId));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/marketplace/rate") {
+    const body = z.object({ moduleId: z.string().min(1), review: marketplaceReviewSchema.pick({ reviewer: true, rating: true, comment: true }) }).parse(await json(request));
+    send(response, 202, defaultService.rateMarketplaceModule(body.moduleId, body.review));
     return;
   }
 

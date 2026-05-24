@@ -290,6 +290,22 @@ curl -X POST http://localhost:8787/marketplace/plan \
   -H "content-type: application/json" \
   -d '{"id":"retrieval-trust-heavy"}'
 curl http://localhost:8787/marketplace
+curl http://localhost:8787/marketplace/submissions
+curl -X POST http://localhost:8787/marketplace/submissions \
+  -H "content-type: application/json" \
+  -d '{"submitter":"dahuby","sourceUrl":"https://github.com/cognilabz/cognibrain/pull/1","module":{"id":"persona-reviewer","kind":"persona","name":"Reviewer","version":"1.0.0","description":"Review defaults","manifest":{"id":"reviewer","label":"Reviewer","summaryStyle":"concise"}}}'
+curl -X POST http://localhost:8787/marketplace/scan \
+  -H "content-type: application/json" \
+  -d '{"submissionId":"submission_id"}'
+curl -X POST http://localhost:8787/marketplace/review \
+  -H "content-type: application/json" \
+  -d '{"submissionId":"submission_id","review":{"reviewer":"operator","rating":5,"comment":"Manifest and docs are complete.","approve":true}}'
+curl -X POST http://localhost:8787/marketplace/publish \
+  -H "content-type: application/json" \
+  -d '{"submissionId":"submission_id"}'
+curl -X POST http://localhost:8787/marketplace/rate \
+  -H "content-type: application/json" \
+  -d '{"moduleId":"persona-reviewer","review":{"reviewer":"user","rating":5,"comment":"Installed cleanly."}}'
 curl http://localhost:8787/sdk/openapi
 curl http://localhost:8787/benchmarks/trend
 curl http://localhost:8787/benchmarks/leaderboard
@@ -321,7 +337,7 @@ curl "http://localhost:8787/privacy/insights?epsilon=0.8&k=3"
 
 `/webhooks/deliver` defaults to the deterministic local delivery simulator used by tests and offline harnesses. Passing `{"real":true}` sends queued deliveries as HTTP `POST` requests to the registered webhook URL; CLI users can set `MEMORY_WEBHOOK_REAL_HTTP=true` before `webhook-deliver` for the same behavior. Each real delivery body is `{"deliveryId": "...", "event": {...}}` and includes `x-cognibrain-delivery`, `x-cognibrain-event`, and `user-agent: cognibrain-webhook/0.1`. Registrations with `secretRef` receive `x-cognibrain-signature: sha256=<hex>`, computed over the exact JSON body. Delivery records expose attempts, `lastStatusCode`, `lastError`, `lastAttemptAt`, and retry backoff timestamps through `/webhooks/deliveries`. Real HTTP delivery times out after `MEMORY_WEBHOOK_TIMEOUT_MS` or 10 seconds by default so unhealthy endpoints cannot block the queue indefinitely.
 
-Every write/update/delete/search/extract/reflect/share/share-request/share-revoke/agent/persona/connector/provider/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries, simulate delivery, and verify retry metadata before enabling real network delivery. Marketplace installs persist module metadata, validate security scan metadata, materialize personas, register connectors, and save retrieval profiles. `/sdk/openapi` exposes the generated client/API description, and `/migration/export` produces a local-to-managed or backup bundle with SSO, secret-manager labels, Docker/Compose/Kubernetes deployment artifact references, and a concrete import workflow. `/backup/verify` checks encrypted-memory recovery without exposing plaintext, and `/migration/import` restores exported memories plus profiles, personas, connectors, marketplace modules and retention rules. Retention rules can target memory user, brain, source, source kind, visibility, entity, relation type, or tag and are enforced before search and dream. Compliance reports summarize storage scope, consent, retention rules, delete-on-request, encryption key provider status, backup recovery, transport security, data flows, and audit counts. Privacy insights return noised aggregates and suppress groups below the configured k-anonymity threshold.
+Every write/update/delete/search/extract/reflect/share/share-request/share-revoke/agent/persona/connector/provider/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries, simulate delivery, and verify retry metadata before enabling real network delivery. Marketplace submissions persist submitter/source metadata, run deterministic security scans, collect reviews/ratings, publish approved modules, and expose trust signals before install. Marketplace installs persist module metadata, validate security scan metadata, materialize personas, register connectors, and save retrieval profiles. `/sdk/openapi` exposes the generated client/API description, and `/migration/export` produces a local-to-managed or backup bundle with SSO, secret-manager labels, Docker/Compose/Kubernetes deployment artifact references, and a concrete import workflow. `/backup/verify` checks encrypted-memory recovery without exposing plaintext, and `/migration/import` restores exported memories plus profiles, personas, connectors, marketplace modules and retention rules. Retention rules can target memory user, brain, source, source kind, visibility, entity, relation type, or tag and are enforced before search and dream. Compliance reports summarize storage scope, consent, retention rules, delete-on-request, encryption key provider status, backup recovery, transport security, data flows, and audit counts. Privacy insights return noised aggregates and suppress groups below the configured k-anonymity threshold.
 
 ## Reflection
 

@@ -427,6 +427,46 @@ switch (command) {
     console.log(JSON.stringify(module, null, 2));
     break;
   }
+
+  case "marketplace-submit": {
+    const [submitter, moduleJson, sourceUrl] = args;
+    if (!submitter || !moduleJson) fail("Usage: memctl marketplace-submit <submitter> '<module-json>' [source-url]");
+    console.log(JSON.stringify(service.submitMarketplaceModule({ submitter, module: JSON.parse(moduleJson), sourceUrl }), null, 2));
+    break;
+  }
+
+  case "marketplace-submissions": {
+    console.log(JSON.stringify(service.listMarketplaceSubmissions(args[0] as Parameters<typeof service.listMarketplaceSubmissions>[0]), null, 2));
+    break;
+  }
+
+  case "marketplace-scan": {
+    const submissionId = args[0];
+    if (!submissionId) fail("Usage: memctl marketplace-scan <submission-id>");
+    console.log(JSON.stringify(service.scanMarketplaceSubmission(submissionId), null, 2));
+    break;
+  }
+
+  case "marketplace-review": {
+    const [submissionId, reviewer, rating, ...commentParts] = args;
+    if (!submissionId || !reviewer || !rating) fail("Usage: memctl marketplace-review <submission-id> <reviewer> <rating> [comment]");
+    console.log(JSON.stringify(service.reviewMarketplaceSubmission(submissionId, { reviewer, rating: Number(rating), comment: commentParts.join(" ") || undefined, approve: process.env.MEMORY_MARKETPLACE_APPROVE !== "false" }), null, 2));
+    break;
+  }
+
+  case "marketplace-publish": {
+    const submissionId = args[0];
+    if (!submissionId) fail("Usage: memctl marketplace-publish <submission-id>");
+    console.log(JSON.stringify(service.publishMarketplaceSubmission(submissionId), null, 2));
+    break;
+  }
+
+  case "marketplace-rate": {
+    const [moduleId, reviewer, rating, ...commentParts] = args;
+    if (!moduleId || !reviewer || !rating) fail("Usage: memctl marketplace-rate <module-id> <reviewer> <rating> [comment]");
+    console.log(JSON.stringify(service.rateMarketplaceModule(moduleId, { reviewer, rating: Number(rating), comment: commentParts.join(" ") || undefined }), null, 2));
+    break;
+  }
   case "api-spec": {
     console.log(JSON.stringify(service.apiDescription(), null, 2));
     break;
@@ -703,7 +743,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|api-spec|migration-export|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {

@@ -549,6 +549,10 @@ export interface AuditEvent {
     | "sync.queue"
     | "sync.run"
     | "webhook.register"
+    | "marketplace.submit"
+    | "marketplace.scan"
+    | "marketplace.review"
+    | "marketplace.publish"
     | "marketplace.install"
     | "inference.run"
     | "entity.merge"
@@ -659,6 +663,41 @@ export interface MarketplaceModule {
     risks: string[];
   };
   manifest: Record<string, unknown>;
+  trustSignals?: MarketplaceTrustSignals;
+}
+
+export interface MarketplaceTrustSignals {
+  ratingAverage?: number;
+  ratingCount?: number;
+  reviewCount?: number;
+  installCount?: number;
+  securityStatus?: "passed" | "warning" | "blocked";
+  publisher?: string;
+  publishedAt?: Date | string;
+  sourceUrl?: string;
+  lastReviewedAt?: Date | string;
+}
+
+export interface MarketplaceReview {
+  reviewer: string;
+  rating: number;
+  comment?: string;
+  createdAt: Date | string;
+}
+
+export interface MarketplaceSubmission {
+  id: string;
+  module: MarketplaceModule;
+  submitter: string;
+  sourceUrl?: string;
+  status: "submitted" | "scanned" | "changes_requested" | "approved" | "published" | "rejected";
+  submittedAt: Date | string;
+  scannedAt?: Date | string;
+  reviewedAt?: Date | string;
+  publishedAt?: Date | string;
+  scan?: MarketplaceModule["security"];
+  reviewNotes: string[];
+  reviews: MarketplaceReview[];
 }
 
 export interface MarketplaceInstallPlan {

@@ -12,6 +12,7 @@ import { CognibrainClient } from "../src/sdk/client";
 import { AppendOnlyLogPersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, SQLitePersistenceAdapter, sqliteAvailable } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
 import { buildLeaderboardArtifact, validateLeaderboardArtifact } from "../src/eval/leaderboard";
+import { publishLeaderboardArtifact } from "../src/eval/publishLeaderboard";
 import { runNextgenBenchmarkSuites } from "../src/eval/nextgenBenchmarks";
 import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
 import { runMarketGate } from "../src/eval/marketGate";
@@ -1072,6 +1073,42 @@ describe("TypeScript memory core", () => {
     expect(calls.map((call) => call.url)).toEqual(["http://memory.local/memories", "http://memory.local/feedback", "http://memory.local/graph/query"]);
   });
 
+  it("runs the marketplace submission, scan, review, publish, rating, and install lifecycle", () => {
+    const service = new MemoryService();
+    const module = {
+      id: "persona-community-reviewer",
+      kind: "persona" as const,
+      name: "Community Reviewer",
+      version: "1.0.0",
+      description: "Review-friendly community persona defaults.",
+      manifest: { id: "community-reviewer", label: "Community Reviewer", summaryStyle: "concise" }
+    };
+
+    const submitted = service.submitMarketplaceModule({ module, submitter: "dahuby", sourceUrl: "https://github.com/cognilabz/cognibrain/pull/1" });
+    expect(submitted.status).toBe("submitted");
+
+    const scanned = service.scanMarketplaceSubmission(submitted.id);
+    expect(scanned.status).toBe("scanned");
+    expect(scanned.scan?.status).toBe("passed");
+
+    const reviewed = service.reviewMarketplaceSubmission(submitted.id, { reviewer: "operator", rating: 4.8, comment: "Manifest and privacy defaults are reviewable.", approve: true });
+    expect(reviewed.status).toBe("approved");
+    expect(reviewed.module.trustSignals?.ratingAverage).toBe(4.8);
+
+    const published = service.publishMarketplaceSubmission(submitted.id);
+    expect(published.installState).toBe("available");
+    expect(published.trustSignals?.publisher).toBe("dahuby");
+    expect(published.trustSignals?.reviewCount).toBe(1);
+
+    const rated = service.rateMarketplaceModule(published.id, { reviewer: "user", rating: 5, comment: "Installed cleanly." });
+    expect(rated.trustSignals?.ratingCount).toBe(2);
+
+    const installed = service.installMarketplaceModuleById(published.id);
+    expect(installed.installState).toBe("installed");
+    expect(installed.trustSignals?.installCount).toBe(1);
+    expect(service.listMarketplaceSubmissions("published")).toHaveLength(1);
+  });
+
   it("runs deterministic nextgen benchmark suites", () => {
     const dir = mkdtempSync(join(tmpdir(), "memory-bench-"));
     try {
@@ -1100,6 +1137,9 @@ describe("TypeScript memory core", () => {
       expect(artifact.entries.some((entry) => entry.category === "answer_generation")).toBe(true);
       expect(JSON.stringify(artifact)).not.toContain("rawPrompt");
       expect(JSON.stringify(artifact)).not.toContain("rawEvidence");
+      const publication = publishLeaderboardArtifact({ inputPath: outputPath, outputDir: join(dir, "public") });
+      expect(publication.entries).toBeGreaterThan(0);
+      expect(publication.anonymized).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

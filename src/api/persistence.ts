@@ -11,6 +11,7 @@ import type {
   ConnectorManifest,
   ConnectorSyncRecord,
   IdentityLink,
+  MarketplaceSubmission,
   MarketplaceModule,
   Memory,
   MemorySource,
@@ -45,6 +46,7 @@ export interface PersistedMemoryFile {
   webhooks?: WebhookRegistration[];
   webhookDeliveries?: WebhookDelivery[];
   marketplaceModules?: MarketplaceModule[];
+  marketplaceSubmissions?: MarketplaceSubmission[];
   offlineOperations?: OfflineOperation[];
   connectorManifests?: ConnectorManifest[];
   connectorSyncRecords?: ConnectorSyncRecord[];

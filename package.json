@@ -47,6 +47,7 @@
     "benchmark:market": "tsx src/eval/marketGate.ts",
     "benchmark:answer-generation": "tsx src/eval/answerGeneration.ts --out artifacts/answer-generation.json",
     "benchmark:certified": "tsx src/eval/certified.ts",
+    "leaderboard:publish": "tsx src/eval/publishLeaderboard.ts --input artifacts/leaderboard.json --out public/leaderboard",
     "docs:market-claims": "tsx src/eval/readmeClaims.ts",
     "verify": "npm run test && npm run eval && npm run build",
     "verify:nextgen": "npm run test && npm run eval && npm run eval:nextgen && npm run benchmark:nextgen && npm run benchmark:answer-generation -- --reports artifacts/nextgen-benchmarks.json && npm run leaderboard && npm run build",

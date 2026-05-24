@@ -62,6 +62,8 @@ import type {
   MemorySource,
   MarketplaceModule,
   MarketplaceInstallPlan,
+  MarketplaceSubmission,
+  MarketplaceReview,
   MetricsReport,
   ManagedMigrationBundle,
   ManagedDeploymentPlan,
@@ -177,6 +179,7 @@ export class MemoryService {
   private webhooks = new Map<string, WebhookRegistration>();
   private webhookDeliveries: WebhookDelivery[] = [];
   private marketplaceModules = new Map<string, MarketplaceModule>();
+  private marketplaceSubmissions = new Map<string, MarketplaceSubmission>();
   private offlineOperations: OfflineOperation[] = [];
   private connectorManifests = new Map<string, ConnectorManifest>();
   private connectorSyncRecords: ConnectorSyncRecord[] = [];
@@ -1177,7 +1180,17 @@ export class MemoryService {
   installMarketplaceModule(module: MarketplaceModule): MarketplaceModule {
     const plan = this.marketplaceInstallPlan(module);
     if (!plan.valid) throw new Error(`Marketplace module failed validation: ${plan.risks.join(", ")}`);
-    const installed = { ...module, security: module.security ?? securityScanFor(module), installState: "installed" as const };
+    const current = this.marketplaceModules.get(module.id);
+    const installed = {
+      ...module,
+      security: module.security ?? securityScanFor(module),
+      installState: "installed" as const,
+      trustSignals: {
+        ...(module.trustSignals ?? current?.trustSignals),
+        securityStatus: (module.security ?? current?.security)?.status ?? securityScanFor(module).status,
+        installCount: (current?.trustSignals?.installCount ?? module.trustSignals?.installCount ?? 0) + 1
+      }
+    };
     this.marketplaceModules.set(installed.id, installed);
     if (installed.kind === "persona") {
       const manifest = installed.manifest as Partial<PersonaProfile>;
@@ -1226,6 +1239,157 @@ export class MemoryService {
     return [...this.marketplaceModules.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  submitMarketplaceModule(input: { module: MarketplaceModule; submitter: string; sourceUrl?: string }): MarketplaceSubmission {
+    const id = `submission_${contentHash(`${input.module.id}:${input.module.version}:${input.submitter}`).slice(2, 14)}`;
+    const submittedAt = new Date().toISOString();
+    const submission: MarketplaceSubmission = {
+      id,
+      module: {
+        ...input.module,
+        installState: "available",
+        trustSignals: {
+          ...(input.module.trustSignals ?? {}),
+          publisher: input.submitter,
+          sourceUrl: input.sourceUrl
+        }
+      },
+      submitter: input.submitter,
+      sourceUrl: input.sourceUrl,
+      status: "submitted",
+      submittedAt,
+      reviewNotes: [],
+      reviews: []
+    };
+    this.marketplaceSubmissions.set(id, submission);
+    this.recordAudit("marketplace.submit", { actorId: input.submitter, metadata: { submissionId: id, moduleId: input.module.id, sourceUrl: input.sourceUrl } });
+    this.persist();
+    return submission;
+  }
+
+  scanMarketplaceSubmission(submissionId: string): MarketplaceSubmission {
+    const submission = this.requireMarketplaceSubmission(submissionId);
+    const scan = securityScanFor(submission.module);
+    const updated: MarketplaceSubmission = {
+      ...submission,
+      status: scan.status === "blocked" ? "changes_requested" : "scanned",
+      scannedAt: new Date().toISOString(),
+      scan,
+      module: {
+        ...submission.module,
+        security: scan,
+        trustSignals: { ...(submission.module.trustSignals ?? {}), securityStatus: scan.status }
+      },
+      reviewNotes: [...submission.reviewNotes, ...scan.risks]
+    };
+    this.marketplaceSubmissions.set(submissionId, updated);
+    this.recordAudit("marketplace.scan", { actorId: "security-scan", metadata: { submissionId, moduleId: updated.module.id, status: scan.status, risks: scan.risks } });
+    this.persist();
+    return updated;
+  }
+
+  reviewMarketplaceSubmission(submissionId: string, review: { reviewer: string; rating: number; comment?: string; approve?: boolean; requestChanges?: boolean; reject?: boolean }): MarketplaceSubmission {
+    const submission = this.requireMarketplaceSubmission(submissionId);
+    const normalizedReview: MarketplaceReview = {
+      reviewer: review.reviewer,
+      rating: clampRating(review.rating),
+      comment: review.comment,
+      createdAt: new Date().toISOString()
+    };
+    const reviews = [...submission.reviews, normalizedReview];
+    const status = review.reject
+      ? "rejected"
+      : review.requestChanges
+        ? "changes_requested"
+        : review.approve
+          ? "approved"
+          : submission.status;
+    const updated: MarketplaceSubmission = {
+      ...submission,
+      status,
+      reviewedAt: normalizedReview.createdAt,
+      reviews,
+      reviewNotes: review.comment ? [...submission.reviewNotes, review.comment] : submission.reviewNotes,
+      module: {
+        ...submission.module,
+        trustSignals: {
+          ...(submission.module.trustSignals ?? {}),
+          ratingAverage: averageRating(reviews),
+          ratingCount: reviews.length,
+          reviewCount: reviews.length,
+          lastReviewedAt: normalizedReview.createdAt
+        }
+      }
+    };
+    this.marketplaceSubmissions.set(submissionId, updated);
+    this.recordAudit("marketplace.review", { actorId: review.reviewer, metadata: { submissionId, moduleId: updated.module.id, status, rating: normalizedReview.rating } });
+    this.persist();
+    return updated;
+  }
+
+  publishMarketplaceSubmission(submissionId: string): MarketplaceModule {
+    const submission = this.requireMarketplaceSubmission(submissionId);
+    if (submission.status !== "approved" && submission.status !== "scanned") throw new Error(`Marketplace submission ${submissionId} must be scanned or approved before publish`);
+    const scan = submission.scan ?? securityScanFor(submission.module);
+    if (scan.status === "blocked") throw new Error(`Marketplace submission ${submissionId} is blocked by security scan`);
+    const publishedAt = new Date().toISOString();
+    const published: MarketplaceModule = {
+      ...submission.module,
+      security: scan,
+      installState: "available",
+      trustSignals: {
+        ...(submission.module.trustSignals ?? {}),
+        securityStatus: scan.status,
+        publisher: submission.submitter,
+        publishedAt,
+        sourceUrl: submission.sourceUrl,
+        ratingAverage: averageRating(submission.reviews),
+        ratingCount: submission.reviews.length,
+        reviewCount: submission.reviews.length
+      }
+    };
+    const updated: MarketplaceSubmission = { ...submission, status: "published", publishedAt, module: published, scan };
+    this.marketplaceSubmissions.set(submissionId, updated);
+    this.marketplaceModules.set(published.id, published);
+    this.recordAudit("marketplace.publish", { actorId: submission.submitter, metadata: { submissionId, moduleId: published.id, securityStatus: scan.status } });
+    this.persist();
+    return published;
+  }
+
+  listMarketplaceSubmissions(status?: MarketplaceSubmission["status"]): MarketplaceSubmission[] {
+    return [...this.marketplaceSubmissions.values()]
+      .filter((submission) => !status || submission.status === status)
+      .sort((a, b) => String(b.submittedAt).localeCompare(String(a.submittedAt)));
+  }
+
+  rateMarketplaceModule(moduleId: string, review: { reviewer: string; rating: number; comment?: string }): MarketplaceModule {
+    const module = this.marketplaceModules.get(moduleId);
+    if (!module) throw new Error(`Marketplace module not found: ${moduleId}`);
+    const priorCount = module.trustSignals?.ratingCount ?? 0;
+    const priorAverage = module.trustSignals?.ratingAverage ?? 0;
+    const rating = clampRating(review.rating);
+    const ratingCount = priorCount + 1;
+    const updated: MarketplaceModule = {
+      ...module,
+      trustSignals: {
+        ...(module.trustSignals ?? {}),
+        ratingAverage: ((priorAverage * priorCount) + rating) / ratingCount,
+        ratingCount,
+        reviewCount: (module.trustSignals?.reviewCount ?? 0) + (review.comment ? 1 : 0),
+        lastReviewedAt: new Date().toISOString()
+      }
+    };
+    this.marketplaceModules.set(moduleId, updated);
+    this.recordAudit("marketplace.review", { actorId: review.reviewer, metadata: { moduleId, rating, comment: review.comment } });
+    this.persist();
+    return updated;
+  }
+
+  private requireMarketplaceSubmission(submissionId: string): MarketplaceSubmission {
+    const submission = this.marketplaceSubmissions.get(submissionId);
+    if (!submission) throw new Error(`Marketplace submission not found: ${submissionId}`);
+    return submission;
+  }
+
   apiDescription() {
     return {
       openapi: "3.1.0",
@@ -1238,6 +1402,11 @@ export class MemoryService {
         "/graph": ["GET"],
         "/graph/query": ["POST"],
         "/marketplace": ["GET"],
+        "/marketplace/submissions": ["GET", "POST"],
+        "/marketplace/scan": ["POST"],
+        "/marketplace/review": ["POST"],
+        "/marketplace/publish": ["POST"],
+        "/marketplace/rate": ["POST"],
         "/marketplace/install": ["POST"],
         "/marketplace/plan": ["POST"],
         "/migration/export": ["POST"],
@@ -2252,6 +2421,7 @@ export class MemoryService {
     this.webhooks = new Map((raw.webhooks ?? []).map((webhook) => [webhook.id, webhook]));
     this.webhookDeliveries = raw.webhookDeliveries ?? [];
     this.marketplaceModules = new Map([...officialMarketplaceModules(), ...(raw.marketplaceModules ?? [])].map((module) => [module.id, module]));
+    this.marketplaceSubmissions = new Map((raw.marketplaceSubmissions ?? []).map((submission) => [submission.id, submission]));
     this.offlineOperations = raw.offlineOperations ?? [];
     for (const manifest of raw.connectorManifests ?? []) this.connectorManifests.set(manifest.id, manifest);
     this.connectorSyncRecords = raw.connectorSyncRecords ?? [];
@@ -2281,6 +2451,7 @@ export class MemoryService {
       webhooks: [...this.webhooks.values()],
       webhookDeliveries: this.webhookDeliveries,
       marketplaceModules: [...this.marketplaceModules.values()],
+      marketplaceSubmissions: [...this.marketplaceSubmissions.values()],
       offlineOperations: this.offlineOperations,
       connectorManifests: [...this.connectorManifests.values()],
       connectorSyncRecords: this.connectorSyncRecords,
@@ -2764,7 +2935,7 @@ function marketplaceRisks(module: MarketplaceModule): string[] {
   return risks;
 }
 
-function securityScanFor(module: MarketplaceModule): MarketplaceModule["security"] {
+function securityScanFor(module: MarketplaceModule): NonNullable<MarketplaceModule["security"]> {
   const risks = marketplaceRisks({ ...module, security: { scannedAt: new Date().toISOString(), status: "passed", permissions: [], risks: [] } }).filter((risk) => risk !== "warning: module has no security scan metadata");
   return {
     scannedAt: new Date().toISOString(),
@@ -2772,6 +2943,16 @@ function securityScanFor(module: MarketplaceModule): MarketplaceModule["security
     permissions: module.kind === "connector" ? ((module.manifest as Partial<ConnectorManifest>).capabilities ?? []) : [module.kind],
     risks
   };
+}
+
+function clampRating(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(5, Math.max(1, Math.round(value * 10) / 10));
+}
+
+function averageRating(reviews: MarketplaceReview[]): number | undefined {
+  if (!reviews.length) return undefined;
+  return reviews.reduce((sum, review) => sum + clampRating(review.rating), 0) / reviews.length;
 }
 
 function validateConnectorManifest(input: Omit<ConnectorManifest, "createdAt" | "updatedAt">): void {

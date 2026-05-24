@@ -456,6 +456,22 @@ export interface EpisodeInput {
   source?: Provenance;
 }
 
+export interface HarnessActionInput {
+  userId: string;
+  agentId?: string;
+  sessionId?: string;
+  appId?: string;
+  orgId?: string;
+  projectId?: string;
+  command?: string;
+  filesChanged?: string[];
+  tests?: Array<{ name: string; status: "passed" | "failed" | "skipped"; output?: string }>;
+  pullRequest?: string;
+  errorFixed?: string;
+  content?: string;
+  timestamp?: Date | string;
+}
+
 export interface QueryExpander {
   expand(input: { query: string; userId: string; now: Date; memories?: Memory[] }): string[];
 }

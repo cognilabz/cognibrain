@@ -508,6 +508,25 @@ describe("TypeScript memory core", () => {
     expect(service.search({ userId: "u1", query: "Vitest release" }).some((result) => result.memory.id === active.id)).toBe(false);
   });
 
+  it("records harness actions as episodic memory evidence", () => {
+    const service = new MemoryService();
+    const action = service.recordHarnessAction({
+      userId: "u1",
+      agentId: "codex",
+      projectId: "memory",
+      command: "npm run test",
+      filesChanged: ["src/api/service.ts"],
+      tests: [{ name: "vitest", status: "passed" }],
+      errorFixed: "TypeScript build failure"
+    });
+    expect(action.type).toBe("episodic");
+    expect(action.source.kind).toBe("tool");
+    expect(action.tags).toContain("harness-action");
+    expect(action.metadata.action).toMatchObject({ command: "npm run test", errorFixed: "TypeScript build failure" });
+    const recalled = service.search({ userId: "u1", query: "what fixed TypeScript build failure last time?", limit: 3 });
+    expect(recalled.some((result) => result.memory.id === action.id)).toBe(true);
+  });
+
   it("redacts sensitive writes, extracts add-only facts, records feedback, and reports metrics", () => {
     const service = new MemoryService({ redactionPolicy: { mode: "redact" } });
     const secret = service.add({

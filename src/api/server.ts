@@ -112,6 +112,22 @@ const evidencePackSchema = searchSchema.extend({
   tokenBudget: z.number().int().positive().max(8000).optional()
 });
 
+const harnessActionSchema = z.object({
+  userId: z.string().min(1),
+  agentId: z.string().optional(),
+  sessionId: z.string().optional(),
+  appId: z.string().optional(),
+  orgId: z.string().optional(),
+  projectId: z.string().optional(),
+  command: z.string().optional(),
+  filesChanged: z.array(z.string()).optional(),
+  tests: z.array(z.object({ name: z.string(), status: z.enum(["passed", "failed", "skipped"]), output: z.string().optional() })).optional(),
+  pullRequest: z.string().optional(),
+  errorFixed: z.string().optional(),
+  content: z.string().optional(),
+  timestamp: z.string().optional()
+});
+
 const graphExportSchema = z.object({
   userId: z.string().optional(),
   relationTypes: z.array(relationTypeSchema).optional(),
@@ -1056,6 +1072,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     const { events, ...scope } = body;
     const report = defaultService.extract(events, scope);
     send(response, 201, serializeExtractionReport(report));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/actions") {
+    send(response, 201, serialize(defaultService.recordHarnessAction(harnessActionSchema.parse(await json(request)))));
     return;
   }
 

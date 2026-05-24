@@ -54,6 +54,24 @@ switch (command) {
     console.log(JSON.stringify(report, null, 2));
     break;
   }
+  case "action": {
+    const commandText = args.join(" ");
+    if (!commandText) fail("Usage: memctl action <command-or-action-summary>");
+    console.log(JSON.stringify(service.recordHarnessAction({
+      userId,
+      agentId: process.env.MEMORY_AGENT_ID,
+      sessionId: process.env.MEMORY_SESSION_ID,
+      appId: process.env.MEMORY_APP_ID,
+      orgId: process.env.MEMORY_ORG_ID,
+      projectId: process.env.MEMORY_PROJECT_ID,
+      command: commandText,
+      filesChanged: csvList(process.env.MEMORY_FILES_CHANGED),
+      tests: process.env.MEMORY_TESTS_JSON ? JSON.parse(process.env.MEMORY_TESTS_JSON) : undefined,
+      pullRequest: process.env.MEMORY_PULL_REQUEST,
+      errorFixed: process.env.MEMORY_ERROR_FIXED
+    }), null, 2));
+    break;
+  }
   case "search": {
     const query = args.join(" ");
     if (!query) fail("Usage: memctl search <query>");
@@ -911,7 +929,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|inspect|route|intent|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|action|search|inspect|route|intent|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {

@@ -59,6 +59,7 @@ import type {
   GraphExplainReport,
   GraphExportOptions,
   GraphExportResult,
+  HarnessActionInput,
   IdentityLink,
   LearnedProfileReport,
   Memory,
@@ -673,6 +674,43 @@ export class MemoryService {
     });
     this.recordAudit("memory.update", { userId: confirmed.userId, memoryId, metadata: { action: "confirm" } });
     return confirmed;
+  }
+
+  recordHarnessAction(input: HarnessActionInput): Memory {
+    const passed = input.tests?.filter((test) => test.status === "passed").map((test) => test.name) ?? [];
+    const failed = input.tests?.filter((test) => test.status === "failed").map((test) => test.name) ?? [];
+    const content = input.content ?? [
+      input.command ? `Command executed: ${input.command}.` : undefined,
+      input.filesChanged?.length ? `Files changed: ${input.filesChanged.join(", ")}.` : undefined,
+      passed.length ? `Tests passed: ${passed.join(", ")}.` : undefined,
+      failed.length ? `Tests failed: ${failed.join(", ")}.` : undefined,
+      input.pullRequest ? `Pull request created: ${input.pullRequest}.` : undefined,
+      input.errorFixed ? `Fixed error: ${input.errorFixed}.` : undefined
+    ].filter(Boolean).join(" ");
+    return this.add({
+      userId: input.userId,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      appId: input.appId,
+      orgId: input.orgId,
+      projectId: input.projectId,
+      content: content || "Harness action completed.",
+      type: "episodic",
+      layer: "episodic",
+      source: { kind: "tool", confidence: failed.length ? 0.72 : 0.9 },
+      tags: ["harness-action", ...(input.command ? ["command"] : []), ...(input.tests?.length ? ["tests"] : []), ...(input.errorFixed ? ["fix"] : [])],
+      entities: [...(input.filesChanged ?? []), ...(input.command ? [input.command.split(/\s+/)[0]] : [])],
+      temporal: { eventAt: input.timestamp ?? new Date().toISOString(), lastConfirmedAt: failed.length ? undefined : new Date().toISOString() },
+      metadata: {
+        action: {
+          command: input.command,
+          filesChanged: input.filesChanged ?? [],
+          tests: input.tests ?? [],
+          pullRequest: input.pullRequest,
+          errorFixed: input.errorFixed
+        }
+      }
+    });
   }
 
   retractMemory(memoryId: string, userId?: string, reason?: string): Memory {
@@ -1725,6 +1763,7 @@ export class MemoryService {
         "/memories": ["GET", "POST"],
         "/episodes": ["GET"],
         "/episodes/{id}": ["GET"],
+        "/actions": ["POST"],
         "/search": ["POST"],
         "/route": ["POST"],
         "/intent": ["POST"],

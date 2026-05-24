@@ -59,6 +59,14 @@ curl -X POST http://localhost:8787/extract \
 
 `/extract` performs staged single-pass, add-only fact extraction. Deterministic rules run first; if a JSON-command extractor is configured, low-confidence or media-heavy events can fall back to provider extraction. Events may include `mediaType` (`text`, `code`, `document`, `audio`, `image`, `video`), `language`, `uri`, and `mimeType`. The response returns written memories, `entityLinks`, extraction `stages`, auditable `failures`, `enrichmentCandidates`, and `learnedRules` suggestions for regex, provider, or translation improvements.
 
+```bash
+curl -X POST http://localhost:8787/actions \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","agentId":"codex","command":"npm run test","filesChanged":["src/api/service.ts"],"tests":[{"name":"vitest","status":"passed"}],"errorFixed":"TypeScript build failure"}'
+```
+
+Harness action memories capture commands, changed files, test outcomes, pull requests, and fixed errors as first-class episodic memories. This lets retrieval answer "what fixed this last time?" from tool evidence instead of relying on a prose summary.
+
 ## Connectors, Providers, Translation, And Media
 
 ```bash
@@ -162,7 +170,7 @@ curl -X POST http://localhost:8787/evidence-pack \
 
 Evidence packs are the canonical "why was this memory used?" artifact. The response includes the compact context block plus per-memory source, scope, consent, validity window, stale/decision state, score signals, graph paths, citation and explanation. CLI users can run `cognibrain memory why-used "<query>"` or `cognibrain memory evidence-pack "<query>"`; MCP users receive the same structure through `memory_context_pack`.
 
-Episodes preserve the raw extraction ground truth. `memory extract` creates an episode with raw conversation events, tool-call outputs, touched files from metadata, a stable hash and the derived memory ids. Extracted memories reference the episode through `metadata.episodeId` and `provenance.extractedFromEpisodeId`, so operators can inspect the original context before trusting a fact.
+Episodes preserve the raw extraction ground truth. `memory extract` creates an episode with raw conversation events, tool-call outputs, touched files from metadata, a stable hash and the derived memory ids. Extracted memories reference the episode through `metadata.episodeId` and `provenance.extractedFromEpisodeId`, so operators can inspect the original context before trusting a fact. Harness actions are stored through `/actions` or `memory action` with command, file, test, PR and fix metadata.
 
 Search accepts optional scope and retrieval-weight overrides:
 

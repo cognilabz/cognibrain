@@ -157,6 +157,7 @@ Extract add-only memories from an event or conversation:
 
 ```bash
 ./bin/cognibrain.mjs memory extract "Atlas now uses Redis for cache. Verified npm test passed."
+./bin/cognibrain.mjs memory action "npm run test"
 ./bin/cognibrain.mjs memory episodes
 ```
 

@@ -914,6 +914,59 @@ describe("TypeScript memory core", () => {
     expect(service.providerStatus().tasks).toContain("translate");
   });
 
+  it("learns from injection feedback, adapts dream policy, generates cited observations, and predicts prefetch context", () => {
+    const service = new MemoryService({ autoDream: { enabled: true, intervalHours: 6, writeThreshold: 12 } });
+    const first = service.add({
+      userId: "u1",
+      content: "Operator reviews graph evidence before every Friday release.",
+      tags: ["release", "graph"],
+      entities: ["operator", "release"],
+      temporal: { eventAt: "2026-05-01T09:00:00.000Z" },
+      source: { kind: "human", confidence: 0.94 }
+    });
+    service.add({
+      userId: "u1",
+      content: "Operator reviews benchmark proof before every Friday release.",
+      tags: ["release", "benchmark"],
+      entities: ["operator", "release"],
+      temporal: { eventAt: "2026-05-08T09:00:00.000Z" },
+      source: { kind: "human", confidence: 0.94 }
+    });
+    const risky = service.add({
+      userId: "u1",
+      content: "Unverified transcript claims the release uses a stale API.",
+      tags: ["release", "needs-review"],
+      entities: ["release"],
+      source: { kind: "transcript", confidence: 0.34 }
+    });
+
+    const feedback = service.recordInjectionFeedback({
+      userId: "u1",
+      query: "release graph proof",
+      injectedMemoryIds: [first.id, risky.id],
+      acceptedMemoryIds: [first.id],
+      rejectedMemoryIds: [risky.id],
+      outcome: "accepted",
+      signals: { graph: 0.9, trust: 0.8 }
+    });
+    expect(feedback.updatedMemories).toHaveLength(2);
+    expect(feedback.learnedProfile.samples).toBeGreaterThanOrEqual(2);
+    expect(service.getRetrievalProfiles().some((profile) => profile.id === "learned-injection")).toBe(true);
+
+    const policy = service.adaptiveDreamPolicy("u1");
+    expect(policy.recommended.writeThreshold).toBeLessThanOrEqual(12);
+    expect(policy.rationale.join(" ")).toContain("feedback");
+
+    const observations = service.generateObservations("u1", { persist: true, style: "descriptive" });
+    expect(observations.observations.some((observation) => observation.citations.length >= 2 && observation.observationMemoryId)).toBe(true);
+    expect(observations.observations[0].memoryIds.length).toBeGreaterThanOrEqual(2);
+
+    const predictions = service.predictionReport("u1", { query: "Friday release review" });
+    expect(predictions.predictions.some((prediction) => prediction.suggestedQuery.includes("Friday release review") || prediction.label.includes("release"))).toBe(true);
+    expect(predictions.prefetch.length).toBeGreaterThan(0);
+    expect(predictions.anomalies.some((anomaly) => anomaly.kind === "low_trust_recent_memory" || anomaly.kind === "pending_pattern_review")).toBe(true);
+  });
+
   it("enforces brain membership, explicit shared-brain federation, consent updates, audit revert, storage status, and offline sync", () => {
     const service = new MemoryService();
     const brain = service.createBrain({

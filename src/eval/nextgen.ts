@@ -45,7 +45,7 @@ export function runNextgenEvaluation() {
     consent: { visibility: "private", retentionUntil: "2024-01-01T00:00:00.000Z", deleteOnRequest: true },
     source: { kind: "human", confidence: 0.97 }
   });
-  service.add({
+  const riskyCacheClaim = service.add({
     brainId: brain.id,
     sourceId: source.id,
     userId: "bench",
@@ -171,6 +171,19 @@ export function runNextgenEvaluation() {
     { role: "operator", content: "Speicher soll release notes erfassen.", mediaType: "audio", language: "de", uri: "file:///eval/audio-de.m4a" },
     { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }
   );
+  const injectionFeedback = service.recordInjectionFeedback({
+    userId: "bench",
+    query: "Atlas CacheClient proof",
+    injectedMemoryIds: [atlas.id, riskyCacheClaim.id],
+    acceptedMemoryIds: [atlas.id],
+    rejectedMemoryIds: [riskyCacheClaim.id],
+    outcome: "accepted",
+    profileId: "bench-injection",
+    signals: { graph: 0.9, trust: 0.8, semantic: 0.6 }
+  });
+  const adaptivePolicy = service.adaptiveDreamPolicy("bench");
+  const observations = service.generateObservations("bench", { persist: true, style: "descriptive", limit: 2 });
+  const predictions = service.predictionReport("bench", { query: "Friday graph review habit", limit: 3 });
   const webhookDelivery = service.deliverWebhookQueue();
   const compliance = service.complianceReport(new Date("2026-01-01T00:00:00.000Z"));
   const agentFeed = service.eventFeed({ agentId: "agent-bench", brainId: brain.id });
@@ -241,6 +254,17 @@ export function runNextgenEvaluation() {
       service.providerStatus().tasks.includes("translate") &&
       service.auditTrail({ type: "connector.sync" }).length >= 1,
     detail: `${service.listConnectorManifests().length} connector manifests, ${connectorSync.memoryIds.length} synced memories, translation provider=${translation.provider}`
+  });
+  checks.push({
+    id: "learning-adaptation",
+    passed:
+      injectionFeedback.updatedMemories.length === 2 &&
+      service.getRetrievalProfiles().some((profile) => profile.id === "bench-injection") &&
+      adaptivePolicy.rationale.some((item) => item.includes("feedback") || item.includes("health")) &&
+      observations.observations.some((observation) => observation.citations.length >= 1 && observation.observationMemoryId) &&
+      predictions.prefetch.length > 0 &&
+      predictions.anomalies.some((anomaly) => anomaly.kind === "low_trust_recent_memory" || anomaly.kind === "pending_pattern_review"),
+    detail: `${injectionFeedback.updatedMemories.length} feedback memories, ${observations.observations.length} observations, ${predictions.prefetch.length} prefetched`
   });
   checks.push({
     id: "multi-agent-collaboration",

@@ -106,6 +106,32 @@ switch (command) {
     console.log(JSON.stringify(service.feedback({ memoryId, kind, userId, note: note.join(" ") || undefined }), null, 2));
     break;
   }
+  case "feedback-injection": {
+    const [query, outcome, memoryIdsCsv, signalsJson, acceptedCsv, rejectedCsv] = args;
+    if (!query || !outcome || !memoryIdsCsv) fail("Usage: memctl feedback-injection <query> <helpful|wrong|accepted|rejected> <memory-id,...> [signals-json] [accepted-id,...] [rejected-id,...]");
+    if (!["helpful", "wrong", "accepted", "rejected"].includes(outcome)) fail(`Unsupported outcome: ${outcome}`);
+    const injectedMemoryIds = csvList(memoryIdsCsv);
+    const acceptedMemoryIds = csvList(acceptedCsv ?? process.env.MEMORY_ACCEPTED_IDS);
+    const rejectedMemoryIds = csvList(rejectedCsv ?? process.env.MEMORY_REJECTED_IDS);
+    console.log(
+      JSON.stringify(
+        service.recordInjectionFeedback({
+          userId,
+          query,
+          outcome: outcome as "helpful" | "wrong" | "accepted" | "rejected",
+          injectedMemoryIds,
+          acceptedMemoryIds: acceptedMemoryIds.length ? acceptedMemoryIds : undefined,
+          rejectedMemoryIds: rejectedMemoryIds.length ? rejectedMemoryIds : undefined,
+          signals: signalsJson ? JSON.parse(signalsJson) : undefined,
+          sessionId: process.env.MEMORY_SESSION_ID,
+          profileId: process.env.MEMORY_PROFILE_ID
+        }),
+        null,
+        2
+      )
+    );
+    break;
+  }
   case "metrics": {
     console.log(JSON.stringify(service.metricsReport(), null, 2));
     break;
@@ -493,6 +519,18 @@ switch (command) {
     console.log(JSON.stringify(service.lifecyclePreview(userId), null, 2));
     break;
   }
+  case "dream-policy": {
+    console.log(JSON.stringify(service.adaptiveDreamPolicy(userId), null, 2));
+    break;
+  }
+  case "observations": {
+    console.log(JSON.stringify(service.generateObservations(userId, { style: observationStyleFromEnv(), persist: process.env.MEMORY_PERSIST_OBSERVATIONS === "true", limit: process.env.MEMORY_OBSERVATION_LIMIT ? Number(process.env.MEMORY_OBSERVATION_LIMIT) : undefined }), null, 2));
+    break;
+  }
+  case "predictions": {
+    console.log(JSON.stringify(service.predictionReport(userId, { query: args.join(" ") || undefined, limit: process.env.MEMORY_PREDICTION_LIMIT ? Number(process.env.MEMORY_PREDICTION_LIMIT) : undefined }), null, 2));
+    break;
+  }
   case "export": {
     console.log(JSON.stringify(service.exportUser(userId), null, 2));
     break;
@@ -502,7 +540,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|storage|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|storage|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -531,6 +569,15 @@ function permissionsFromEnv() {
 function summaryStyleFromEnv() {
   const value = process.env.MEMORY_PERSONA_SUMMARY_STYLE;
   return value === "descriptive" || value === "narrative" ? value : "concise";
+}
+
+function observationStyleFromEnv() {
+  const value = process.env.MEMORY_OBSERVATION_STYLE;
+  return value === "descriptive" || value === "narrative" ? value : "concise";
+}
+
+function csvList(value?: string) {
+  return value ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
 }
 
 function privacyDefaultFromEnv() {

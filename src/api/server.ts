@@ -178,6 +178,20 @@ const feedbackSchema = z.object({
   timestamp: z.string().optional()
 });
 
+const injectionFeedbackSchema = z.object({
+  userId: z.string().min(1),
+  query: z.string().min(1),
+  injectedMemoryIds: z.array(z.string().min(1)).min(1),
+  acceptedMemoryIds: z.array(z.string().min(1)).optional(),
+  rejectedMemoryIds: z.array(z.string().min(1)).optional(),
+  outcome: z.enum(["helpful", "wrong", "accepted", "rejected"]),
+  sessionId: z.string().optional(),
+  profileId: z.string().optional(),
+  note: z.string().optional(),
+  signals: z.record(z.number()).optional(),
+  timestamp: z.string().optional()
+});
+
 const trainingSampleSchema = z.object({
   query: z.string().min(1),
   userId: z.string().min(1),
@@ -740,6 +754,15 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && url.pathname === "/feedback/injection") {
+    const report = defaultService.recordInjectionFeedback(injectionFeedbackSchema.parse(await json(request)));
+    send(response, 202, {
+      ...report,
+      updatedMemories: report.updatedMemories.map(serialize)
+    });
+    return;
+  }
+
   if (method === "POST" && parts[0] === "memories" && parts[2] === "promote") {
     const body = z.object({ orgId: z.string().min(1) }).parse(await json(request));
     send(response, 202, serialize(defaultService.promoteSharedMemory(parts[1], body.orgId)));
@@ -795,6 +818,29 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (method === "POST" && url.pathname === "/lifecycle/preview") {
     const body = z.object({ userId: z.string().min(1), policy: z.record(z.unknown()).optional() }).parse(await json(request));
     send(response, 200, defaultService.lifecyclePreview(body.userId, body.policy));
+    return;
+  }
+
+  if (method === "GET" && parts[0] === "learning" && parts[1] === "dream-policy" && parts[2]) {
+    send(response, 200, defaultService.adaptiveDreamPolicy(parts[2]));
+    return;
+  }
+
+  if (method === "POST" && parts[0] === "learning" && parts[1] === "observations" && parts[2]) {
+    const body = z.object({ style: z.enum(["concise", "descriptive", "narrative"]).optional(), persist: z.boolean().optional(), limit: z.number().int().positive().max(12).optional() }).parse(await json(request));
+    send(response, 202, defaultService.generateObservations(parts[2], body));
+    return;
+  }
+
+  if (method === "GET" && parts[0] === "learning" && parts[1] === "predictions" && parts[2]) {
+    const report = defaultService.predictionReport(parts[2], {
+      query: url.searchParams.get("query") ?? undefined,
+      limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined
+    });
+    send(response, 200, {
+      ...report,
+      prefetch: report.prefetch.map((result) => ({ ...result, memory: serialize(result.memory) }))
+    });
     return;
   }
 

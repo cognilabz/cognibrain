@@ -161,9 +161,14 @@ Brains are logical memory databases. Sources are content repositories inside a b
 curl -X POST http://localhost:8787/feedback \
   -H "content-type: application/json" \
   -d '{"userId":"dev","memoryId":"<id>","kind":"helpful"}'
+curl -X POST http://localhost:8787/feedback/injection \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","query":"release graph proof","injectedMemoryIds":["mem_good","mem_bad"],"acceptedMemoryIds":["mem_good"],"rejectedMemoryIds":["mem_bad"],"outcome":"accepted","signals":{"graph":0.9,"trust":0.8}}'
 ```
 
-Supported feedback kinds are `helpful`, `wrong`, `stale`, `always_include`, `never_include`, `private`, `shareable`, `approve_pattern`, and `reject_pattern`. Feedback updates bounded trust/importance metadata, handles inferred-pattern review, and feeds later retrieval tuning.
+Supported feedback kinds are `helpful`, `wrong`, `stale`, `always_include`, `never_include`, `private`, `shareable`, `approve_pattern`, and `reject_pattern`. Feedback updates bounded trust/importance metadata, handles inferred-pattern review, and feeds later retrieval tuning. Injection feedback records accepted and rejected context packs, updates affected memories, adds a retrieval training sample, and produces or refreshes a scoped learned profile.
+
+The equivalent CLI is `cognibrain memory feedback-injection "release graph proof" accepted <good-id>,<bad-id> '{"graph":0.9,"trust":0.8}' <good-id> <bad-id>`. The final two optional CSV arguments, or `MEMORY_ACCEPTED_IDS` and `MEMORY_REJECTED_IDS`, let a harness send mixed accepted/rejected context packs from one injection.
 
 ## Retrieval Profiles
 
@@ -234,9 +239,14 @@ curl -X POST http://localhost:8787/graph/infer \
 curl -X POST http://localhost:8787/lifecycle/preview \
   -H "content-type: application/json" \
   -d '{"userId":"dev","policy":{"archiveAfterDays":30}}'
+curl http://localhost:8787/learning/dream-policy/dev
+curl -X POST http://localhost:8787/learning/observations/dev \
+  -H "content-type: application/json" \
+  -d '{"persist":true,"style":"descriptive","limit":3}'
+curl "http://localhost:8787/learning/predictions/dev?query=Friday%20release%20review&limit=3"
 ```
 
-Identity links require an explicit consent token and store only a hash of that token. Shared-brain retrieval is opt-in via `includeSharedBrains` and `brainIds`, then still respects consent and org visibility. `/federation/search` reports searched and blocked brains so agents can audit cross-brain access. Shared-memory review supports request, promote, and revoke steps with audit events. `/storage` reports active and available persistence adapters. `/sync/*` lets offline clients queue add/update/delete/consent operations, replay them, and inspect conflicts. `/audit` exposes filtered provenance logs, and memory revert restores the last captured write/update/delete/consent snapshot. Timelines expose event time, validity windows, supersession metadata, and hour/day/week/month period groupings. Timeline summarization can return deterministic or provider-backed summaries and optionally persist auditable reflection memories with `summaryOf` provenance. Temporal interval queries consider event and validity windows, then return filtered events plus changed entities. Pattern reports include reviewed dream patterns, deterministic recurring weekday/entity/tag patterns, sequence patterns, confidence, and false-positive risk for operator approval. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, spreading activation, safe graph-query matches, configurable rule-based inferred relations, and filtered JSON/GraphML exports. Path edges include confidence, trust, timestamp, source and memory provenance. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
+Identity links require an explicit consent token and store only a hash of that token. Shared-brain retrieval is opt-in via `includeSharedBrains` and `brainIds`, then still respects consent and org visibility. `/federation/search` reports searched and blocked brains so agents can audit cross-brain access. Shared-memory review supports request, promote, and revoke steps with audit events. `/storage` reports active and available persistence adapters. `/sync/*` lets offline clients queue add/update/delete/consent operations, replay them, and inspect conflicts. `/audit` exposes filtered provenance logs, and memory revert restores the last captured write/update/delete/consent snapshot. Timelines expose event time, validity windows, supersession metadata, and hour/day/week/month period groupings. Timeline summarization can return deterministic or provider-backed summaries and optionally persist auditable reflection memories with `summaryOf` provenance. Temporal interval queries consider event and validity windows, then return filtered events plus changed entities. Pattern reports include reviewed dream patterns, deterministic recurring weekday/entity/tag patterns, sequence patterns, confidence, and false-positive risk for operator approval. The learning endpoints preview adaptive dream thresholds from health and feedback, generate cited observations from memory clusters, and return prediction/prefetch reports with anomaly flags for stale or risky memories. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, spreading activation, safe graph-query matches, configurable rule-based inferred relations, and filtered JSON/GraphML exports. Path edges include confidence, trust, timestamp, source and memory provenance. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
 
 ## Events, Webhooks, Marketplace, And Compliance
 
@@ -322,4 +332,4 @@ When the service is configured with a domain module, this endpoint runs the modu
 npm run verify:nextgen
 ```
 
-This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, multi-tenant audit, webhook event feeds, compliance retention, and marketplace persona installation.
+This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, connector ingestion, injection-feedback learning, adaptive dream policy, generated observations, prediction reports, multi-tenant audit, webhook event feeds, compliance retention, and marketplace persona installation.

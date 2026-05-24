@@ -761,6 +761,82 @@ export interface FeedbackEvent {
   timestamp?: Date | string;
 }
 
+export interface InjectionFeedbackEvent {
+  userId: string;
+  query: string;
+  injectedMemoryIds: string[];
+  acceptedMemoryIds?: string[];
+  rejectedMemoryIds?: string[];
+  outcome: "helpful" | "wrong" | "accepted" | "rejected";
+  sessionId?: string;
+  profileId?: string;
+  note?: string;
+  signals?: Partial<RetrievalWeights>;
+  timestamp?: Date | string;
+}
+
+export interface InjectionFeedbackReport {
+  event: InjectionFeedbackEvent;
+  updatedMemories: Memory[];
+  trainingSample: RetrievalTrainingSample;
+  learnedProfile: LearnedProfileReport;
+}
+
+export interface AdaptiveDreamPolicyReport {
+  userId: string;
+  generatedAt: Date | string;
+  recommended: {
+    intervalHours: number;
+    writeThreshold: number;
+    summaryDepth: number;
+    fadeAfterDays: number;
+    archiveAfterDays: number;
+  };
+  signals: {
+    healthScore: number;
+    activeMemories: number;
+    reviewMemories: number;
+    feedbackVolume: number;
+    negativeFeedback: number;
+    writesSinceDream: number;
+    searches: number;
+  };
+  rationale: string[];
+}
+
+export interface ObservationReport {
+  userId: string;
+  generatedAt: Date | string;
+  style: "concise" | "descriptive" | "narrative";
+  persisted: boolean;
+  observations: Array<{
+    content: string;
+    memoryIds: string[];
+    citations: string[];
+    confidence: number;
+    mode: "deterministic" | "provider";
+    observationMemoryId?: string;
+  }>;
+}
+
+export interface PredictionReport {
+  userId: string;
+  generatedAt: Date | string;
+  predictions: Array<{
+    label: string;
+    confidence: number;
+    reason: string;
+    memoryIds: string[];
+    suggestedQuery: string;
+  }>;
+  prefetch: SearchResult[];
+  anomalies: Array<{
+    kind: "missing_recent_confirmation" | "pending_pattern_review" | "low_trust_recent_memory";
+    memoryId?: string;
+    message: string;
+  }>;
+}
+
 export interface MetricsReport {
   memoriesAdded: number;
   memoriesUpdated?: number;

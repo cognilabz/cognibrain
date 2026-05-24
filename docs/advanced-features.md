@@ -4,7 +4,7 @@
 
 Retrieval combines semantic token overlap, keyword coverage, entity matches, temporal decay, behavioural fit, trust, access frequency, and graph reachability. Search exposes explicit `hybrid`, `rrf`, `graph`, and `path` modes. `rrf` fuses per-signal rankings with reciprocal-rank fusion, while `graph` and `path` raise graph/entity weight for multi-hop questions. Entity extraction is zero-dependency: every write links proper nouns, paths, quoted phrases, and lowercase compound terms such as `operator gate` or `dream cycle`. Query-time entity matching boosts exact compound phrases without letting random transcript words become graph edges, so the graph stays useful without requiring an external graph database.
 
-The ranker now accepts configurable weights while preserving the benchmarked default profile. Retrieval profiles can be stored with user/project/app/org/agent scope, selected per search, loaded from `MEMORY_CONFIG_PATH`, or learned from scoped feedback and labeled outcome samples. Query expansion can be deterministic, caller-provided, or provider-backed through the JSON-command adapter. Search results expose signal explanations, expanded queries, fusion metadata, graph path hints, contradiction decisions, and a deterministic context-verification decision. A lightweight rerank pass runs before context verification, and a JSON-command provider adapter can connect NLI, LLM, query expansion, or cross-encoder tools without becoming required for local install.
+The ranker now accepts configurable weights while preserving the benchmarked default profile. Retrieval profiles can be stored with user/project/app/org/agent scope, selected per search, loaded from `MEMORY_CONFIG_PATH`, or learned from scoped feedback and labeled outcome samples. `recordInjectionFeedback()` captures accepted and rejected context packs after retrieval injection, updates memory trust/importance, stores a training sample, and refreshes a scoped learned profile so real usage gradually tunes semantic, keyword, entity, temporal, trust, graph, and access weights. Query expansion can be deterministic, caller-provided, or provider-backed through the JSON-command adapter. Search results expose signal explanations, expanded queries, fusion metadata, graph path hints, contradiction decisions, and a deterministic context-verification decision. A lightweight rerank pass runs before context verification, and a JSON-command provider adapter can connect NLI, LLM, query expansion, or cross-encoder tools without becoming required for local install.
 
 Benchmark runners use the same principle: lexical anchors keep factual recall stable, while fused retrieval reserves part of the top-K for graph and semantic hits that keyword-only ranking would otherwise block.
 
@@ -39,6 +39,8 @@ Temporal metadata tracks event time, valid windows, last confirmation, supersess
 Retrieval now includes a behavioural signal alongside semantic, keyword, entity, temporal, trust, graph, and access signals. The signal boosts memories and reviewed pattern summaries that match a query's weekday, cadence, or habit anchor, and it is tunable through the same retrieval-weight profile APIs.
 
 `summarizeTimeline()` generates hour/day/week/month summaries with `summaryOf` provenance. It uses deterministic summaries by default and can call the configured JSON-command summarizer for provider-backed narrative styles. When `persist` is true, summaries are stored as reflection memories so later retrieval can reuse them without scanning every raw event.
+
+`predictionReport()` turns reviewed behavioral patterns and recent memory signals into suggested follow-up queries, prefetches likely context, and flags anomalies such as low-trust recent memories or pending pattern reviews. This gives an operator a preview of what the memory system is likely to surface next before it reaches an agent prompt.
 
 ## Graph-Native Reasoning
 
@@ -84,6 +86,8 @@ Contradiction detection now uses a multilingual claim registry for preferences, 
 
 Reflection summaries remain deterministic by default, but an optional summarizer can generate higher-quality prose. Generated summaries still preserve `summaryOf`, `dreamedAt`, `dreamJob`, and provider metadata so operators can audit the source evidence. A safety gate flags generated summaries that introduce unsupported named entities.
 
+Adaptive learning sits beside the dream cycle. `adaptiveDreamPolicy()` previews dream interval, write threshold, summary depth, and lifecycle windows from health score, review load, feedback volume, negative feedback rate, writes since dream, and search workload. `generateObservations()` clusters active memories by entity/tag, produces concise/descriptive/narrative observations, preserves citations, and can persist those observations as reflection memories with `summaryOf` provenance.
+
 The cycle returns a `lifecycle` report with:
 
 - `evaluated`: active memories inspected,
@@ -100,7 +104,7 @@ Pinned memories and lifecycle-protected layers/source kinds are never faded or a
 
 `npm run eval` runs a synthetic benchmark with single-hop, multi-hop, temporal correction, contradiction, and abstention cases. It compares cognibrain against vector-only, keyword-only, and recency-only baselines and writes `artifacts/evaluation-report.json`. CI uploads this artifact on every push and pull request. Scheduled and manually triggered CI runs execute `npm run benchmark:certified` and upload the certified market-proof JSON artifacts.
 
-`npm run verify:nextgen` extends the loop with `src/eval/nextgen.ts`, which proves the new graph path, activation, query, export, inference, brain/source, temporal/pattern reasoning, timeline summaries, staged extraction/enrichment, connector sync, provider translation, media ingestion, webhook delivery, entity disambiguation, compliance, and marketplace surfaces using deterministic fixtures before building the production dashboard.
+`npm run verify:nextgen` extends the loop with `src/eval/nextgen.ts`, which proves the new graph path, activation, query, export, inference, brain/source, temporal/pattern reasoning, timeline summaries, staged extraction/enrichment, connector sync, provider translation, media ingestion, webhook delivery, injection-feedback learning, adaptive dream policies, generated observations, prediction reports, entity disambiguation, compliance, and marketplace surfaces using deterministic fixtures before building the production dashboard.
 
 ## Dashboard
 

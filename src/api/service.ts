@@ -10,6 +10,7 @@ import {
 import {
   EntityRegistry,
   activateGraph,
+  citationFor,
   extractAddOnlyMemories,
   exportMemoryGraph,
   findGraphPaths,
@@ -39,6 +40,7 @@ import type {
   EntityMergeSuggestion,
   EntityRecord,
   ExtractionReport,
+  FeedbackKind,
   FeedbackEvent,
   FederatedSearchReport,
   GraphReport,
@@ -69,6 +71,11 @@ import type {
   TranslationProvider,
   ProviderAdapterStatus,
   TranslationReport,
+  InjectionFeedbackEvent,
+  InjectionFeedbackReport,
+  AdaptiveDreamPolicyReport,
+  ObservationReport,
+  PredictionReport,
   BehavioralPatternReport,
   TemporalQueryReport,
   TimelineSummaryReport,
@@ -399,6 +406,32 @@ export class MemoryService {
     this.metrics.feedback += 1;
     this.persist();
     return updated;
+  }
+
+  recordInjectionFeedback(event: InjectionFeedbackEvent): InjectionFeedbackReport {
+    const timestamp = event.timestamp ? new Date(event.timestamp).toISOString() : new Date().toISOString();
+    const accepted = new Set(event.acceptedMemoryIds ?? (event.outcome === "helpful" || event.outcome === "accepted" ? event.injectedMemoryIds : []));
+    const rejected = new Set(event.rejectedMemoryIds ?? (event.outcome === "wrong" || event.outcome === "rejected" ? event.injectedMemoryIds : []));
+    const updatedMemories: Memory[] = [];
+    for (const memoryId of event.injectedMemoryIds) {
+      const kind: FeedbackKind | undefined = accepted.has(memoryId) ? "helpful" : rejected.has(memoryId) ? "wrong" : undefined;
+      if (!kind || !safeGet(this.store, memoryId)) continue;
+      updatedMemories.push(this.feedback({ memoryId, userId: event.userId, kind, note: event.note, timestamp }));
+    }
+    const trainingSample = this.addTrainingSample({
+      query: event.query,
+      userId: event.userId,
+      selectedMemoryId: event.acceptedMemoryIds?.[0] ?? (event.outcome === "helpful" || event.outcome === "accepted" ? event.injectedMemoryIds[0] : undefined),
+      rejectedMemoryIds: event.rejectedMemoryIds ?? (event.outcome === "wrong" || event.outcome === "rejected" ? event.injectedMemoryIds : undefined),
+      profileId: event.profileId,
+      signals: event.signals,
+      outcome: event.outcome,
+      timestamp
+    });
+    const learnedProfile = this.learnRetrievalProfile(event.profileId ?? "learned-injection", "Learned injection feedback", { scope: { userId: event.userId } });
+    this.recordAudit("provider.call", { userId: event.userId, metadata: { task: "injection-feedback", query: event.query, injected: event.injectedMemoryIds.length, outcome: event.outcome, learnedSamples: learnedProfile.samples } });
+    this.persist();
+    return { event: { ...event, timestamp }, updatedMemories, trainingSample, learnedProfile };
   }
 
   exportUser(userId: string): Memory[] {
@@ -1103,6 +1136,110 @@ export class MemoryService {
       }));
     const mined = [...mineRecurringPatterns(memories), ...mineRecurringSequences(memories)];
     return { userId, patterns: [...generated, ...mined].sort((a, b) => b.confidence - a.confidence || b.support - a.support) };
+  }
+
+  adaptiveDreamPolicy(userId: string): AdaptiveDreamPolicyReport {
+    const health = this.health(userId);
+    const active = this.store.list(userId).filter((memory) => !memory.archivedAt);
+    const reviewMemories = active.filter((memory) => memory.trust < 0.55 || memory.tags.includes("needs-review") || memory.source.kind === "transcript").length;
+    const feedback = this.feedbackEvents.filter((event) => !event.userId || event.userId === userId);
+    const negativeFeedback = feedback.filter((event) => event.kind === "wrong" || event.kind === "never_include" || event.kind === "stale" || event.kind === "reject_pattern").length;
+    const writesSinceDream = this.userMaintenance(userId).writesSinceDream;
+    const pressure = Math.min(1, reviewMemories / Math.max(1, active.length) + negativeFeedback / Math.max(4, feedback.length || 1) + (1 - health.healthScore));
+    const recommended = {
+      intervalHours: Math.max(1, Math.round(this.autoDream.intervalHours * (pressure > 0.75 ? 0.45 : pressure > 0.45 ? 0.7 : 1.15))),
+      writeThreshold: Math.max(3, Math.round(this.autoDream.writeThreshold * (pressure > 0.75 ? 0.45 : pressure > 0.45 ? 0.7 : 1.1))),
+      summaryDepth: pressure > 0.65 ? 5 : pressure > 0.35 ? 4 : 3,
+      fadeAfterDays: pressure > 0.65 ? 30 : 45,
+      archiveAfterDays: pressure > 0.65 ? 60 : 90
+    };
+    const rationale = [
+      `health=${health.healthScore.toFixed(2)}`,
+      `${reviewMemories} active memories need review`,
+      `${negativeFeedback}/${feedback.length} feedback events are negative`,
+      `${writesSinceDream} writes since last dream`
+    ];
+    return {
+      userId,
+      generatedAt: new Date().toISOString(),
+      recommended,
+      signals: {
+        healthScore: health.healthScore,
+        activeMemories: active.length,
+        reviewMemories,
+        feedbackVolume: feedback.length,
+        negativeFeedback,
+        writesSinceDream,
+        searches: this.metrics.searches
+      },
+      rationale
+    };
+  }
+
+  generateObservations(userId: string, options: { style?: ObservationReport["style"]; persist?: boolean; limit?: number } = {}): ObservationReport {
+    const now = new Date();
+    const style = options.style ?? "concise";
+    const clusters = observationClusters(this.store.list(userId).filter((memory) => !memory.archivedAt && memory.layer !== "reflection")).slice(0, options.limit ?? 4);
+    const observations: ObservationReport["observations"] = [];
+    for (const cluster of clusters) {
+      const generated = this.defaultSummarizer?.summarize({ theme: cluster.label, memories: cluster.memories, now });
+      const providerContent = generated?.content?.trim();
+      const content = providerContent || deterministicObservation(cluster.label, cluster.memories, style);
+      let observationMemoryId: string | undefined;
+      if (options.persist) {
+        const memory = this.add({
+          userId,
+          content,
+          type: "reference",
+          layer: "reflection",
+          source: { kind: providerContent ? "agent" : "tool", confidence: generated?.confidence ?? 0.78 },
+          tags: ["observation", style, cluster.label],
+          entities: [cluster.label],
+          metadata: {
+            summaryOf: cluster.memories.map((memory) => memory.id),
+            observation: true,
+            observationStyle: style,
+            generatedAt: now.toISOString(),
+            summaryMode: providerContent ? "provider" : "deterministic",
+            provider: generated?.metadata?.provider
+          }
+        });
+        observationMemoryId = memory.id;
+      }
+      observations.push({
+        content,
+        memoryIds: cluster.memories.map((memory) => memory.id),
+        citations: cluster.memories.map(citationFor),
+        confidence: generated?.confidence ?? Math.min(0.92, 0.55 + cluster.memories.length * 0.08),
+        mode: providerContent ? "provider" : "deterministic",
+        observationMemoryId
+      });
+    }
+    this.recordAudit("reflect.run", { userId, metadata: { resource: "observations", style, persisted: Boolean(options.persist), observations: observations.length } });
+    this.persist();
+    return { userId, generatedAt: now.toISOString(), style, persisted: Boolean(options.persist), observations };
+  }
+
+  predictionReport(userId: string, options: { query?: string; limit?: number } = {}): PredictionReport {
+    const patterns = this.behavioralPatterns(userId).patterns.slice(0, options.limit ?? 4);
+    const predictions = patterns.map((pattern) => ({
+      label: pattern.label,
+      confidence: pattern.confidence,
+      reason: `${pattern.cadence} with ${pattern.support} supporting memories`,
+      memoryIds: pattern.memoryIds,
+      suggestedQuery: options.query ?? pattern.label.replace(/^Inferred pattern:\s*/i, "").slice(0, 160)
+    }));
+    const prefetchQuery = predictions[0]?.suggestedQuery ?? options.query ?? "recent memory workflow";
+    const prefetch = this.search({ userId, query: prefetchQuery, limit: 5, includePrivate: true, expandQuery: true });
+    const now = Date.now();
+    const anomalies: PredictionReport["anomalies"] = [];
+    for (const memory of this.store.list(userId).filter((item) => !item.archivedAt)) {
+      const ageDays = (now - memory.createdAt.getTime()) / 86_400_000;
+      if (memory.metadata.patternReview && (memory.metadata.patternReview as { status?: string }).status === "pending") anomalies.push({ kind: "pending_pattern_review", memoryId: memory.id, message: `Pattern ${memory.id} awaits operator review.` });
+      if (ageDays < 14 && memory.trust < 0.55) anomalies.push({ kind: "low_trust_recent_memory", memoryId: memory.id, message: `Recent memory ${memory.id} has low trust.` });
+      if (ageDays > 30 && !memory.temporal.lastConfirmedAt && memory.pinned) anomalies.push({ kind: "missing_recent_confirmation", memoryId: memory.id, message: `Pinned memory ${memory.id} has no recent confirmation.` });
+    }
+    return { userId, generatedAt: new Date().toISOString(), predictions, prefetch, anomalies: anomalies.slice(0, 12) };
   }
 
   graph(userId?: string): GraphReport {
@@ -1865,6 +2002,30 @@ function dedupeMemories(memories: Memory[]): Memory[] {
     seen.add(memory.id);
     return true;
   });
+}
+
+function observationClusters(memories: Memory[]): Array<{ label: string; memories: Memory[] }> {
+  const groups = new Map<string, Memory[]>();
+  for (const memory of memories) {
+    const keys = [...memory.entities, ...memory.tags].filter((value) => value.length > 2).slice(0, 4);
+    for (const key of keys.length ? keys : ["general"]) {
+      const normalized = key.toLowerCase();
+      groups.set(normalized, [...(groups.get(normalized) ?? []), memory]);
+    }
+  }
+  return [...groups.entries()]
+    .map(([label, group]) => ({ label, memories: dedupeMemories(group).sort((a, b) => b.trust * b.importance - a.trust * a.importance) }))
+    .filter((cluster) => cluster.memories.length >= 2)
+    .sort((a, b) => b.memories.length - a.memories.length || b.memories[0].trust - a.memories[0].trust);
+}
+
+function deterministicObservation(label: string, memories: Memory[], style: ObservationReport["style"]): string {
+  const facts = memories
+    .slice(0, style === "concise" ? 3 : 5)
+    .map((memory) => memory.content.replace(/\s+/g, " ").slice(0, 120));
+  if (style === "narrative") return `Observation about ${label}: ${facts.join(" Then, ")}`;
+  if (style === "descriptive") return `Observation about ${label}: ${facts.join(" | ")}`;
+  return `${label}: ${facts.join(" | ")}`;
 }
 
 function groupedPeriods(events: TimelineReport["events"], summaries: Map<string, string>): TimelineReport["periods"] {

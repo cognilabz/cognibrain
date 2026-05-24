@@ -1082,7 +1082,7 @@ describe("TypeScript memory core", () => {
       userId: "u1",
       content: "Atlas depends on CacheClient for cache reads.",
       entities: ["atlas", "cacheclient"],
-      relations: [{ type: "depends_on", sourceEntity: "atlas", targetEntity: "cacheclient", confidence: 0.9 }],
+      relations: [{ type: "depends_on", sourceEntity: "atlas", targetEntity: "cacheclient", confidence: 0.9, validFrom: "2026-01-01T00:00:00.000Z", validUntil: "2026-02-01T00:00:00.000Z" }],
       source: { kind: "human", confidence: 0.96 }
     });
     service.add({
@@ -1108,6 +1108,14 @@ describe("TypeScript memory core", () => {
     const paths = service.graphPaths("atlas", "redisadapter", { userId: "u1", maxDepth: 3, relationTypes: ["transitive_depends_on"] });
     expect(paths.some((path) => path.explanation.join(" ").includes("transitive_depends_on"))).toBe(true);
     expect(paths[0].edges.some((edge) => edge.source?.kind === "human" && typeof edge.trust === "number")).toBe(true);
+    expect(paths[0].edges[0].validFrom).toBeTruthy();
+
+    const validPast = service.graphPaths("atlas", "cacheclient", { userId: "u1", maxDepth: 1, relationTypes: ["depends_on"], validAt: "2026-01-15T00:00:00.000Z" });
+    const validFuture = service.graphPaths("atlas", "cacheclient", { userId: "u1", maxDepth: 1, relationTypes: ["depends_on"], validAt: "2026-03-01T00:00:00.000Z" });
+    expect(validPast.length).toBeGreaterThan(0);
+    expect(validFuture.length).toBe(0);
+    const explained = service.graphExplain("atlas", "cacheclient", { userId: "u1", strategy: "shortest", validAt: "2026-01-15T00:00:00.000Z" });
+    expect(explained.paths[0].explanation.join(" ")).toContain("depends_on");
 
     const query = service.graphQuery("MATCH (a)-[:transitive_depends_on]->(b) WHERE trust>0.8 RETURN a,b,trust", "u1");
     expect(query.matches[0].relation?.targetEntity).toBe("redisadapter");

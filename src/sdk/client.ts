@@ -1,4 +1,4 @@
-import type { EvidencePack, FeedbackKind, MarketplaceModule, Memory, MemoryInput, SearchOptions, SearchResult } from "../core";
+import type { EvidencePack, FeedbackKind, GraphExplainReport, MarketplaceModule, Memory, MemoryInput, SearchOptions, SearchResult } from "../core";
 
 export interface CognibrainClientOptions {
   baseUrl?: string;
@@ -36,6 +36,16 @@ export class CognibrainClient {
 
   graphQuery(query: string, userId?: string): Promise<unknown> {
     return this.request("/graph/query", { method: "POST", body: { query, userId } });
+  }
+
+  graphExplain(from: string, to: string, options: { userId?: string; strategy?: GraphExplainReport["strategy"]; validAt?: Date | string; maxDepth?: number; limit?: number } = {}): Promise<GraphExplainReport> {
+    const params = new URLSearchParams({ from, to });
+    if (options.userId) params.set("userId", options.userId);
+    if (options.strategy) params.set("strategy", options.strategy);
+    if (options.validAt) params.set("validAt", new Date(options.validAt).toISOString());
+    if (options.maxDepth) params.set("maxDepth", String(options.maxDepth));
+    if (options.limit) params.set("limit", String(options.limit));
+    return this.request(`/graph/explain?${params.toString()}`);
   }
 
   marketplace(): Promise<MarketplaceModule[]> {

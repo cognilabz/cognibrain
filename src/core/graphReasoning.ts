@@ -8,6 +8,10 @@ interface GraphEdge {
   memoryId?: string;
   trust?: number;
   timestamp?: Date | string;
+  validFrom?: Date | string;
+  validUntil?: Date | string;
+  evidenceIds?: string[];
+  createdBy?: Memory["source"]["kind"];
   source?: Memory["source"];
 }
 
@@ -25,13 +29,14 @@ export function findGraphPaths(
   memories: Memory[],
   from: string,
   to: string,
-  options: { maxDepth?: number; relationTypes?: RelationType[]; limit?: number } = {}
+  options: { maxDepth?: number; relationTypes?: RelationType[]; limit?: number; validAt?: Date | string } = {}
 ): GraphPath[] {
   const graph = buildGraph(memories);
   const fromNode = resolveNode(graph.labels, from);
   const toNode = resolveNode(graph.labels, to);
   if (!fromNode || !toNode) return [];
   const relationTypes = new Set(options.relationTypes ?? []);
+  const validAt = options.validAt ? new Date(options.validAt) : undefined;
   const maxDepth = options.maxDepth ?? 3;
   const queue: Array<{ node: string; edges: GraphEdge[]; seen: Set<string> }> = [{ node: fromNode, edges: [], seen: new Set([fromNode]) }];
   const paths: GraphPath[] = [];
@@ -39,6 +44,7 @@ export function findGraphPaths(
     const current = queue.shift()!;
     if (current.edges.length >= maxDepth) continue;
     for (const edge of graph.adj.get(current.node) ?? []) {
+      if (!edgeValidAt(edge, validAt)) continue;
       if (relationTypes.size && edge.type !== "mentions" && !relationTypes.has(edge.type)) continue;
       if (current.seen.has(edge.to)) continue;
       const edges = [...current.edges, edge];
@@ -55,7 +61,7 @@ export function findGraphPaths(
 export function activateGraph(
   memories: Memory[],
   query: string,
-  options: { maxDepth?: number; relationTypes?: RelationType[]; limit?: number; damping?: number } = {}
+  options: { maxDepth?: number; relationTypes?: RelationType[]; limit?: number; damping?: number; validAt?: Date | string } = {}
 ): GraphActivationResult {
   const graph = buildGraph(memories);
   const queryTokens = new Set(query.toLowerCase().split(/[^a-z0-9_./-]+/).filter(Boolean));
@@ -63,6 +69,7 @@ export function activateGraph(
     .filter(([, value]) => [...queryTokens].some((token) => value.label.toLowerCase().includes(token)))
     .map(([id]) => id);
   const relationTypes = new Set(options.relationTypes ?? []);
+  const validAt = options.validAt ? new Date(options.validAt) : undefined;
   const damping = options.damping ?? 0.72;
   const scores = new Map<string, number>();
   const explanations = new Map<string, string[]>();
@@ -79,6 +86,7 @@ export function activateGraph(
     const current = queue.shift()!;
     if (current.depth >= (options.maxDepth ?? 3)) continue;
     for (const edge of graph.adj.get(current.node) ?? []) {
+      if (!edgeValidAt(edge, validAt)) continue;
       if (relationTypes.size && edge.type !== "mentions" && !relationTypes.has(edge.type)) continue;
       if (current.path.includes(edge.to)) continue;
       const score = current.score * damping * edge.confidence;
@@ -184,20 +192,31 @@ function buildGraph(memories: Memory[]) {
       if (!target) continue;
       labels.set(source, labels.get(source) ?? { kind: source.startsWith("entity:") ? "entity" : "memory", label: source.replace(/^(entity|memory):/, ""), memoryId: source.startsWith("memory:") ? memory.id : undefined });
       labels.set(target, labels.get(target) ?? { kind: target.startsWith("entity:") ? "entity" : "memory", label: target.replace(/^(entity|memory):/, ""), memoryId: target.startsWith("memory:") ? relation.targetId : undefined });
-      connect(adj, edgeWithProvenance(memory, { from: source, to: target, type: relation.type, confidence: relation.confidence ?? 0.5, memoryId: memory.id }));
-      if (relation.direction === "undirected") connect(adj, edgeWithProvenance(memory, { from: target, to: source, type: relation.type, confidence: relation.confidence ?? 0.5, memoryId: memory.id }));
+      connect(adj, edgeWithProvenance(memory, { from: source, to: target, type: relation.type, confidence: relation.confidence ?? 0.5, memoryId: memory.id }, relation));
+      if (relation.direction === "undirected") connect(adj, edgeWithProvenance(memory, { from: target, to: source, type: relation.type, confidence: relation.confidence ?? 0.5, memoryId: memory.id }, relation));
     }
   }
   return { adj, labels };
 }
 
-function edgeWithProvenance(memory: Memory, edge: GraphEdge): GraphEdge {
+function edgeWithProvenance(memory: Memory, edge: GraphEdge, relation?: MemoryRelation): GraphEdge {
   return {
     ...edge,
     trust: memory.trust,
     timestamp: memory.temporal.eventAt ?? memory.createdAt.toISOString(),
+    validFrom: relation?.validFrom ?? memory.temporal.validFrom ?? memory.temporal.eventAt ?? memory.createdAt.toISOString(),
+    validUntil: relation?.validUntil ?? memory.temporal.validUntil,
+    evidenceIds: [memory.id],
+    createdBy: memory.source.kind,
     source: memory.source
   };
+}
+
+function edgeValidAt(edge: GraphEdge, validAt?: Date): boolean {
+  if (!validAt) return true;
+  if (edge.validFrom && new Date(edge.validFrom) > validAt) return false;
+  if (edge.validUntil && new Date(edge.validUntil) < validAt) return false;
+  return true;
 }
 
 function connect(adj: Map<string, GraphEdge[]>, edge: GraphEdge): void {
@@ -226,6 +245,7 @@ function toPath(edges: GraphEdge[], labels: Map<string, { kind: "memory" | "enti
 function filterGraphMemories(memories: Memory[], options: GraphExportOptions): Memory[] {
   const after = options.after ? new Date(options.after) : undefined;
   const before = options.before ? new Date(options.before) : undefined;
+  const validAt = options.validAt ? new Date(options.validAt) : undefined;
   const relationTypes = new Set(options.relationTypes ?? []);
   return memories
     .filter((memory) => !options.minTrust || memory.trust >= options.minTrust)
@@ -234,6 +254,8 @@ function filterGraphMemories(memories: Memory[], options: GraphExportOptions): M
       const eventAt = new Date(memory.temporal.eventAt ?? memory.createdAt);
       if (after && eventAt < after) return false;
       if (before && eventAt >= before) return false;
+      if (validAt && memory.temporal.validFrom && new Date(memory.temporal.validFrom) > validAt) return false;
+      if (validAt && memory.temporal.validUntil && new Date(memory.temporal.validUntil) < validAt) return false;
       return true;
     })
     .map((memory) => ({

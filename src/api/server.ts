@@ -601,6 +601,26 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       userId: url.searchParams.get("userId") ?? undefined,
       maxDepth: url.searchParams.get("maxDepth") ? Number(url.searchParams.get("maxDepth")) : undefined,
       limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined,
+      validAt: url.searchParams.get("validAt") ?? undefined,
+      relationTypes: parseRelationTypes(url.searchParams.get("relationTypes"))
+    }));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/graph/explain") {
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
+    if (!from || !to) {
+      send(response, 400, { error: "from and to are required" });
+      return;
+    }
+    const strategy = url.searchParams.get("strategy");
+    send(response, 200, defaultService.graphExplain(from, to, {
+      userId: url.searchParams.get("userId") ?? undefined,
+      maxDepth: url.searchParams.get("maxDepth") ? Number(url.searchParams.get("maxDepth")) : undefined,
+      limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined,
+      validAt: url.searchParams.get("validAt") ?? undefined,
+      strategy: strategy === "shortest" || strategy === "strongest" || strategy === "most_recent" || strategy === "highest_trust" ? strategy : undefined,
       relationTypes: parseRelationTypes(url.searchParams.get("relationTypes"))
     }));
     return;
@@ -616,6 +636,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       userId: url.searchParams.get("userId") ?? undefined,
       maxDepth: url.searchParams.get("maxDepth") ? Number(url.searchParams.get("maxDepth")) : undefined,
       limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined,
+      validAt: url.searchParams.get("validAt") ?? undefined,
       relationTypes: parseRelationTypes(url.searchParams.get("relationTypes"))
     }));
     return;
@@ -630,6 +651,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       sourceKind: sourceKind(url.searchParams.get("sourceKind")),
       after: url.searchParams.get("after") ?? undefined,
       before: url.searchParams.get("before") ?? undefined,
+      validAt: url.searchParams.get("validAt") ?? undefined,
       format
     });
     if (format === "graphml" && typeof exported === "string") {

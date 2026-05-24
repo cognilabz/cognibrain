@@ -907,7 +907,20 @@ export interface ManagedControlPlaneReport {
 
 export interface GraphPath {
   nodes: Array<{ id: string; kind: "memory" | "entity"; label: string; memoryId?: string }>;
-  edges: Array<{ from: string; to: string; type: RelationType | "mentions"; confidence: number; memoryId?: string; trust?: number; timestamp?: Date | string; source?: Provenance }>;
+  edges: Array<{
+    from: string;
+    to: string;
+    type: RelationType | "mentions";
+    confidence: number;
+    memoryId?: string;
+    trust?: number;
+    timestamp?: Date | string;
+    validFrom?: Date | string;
+    validUntil?: Date | string;
+    evidenceIds?: string[];
+    createdBy?: SourceKind;
+    source?: Provenance;
+  }>;
   score: number;
   explanation: string[];
 }
@@ -931,7 +944,16 @@ export interface GraphExportOptions {
   sourceKind?: SourceKind;
   after?: Date | string;
   before?: Date | string;
+  validAt?: Date | string;
   format?: "json" | "graphml";
+}
+
+export interface GraphExplainReport {
+  from: string;
+  to: string;
+  strategy: "shortest" | "strongest" | "most_recent" | "highest_trust";
+  validAt?: Date | string;
+  paths: GraphPath[];
 }
 
 export interface GraphExportResult {

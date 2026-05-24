@@ -54,6 +54,7 @@ import type {
   FederatedSearchReport,
   GraphReport,
   GraphActivationResult,
+  GraphExplainReport,
   GraphExportOptions,
   GraphExportResult,
   IdentityLink,
@@ -1249,16 +1250,28 @@ export class MemoryService {
     return updated;
   }
 
-  graphPaths(from: string, to: string, options?: { userId?: string; maxDepth?: number; relationTypes?: RelationType[]; limit?: number }) {
+  graphPaths(from: string, to: string, options?: { userId?: string; maxDepth?: number; relationTypes?: RelationType[]; limit?: number; validAt?: Date | string }) {
     const memories = this.store.list(options?.userId).filter((memory) => !memory.archivedAt);
     return findGraphPaths(memories, from, to, options);
+  }
+
+  graphExplain(from: string, to: string, options: { userId?: string; maxDepth?: number; relationTypes?: RelationType[]; limit?: number; validAt?: Date | string; strategy?: GraphExplainReport["strategy"] } = {}): GraphExplainReport {
+    const strategy = options.strategy ?? "strongest";
+    const paths = this.graphPaths(from, to, { ...options, limit: Math.max(options.limit ?? 5, 8) });
+    const ranked = [...paths].sort((a, b) => {
+      if (strategy === "shortest") return a.edges.length - b.edges.length || b.score - a.score;
+      if (strategy === "most_recent") return newestPathTime(b) - newestPathTime(a) || b.score - a.score;
+      if (strategy === "highest_trust") return averagePathTrust(b) - averagePathTrust(a) || b.score - a.score;
+      return b.score - a.score || a.edges.length - b.edges.length;
+    });
+    return { from, to, strategy, validAt: options.validAt, paths: ranked.slice(0, options.limit ?? 5) };
   }
 
   graphQuery(query: string, userId?: string) {
     return queryMemoryGraph(this.store.list(userId).filter((memory) => !memory.archivedAt), query);
   }
 
-  graphActivation(query: string, options?: { userId?: string; maxDepth?: number; relationTypes?: RelationType[]; limit?: number }): GraphActivationResult {
+  graphActivation(query: string, options?: { userId?: string; maxDepth?: number; relationTypes?: RelationType[]; limit?: number; validAt?: Date | string }): GraphActivationResult {
     return activateGraph(this.store.list(options?.userId).filter((memory) => !memory.archivedAt), query, options);
   }
 
@@ -1533,6 +1546,10 @@ export class MemoryService {
         "/feedback": ["POST"],
         "/feedback/injection": ["POST"],
         "/graph": ["GET"],
+        "/graph/paths": ["GET"],
+        "/graph/explain": ["GET"],
+        "/graph/activate": ["GET"],
+        "/graph/export": ["GET"],
         "/graph/query": ["POST"],
         "/marketplace": ["GET"],
         "/marketplace/submissions": ["GET", "POST"],
@@ -3568,6 +3585,15 @@ function intervalOverlaps(event: TimelineReport["events"][number], after?: Date,
 function evidenceDate(value: Date | string | undefined): string | undefined {
   if (!value) return undefined;
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function newestPathTime(path: { edges: Array<{ timestamp?: Date | string }> }): number {
+  return Math.max(0, ...path.edges.map((edge) => edge.timestamp ? new Date(edge.timestamp).getTime() : 0));
+}
+
+function averagePathTrust(path: { edges: Array<{ trust?: number }> }): number {
+  if (!path.edges.length) return 0;
+  return path.edges.reduce((sum, edge) => sum + (edge.trust ?? 0), 0) / path.edges.length;
 }
 
 function isoHour(date: Date): string {

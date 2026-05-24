@@ -258,13 +258,20 @@ switch (command) {
   case "graph-path": {
     const [from, to] = args;
     if (!from || !to) fail("Usage: memctl graph-path <from-entity-or-node> <to-entity-or-node>");
-    console.log(JSON.stringify(service.graphPaths(from, to, { userId, maxDepth: Number(process.env.MEMORY_GRAPH_DEPTH ?? 3), relationTypes: relationTypesFromEnv(), limit: Number(process.env.MEMORY_GRAPH_LIMIT ?? 5) }), null, 2));
+    console.log(JSON.stringify(service.graphPaths(from, to, { userId, maxDepth: Number(process.env.MEMORY_GRAPH_DEPTH ?? 3), relationTypes: relationTypesFromEnv(), limit: Number(process.env.MEMORY_GRAPH_LIMIT ?? 5), validAt: process.env.MEMORY_VALID_AT }), null, 2));
+    break;
+  }
+  case "explain": {
+    const [from, to] = args;
+    if (!from || !to) fail("Usage: memctl explain <from-entity-or-node> <to-entity-or-node>");
+    const strategy = graphExplainStrategyFromEnv();
+    console.log(JSON.stringify(service.graphExplain(from, to, { userId, maxDepth: Number(process.env.MEMORY_GRAPH_DEPTH ?? 3), relationTypes: relationTypesFromEnv(), limit: Number(process.env.MEMORY_GRAPH_LIMIT ?? 5), validAt: process.env.MEMORY_VALID_AT, strategy }), null, 2));
     break;
   }
   case "graph-activate": {
     const query = args.join(" ");
     if (!query) fail("Usage: memctl graph-activate <query>");
-    console.log(JSON.stringify(service.graphActivation(query, { userId, maxDepth: Number(process.env.MEMORY_GRAPH_DEPTH ?? 3), relationTypes: relationTypesFromEnv(), limit: Number(process.env.MEMORY_GRAPH_LIMIT ?? 10) }), null, 2));
+    console.log(JSON.stringify(service.graphActivation(query, { userId, maxDepth: Number(process.env.MEMORY_GRAPH_DEPTH ?? 3), relationTypes: relationTypesFromEnv(), limit: Number(process.env.MEMORY_GRAPH_LIMIT ?? 10), validAt: process.env.MEMORY_VALID_AT }), null, 2));
     break;
   }
   case "graph-export": {
@@ -280,6 +287,10 @@ switch (command) {
     const query = args.join(" ");
     if (!query) fail("Usage: memctl graph-query <query>");
     console.log(JSON.stringify(service.graphQuery(query, userId), null, 2));
+    break;
+  }
+  case "graph-changes": {
+    console.log(JSON.stringify(service.temporalQuery(userId, { after: process.env.MEMORY_AFTER ?? args[0], before: process.env.MEMORY_BEFORE }), null, 2));
     break;
   }
   case "infer": {
@@ -835,7 +846,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|inspect|evidence-pack|why-used|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|inspect|evidence-pack|why-used|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -854,6 +865,11 @@ function relationTypesFromEnv() {
 function retrievalModeFromEnv() {
   const value = process.env.MEMORY_RETRIEVAL_MODE;
   return value === "rrf" || value === "graph" || value === "path" || value === "hybrid" ? value : undefined;
+}
+
+function graphExplainStrategyFromEnv() {
+  const value = process.env.MEMORY_GRAPH_STRATEGY;
+  return value === "shortest" || value === "strongest" || value === "most_recent" || value === "highest_trust" ? value : undefined;
 }
 
 function permissionsFromEnv() {

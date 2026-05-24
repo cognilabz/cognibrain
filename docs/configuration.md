@@ -181,7 +181,13 @@ MEMORY_STORAGE_BACKEND=postgres MEMORY_POSTGRES_COMPAT_PATH=.memory-harness.post
 
 CockroachDB can use the same PostgreSQL-compatible contract through `MEMORY_STORAGE_BACKEND=cockroach`; production deployments should set a real PostgreSQL/Cockroach connection driver when one is installed. Cassandra-class storage is reported as a strategy-only target: it is suitable for planning and export/import boundaries, but not selectable as a runtime adapter until a dedicated wide-column adapter exists.
 
-`GET /storage` and `memctl storage` expose the active backend plus adapter capabilities, including durability, transactionality, append-only support, SQL support, replication, sharding and migration safety. JSON, JSONL, SQLite and Postgres-compatible migration paths are covered by tests; Cassandra-class deployments remain an explicitly scoped strategy, not a completed adapter.
+Cassandra-compatible mode stores wide-column shaped snapshots and append-only events in a local file for CI, migration, and package validation. It models keyspace, partition key, clustering key, quorum consistency and range sharding:
+
+```bash
+MEMORY_STORAGE_BACKEND=cassandra MEMORY_CASSANDRA_COMPAT_PATH=.memory-harness.cassandra.json MEMORY_STORAGE_SHARDS=8 npm run start:local
+```
+
+`GET /storage` and `memctl storage` expose the active backend plus adapter capabilities, including durability, transactionality, append-only support, SQL support, replication, sharding and migration safety. JSON, JSONL, SQLite, Postgres-compatible and Cassandra-compatible migration paths are covered by tests.
 
 ## Security And Managed Deployment
 

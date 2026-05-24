@@ -22,7 +22,7 @@
 - Pluggable persistence with atomic JSON snapshots and append-only JSONL durable audit mode
 - SQLite transactional persistence with append-only SQL event table and JSON-to-SQL migration coverage
 - Postgres-compatible and Cockroach-compatible SQL persistence contracts with append-only event rows, logical replication metadata, and JSON/SQL migration coverage
-- Cassandra-class storage is documented as a strategy-only target until a dedicated wide-column adapter is implemented
+- Cassandra-compatible wide-column storage is implemented for CI/package validation with partition keys, clustering keys, quorum metadata and range-sharding capability reporting
 - Next-generation epics and sub-issues mirrored from `nextplan.md`
 - Graph path search, spreading activation, safe graph query, GraphML/JSON export, and configurable inferred relation substrate
 - Temporal interval queries, behavioural retrieval scoring, recurring behavioural pattern mining, and persisted timeline summaries
@@ -39,7 +39,7 @@
 5. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
 6. Improve LoCoMo category 3 multi-hop evidence recall.
 7. Import more directly comparable vendor artifacts and normalize per-question outputs.
-8. Postgres/Cockroach/Cassandra adapters behind the persistence boundary.
+8. Production remote drivers for Postgres/Cockroach/Cassandra clusters behind the existing persistence boundary.
 9. Dashboard result browser for historical benchmark artifacts.
 10. Connector packages for Claude Code, Codex, Copilot, and Cursor.
 

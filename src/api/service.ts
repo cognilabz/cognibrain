@@ -5,6 +5,7 @@ import { loadRuntimeConfig } from "../core/runtimeConfig";
 import {
   createPersistenceFromEnv,
   AppendOnlyLogPersistenceAdapter,
+  CassandraCompatiblePersistenceAdapter,
   JsonFilePersistenceAdapter,
   PostgresCompatiblePersistenceAdapter,
   SQLitePersistenceAdapter,
@@ -922,19 +923,7 @@ export class MemoryService {
     const jsonl = { kind: "append-only-log", ...new AppendOnlyLogPersistenceAdapter(".memory-harness.jsonl").capabilities(), encryptedAppendLog: this.redactionPolicy.mode === "encrypt" };
     const postgres = { kind: "postgres-compatible", ...new PostgresCompatiblePersistenceAdapter(".memory-harness.postgres.json").capabilities() };
     const cockroach = { kind: "cockroach-compatible", ...new PostgresCompatiblePersistenceAdapter(".memory-harness.cockroach.json").capabilities(), notes: ["CockroachDB-compatible mode uses the PostgreSQL wire-protocol adapter and external quorum replication.", "Set MEMORY_STORAGE_BACKEND=cockroach with MEMORY_POSTGRES_URL in production."] };
-    const cassandra = {
-      kind: "cassandra-strategy",
-      durable: true,
-      distributedReady: true,
-      transactional: false,
-      appendOnly: true,
-      sql: false,
-      encryptedAtRest: Boolean(process.env.MEMORY_ENCRYPTION_KEY),
-      migrationSafe: false,
-      replication: "quorum" as const,
-      sharding: "range" as const,
-      notes: ["Strategy-only capability report: Cassandra-class stores need a dedicated wide-column adapter before runtime selection is enabled.", "Use export/import plus append-only event replay to migrate when that adapter is installed."]
-    };
+    const cassandra = { kind: "cassandra-compatible", ...new CassandraCompatiblePersistenceAdapter(".memory-harness.cassandra.json").capabilities() };
     const sqlite = sqliteAvailable()
       ? { kind: "sqlite", ...new SQLitePersistenceAdapter(".memory-harness.sqlite").capabilities() }
       : {

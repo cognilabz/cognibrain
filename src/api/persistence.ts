@@ -303,6 +303,90 @@ export class PostgresCompatiblePersistenceAdapter implements MemoryPersistenceAd
   }
 }
 
+export class CassandraCompatiblePersistenceAdapter implements MemoryPersistenceAdapter {
+  readonly kind = "cassandra-compatible";
+  private readonly path: string;
+
+  constructor(path: string) {
+    this.path = resolve(path);
+  }
+
+  load(): PersistedMemoryFile | undefined {
+    if (!existsSync(this.path)) return undefined;
+    const database = JSON.parse(readFileSync(this.path, "utf8")) as CassandraCompatibleDatabase;
+    const latest = database.tables.snapshots.at(-1);
+    return latest ? (JSON.parse(latest.payload) as PersistedMemoryFile) : undefined;
+  }
+
+  save(payload: PersistedMemoryFile): void {
+    mkdirSync(dirname(this.path), { recursive: true });
+    const current = this.readDatabase();
+    const committedAt = new Date().toISOString();
+    const serialized = JSON.stringify(payload);
+    const keyspace = process.env.MEMORY_CASSANDRA_KEYSPACE ?? current.keyspace;
+    const shardCount = Math.max(1, Number(process.env.MEMORY_STORAGE_SHARDS ?? current.replication.shardCount ?? 1));
+    const partition = partitionKey(payload, shardCount);
+    const next: CassandraCompatibleDatabase = {
+      dialect: "cassandra-compatible",
+      keyspace,
+      committedAt,
+      schemaVersion: 1,
+      tables: {
+        snapshots: [
+          ...current.tables.snapshots,
+          {
+            partition,
+            clustering: committedAt,
+            version: payload.version,
+            payload: serialized
+          }
+        ].slice(-100),
+        persistence_events: [
+          ...current.tables.persistence_events,
+          {
+            partition,
+            clustering: `${committedAt}#${current.tables.persistence_events.length + 1}`,
+            event_type: "snapshot",
+            payload: serialized
+          }
+        ]
+      },
+      replication: {
+        strategy: process.env.MEMORY_CASSANDRA_REPLICATION_STRATEGY ?? current.replication.strategy,
+        consistency: process.env.MEMORY_CASSANDRA_CONSISTENCY ?? current.replication.consistency,
+        shardCount
+      }
+    };
+    const tempPath = `${this.path}.${process.pid}.tmp`;
+    writeFileSync(tempPath, JSON.stringify(next, null, 2));
+    renameSync(tempPath, this.path);
+  }
+
+  capabilities(): PersistenceCapabilities {
+    return {
+      durable: true,
+      distributedReady: true,
+      transactional: false,
+      appendOnly: true,
+      sql: false,
+      encryptedAtRest: Boolean(process.env.MEMORY_ENCRYPTION_KEY),
+      migrationSafe: true,
+      replication: "quorum",
+      sharding: "range",
+      notes: [
+        "Cassandra-compatible wide-column adapter with partition/clustering keys and append-only snapshot events.",
+        "The local file-backed emulator is intended for CI, migration tests, and package validation.",
+        "Set MEMORY_STORAGE_BACKEND=cassandra with a production Cassandra driver boundary before remote cluster deployment."
+      ]
+    };
+  }
+
+  private readDatabase(): CassandraCompatibleDatabase {
+    if (!existsSync(this.path)) return emptyCassandraCompatibleDatabase();
+    return JSON.parse(readFileSync(this.path, "utf8")) as CassandraCompatibleDatabase;
+  }
+}
+
 export function createPersistenceFromEnv(defaultPath = ".memory-harness.json"): MemoryPersistenceAdapter {
   const backend = process.env.MEMORY_STORAGE_BACKEND ?? "json";
   if (backend === "jsonl" || backend === "append-only" || backend === "log") {
@@ -313,6 +397,9 @@ export function createPersistenceFromEnv(defaultPath = ".memory-harness.json"): 
   }
   if (backend === "postgres" || backend === "postgres-compatible" || backend === "cockroach") {
     return new PostgresCompatiblePersistenceAdapter(process.env.MEMORY_POSTGRES_COMPAT_PATH ?? defaultPath.replace(/\.json$/i, ".postgres.json"));
+  }
+  if (backend === "cassandra" || backend === "cassandra-compatible" || backend === "wide-column") {
+    return new CassandraCompatiblePersistenceAdapter(process.env.MEMORY_CASSANDRA_COMPAT_PATH ?? defaultPath.replace(/\.json$/i, ".cassandra.json"));
   }
   return new JsonFilePersistenceAdapter(defaultPath);
 }
@@ -347,6 +434,18 @@ interface PostgresCompatibleDatabase {
   replication: { mode: string; shardCount: number };
 }
 
+interface CassandraCompatibleDatabase {
+  dialect: "cassandra-compatible";
+  keyspace: string;
+  committedAt: string;
+  schemaVersion: 1;
+  tables: {
+    snapshots: Array<{ partition: string; clustering: string; version: number; payload: string }>;
+    persistence_events: Array<{ partition: string; clustering: string; event_type: string; payload: string }>;
+  };
+  replication: { strategy: string; consistency: string; shardCount: number };
+}
+
 function emptyPostgresCompatibleDatabase(): PostgresCompatibleDatabase {
   return {
     dialect: "postgres-compatible",
@@ -355,6 +454,29 @@ function emptyPostgresCompatibleDatabase(): PostgresCompatibleDatabase {
     tables: { memory_snapshots: [], persistence_events: [] },
     replication: { mode: "logical", shardCount: Number(process.env.MEMORY_STORAGE_SHARDS ?? 1) }
   };
+}
+
+function emptyCassandraCompatibleDatabase(): CassandraCompatibleDatabase {
+  return {
+    dialect: "cassandra-compatible",
+    keyspace: process.env.MEMORY_CASSANDRA_KEYSPACE ?? "cognibrain",
+    committedAt: new Date(0).toISOString(),
+    schemaVersion: 1,
+    tables: { snapshots: [], persistence_events: [] },
+    replication: {
+      strategy: process.env.MEMORY_CASSANDRA_REPLICATION_STRATEGY ?? "NetworkTopologyStrategy",
+      consistency: process.env.MEMORY_CASSANDRA_CONSISTENCY ?? "QUORUM",
+      shardCount: Math.max(1, Number(process.env.MEMORY_STORAGE_SHARDS ?? 1))
+    }
+  };
+}
+
+function partitionKey(payload: PersistedMemoryFile, shardCount: number): string {
+  const firstMemory = payload.memories[0];
+  const anchor = firstMemory?.brainId ?? firstMemory?.userId ?? "global";
+  let hash = 0;
+  for (const char of anchor) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+  return `${anchor}#${Math.abs(hash) % shardCount}`;
 }
 
 function loadSQLite(): new (path: string) => SQLiteDatabase {

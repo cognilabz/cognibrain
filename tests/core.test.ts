@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createHmac } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,7 +9,7 @@ import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { MemoryService } from "../src/api/service";
 import { CognibrainClient } from "../src/sdk/client";
-import { AppendOnlyLogPersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, SQLitePersistenceAdapter, sqliteAvailable } from "../src/api/persistence";
+import { AppendOnlyLogPersistenceAdapter, CassandraCompatiblePersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, SQLitePersistenceAdapter, sqliteAvailable } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
 import { buildLeaderboardArtifact, validateLeaderboardArtifact } from "../src/eval/leaderboard";
 import { publishLeaderboardArtifact } from "../src/eval/publishLeaderboard";
@@ -139,6 +139,15 @@ describe("TypeScript memory core", () => {
     const results = new RetrievalEngine(store).search({ userId: "u1", query: "Redis cache", now: new Date("2026-05-21T00:00:00.000Z") });
     expect(results[0].memory.content).toContain("Redis");
     expect(results[0].explanation?.some((item) => item.includes("rerank coverage"))).toBe(true);
+  });
+
+  it("uses BM25-style lexical ranking for repeated exact query terms", () => {
+    const store = new MemoryStore();
+    store.add({ userId: "u1", content: "Atlas cache cache cache incidents mention Redis once.", source: { kind: "human", confidence: 0.95 } });
+    store.add({ userId: "u1", content: "Atlas cache policy mentions storage in a general way.", source: { kind: "human", confidence: 0.95 } });
+    const results = new RetrievalEngine(store, { keyword: 1, semantic: 0, entity: 0, temporal: 0, trust: 0, graph: 0, access: 0 }).search({ userId: "u1", query: "cache cache Redis", limit: 2 });
+    expect(results[0].memory.content).toContain("Redis");
+    expect(results[0].signals.keyword).toBeGreaterThan(results[1].signals.keyword);
   });
 
   it("keeps scoped and private memories out of unrelated retrieval", () => {
@@ -939,13 +948,37 @@ describe("TypeScript memory core", () => {
       const status = reloaded.storageStatus();
       expect(status.adapters.find((adapter) => adapter.kind === "postgres-compatible")).toMatchObject({ sql: true, transactional: true, appendOnly: true, distributedReady: true, replication: "logical" });
       expect(status.adapters.find((adapter) => adapter.kind === "cockroach-compatible")?.distributedReady).toBe(true);
-      expect(status.adapters.find((adapter) => adapter.kind === "cassandra-strategy")?.migrationSafe).toBe(false);
+      expect(status.adapters.find((adapter) => adapter.kind === "cassandra-compatible")?.migrationSafe).toBe(true);
       expect(reloaded.search({ userId: "u1", query: "team memories replicated", limit: 1 })[0].memory.content).toContain("Postgres-compatible");
       reloaded.update(memory.id, { content: "Postgres-compatible storage keeps team memories transactionally replicated with audit snapshots." });
       const sync = reloaded.syncOfflineOperations();
       expect(sync.applied).toHaveLength(1);
       expect(reloaded.auditTrail().some((event) => event.type === "memory.update")).toBe(true);
       expect(reloaded.revertMemory(memory.id).content).toContain("transactionally replicated");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("supports Cassandra-compatible wide-column persistence and migration reports", () => {
+    const dir = mkdtempSync(join(tmpdir(), "open-memory-cassandra-"));
+    try {
+      const cassandraPath = join(dir, "memory.cassandra.json");
+      const service = new MemoryService({ persistence: new CassandraCompatiblePersistenceAdapter(cassandraPath) });
+      service.createBrain({ id: "team-brain", name: "Team Brain", ownerUserId: "u1", visibility: "team" });
+      const memory = service.add({
+        userId: "u1",
+        brainId: "team-brain",
+        content: "Cassandra-compatible storage partitions team memories by brain and user.",
+        source: { kind: "human", confidence: 0.95 }
+      });
+      const reloaded = new MemoryService({ persistence: new CassandraCompatiblePersistenceAdapter(cassandraPath) });
+      expect(reloaded.search({ userId: "u1", query: "Cassandra partitions team memories" })[0].memory.id).toBe(memory.id);
+      expect(reloaded.storageStatus().adapters.some((adapter) => adapter.kind === "cassandra-compatible" && adapter.distributedReady && adapter.sharding === "range")).toBe(true);
+      const raw = JSON.parse(readFileSync(cassandraPath, "utf8"));
+      expect(raw.dialect).toBe("cassandra-compatible");
+      expect(raw.tables.persistence_events.length).toBeGreaterThanOrEqual(1);
+      expect(raw.tables.snapshots.at(-1).partition).toContain("team-brain");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

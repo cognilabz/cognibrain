@@ -41,10 +41,11 @@ export class RetrievalEngine {
     const mode = options.mode ?? "hybrid";
     const weights = weightsForMode(mode, normalizeRetrievalWeights({ ...this.defaultWeights, ...(options.weights ?? {}) }));
     const graphBoosts = this.graphBoosts(candidates, queryTokens, queryText, options);
+    const bm25 = bm25Index(candidates, queryTokens);
     const scored = candidates
       .map((memory) => {
         const graph = graphBoosts.get(memory.id);
-        return this.score(memory, queryTokens, queryEntities, queryText, now, graph?.score ?? 0, graph?.paths ?? [], weights, mode, expandedQueries);
+        return this.score(memory, queryTokens, queryEntities, queryText, now, graph?.score ?? 0, graph?.paths ?? [], weights, mode, expandedQueries, bm25);
       })
       .filter((result) => result.score > 0.05 && relevanceEvidence(result) > 0.08)
       .sort((a, b) => b.score - a.score)
@@ -86,11 +87,12 @@ export class RetrievalEngine {
     graphPaths: string[],
     weights: RetrievalWeights,
     mode: NonNullable<SearchOptions["mode"]>,
-    expandedQueries: string[]
+    expandedQueries: string[],
+    bm25: Map<string, number>
   ): SearchResult {
     const memoryTokens = tokenize(`${memory.content} ${memory.tags.join(" ")}`);
     const semantic = cosineLike(queryTokens, memoryTokens);
-    const keyword = keywordCoverage(queryTokens, memoryTokens);
+    const keyword = Math.max(keywordCoverage(queryTokens, memoryTokens), bm25.get(memory.id) ?? 0);
     const entityHits = memory.entities.filter((entity) => entityMatchesQuery(entity, queryEntities, queryText)).length;
     const entity = memory.entities.length ? clamp(entityHits / Math.min(4, memory.entities.length)) : 0;
     const eventAt = memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt;
@@ -343,6 +345,36 @@ function weekdayInQuery(queryText: string): string | undefined {
 
 function weekdayName(date: Date): string {
   return date.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }).toLowerCase();
+}
+
+function bm25Index(memories: Memory[], queryTokens: string[]): Map<string, number> {
+  const documents = memories.map((memory) => ({ id: memory.id, tokens: tokenize(`${memory.content} ${memory.tags.join(" ")} ${memory.entities.join(" ")}`) }));
+  if (!documents.length) return new Map();
+  const avgLength = documents.reduce((sum, document) => sum + document.tokens.length, 0) / documents.length || 1;
+  const documentFrequency = new Map<string, number>();
+  for (const document of documents) {
+    for (const token of new Set(document.tokens)) documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
+  }
+  const raw = new Map<string, number>();
+  let max = 0;
+  const k1 = 1.2;
+  const b = 0.75;
+  for (const document of documents) {
+    const tf = new Map<string, number>();
+    for (const token of document.tokens) tf.set(token, (tf.get(token) ?? 0) + 1);
+    let score = 0;
+    for (const token of new Set(queryTokens)) {
+      const count = tf.get(token) ?? 0;
+      if (!count) continue;
+      const df = documentFrequency.get(token) ?? 0;
+      const idf = Math.log(1 + (documents.length - df + 0.5) / (df + 0.5));
+      const denominator = count + k1 * (1 - b + b * (document.tokens.length / avgLength));
+      score += idf * ((count * (k1 + 1)) / denominator);
+    }
+    raw.set(document.id, score);
+    max = Math.max(max, score);
+  }
+  return new Map([...raw.entries()].map(([id, score]) => [id, max ? clamp(score / max) : 0]));
 }
 
 function scopeMatches(memory: Memory, options: SearchOptions): boolean {

@@ -19,6 +19,7 @@
 - Config-file retrieval profiles plus feedback/training-sample learning
 - Canonical entity registry, typed graph report, encrypted sensitive-memory mode, and dashboard tuning controls
 - Streamable HTTP MCP server mode for remote/shared clients
+- One-command connector installer surface through `cognibrain-connect`
 - Pluggable persistence with atomic JSON snapshots and append-only JSONL durable audit mode
 - SQLite transactional persistence with append-only SQL event table and JSON-to-SQL migration coverage
 - Postgres-compatible and Cockroach-compatible SQL persistence contracts with append-only event rows, logical replication metadata, and JSON/SQL migration coverage
@@ -29,19 +30,20 @@
 - Staged extraction reports, provider extractor fallback, media/language envelopes, enrichment candidates, and entity merge/split operations
 - Brain/source/agent/persona primitives with audit events, webhook queues, marketplace modules, and compliance reports
 - `verify:nextgen` self-test loop for graph, inference, temporal/pattern, extraction/enrichment, multi-tenant audit, webhook, compliance, and marketplace behavior
+- Deterministic answer-generation artifact runner over benchmark reports, used to keep answer artifacts separate from retrieval metrics
 
 ## Next
 
-1. Complete the linked next-generation sub-issues under epics #26-#38.
-2. Full answer-generation benchmark layer for LoCoMo.
-3. Full answer-generation benchmark layer for LongMemEval.
-4. Full answer-generation benchmark layer for BEAM.
-5. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
-6. Improve LoCoMo category 3 multi-hop evidence recall.
-7. Import more directly comparable vendor artifacts and normalize per-question outputs.
-8. Production remote drivers for Postgres/Cockroach/Cassandra clusters behind the existing persistence boundary.
-9. Dashboard result browser for historical benchmark artifacts.
-10. Connector packages for Claude Code, Codex, Copilot, and Cursor.
+1. External answerer/judge benchmark layer for LoCoMo, LongMemEval, and BEAM with comparable per-question artifacts.
+2. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
+3. Improve LoCoMo category 3 multi-hop evidence recall.
+4. Import more directly comparable vendor artifacts and normalize per-question outputs.
+5. Production remote drivers for Postgres/Cockroach/Cassandra clusters behind the existing persistence boundary.
+6. Dashboard result browser for historical benchmark artifacts.
+7. Native connector telemetry packages for Claude Code, Codex, Copilot, Cursor, VS Code and OpenCode/OpenClaw.
+8. Source-specific two-way connectors for GitHub, Jira, Linear, Slack, Notion, Drive, Gmail and Calendar.
+9. Optional external enrichment pipeline for high-attention entities.
+10. Managed/SaaS deployment implementation beyond the current local control-plane readiness reports.
 
 ## Completion Bar
 

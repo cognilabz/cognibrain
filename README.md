@@ -376,6 +376,7 @@ docker/            Container and compose files
 - [Privacy And Retention Tutorial](docs/tutorials/privacy-retention.md)
 - [Domain Module Tutorial](docs/tutorials/domain-module.md)
 - [Market Comparison](docs/market-comparison.md)
+- [Market Analysis Implementation Audit](docs/market-analysis-implementation-audit.md)
 - [Advanced Features](docs/advanced-features.md)
 - [Roadmap](docs/roadmap.md)
 

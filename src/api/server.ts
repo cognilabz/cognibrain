@@ -300,7 +300,7 @@ const personaSchema = z.object({
 const webhookSchema = z.object({
   id: z.string().optional(),
   url: z.string().url(),
-  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "managed.tenant", "privacy.compute", "inference.run", "entity.merge", "entity.split"])),
+  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "managed.tenant", "privacy.compute", "inference.run", "entity.merge", "entity.split", "policy.violation", "retention.enforce", "security.key.rotate", "privacy.insights"])),
   secretRef: z.string().optional()
 });
 
@@ -311,6 +311,22 @@ const marketplaceModuleSchema = z.object({
   version: z.string().min(1),
   description: z.string(),
   installState: z.enum(["available", "installed"]).optional(),
+  signature: z
+    .object({
+      signer: z.string().min(1),
+      algorithm: z.enum(["sha256", "ed25519"]),
+      digest: z.string().min(1),
+      status: z.enum(["verified", "invalid", "unverified"]).optional(),
+      verifiedAt: z.string().optional()
+    })
+    .optional(),
+  compatibility: z
+    .object({
+      minCognibrainVersion: z.string().optional(),
+      maxCognibrainVersion: z.string().optional(),
+      engines: z.array(z.string()).optional()
+    })
+    .optional(),
   security: z
     .object({
       scannedAt: z.string(),

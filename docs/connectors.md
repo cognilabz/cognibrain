@@ -108,10 +108,11 @@ See `src/connectors/harnessHook.ts`.
 
 ## MCP Server
 
-The repo now includes a stdio MCP server:
+The repo now includes stdio and Streamable HTTP MCP transports:
 
 ```bash
 ./bin/cognibrain.mjs mcp
+./bin/cognibrain.mjs mcp --http --port 8791
 ```
 
 Tools:
@@ -129,7 +130,7 @@ Prompt:
 
 - `memory_usage_policy`
 
-Use stdio MCP for local harnesses first. Add Streamable HTTP later when remote/multi-user deployments need it.
+Use stdio MCP for local harnesses and Streamable HTTP MCP when a remote, browser, or shared client needs an HTTP session transport. Both transports expose the same memory tools and policy prompt; connector packages should choose the transport that matches the harness instead of changing memory behavior.
 
 Recommended client policy:
 
@@ -170,6 +171,7 @@ Enhancement path:
 3. Store per-project policy in `.claude/settings.json`.
 4. Start from `templates/claude/settings.json` for shell-hook experiments.
 5. Add a generated Skill that teaches Claude when to retrieve, cite, and store memories.
+6. Use `./bin/cognibrain.mjs mcp --http` only where Claude-side remote MCP transport is available and policy allows it.
 
 Source: https://docs.anthropic.com/en/docs/claude-code/hooks
 
@@ -213,7 +215,7 @@ Enhancement path:
 2. Run `./bin/cognibrain.mjs skill install` to install the packaged Codex Skill into `~/.codex/skills/cognibrain`.
 3. Use `./bin/cognibrain.mjs start` to start the backend and dashboard together.
 4. Start from `templates/codex/AGENTS.md` for repo-local policy.
-5. Add Streamable HTTP later for remote Codex environments.
+5. Use Streamable HTTP MCP for remote Codex environments that support HTTP MCP sessions.
 6. Keep repo-local memory policy compact so Codex can use MCP without overloading the prompt.
 
 Source: https://platform.openai.com/docs/docs-mcp
@@ -259,16 +261,16 @@ Source: https://docs.cursor.com/context/model-context-protocol
 | OpenAI Codex | stdio MCP plus `AGENTS.md` and Skill template | Installs Skill, starts backend/dashboard with one command, and generates compact project memory policy | `memory_maintenance_status` works and `memory_search` returns project memories |
 | Cursor | stdio MCP plus project rule template | `setup --all-harnesses` writes `.cursor/mcp.json` and `.cursor/rules/open-memory.mdc` | Cursor MCP config and rule file are generated deterministically |
 
-The first implementation target should be instruction-file generation because it is low risk, reviewable in git, and works even when an IDE's dynamic MCP support is disabled.
+The implemented baseline is instruction-file generation plus MCP config because it is low risk, reviewable in git, and works even when an IDE's dynamic MCP support is disabled. The remaining product work is native telemetry from each IDE or harness: accepted/rejected suggestions, tool outcomes, and context-pack feedback without relying on users to run feedback commands manually.
 
 ## Connector Roadmap
 
 Highest leverage next work:
 
-1. Streamable HTTP MCP transport for remote/shared deployments.
-2. Streamable HTTP client examples for Copilot/Cursor environments that support remote MCP.
-3. Deeper feedback adapters from native IDE telemetry where providers expose accepted/rejected suggestion events.
-4. Source-specific writeback adapters for GitHub, Slack/Discord, docs, issue trackers, and calendar systems.
-5. Privacy policies per connector: personal, project, team, never-store.
+1. Deepen packaged installers for Claude Code, Codex, Copilot, and Cursor with harness-native health checks and telemetry.
+2. Add connector-specific writeback adapters for GitHub, Jira, Linear, Slack, Notion, Drive, Gmail and Calendar.
+3. Add typed connector packages that collect accepted/rejected suggestion feedback automatically.
+4. Add operator controls for connector consent, retention, and project-only scoping.
+5. Publish per-connector examples that prove context-pack injection, feedback, and writeback end to end.
 
 Webhook delivery is no longer only a placeholder queue. The HTTP API and CLI can drain queued deliveries through real outbound `POST` calls with delivery ids, event-type headers, optional HMAC signatures, status-code capture, and retry backoff. Keep connector-specific writeback separate from this generic webhook transport so source APIs can enforce their own auth, rate limits, and conflict handling.

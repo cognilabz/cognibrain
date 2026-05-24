@@ -15,7 +15,7 @@ This is stronger than a synthetic demo because the certified runners use public 
 
 ## What Is Not Proven Yet
 
-Direct market leadership is strongest when competitor results are imported with comparable methodology. Many public vendor claims report answer-generation accuracy, LLM-as-judge scores, different retrieval budgets, or proprietary evaluation settings. Those are useful landscape signals, but they are not apples-to-apples proof against this repo's current retrieval-only metrics.
+Direct market leadership is strongest when competitor results are imported with comparable methodology. Many public vendor claims report answer-generation accuracy, LLM-as-judge scores, different retrieval budgets, or proprietary evaluation settings. Those are useful landscape signals, but they are not apples-to-apples proof against this repo's current retrieval-first metrics and deterministic answer-generation artifacts.
 
 ## Competitor Artifact Format
 
@@ -49,7 +49,7 @@ This gate imports public BEAM claims from Graphonomous and Hindsight as recorded
 Public market material should be treated as research context until normalized into the artifact format above.
 
 - Letta's strongest product idea is a memory hierarchy: always-visible memory blocks for stable state and on-demand archival memory for long-term semantic search. cognibrain should keep its context packs compact like memory blocks while persisting the larger store outside prompt context.
-- Zep and Graphiti make temporal knowledge graphs the center of memory, especially for changing relationships and historical context. cognibrain already uses entity and graph signals in retrieval; the next step is explicit edge storage with validity windows.
+- Zep and Graphiti make temporal knowledge graphs the center of memory, especially for changing relationships and historical context. cognibrain now has typed relation edges, validity windows, graph path search, spreading activation, graph export, and connection explanation in the local runtime; the remaining proof work is vendor-comparable temporal graph artifacts rather than more local edge scaffolding.
 - Mem0's current open-source direction emphasizes ADD-only extraction, hybrid search, and built-in entity linking instead of a separate graph-store dependency. cognibrain now follows that lesson locally by extracting proper nouns, paths, quoted phrases, and lowercase compound entities on every write.
 - LangGraph and LangMem frame long-term memory as semantic, episodic, and procedural state with stores and background consolidation. cognibrain now matches that shape with layers, CLI/API persistence, and automatic dream maintenance.
 - Generative Agents and A-MEM point to the same behavioral lesson: memory should not be an append-only vector pile. It should retrieve by multiple signals, periodically reflect, and evolve links or summaries as new evidence arrives.
@@ -61,14 +61,14 @@ Public market material should be treated as research context until normalized in
 
 ## Next Evidence Work
 
-1. Add explicit graph edges with temporal validity and contradiction supersession.
-2. Add a write-time note evolution pass that updates tags and links on related memories, beyond the current write-time entity extraction.
-3. Add full answer-generation evaluators for LoCoMo, LongMemEval, and BEAM.
-4. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
-5. Import vendor artifacts or local vendor reruns only when their dataset, metric, and budget match.
-6. Expand the generic vendor artifact adapter with per-question importers for Mem0's open benchmark repository output.
-7. Keep retrieval-only and answer-generation claims separate in every artifact and document.
-8. Add a result browser in the dashboard so every failed question can be inspected.
+1. Add vendor-comparable rerun/import artifacts with per-question rows, matching dataset, metric, answerer/judge, top-K or token budget.
+2. Extend deterministic answer-generation artifacts into optional external answerer/judge runs while keeping retrieval-only and answer-generation claims separated.
+3. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
+4. Expand the generic vendor artifact adapter with per-question importers for Mem0's open benchmark repository output.
+5. Add a result browser in the dashboard so every failed question can be inspected without reading raw JSON.
+6. Prove native IDE connector telemetry with real accepted/rejected suggestion events rather than only CLI feedback commands.
+7. Add production remote database drivers behind the persistence boundary; current Postgres/Cockroach/Cassandra surfaces are compatibility contracts and local migration-proof adapters.
+8. Treat external enrichment as optional product work: the runtime has enrichment candidates and provider hooks, but no default web/API enrichment pipeline.
 
 ## Sources
 

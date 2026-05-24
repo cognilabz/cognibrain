@@ -172,6 +172,29 @@ MEMORY_STORAGE_BACKEND=sqlite MEMORY_SQLITE_PATH=.memory-harness.sqlite npm run 
 
 `GET /storage` and `memctl storage` expose the active backend plus adapter capabilities, including durability, transactionality, append-only support, SQL support and migration safety. SQLite is the first real SQL backend. Postgres, CockroachDB and Cassandra-class deployments still require dedicated adapters before the repo can claim distributed storage.
 
+## Security And Managed Deployment
+
+Sensitive-memory encryption can be enabled with an explicit key id/version. The key provider report never exposes key material; it only reports scope, key ids, versions, rotation policy and backup refs:
+
+```bash
+MEMORY_REDACTION_MODE=encrypt \
+MEMORY_ENCRYPTION_KEY="replace-with-secret-manager-value" \
+MEMORY_ENCRYPTION_KEY_ID=org-default \
+MEMORY_ENCRYPTION_KEY_VERSION=1 \
+MEMORY_KEY_SCOPE=org \
+npm run cli -- key-provider
+```
+
+Before moving a local brain to a hosted or self-hosted runtime, export a bundle and verify encrypted recovery:
+
+```bash
+MEMORY_BACKUP_REF=local-backup://2026-05 MEMORY_SSO_PROVIDER=oidc MEMORY_SECRET_MANAGER=vault npm run cli -- migration-export managed > managed-bundle.json
+npm run cli -- backup-verify managed-bundle.json
+npm run cli -- migration-import managed-bundle.json
+```
+
+`doctor --publish` emits a warning when `MEMORY_DEPLOYMENT_MODE=managed`, `self_hosted`, or `production` uses a non-HTTPS `MEMORY_PUBLIC_URL` without `MEMORY_TLS_TERMINATED_BY`. Set `MEMORY_TLS_TERMINATED_BY=ingress` or expose an `https://` public URL before claiming production transport security. Concrete deployment artifacts live in `docker/` and `deploy/kubernetes/cognibrain.yaml`.
+
 Offline clients can queue operations while disconnected and replay them later:
 
 ```bash

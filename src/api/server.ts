@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import { defaultService } from "./service";
-import type { ExtractionReport, Memory } from "../core";
+import type { ExtractionReport, ManagedMigrationBundle, Memory } from "../core";
 
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -306,6 +306,16 @@ const migrationExportSchema = z.object({
   ssoProvider: z.string().optional(),
   secretManager: z.string().optional()
 });
+
+const migrationImportSchema = z.object({
+  generatedAt: z.union([z.string(), z.date()]),
+  target: z.enum(["self_hosted", "managed", "backup"]),
+  counts: z.record(z.number()),
+  backup: z.record(z.unknown()),
+  placeholders: z.record(z.unknown()),
+  deployment: z.record(z.unknown()).optional(),
+  manifest: z.record(z.unknown())
+}).passthrough();
 
 const connectorManifestSchema = z.object({
   id: z.string().min(1),
@@ -691,6 +701,17 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && url.pathname === "/migration/import") {
+    send(response, 202, defaultService.importMigrationBundle(migrationImportSchema.parse(await json(request)) as unknown as ManagedMigrationBundle));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/backup/verify") {
+    const body = await json(request).catch(() => undefined);
+    send(response, 200, body ? defaultService.verifyBackupRecovery(migrationImportSchema.parse(body) as unknown as ManagedMigrationBundle) : defaultService.verifyBackupRecovery());
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/compliance") {
     send(response, 200, defaultService.complianceReport());
     return;
@@ -719,6 +740,16 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/security/keys") {
     send(response, 200, defaultService.securityKeyReport());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/security/key-provider") {
+    send(response, 200, defaultService.keyProviderReport());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/security/transport") {
+    send(response, 200, defaultService.transportSecurityReport());
     return;
   }
 

@@ -16,6 +16,7 @@
     "templates/",
     "docs/",
     "docker/",
+    "deploy/",
     ".env.example",
     "bootstrap.sh",
     "CONTRIBUTING.md",

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { createPersistenceFromEnv } from "../api/persistence";
 import { MemoryService } from "../api/service";
 import { buildLeaderboardArtifact } from "../eval/leaderboard";
@@ -391,6 +392,10 @@ switch (command) {
     console.log(JSON.stringify(service.securityKeyReport(), null, 2));
     break;
   }
+  case "key-provider": {
+    console.log(JSON.stringify(service.keyProviderReport(), null, 2));
+    break;
+  }
   case "key-rotate": {
     const [keyId, keyVersion, backupRef] = args;
     if (!keyId || !keyVersion) fail("Usage: memctl key-rotate <key-id> <key-version> [backup-ref]");
@@ -429,6 +434,22 @@ switch (command) {
   case "migration-export": {
     const target = args[0] === "self_hosted" || args[0] === "managed" || args[0] === "backup" ? args[0] : undefined;
     console.log(JSON.stringify(service.managedMigrationBundle({ target, backupRef: process.env.MEMORY_BACKUP_REF, ssoProvider: process.env.MEMORY_SSO_PROVIDER, secretManager: process.env.MEMORY_SECRET_MANAGER }), null, 2));
+    break;
+  }
+  case "migration-import": {
+    const path = args[0];
+    if (!path) fail("Usage: memctl migration-import <bundle-json-path>");
+    console.log(JSON.stringify(service.importMigrationBundle(JSON.parse(readFileSync(path, "utf8"))), null, 2));
+    break;
+  }
+  case "backup-verify": {
+    const path = args[0];
+    const bundle = path ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    console.log(JSON.stringify(service.verifyBackupRecovery(bundle), null, 2));
+    break;
+  }
+  case "transport-security": {
+    console.log(JSON.stringify(service.transportSecurityReport(), null, 2));
     break;
   }
   case "benchmark-nextgen": {

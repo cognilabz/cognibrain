@@ -88,7 +88,7 @@ async function setup(setupArgs) {
 async function doctor(doctorArgs) {
   const publish = doctorArgs.includes("--publish");
   const checks = [];
-  const add = (name, ok, detail = "") => checks.push({ name, ok, detail });
+  const add = (name, ok, detail = "", level = ok ? "ok" : "fail") => checks.push({ name, ok, detail, level });
 
   add("Node >= 20", majorVersion(process.version) >= 20, process.version);
   const npmVersion = runCapture("npm", ["--version"]);
@@ -122,13 +122,41 @@ async function doctor(doctorArgs) {
       pack.stdout.includes(item)
     );
     add("package excludes generated files", leaked.length === 0, leaked.length ? leaked.join(", ") : "clean");
+    const transport = transportSecurityCheck(state?.api?.url);
+    add("transport security", transport.ok, transport.detail, transport.level);
   }
 
   for (const check of checks) {
-    console.log(`${check.ok ? "ok" : "fail"}  ${check.name}${check.detail ? ` - ${check.detail}` : ""}`);
+    console.log(`${check.level === "warn" ? "warn" : check.ok ? "ok" : "fail"}  ${check.name}${check.detail ? ` - ${check.detail}` : ""}`);
   }
 
-  if (checks.some((check) => !check.ok)) process.exit(1);
+  if (checks.some((check) => !check.ok && check.level !== "warn")) process.exit(1);
+}
+
+function transportSecurityCheck(localUrl) {
+  const publicUrl = process.env.MEMORY_PUBLIC_URL || localUrl || "";
+  const deploymentMode = process.env.MEMORY_DEPLOYMENT_MODE || inferDeploymentMode(publicUrl);
+  const tlsTerminatedBy = process.env.MEMORY_TLS_TERMINATED_BY;
+  const encrypted = publicUrl.startsWith("https://") || Boolean(tlsTerminatedBy);
+  const nonLocal = deploymentMode === "managed" || deploymentMode === "self_hosted" || deploymentMode === "production";
+  if (nonLocal && !encrypted) {
+    return {
+      ok: true,
+      level: "warn",
+      detail: `warn: ${deploymentMode} publish target is not HTTPS and MEMORY_TLS_TERMINATED_BY is unset`
+    };
+  }
+  return { ok: true, level: "ok", detail: encrypted ? `encrypted in transit via ${tlsTerminatedBy || "https"}` : "local-only transport" };
+}
+
+function inferDeploymentMode(url) {
+  if (!url) return "local";
+  try {
+    const host = new URL(url).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" ? "local" : "production";
+  } catch {
+    return "production";
+  }
 }
 
 function writeHarnessConfig(target) {

@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { applyRedactionPolicy, type RedactionPolicy } from "../core/privacy";
+import { applyRedactionPolicy, decryptMemoryContent, type DecryptionKeyMaterial, type RedactionPolicy } from "../core/privacy";
 import { createJsonCommandIntelligenceFromEnv } from "../core/providers";
 import { loadRuntimeConfig } from "../core/runtimeConfig";
 import {
@@ -63,6 +63,7 @@ import type {
   MarketplaceInstallPlan,
   MetricsReport,
   ManagedMigrationBundle,
+  ManagedDeploymentPlan,
   OfflineOperation,
   PersonaProfile,
   RelationType,
@@ -85,7 +86,10 @@ import type {
   InjectionFeedbackReport,
   AdaptiveDreamPolicyReport,
   DifferentialPrivacyReport,
+  BackupRecoveryReport,
   KeyRotationReport,
+  KeyProviderReport,
+  TransportSecurityReport,
   ObservationReport,
   PredictionReport,
   BehavioralPatternReport,
@@ -1221,7 +1225,11 @@ export class MemoryService {
         "/marketplace/install": ["POST"],
         "/marketplace/plan": ["POST"],
         "/migration/export": ["POST"],
+        "/migration/import": ["POST"],
+        "/backup/verify": ["POST"],
         "/privacy/insights": ["GET"],
+        "/security/key-provider": ["GET"],
+        "/security/transport": ["GET"],
         "/compliance/export": ["GET"]
       },
       clients: {
@@ -1255,6 +1263,7 @@ export class MemoryService {
         sso: { required: target === "managed", provider: options.ssoProvider, note: "Provision SCIM/OIDC externally; this local bundle carries only the provider label." },
         secretManager: { required: keyReport.encrypted > 0, provider: options.secretManager, note: "Move MEMORY_ENCRYPTION_KEY into the target secret manager before importing encrypted memories." }
       },
+      deployment: this.managedDeploymentPlan({ target, ssoProvider: options.ssoProvider, secretManager: options.secretManager }),
       manifest: {
         memories: this.store.export(),
         retrievalProfiles: [...this.retrievalProfiles.values()],
@@ -1264,6 +1273,55 @@ export class MemoryService {
         retentionRules: [...this.retentionRules.values()],
         compliance: this.complianceReport()
       }
+    };
+  }
+
+  importMigrationBundle(bundle: ManagedMigrationBundle): { importedMemories: number; importedProfiles: number; importedPersonas: number; importedConnectors: number; importedRetentionRules: number } {
+    const manifest = bundle.manifest as {
+      memories?: Memory[];
+      retrievalProfiles?: RetrievalProfile[];
+      personas?: PersonaProfile[];
+      connectors?: ConnectorManifest[];
+      marketplaceModules?: MarketplaceModule[];
+      retentionRules?: RetentionRule[];
+    };
+    const imported = manifest.memories?.length ? this.store.import(manifest.memories) : [];
+    for (const profile of manifest.retrievalProfiles ?? []) this.setRetrievalProfile({ ...profile, updatedAt: new Date(profile.updatedAt).toISOString() });
+    for (const persona of manifest.personas ?? []) this.personas.set(persona.id, persona);
+    for (const connector of manifest.connectors ?? []) this.connectorManifests.set(connector.id, connector);
+    for (const module of manifest.marketplaceModules ?? []) this.marketplaceModules.set(module.id, module);
+    for (const rule of manifest.retentionRules ?? []) this.retentionRules.set(rule.id, rule);
+    this.recordAudit("sync.run", { metadata: { action: "migration.import", importedMemories: imported.length, target: bundle.target } });
+    this.persist();
+    return {
+      importedMemories: imported.length,
+      importedProfiles: manifest.retrievalProfiles?.length ?? 0,
+      importedPersonas: manifest.personas?.length ?? 0,
+      importedConnectors: manifest.connectors?.length ?? 0,
+      importedRetentionRules: manifest.retentionRules?.length ?? 0
+    };
+  }
+
+  verifyBackupRecovery(bundle?: ManagedMigrationBundle, options: { keyring?: DecryptionKeyMaterial[] } = {}): BackupRecoveryReport {
+    const manifest = bundle?.manifest as { memories?: Memory[] } | undefined;
+    const memories = manifest?.memories ?? this.store.export();
+    const keyring = options.keyring ?? this.defaultKeyring();
+    const recovered: string[] = [];
+    const failed: Array<{ memoryId: string; reason: string }> = [];
+    for (const memory of memories) {
+      const privacy = memory.metadata.privacy as { encrypted?: boolean } | undefined;
+      if (!privacy?.encrypted) continue;
+      const decrypted = decryptMemoryContent(memory, keyring);
+      if (decrypted.ok) recovered.push(memory.id);
+      else failed.push({ memoryId: memory.id, reason: decrypted.error ?? "decryption failed" });
+    }
+    return {
+      generatedAt: new Date().toISOString(),
+      backupRef: bundle?.backup.backupRef ?? this.securityKeyReport().backupRefs[0],
+      encryptedMemories: recovered.length + failed.length,
+      recovered,
+      failed,
+      verified: failed.length === 0
     };
   }
 
@@ -1334,6 +1392,80 @@ export class MemoryService {
       if (privacy.backupRef && !report.backupRefs.includes(privacy.backupRef)) report.backupRefs.push(privacy.backupRef);
     }
     return report;
+  }
+
+  keyProviderReport(): KeyProviderReport {
+    const security = this.securityKeyReport();
+    const configuredProvider = process.env.MEMORY_KEY_PROVIDER;
+    const provider: KeyProviderReport["provider"] = configuredProvider ? "external" : this.redactionPolicy.encryptionKey || process.env.MEMORY_ENCRYPTION_KEY ? "local-env" : "unconfigured";
+    const scope = (process.env.MEMORY_KEY_SCOPE === "org" || process.env.MEMORY_KEY_SCOPE === "user" ? process.env.MEMORY_KEY_SCOPE : "local") as KeyProviderReport["scope"];
+    const rotationPolicyDays = process.env.MEMORY_KEY_ROTATION_DAYS ? Math.max(1, Number(process.env.MEMORY_KEY_ROTATION_DAYS)) : undefined;
+    const activeKeyId = this.redactionPolicy.encryptionKeyId ?? process.env.MEMORY_ENCRYPTION_KEY_ID;
+    const activeKeyVersion = this.redactionPolicy.encryptionKeyVersion ?? process.env.MEMORY_ENCRYPTION_KEY_VERSION;
+    const notes = [
+      provider === "external" ? `Key material is expected from ${configuredProvider}.` : provider === "local-env" ? "Local env key provider is active; move production keys to a secret manager." : "No encryption key material is configured.",
+      scope === "org" ? "Keys are scoped for organization-level rotation." : scope === "user" ? "Keys are scoped for per-user rotation." : "Keys are scoped to the local runtime."
+    ];
+    return {
+      provider,
+      scope,
+      activeKeyId,
+      activeKeyVersion,
+      encryptedMemories: security.encrypted,
+      knownKeyIds: Object.keys(security.keyIds),
+      knownKeyVersions: Object.keys(security.keyVersions),
+      hasEncryptionMaterial: Boolean(this.defaultKeyring().length),
+      rotationPolicyDays,
+      backupRefs: security.backupRefs,
+      notes
+    };
+  }
+
+  transportSecurityReport(options: { publicUrl?: string; mode?: TransportSecurityReport["mode"]; tlsTerminatedBy?: string } = {}): TransportSecurityReport {
+    const publicUrl = options.publicUrl ?? process.env.MEMORY_PUBLIC_URL;
+    const mode = options.mode ?? deploymentModeFromEnv(publicUrl);
+    const tlsTerminatedBy = options.tlsTerminatedBy ?? process.env.MEMORY_TLS_TERMINATED_BY;
+    const inTransitEncrypted = Boolean(publicUrl?.startsWith("https://") || tlsTerminatedBy);
+    return {
+      generatedAt: new Date().toISOString(),
+      mode,
+      publicUrl,
+      tlsTerminatedBy,
+      inTransitEncrypted,
+      ...(!inTransitEncrypted && mode !== "local" ? { warning: "Non-local deployments must terminate TLS before exposing the API or dashboard." } : {})
+    };
+  }
+
+  managedDeploymentPlan(options: { target?: ManagedMigrationBundle["target"]; ssoProvider?: string; secretManager?: string } = {}): ManagedDeploymentPlan {
+    const mode = options.target ?? "backup";
+    return {
+      mode,
+      artifacts: {
+        dockerfile: "docker/Dockerfile",
+        dockerCompose: "docker/docker-compose.yml",
+        kubernetes: "deploy/kubernetes/cognibrain.yaml"
+      },
+      environment: [
+        "MEMORY_STORAGE_BACKEND",
+        "MEMORY_ENCRYPTION_KEY_ID",
+        "MEMORY_ENCRYPTION_KEY_VERSION",
+        "MEMORY_KEY_PROVIDER",
+        "MEMORY_PUBLIC_URL",
+        "MEMORY_TLS_TERMINATED_BY",
+        "MEMORY_SSO_PROVIDER",
+        "MEMORY_SECRET_MANAGER"
+      ],
+      secretManager: options.secretManager,
+      ssoProvider: options.ssoProvider,
+      importWorkflow: [
+        "Run /migration/export or `cognibrain memory migration-export managed` on the source runtime.",
+        "Copy the bundle to the target deployment through an encrypted channel.",
+        "Provision the listed key ids in the configured secret manager before import.",
+        "POST the bundle to /migration/import or run `cognibrain memory migration-import <bundle.json>`.",
+        "Run /backup/verify and /compliance/export before serving production traffic."
+      ],
+      transport: this.transportSecurityReport({ mode: mode === "managed" ? "managed" : mode === "self_hosted" ? "self_hosted" : "local" })
+    };
   }
 
   rotateEncryptionKeyMetadata(input: { keyId: string; keyVersion: string; backupRef?: string; actorId?: string }): KeyRotationReport {
@@ -1430,6 +1562,9 @@ export class MemoryService {
     const auditByType: Record<string, number> = {};
     for (const event of this.auditEvents) auditByType[event.type] = (auditByType[event.type] ?? 0) + 1;
     const encryption = this.securityKeyReport();
+    const keyProvider = this.keyProviderReport();
+    const backup = this.verifyBackupRecovery();
+    const transportSecurity = this.transportSecurityReport();
     const dataFlows = Object.entries(auditByType)
       .map(([type, count]) => ({
         type,
@@ -1447,10 +1582,15 @@ export class MemoryService {
       auditByType,
       retentionRules: this.listRetentionRules(),
       encryption,
+      keyProvider,
+      backup,
+      transportSecurity,
       dataFlows,
       risks: [
         ...(retentionExpired ? [`${retentionExpired} memories are past retention and should be archived or deleted.`] : []),
         ...(encryption.missingKeyMetadata ? [`${encryption.missingKeyMetadata} encrypted memories are missing key id/version metadata.`] : []),
+        ...(!backup.verified ? [`${backup.failed.length} encrypted memories failed backup recovery verification.`] : []),
+        ...(transportSecurity.warning ? [transportSecurity.warning] : []),
         ...(memories.some((memory) => memory.consent.visibility === "public" && memory.trust < 0.5) ? ["Low-trust public memories require operator review."] : [])
       ]
     };
@@ -2132,6 +2272,16 @@ export class MemoryService {
     };
     this.persistence.save(payload);
   }
+
+  private defaultKeyring(): DecryptionKeyMaterial[] {
+    const key = this.redactionPolicy.encryptionKey ?? process.env.MEMORY_ENCRYPTION_KEY;
+    if (!key || key.length < 16) return [];
+    return [{
+      key,
+      keyId: this.redactionPolicy.encryptionKeyId ?? process.env.MEMORY_ENCRYPTION_KEY_ID,
+      keyVersion: this.redactionPolicy.encryptionKeyVersion ?? process.env.MEMORY_ENCRYPTION_KEY_VERSION
+    }];
+  }
 }
 
 export function createDefaultMemoryService() {
@@ -2157,6 +2307,18 @@ export function createDefaultMemoryService() {
 function redactionModeFromEnv(value: string | undefined): RedactionPolicy["mode"] {
   if (value === "off" || value === "reject" || value === "archive" || value === "encrypt") return value;
   return "redact";
+}
+
+function deploymentModeFromEnv(publicUrl?: string): TransportSecurityReport["mode"] {
+  const raw = process.env.MEMORY_DEPLOYMENT_MODE;
+  if (raw === "managed" || raw === "self_hosted" || raw === "production" || raw === "local") return raw;
+  if (!publicUrl) return "local";
+  try {
+    const host = new URL(publicUrl).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" ? "local" : "production";
+  } catch {
+    return "production";
+  }
 }
 
 function ruleExtractionFailures(events: MemoryExtractionEvent[]): ExtractionReport["failures"] {

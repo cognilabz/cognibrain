@@ -1,6 +1,6 @@
 import { DEFAULT_CONSENT } from "./config";
-import type { ConsentPolicy, MemoryInput } from "./types";
-import { createCipheriv, createHash, randomBytes } from "node:crypto";
+import type { ConsentPolicy, Memory, MemoryInput } from "./types";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 export interface RedactionPolicy {
   mode: "off" | "redact" | "reject" | "archive" | "encrypt";
@@ -13,6 +13,21 @@ export interface RedactionResult {
   input?: MemoryInput;
   rejected: boolean;
   matches: Array<{ detector: string; count: number }>;
+}
+
+export interface DecryptionKeyMaterial {
+  keyId?: string;
+  keyVersion?: string;
+  key: string;
+}
+
+export interface DecryptionResult {
+  ok: boolean;
+  content?: string;
+  keyId?: string;
+  keyVersion?: string;
+  keyFingerprint?: string;
+  error?: string;
 }
 
 const SECRET_PATTERNS: Array<{ detector: string; pattern: RegExp }> = [
@@ -90,6 +105,43 @@ function encryptText(content: string, key: string | undefined) {
     authTag: cipher.getAuthTag().toString("base64url"),
     keyFingerprint: createHash("sha256").update(normalized).digest("hex").slice(0, 16)
   };
+}
+
+export function decryptMemoryContent(memory: Memory, keyring: DecryptionKeyMaterial[]): DecryptionResult {
+  const privacy = memory.metadata.privacy as { encrypted?: boolean; algorithm?: string; iv?: string; authTag?: string; keyId?: string; keyVersion?: string; keyFingerprint?: string } | undefined;
+  if (!privacy?.encrypted) return { ok: true, content: memory.content };
+  const match = memory.content.match(/^\[encrypted:([^:]+):(.+)\]$/);
+  if (!match) return { ok: false, error: "encrypted memory content is missing ciphertext envelope" };
+  const [, algorithm, ciphertext] = match;
+  if (algorithm !== "aes-256-gcm" || privacy.algorithm !== "aes-256-gcm") return { ok: false, error: `unsupported encryption algorithm: ${algorithm}` };
+  if (!privacy.iv || !privacy.authTag) return { ok: false, error: "encrypted memory is missing iv/authTag metadata" };
+  const ordered = [...keyring].sort((a, b) => Number(b.keyId === privacy.keyId) - Number(a.keyId === privacy.keyId));
+  for (const material of ordered) {
+    if (!material.key || material.key.length < 16) continue;
+    try {
+      const normalized = createHash("sha256").update(material.key).digest();
+      const fingerprint = createHash("sha256").update(normalized).digest("hex").slice(0, 16);
+      if (privacy.keyFingerprint && fingerprint !== privacy.keyFingerprint && material.keyId === privacy.keyId) continue;
+      const decipher = createDecipheriv("aes-256-gcm", normalized, Buffer.from(privacy.iv, "base64url"));
+      decipher.setAuthTag(Buffer.from(privacy.authTag, "base64url"));
+      const content = Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64url")), decipher.final()]).toString("utf8");
+      return {
+        ok: true,
+        content,
+        keyId: material.keyId ?? privacy.keyId,
+        keyVersion: material.keyVersion ?? privacy.keyVersion,
+        keyFingerprint: fingerprint
+      };
+    } catch {
+      continue;
+    }
+  }
+  return { ok: false, error: "no key material could decrypt the encrypted memory" };
+}
+
+export function keyFingerprint(key: string | undefined): string | undefined {
+  if (!key || key.length < 16) return undefined;
+  return createHash("sha256").update(createHash("sha256").update(key).digest()).digest("hex").slice(0, 16);
 }
 
 export function normalizeConsent(input: MemoryInput): MemoryInput {

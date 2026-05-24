@@ -520,6 +520,36 @@ describe("TypeScript memory core", () => {
     expect(memory.metadata.privacy).toMatchObject({ encrypted: true, action: "encrypt", keyId: "local", keyVersion: "1" });
   });
 
+  it("verifies encrypted backup recovery across key rotation and migration import", () => {
+    const oldKey = "old-test-key-with-enough-length";
+    const newKey = "new-test-key-with-enough-length";
+    const service = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: oldKey, encryptionKeyId: "user-u1", encryptionKeyVersion: "1" } });
+    service.add({
+      userId: "u1",
+      content: "The token ghp_abcdefghijklmnopqrstuvwxyz123456 belongs in encrypted backup recovery.",
+      source: { kind: "human", confidence: 0.95 }
+    });
+
+    const initialBundle = service.managedMigrationBundle({ target: "managed", backupRef: "local-backup://security", ssoProvider: "oidc", secretManager: "vault" });
+    expect(initialBundle.deployment?.artifacts.kubernetes).toBe("deploy/kubernetes/cognibrain.yaml");
+    expect(initialBundle.deployment?.importWorkflow.some((step) => step.includes("/migration/import"))).toBe(true);
+    expect(service.verifyBackupRecovery(initialBundle, { keyring: [{ key: oldKey, keyId: "user-u1", keyVersion: "1" }] })).toMatchObject({ encryptedMemories: 1, verified: true });
+
+    service.rotateEncryptionKeyMetadata({ keyId: "org-main", keyVersion: "2", backupRef: "local-backup://security" });
+    const rotatedBundle = service.managedMigrationBundle({ target: "managed", backupRef: "local-backup://security", ssoProvider: "oidc", secretManager: "vault" });
+    const recovery = service.verifyBackupRecovery(rotatedBundle, { keyring: [{ key: newKey, keyId: "org-main", keyVersion: "2" }, { key: oldKey, keyId: "user-u1", keyVersion: "1" }] });
+    expect(recovery).toMatchObject({ encryptedMemories: 1, verified: true });
+
+    const imported = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: oldKey, encryptionKeyId: "user-u1", encryptionKeyVersion: "1" } });
+    const importReport = imported.importMigrationBundle(rotatedBundle);
+    expect(importReport.importedMemories).toBe(1);
+    expect(imported.securityKeyReport()).toMatchObject({ encrypted: 1, rotated: 1, backupRefs: ["local-backup://security"] });
+    const compliance = imported.complianceReport();
+    expect(compliance.keyProvider?.knownKeyIds).toContain("org-main");
+    expect(compliance.backup?.verified).toBe(true);
+    expect(imported.transportSecurityReport({ mode: "managed", publicUrl: "http://memory.example.com" }).warning).toContain("TLS");
+  });
+
   it("enforces retention, rotates encrypted key metadata, and emits privacy-safe insights", () => {
     const service = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "test-key-with-enough-length", encryptionKeyId: "primary", encryptionKeyVersion: "1" } });
     const staleSearch = service.add({
@@ -566,6 +596,9 @@ describe("TypeScript memory core", () => {
     const compliance = service.complianceReport();
     expect(compliance.retentionRules?.length).toBeGreaterThanOrEqual(2);
     expect(compliance.encryption?.keyVersions["2"]).toBe(1);
+    expect(compliance.keyProvider?.encryptedMemories).toBe(1);
+    expect(compliance.backup?.verified).toBe(true);
+    expect(compliance.transportSecurity?.mode).toBe("local");
     expect(compliance.dataFlows?.some((flow) => flow.type === "security.key.rotate")).toBe(true);
     expect(service.auditTrail({ type: "retention.enforce" }).length).toBeGreaterThan(0);
   });
@@ -970,6 +1003,8 @@ describe("TypeScript memory core", () => {
 
     const bundle = service.managedMigrationBundle({ target: "managed", backupRef: "local-backup://market", ssoProvider: "oidc", secretManager: "vault" });
     expect(bundle.placeholders.sso.required).toBe(true);
+    expect(bundle.deployment?.secretManager).toBe("vault");
+    expect(bundle.deployment?.artifacts.dockerCompose).toBe("docker/docker-compose.yml");
     expect(bundle.counts.connectors).toBeGreaterThan(0);
     expect(service.apiDescription().clients.typescript).toContain("src/sdk/client.ts");
 

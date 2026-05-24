@@ -685,7 +685,22 @@ export interface ManagedMigrationBundle {
     sso: { required: boolean; provider?: string; note: string };
     secretManager: { required: boolean; provider?: string; note: string };
   };
+  deployment?: ManagedDeploymentPlan;
   manifest: Record<string, unknown>;
+}
+
+export interface ManagedDeploymentPlan {
+  mode: "self_hosted" | "managed" | "backup";
+  artifacts: {
+    dockerfile: string;
+    dockerCompose: string;
+    kubernetes: string;
+  };
+  environment: string[];
+  secretManager?: string;
+  ssoProvider?: string;
+  importWorkflow: string[];
+  transport: TransportSecurityReport;
 }
 
 export interface GraphPath {
@@ -751,8 +766,25 @@ export interface ComplianceReport {
     missingKeyMetadata: number;
     backupRefs: string[];
   };
+  keyProvider?: KeyProviderReport;
+  backup?: BackupRecoveryReport;
+  transportSecurity?: TransportSecurityReport;
   dataFlows?: Array<{ type: string; count: number; lastSeenAt?: Date | string }>;
   risks: string[];
+}
+
+export interface KeyProviderReport {
+  provider: "local-env" | "external" | "unconfigured";
+  scope: "local" | "user" | "org";
+  activeKeyId?: string;
+  activeKeyVersion?: string;
+  encryptedMemories: number;
+  knownKeyIds: string[];
+  knownKeyVersions: string[];
+  hasEncryptionMaterial: boolean;
+  rotationPolicyDays?: number;
+  backupRefs: string[];
+  notes: string[];
 }
 
 export interface SecurityKeyReport {
@@ -771,6 +803,25 @@ export interface KeyRotationReport {
   keyId: string;
   keyVersion: string;
   backupRef?: string;
+}
+
+export interface BackupRecoveryReport {
+  generatedAt: Date | string;
+  backupRef?: string;
+  encryptedMemories: number;
+  recovered: string[];
+  failed: Array<{ memoryId: string; reason: string }>;
+  importedMemories?: number;
+  verified: boolean;
+}
+
+export interface TransportSecurityReport {
+  generatedAt: Date | string;
+  mode: "local" | "self_hosted" | "managed" | "production";
+  publicUrl?: string;
+  tlsTerminatedBy?: string;
+  inTransitEncrypted: boolean;
+  warning?: string;
 }
 
 export interface DifferentialPrivacyReport {

@@ -140,6 +140,7 @@ Search memory:
 ```bash
 ./bin/cognibrain.mjs memory search "What language does Atlas use?"
 ./bin/cognibrain.mjs memory inspect <memory-id>
+./bin/cognibrain.mjs memory route "Which release memory should Codex use?"
 ```
 
 Explain why memories were used and export the same evidence an agent would receive:

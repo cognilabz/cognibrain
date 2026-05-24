@@ -1157,6 +1157,16 @@ describe("TypeScript memory core", () => {
       consent: { visibility: "private", retentionUntil: "2020-01-01T00:00:00.000Z", deleteOnRequest: true },
       source: { kind: "human", confidence: 0.98 }
     });
+    service.add({
+      userId: "u2",
+      content: "Other user's private launch decision.",
+      consent: { visibility: "private" }
+    });
+    const route = service.routeMemory({ userId: "u1", agentId: "agent-codex", orgId: "org1", brainIds: [brain.id, "missing-brain"], includeSharedBrains: true, query: "project launch decisions" });
+    expect(route.selectedScopes.some((scope) => scope.kind === "brain" && scope.id === brain.id)).toBe(true);
+    expect(route.selectedScopes.some((scope) => scope.kind === "agent" && scope.id === "agent-codex")).toBe(true);
+    expect(route.excludedScopes.some((scope) => scope.kind === "brain" && scope.id === "missing-brain")).toBe(true);
+    expect(route.excludedScopes.some((scope) => scope.kind === "private")).toBe(true);
     service.promoteSharedMemory(memory.id, "org1");
 
     expect(service.listBrains()).toHaveLength(1);

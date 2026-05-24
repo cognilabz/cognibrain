@@ -132,9 +132,14 @@ curl "http://localhost:8787/memories?userId=dev"
 curl -X POST http://localhost:8787/search \
   -H "content-type: application/json" \
   -d '{"userId":"dev","query":"What language should Atlas use?","limit":5,"mode":"rrf","expandQuery":true}'
+curl -X POST http://localhost:8787/route \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","agentId":"codex","orgId":"org-1","projectId":"cognibrain","query":"Atlas release checklist","includeSharedBrains":true}'
 ```
 
 Search results include ranked memories, signal breakdowns, citations, and stale flags.
+
+Route reports explain which user/session/app/project/org/brain/agent/persona scopes are selected or excluded before retrieval runs. CLI users can preview the same decision with `cognibrain memory route "<query>"`.
 
 ## MemoryRecordV2
 

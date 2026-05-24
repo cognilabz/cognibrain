@@ -63,6 +63,7 @@ import type {
   MemoryExtractionEvent,
   MemoryExtractor,
   MemoryInput,
+  MemoryRouteReport,
   MemorySource,
   MarketplaceModule,
   MarketplaceInstallPlan,
@@ -398,6 +399,56 @@ export class MemoryService {
     this.recordAudit("search.run", { userId: options.userId, brainId: options.brainId, sourceId: options.sourceId, metadata: { resultCount: results.length, profileId: profile?.id } });
     this.persist();
     return results;
+  }
+
+  routeMemory(options: SearchOptions): MemoryRouteReport {
+    const selectedScopes: MemoryRouteReport["selectedScopes"] = [{ kind: "user", id: options.userId, reason: "request user is always the base memory scope" }];
+    const excludedScopes: MemoryRouteReport["excludedScopes"] = [];
+    const reasoning: string[] = [];
+    if (options.sessionId) selectedScopes.push({ kind: "session", id: options.sessionId, reason: "sessionId was provided by the harness" });
+    if (options.appId) selectedScopes.push({ kind: "app", id: options.appId, reason: "appId narrows recall to the current application" });
+    if (options.projectId) selectedScopes.push({ kind: "project", id: options.projectId, reason: "projectId narrows recall to the current project or repository" });
+    if (options.orgId) selectedScopes.push({ kind: "org", id: options.orgId, reason: "orgId enables approved org-visible memory" });
+    if (options.agentId) {
+      selectedScopes.push({ kind: "agent", id: options.agentId, reason: "agentId selects agent-specific memories and persona defaults" });
+      const persona = this.personaForAgent(options.agentId);
+      if (persona) selectedScopes.push({ kind: "persona", id: persona.id, reason: "agent persona contributes retrieval defaults" });
+    }
+    const accessibleBrains = this.accessibleBrainIds(options);
+    for (const brainId of accessibleBrains) selectedScopes.push({ kind: "brain", id: brainId, reason: "brain is accessible to the user, org, agent, or public visibility" });
+    const requestedBrainIds = new Set(options.brainIds ?? (options.brainId ? [options.brainId] : []));
+    for (const brainId of requestedBrainIds) {
+      if (!accessibleBrains.includes(brainId)) excludedScopes.push({ kind: "brain", id: brainId, reason: "brain was requested but is not accessible for this user/agent/org" });
+    }
+    const privateMatches = this.store.list().filter((memory) => memory.userId !== options.userId && memory.consent.visibility === "private").length;
+    if (privateMatches) excludedScopes.push({ kind: "private", id: `${privateMatches}`, reason: "private memories from other users are never routed without explicit identity linking" });
+    if (options.brainId || options.brainIds?.length) reasoning.push("Brain routing was requested explicitly.");
+    if (options.includeSharedBrains) reasoning.push("Shared brain retrieval is enabled, but still constrained by consent and accessible brain membership.");
+    if (!options.includePrivate) reasoning.push("Private memory remains limited to the requesting user.");
+    if (options.scopeMode) reasoning.push(`Scope mode ${options.scopeMode} will be enforced during retrieval.`);
+    if (!reasoning.length) reasoning.push("Default route uses user memory plus any matching session/app/project/org/agent scopes present on memories.");
+    return {
+      query: options.query,
+      userId: options.userId,
+      selectedScopes,
+      excludedScopes,
+      reasoning,
+      retrievalOptions: {
+        userId: options.userId,
+        agentId: options.agentId,
+        sessionId: options.sessionId,
+        appId: options.appId,
+        orgId: options.orgId,
+        projectId: options.projectId,
+        brainId: options.brainId,
+        brainIds: options.brainIds,
+        includeSharedBrains: options.includeSharedBrains,
+        includeLinkedIdentities: options.includeLinkedIdentities,
+        scopeMode: options.scopeMode,
+        profileId: options.profileId,
+        mode: options.mode
+      }
+    };
   }
 
   evidencePack(options: SearchOptions & { tokenBudget?: number }): EvidencePack {
@@ -1542,6 +1593,7 @@ export class MemoryService {
       paths: {
         "/memories": ["GET", "POST"],
         "/search": ["POST"],
+        "/route": ["POST"],
         "/evidence-pack": ["POST"],
         "/feedback": ["POST"],
         "/feedback/injection": ["POST"],

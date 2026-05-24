@@ -83,6 +83,26 @@ switch (command) {
     console.log(JSON.stringify(service.get(id), null, 2));
     break;
   }
+  case "route": {
+    const query = args.join(" ");
+    if (!query) fail("Usage: memctl route <query>");
+    console.log(JSON.stringify(service.routeMemory({
+      userId,
+      query,
+      profileId: process.env.MEMORY_PROFILE_ID,
+      includeLinkedIdentities: process.env.MEMORY_INCLUDE_LINKED === "true",
+      includeSharedBrains: process.env.MEMORY_INCLUDE_SHARED_BRAINS === "true",
+      brainId: process.env.MEMORY_BRAIN_ID,
+      brainIds: process.env.MEMORY_BRAIN_IDS ? process.env.MEMORY_BRAIN_IDS.split(",").map((item) => item.trim()).filter(Boolean) : undefined,
+      agentId: process.env.MEMORY_AGENT_ID,
+      sessionId: process.env.MEMORY_SESSION_ID,
+      appId: process.env.MEMORY_APP_ID,
+      orgId: process.env.MEMORY_ORG_ID,
+      projectId: process.env.MEMORY_PROJECT_ID,
+      mode: retrievalModeFromEnv()
+    }), null, 2));
+    break;
+  }
   case "evidence-pack":
   case "why-used": {
     const query = args.join(" ");
@@ -391,9 +411,22 @@ switch (command) {
     console.log(JSON.stringify(service.promoteSharedMemory(memoryId, orgId), null, 2));
     break;
   }
+  case "promote":
+  case "review": {
+    const [memoryId, orgId = process.env.MEMORY_ORG_ID ?? "org"] = args;
+    if (!memoryId || !orgId) fail(`Usage: memctl ${command} <memory-id> <org-id>`);
+    console.log(JSON.stringify(service.promoteSharedMemory(memoryId, orgId), null, 2));
+    break;
+  }
   case "share-revoke": {
     const [memoryId, ...reason] = args;
     if (!memoryId) fail("Usage: memctl share-revoke <memory-id> [reason]");
+    console.log(JSON.stringify(service.revokeSharedMemory(memoryId, process.env.MEMORY_AGENT_ID ?? userId, reason.join(" ") || undefined), null, 2));
+    break;
+  }
+  case "revoke": {
+    const [memoryId, ...reason] = args;
+    if (!memoryId) fail("Usage: memctl revoke <memory-id> [reason]");
     console.log(JSON.stringify(service.revokeSharedMemory(memoryId, process.env.MEMORY_AGENT_ID ?? userId, reason.join(" ") || undefined), null, 2));
     break;
   }
@@ -846,7 +879,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|inspect|evidence-pack|why-used|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|inspect|route|evidence-pack|why-used|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {

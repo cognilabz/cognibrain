@@ -1143,6 +1143,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && url.pathname === "/route") {
+    send(response, 200, defaultService.routeMemory(searchSchema.parse(await json(request))));
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/evidence-pack") {
     send(response, 200, defaultService.evidencePack(evidencePackSchema.parse(await json(request))));
     return;

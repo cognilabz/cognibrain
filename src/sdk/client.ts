@@ -1,4 +1,4 @@
-import type { EvidencePack, FeedbackKind, GraphExplainReport, MarketplaceModule, Memory, MemoryInput, SearchOptions, SearchResult } from "../core";
+import type { EvidencePack, FeedbackKind, GraphExplainReport, MarketplaceModule, Memory, MemoryInput, MemoryRouteReport, SearchOptions, SearchResult } from "../core";
 
 export interface CognibrainClientOptions {
   baseUrl?: string;
@@ -24,6 +24,10 @@ export class CognibrainClient {
 
   evidencePack(options: SearchOptions & { tokenBudget?: number }): Promise<EvidencePack> {
     return this.request("/evidence-pack", { method: "POST", body: options });
+  }
+
+  route(options: SearchOptions): Promise<MemoryRouteReport> {
+    return this.request("/route", { method: "POST", body: options });
   }
 
   feedback(memoryId: string, kind: FeedbackKind, userId?: string, note?: string): Promise<Memory> {

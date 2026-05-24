@@ -233,6 +233,15 @@ export interface SearchOptions {
   relationTypes?: RelationType[];
 }
 
+export interface MemoryRouteReport {
+  query: string;
+  userId: string;
+  selectedScopes: Array<{ kind: "user" | "session" | "app" | "project" | "org" | "brain" | "agent" | "persona"; id: string; reason: string }>;
+  excludedScopes: Array<{ kind: "private" | "brain" | "org" | "agent"; id: string; reason: string }>;
+  reasoning: string[];
+  retrievalOptions: Partial<SearchOptions>;
+}
+
 export interface SearchResult {
   memory: Memory;
   score: number;

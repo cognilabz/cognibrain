@@ -4,11 +4,19 @@ import type {
   DomainEvaluationReport,
   EntityRecord,
   FeedbackEvent,
+  AgentRegistration,
+  AuditEvent,
+  Brain,
   IdentityLink,
+  MarketplaceModule,
   Memory,
+  MemorySource,
   MetricsReport,
+  PersonaProfile,
   RetrievalProfile,
-  RetrievalTrainingSample
+  RetrievalTrainingSample,
+  WebhookDelivery,
+  WebhookRegistration
 } from "../core";
 
 export interface PersistedMemoryFile {
@@ -24,6 +32,14 @@ export interface PersistedMemoryFile {
   domainEvaluations?: DomainEvaluationReport[];
   entityRecords?: EntityRecord[];
   trainingSamples?: RetrievalTrainingSample[];
+  brains?: Brain[];
+  sources?: MemorySource[];
+  agents?: AgentRegistration[];
+  personas?: PersonaProfile[];
+  auditEvents?: AuditEvent[];
+  webhooks?: WebhookRegistration[];
+  webhookDeliveries?: WebhookDelivery[];
+  marketplaceModules?: MarketplaceModule[];
 }
 
 export interface MemoryPersistenceAdapter {

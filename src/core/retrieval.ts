@@ -16,6 +16,8 @@ export class RetrievalEngine {
     const userIds = new Set([options.userId, ...((options as SearchOptions & { linkedUserIds?: string[] }).linkedUserIds ?? [])]);
     const candidates = this.store.list().filter((memory) => {
       if (!userIds.has(memory.userId)) return false;
+      if (options.brainId && memory.brainId && memory.brainId !== options.brainId) return false;
+      if (options.sourceId && memory.sourceId && memory.sourceId !== options.sourceId) return false;
       if (!options.includeArchived && memory.archivedAt) return false;
       if (options.agentId && memory.agentId && memory.agentId !== options.agentId) return false;
       if (!scopeMatches(memory, options)) return false;

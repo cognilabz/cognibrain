@@ -26,6 +26,8 @@ export class MemoryStore {
     const tags = unique(input.tags ?? []);
     const memory: Memory = {
       id: makeId(),
+      brainId: input.brainId,
+      sourceId: input.sourceId,
       userId: input.userId,
       agentId: input.agentId,
       sessionId: input.sessionId,
@@ -61,6 +63,8 @@ export class MemoryStore {
     const updated: Memory = {
       ...memory,
       content,
+      brainId: patch.brainId ?? memory.brainId,
+      sourceId: patch.sourceId ?? memory.sourceId,
       userId: patch.userId ?? memory.userId,
       agentId: patch.agentId ?? memory.agentId,
       sessionId: patch.sessionId ?? memory.sessionId,

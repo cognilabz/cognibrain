@@ -645,4 +645,72 @@ describe("TypeScript memory core", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("supports next-gen graph paths, graph queries, and inference rules", () => {
+    const service = new MemoryService();
+    service.add({
+      userId: "u1",
+      content: "Atlas depends on CacheClient for cache reads.",
+      entities: ["atlas", "cacheclient"],
+      relations: [{ type: "depends_on", sourceEntity: "atlas", targetEntity: "cacheclient", confidence: 0.9 }],
+      source: { kind: "human", confidence: 0.96 }
+    });
+    service.add({
+      userId: "u1",
+      content: "CacheClient imports RedisAdapter for storage.",
+      entities: ["cacheclient", "redisadapter"],
+      relations: [{ type: "imports", sourceEntity: "cacheclient", targetEntity: "redisadapter", confidence: 0.88 }],
+      source: { kind: "reviewed_code", confidence: 0.94 }
+    });
+
+    const report = service.runInference();
+    expect(report.inferred.some((item) => item.relation.type === "transitive_depends_on")).toBe(true);
+
+    const paths = service.graphPaths("atlas", "redisadapter", { userId: "u1", maxDepth: 3 });
+    expect(paths.some((path) => path.explanation.join(" ").includes("transitive_depends_on"))).toBe(true);
+
+    const query = service.graphQuery("MATCH (a)-[:transitive_depends_on]->(b) WHERE trust>0.8", "u1");
+    expect(query.matches[0].relation?.targetEntity).toBe("redisadapter");
+  });
+
+  it("manages brains, sources, agents, webhooks, marketplace modules, and compliance reports", () => {
+    const service = new MemoryService();
+    const brain = service.createBrain({ name: "Team Brain", ownerUserId: "u1", orgId: "org1", visibility: "team", consentRequired: true });
+    const source = service.createSource({ brainId: brain.id, name: "Engineering Notes", kind: "docs", defaultConsent: { visibility: "org" } });
+    service.registerAgent({ id: "agent-codex", name: "Codex", namespace: "coding", brainIds: [brain.id], permissions: ["read", "write"] });
+    service.registerWebhook({ url: "https://example.invalid/memory", events: ["memory.write", "memory.share"] });
+    service.installMarketplaceModule({
+      id: "persona-researcher",
+      kind: "persona",
+      name: "Researcher Persona",
+      version: "1.0.0",
+      description: "Careful citation-heavy memory defaults.",
+      manifest: { id: "researcher", label: "Researcher", summaryStyle: "descriptive", privacyDefault: "private" }
+    });
+
+    const memory = service.add({
+      brainId: brain.id,
+      sourceId: source.id,
+      userId: "u1",
+      agentId: "agent-codex",
+      orgId: "org1",
+      content: "Team brain stores approved project launch decisions.",
+      consent: { visibility: "private", retentionUntil: "2020-01-01T00:00:00.000Z", deleteOnRequest: true },
+      source: { kind: "human", confidence: 0.98 }
+    });
+    service.promoteSharedMemory(memory.id, "org1");
+
+    expect(service.listBrains()).toHaveLength(1);
+    expect(service.listSources(brain.id)[0].id).toBe(source.id);
+    expect(service.listAgents()[0].id).toBe("agent-codex");
+    expect(service.listPersonas()[0].id).toBe("researcher");
+    expect(service.listMarketplaceModules()[0].installState).toBe("installed");
+    expect(service.eventFeed().deliveries.some((delivery) => delivery.status === "queued")).toBe(true);
+
+    const compliance = service.complianceReport(new Date("2026-01-01T00:00:00.000Z"));
+    expect(compliance.totals.brains).toBe(1);
+    expect(compliance.totals.sources).toBe(1);
+    expect(compliance.retentionExpired).toBe(1);
+    expect(compliance.auditByType["memory.write"]).toBeGreaterThan(0);
+  });
 });

@@ -168,6 +168,15 @@ const beamCategories = [
   ["temporal", "65/70"]
 ];
 
+const nextgenProof = [
+  ["graph inference", "typed rules"],
+  ["path explainer", "multi-hop"],
+  ["brain/source scope", "team-ready"],
+  ["audit events", "queued webhooks"],
+  ["compliance report", "retention proof"],
+  ["marketplace", "persona install"]
+];
+
 const platformSignals = [
   { label: "CLI", value: "setup installs skill + runtime", icon: Terminal },
   { label: "API", value: "scoped HTTP and MCP store", icon: Network },
@@ -180,7 +189,10 @@ const operatorControls = [
   "scope filters",
   "feedback learning",
   "graph paths",
-  "time review"
+  "time review",
+  "brain scope",
+  "audit trail",
+  "marketplace"
 ];
 
 function App() {
@@ -819,6 +831,17 @@ function ProofView({
           <h2><CheckCircle2 size={17} /> BEAM Ability Breakdown</h2>
           <div className="ability-list">
             {beamCategories.map(([label, value]) => (
+              <div key={label} className="ability-row">
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="panel">
+          <h2><GitBranch size={17} /> Nextgen Substrate</h2>
+          <div className="ability-list">
+            {nextgenProof.map(([label, value]) => (
               <div key={label} className="ability-row">
                 <span>{label}</span>
                 <strong>{value}</strong>

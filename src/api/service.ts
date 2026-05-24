@@ -10,11 +10,14 @@ import {
 import {
   EntityRegistry,
   extractAddOnlyMemories,
+  findGraphPaths,
   healthReport,
   IdentityResolver,
+  inferGraphRelations,
   MemoryStore,
   normalizeLifecyclePolicy,
   normalizeRetrievalWeights,
+  queryMemoryGraph,
   runDomainEvaluation,
   ReflectionEngine,
   RetrievalEngine,
@@ -23,6 +26,10 @@ import {
 } from "../core";
 import type {
   DomainEvaluationReport,
+  AgentRegistration,
+  AuditEvent,
+  Brain,
+  ComplianceReport,
   ContradictionDetector,
   EntityRecord,
   ExtractionReport,
@@ -33,13 +40,19 @@ import type {
   Memory,
   MemoryExtractionEvent,
   MemoryInput,
+  MemorySource,
+  MarketplaceModule,
   MetricsReport,
+  PersonaProfile,
+  RelationType,
   RetrievalProfile,
   RetrievalTrainingSample,
   RetrievalWeights,
   SearchOptions,
   ReflectionSummarizer,
-  TimelineReport
+  TimelineReport,
+  WebhookDelivery,
+  WebhookRegistration
 } from "../core";
 
 export interface MemoryServiceOptions {
@@ -87,6 +100,14 @@ export class MemoryService {
   private retrievalProfiles = new Map<string, RetrievalProfile>();
   private domainEvaluations: DomainEvaluationReport[] = [];
   private trainingSamples: RetrievalTrainingSample[] = [];
+  private brains = new Map<string, Brain>();
+  private sources = new Map<string, MemorySource>();
+  private agents = new Map<string, AgentRegistration>();
+  private personas = new Map<string, PersonaProfile>();
+  private auditEvents: AuditEvent[] = [];
+  private webhooks = new Map<string, WebhookRegistration>();
+  private webhookDeliveries: WebhookDelivery[] = [];
+  private marketplaceModules = new Map<string, MarketplaceModule>();
   private searchEvents: Array<{
     timestamp: string;
     userId: string;
@@ -147,6 +168,7 @@ export class MemoryService {
 
   add(input: MemoryInput) {
     const enriched = this.domainModule?.enrich ? this.domainModule.enrich(input) : input;
+    this.ensureScopedAccess(enriched);
     const checked = applyRedactionPolicy(enriched, this.redactionPolicy);
     if (checked.rejected || !checked.input) {
       throw new Error(`Memory rejected by redaction policy: ${checked.matches.map((match) => match.detector).join(", ")}`);
@@ -154,6 +176,7 @@ export class MemoryService {
     const memory = this.entities.ingest(this.store.add(checked.input));
     if (memory.metadata.archivedOnWrite) this.store.archive(memory.id);
     this.metrics.memoriesAdded += 1;
+    this.recordAudit("memory.write", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id });
     this.afterWrite(memory.userId);
     return memory;
   }
@@ -169,6 +192,7 @@ export class MemoryService {
       return !existingHashes.has(hash);
     });
     const memories = inputs.map((input) => this.add(linkStateChange(input, this.store.list(scope.userId))));
+    this.recordAudit("extract.run", { userId: scope.userId, metadata: { events: events.length, memories: memories.length } });
     const entityLinks: Record<string, string[]> = {};
     for (const memory of memories) {
       for (const entity of memory.entities) {
@@ -189,6 +213,7 @@ export class MemoryService {
 
   update(id: string, patch: Partial<MemoryInput>) {
     const memory = this.store.update(id, patch);
+    this.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id });
     this.afterWrite(memory.userId);
     return memory;
   }
@@ -196,6 +221,7 @@ export class MemoryService {
   delete(id: string) {
     const memory = this.store.get(id);
     const deleted = this.store.delete(id);
+    if (deleted) this.recordAudit("memory.delete", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id });
     if (deleted) this.afterWrite(memory.userId);
     return deleted;
   }
@@ -224,6 +250,7 @@ export class MemoryService {
       lowConfidence: results.some((result) => result.decision === "warn" || result.decision === "review"),
       queryHash: contentHash(options.query)
     });
+    this.recordAudit("search.run", { userId: options.userId, brainId: options.brainId, sourceId: options.sourceId, metadata: { resultCount: results.length, profileId: profile?.id } });
     this.persist();
     return results;
   }
@@ -231,6 +258,7 @@ export class MemoryService {
   reflect(userId: string) {
     const report = this.reflection.run(userId);
     this.recordDream(report.lifecycle.qualityScore, report.contradictions.length, report.lifecycle.actions);
+    this.recordAudit("reflect.run", { userId, metadata: { created: report.created.length, demoted: report.demoted.length, contradictions: report.contradictions.length } });
     this.markDreamed(userId);
     this.persist();
     return report;
@@ -239,6 +267,7 @@ export class MemoryService {
   dream(userId: string) {
     const report = this.reflection.run(userId);
     this.recordDream(report.lifecycle.qualityScore, report.contradictions.length, report.lifecycle.actions);
+    this.recordAudit("reflect.run", { userId, metadata: { created: report.created.length, demoted: report.demoted.length, contradictions: report.contradictions.length } });
     this.markDreamed(userId);
     this.persist();
     return report;
@@ -283,6 +312,170 @@ export class MemoryService {
     for (const memory of memories) this.store.delete(memory.id);
     this.persist();
     return memories.length;
+  }
+
+  createBrain(input: Omit<Brain, "id" | "createdAt" | "updatedAt"> & { id?: string }): Brain {
+    const now = new Date().toISOString();
+    const brain: Brain = {
+      ...input,
+      id: input.id ?? `brain_${contentHash(`${input.ownerUserId}:${input.name}`).slice(2)}`,
+      createdAt: now,
+      updatedAt: now
+    };
+    this.brains.set(brain.id, brain);
+    this.recordAudit("memory.write", { userId: brain.ownerUserId, brainId: brain.id, metadata: { resource: "brain", name: brain.name } });
+    this.persist();
+    return brain;
+  }
+
+  listBrains(): Brain[] {
+    return [...this.brains.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  createSource(input: Omit<MemorySource, "id" | "createdAt" | "updatedAt"> & { id?: string }): MemorySource {
+    if (!this.brains.has(input.brainId)) throw new Error(`Brain not found: ${input.brainId}`);
+    const now = new Date().toISOString();
+    const source: MemorySource = {
+      ...input,
+      id: input.id ?? `src_${contentHash(`${input.brainId}:${input.name}`).slice(2)}`,
+      createdAt: now,
+      updatedAt: now
+    };
+    this.sources.set(source.id, source);
+    this.recordAudit("memory.write", { brainId: source.brainId, sourceId: source.id, metadata: { resource: "source", kind: source.kind } });
+    this.persist();
+    return source;
+  }
+
+  listSources(brainId?: string): MemorySource[] {
+    return [...this.sources.values()].filter((source) => !brainId || source.brainId === brainId).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  registerAgent(input: Omit<AgentRegistration, "createdAt" | "updatedAt">): AgentRegistration {
+    const now = new Date().toISOString();
+    const agent = { ...input, createdAt: now, updatedAt: now };
+    this.agents.set(agent.id, agent);
+    this.recordAudit("memory.write", { actorId: agent.id, metadata: { resource: "agent", namespace: agent.namespace } });
+    this.persist();
+    return agent;
+  }
+
+  listAgents(): AgentRegistration[] {
+    return [...this.agents.values()].sort((a, b) => a.namespace.localeCompare(b.namespace));
+  }
+
+  setPersona(input: Omit<PersonaProfile, "createdAt" | "updatedAt">): PersonaProfile {
+    const now = new Date().toISOString();
+    const persona = { ...input, createdAt: now, updatedAt: now };
+    this.personas.set(persona.id, persona);
+    this.persist();
+    return persona;
+  }
+
+  listPersonas(): PersonaProfile[] {
+    return [...this.personas.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  promoteSharedMemory(memoryId: string, orgId: string): Memory {
+    const memory = this.store.get(memoryId);
+    const updated = this.store.update(memoryId, {
+      orgId,
+      consent: { ...memory.consent, visibility: "org" },
+      metadata: { shared: { promotedAt: new Date().toISOString(), orgId } }
+    });
+    this.recordAudit("memory.share", { userId: updated.userId, brainId: updated.brainId, sourceId: updated.sourceId, memoryId: updated.id, metadata: { orgId } });
+    this.persist();
+    return updated;
+  }
+
+  graphPaths(from: string, to: string, options?: { userId?: string; maxDepth?: number; relationTypes?: RelationType[] }) {
+    const memories = this.store.list(options?.userId).filter((memory) => !memory.archivedAt);
+    return findGraphPaths(memories, from, to, options);
+  }
+
+  graphQuery(query: string, userId?: string) {
+    return queryMemoryGraph(this.store.list(userId).filter((memory) => !memory.archivedAt), query);
+  }
+
+  runInference(): ReturnType<typeof inferGraphRelations> {
+    const report = inferGraphRelations(this.store.list().filter((memory) => !memory.archivedAt));
+    for (const item of report.inferred) {
+      const memory = this.store.get(item.memoryId);
+      this.store.update(item.memoryId, { relations: [...memory.relations, item.relation] });
+    }
+    this.recordAudit("inference.run", { metadata: { rulesEvaluated: report.rulesEvaluated, inferred: report.inferred.length } });
+    this.persist();
+    return report;
+  }
+
+  registerWebhook(input: Omit<WebhookRegistration, "id" | "createdAt"> & { id?: string }): WebhookRegistration {
+    const webhook: WebhookRegistration = {
+      ...input,
+      id: input.id ?? `wh_${contentHash(`${input.url}:${input.events.join(",")}`).slice(2)}`,
+      createdAt: new Date().toISOString()
+    };
+    this.webhooks.set(webhook.id, webhook);
+    this.recordAudit("webhook.register", { metadata: { webhookId: webhook.id, events: webhook.events } });
+    this.persist();
+    return webhook;
+  }
+
+  eventFeed(): { auditEvents: AuditEvent[]; deliveries: WebhookDelivery[] } {
+    return { auditEvents: [...this.auditEvents], deliveries: [...this.webhookDeliveries] };
+  }
+
+  installMarketplaceModule(module: MarketplaceModule): MarketplaceModule {
+    const installed = { ...module, installState: "installed" as const };
+    this.marketplaceModules.set(installed.id, installed);
+    if (installed.kind === "persona") {
+      const manifest = installed.manifest as Partial<PersonaProfile>;
+      if (manifest.id && manifest.label) {
+        this.setPersona({
+          id: manifest.id,
+          label: manifest.label,
+          summaryStyle: manifest.summaryStyle ?? "concise",
+          retrievalWeights: manifest.retrievalWeights,
+          privacyDefault: manifest.privacyDefault,
+          domain: manifest.domain
+        });
+      }
+    }
+    this.recordAudit("marketplace.install", { metadata: { moduleId: installed.id, kind: installed.kind } });
+    this.persist();
+    return installed;
+  }
+
+  listMarketplaceModules(): MarketplaceModule[] {
+    return [...this.marketplaceModules.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  complianceReport(now = new Date()): ComplianceReport {
+    const memories = this.store.list();
+    const consent: ComplianceReport["consent"] = { private: 0, user: 0, org: 0, public: 0 };
+    let encrypted = 0;
+    let retentionExpired = 0;
+    let deleteOnRequest = 0;
+    for (const memory of memories) {
+      consent[memory.consent.visibility] += 1;
+      if ((memory.metadata.privacy as { action?: string } | undefined)?.action === "encrypt") encrypted += 1;
+      if (memory.consent.retentionUntil && new Date(memory.consent.retentionUntil).getTime() <= now.getTime()) retentionExpired += 1;
+      if (memory.consent.deleteOnRequest) deleteOnRequest += 1;
+    }
+    const auditByType: Record<string, number> = {};
+    for (const event of this.auditEvents) auditByType[event.type] = (auditByType[event.type] ?? 0) + 1;
+    return {
+      generatedAt: now.toISOString(),
+      totals: { memories: memories.length, auditEvents: this.auditEvents.length, brains: this.brains.size, sources: this.sources.size },
+      consent,
+      encrypted,
+      retentionExpired,
+      deleteOnRequest,
+      auditByType,
+      risks: [
+        ...(retentionExpired ? [`${retentionExpired} memories are past retention and should be archived or deleted.`] : []),
+        ...(memories.some((memory) => memory.consent.visibility === "public" && memory.trust < 0.5) ? ["Low-trust public memories require operator review."] : [])
+      ]
+    };
   }
 
   metricsReport(): MetricsReport {
@@ -519,6 +712,42 @@ export class MemoryService {
     return this.maintenance.users[userId];
   }
 
+  private ensureScopedAccess(input: MemoryInput): void {
+    if (input.sourceId) {
+      const source = this.sources.get(input.sourceId);
+      if (!source) throw new Error(`Source not found: ${input.sourceId}`);
+      if (input.brainId && source.brainId !== input.brainId) throw new Error(`Source ${input.sourceId} is not part of brain ${input.brainId}`);
+    }
+    if (input.brainId && !this.brains.has(input.brainId)) throw new Error(`Brain not found: ${input.brainId}`);
+    if (input.agentId) {
+      const agent = this.agents.get(input.agentId);
+      if (agent && input.brainId && !agent.brainIds.includes(input.brainId) && !agent.permissions.includes("admin")) {
+        throw new Error(`Agent ${input.agentId} cannot write to brain ${input.brainId}`);
+      }
+    }
+  }
+
+  private recordAudit(type: AuditEvent["type"], event: Partial<AuditEvent>): AuditEvent {
+    const saved: AuditEvent = {
+      id: `audit_${contentHash(`${type}:${Date.now()}:${this.auditEvents.length}`).slice(2)}`,
+      type,
+      timestamp: new Date().toISOString(),
+      ...event
+    };
+    this.auditEvents.push(saved);
+    for (const webhook of this.webhooks.values()) {
+      if (webhook.disabledAt || !webhook.events.includes(type)) continue;
+      this.webhookDeliveries.push({
+        id: `delivery_${contentHash(`${webhook.id}:${saved.id}`).slice(2)}`,
+        webhookId: webhook.id,
+        eventId: saved.id,
+        status: "queued",
+        attempts: 0
+      });
+    }
+    return saved;
+  }
+
   private load(): void {
     const raw = this.persistence?.load();
     if (!raw) return;
@@ -543,6 +772,14 @@ export class MemoryService {
     this.domainEvaluations = raw.domainEvaluations ?? [];
     this.entities.import(raw.entityRecords ?? []);
     this.trainingSamples = raw.trainingSamples ?? [];
+    this.brains = new Map((raw.brains ?? []).map((brain) => [brain.id, brain]));
+    this.sources = new Map((raw.sources ?? []).map((source) => [source.id, source]));
+    this.agents = new Map((raw.agents ?? []).map((agent) => [agent.id, agent]));
+    this.personas = new Map((raw.personas ?? []).map((persona) => [persona.id, persona]));
+    this.auditEvents = raw.auditEvents ?? [];
+    this.webhooks = new Map((raw.webhooks ?? []).map((webhook) => [webhook.id, webhook]));
+    this.webhookDeliveries = raw.webhookDeliveries ?? [];
+    this.marketplaceModules = new Map((raw.marketplaceModules ?? []).map((module) => [module.id, module]));
     this.store.import(raw.memories ?? []);
     for (const memory of this.store.list()) this.entities.ingest(memory);
   }
@@ -559,7 +796,15 @@ export class MemoryService {
       identityLinks: this.identities.export(),
       domainEvaluations: this.domainEvaluations,
       entityRecords: this.entities.export(),
-      trainingSamples: this.trainingSamples
+      trainingSamples: this.trainingSamples,
+      brains: [...this.brains.values()],
+      sources: [...this.sources.values()],
+      agents: [...this.agents.values()],
+      personas: [...this.personas.values()],
+      auditEvents: this.auditEvents,
+      webhooks: [...this.webhooks.values()],
+      webhookDeliveries: this.webhookDeliveries,
+      marketplaceModules: [...this.marketplaceModules.values()]
     };
     this.persistence.save(payload);
   }

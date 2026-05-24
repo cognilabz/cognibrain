@@ -133,6 +133,46 @@ switch (command) {
     console.log(JSON.stringify(service.graph(userId), null, 2));
     break;
   }
+  case "graph-path": {
+    const [from, to] = args;
+    if (!from || !to) fail("Usage: memctl graph-path <from-entity-or-node> <to-entity-or-node>");
+    console.log(JSON.stringify(service.graphPaths(from, to, { userId, maxDepth: Number(process.env.MEMORY_GRAPH_DEPTH ?? 3) }), null, 2));
+    break;
+  }
+  case "graph-query": {
+    const query = args.join(" ");
+    if (!query) fail("Usage: memctl graph-query <query>");
+    console.log(JSON.stringify(service.graphQuery(query, userId), null, 2));
+    break;
+  }
+  case "infer": {
+    console.log(JSON.stringify(service.runInference(), null, 2));
+    break;
+  }
+  case "brain-create": {
+    const [name, visibility = "private"] = args;
+    if (!name || !["private", "team", "org", "public"].includes(visibility)) fail("Usage: memctl brain-create <name> [private|team|org|public]");
+    console.log(JSON.stringify(service.createBrain({ name, ownerUserId: userId, orgId: process.env.MEMORY_ORG_ID, visibility: visibility as "private" | "team" | "org" | "public" }), null, 2));
+    break;
+  }
+  case "brains": {
+    console.log(JSON.stringify(service.listBrains(), null, 2));
+    break;
+  }
+  case "source-create": {
+    const [brainId, name, kind = "manual"] = args;
+    if (!brainId || !name || !["manual", "chat", "code", "docs", "calendar", "connector", "import"].includes(kind)) fail("Usage: memctl source-create <brain-id> <name> [manual|chat|code|docs|calendar|connector|import]");
+    console.log(JSON.stringify(service.createSource({ brainId, name, kind: kind as "manual" | "chat" | "code" | "docs" | "calendar" | "connector" | "import" }), null, 2));
+    break;
+  }
+  case "events": {
+    console.log(JSON.stringify(service.eventFeed(), null, 2));
+    break;
+  }
+  case "compliance": {
+    console.log(JSON.stringify(service.complianceReport(), null, 2));
+    break;
+  }
   case "lifecycle-preview": {
     console.log(JSON.stringify(service.lifecyclePreview(userId), null, 2));
     break;
@@ -146,7 +186,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|graph|lifecycle-preview|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|graph|graph-path|graph-query|infer|brain-create|brains|source-create|events|compliance|lifecycle-preview|export|delete-user> ...");
 }
 
 function fail(message: string): never {

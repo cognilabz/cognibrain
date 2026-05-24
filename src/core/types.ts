@@ -8,7 +8,9 @@ export type RelationType =
   | "defines"
   | "extends"
   | "depends_on"
+  | "transitive_depends_on"
   | "works_for"
+  | "advisor_of"
   | "supersedes"
   | "contradicts"
   | "confirmed_by"
@@ -36,6 +38,8 @@ export interface Provenance {
 }
 
 export interface MemoryScope {
+  brainId?: string;
+  sourceId?: string;
   userId: string;
   agentId?: string;
   sessionId?: string;
@@ -76,6 +80,8 @@ export interface TemporalMetadata {
 }
 
 export interface MemoryInput {
+  brainId?: string;
+  sourceId?: string;
   userId: string;
   agentId?: string;
   sessionId?: string;
@@ -99,6 +105,8 @@ export interface MemoryInput {
 }
 
 export interface Memory {
+  brainId?: string;
+  sourceId?: string;
   id: string;
   userId: string;
   agentId?: string;
@@ -130,6 +138,8 @@ export interface Memory {
 }
 
 export interface SearchOptions {
+  brainId?: string;
+  sourceId?: string;
   userId: string;
   agentId?: string;
   sessionId?: string;
@@ -156,6 +166,8 @@ export interface SearchOptions {
     tags?: string[];
     minTrust?: number;
   };
+  graphDepth?: number;
+  relationTypes?: RelationType[];
 }
 
 export interface SearchResult {
@@ -301,6 +313,128 @@ export interface GraphReport {
     validFrom?: Date | string;
     validUntil?: Date | string;
   }>;
+}
+
+export interface Brain {
+  id: string;
+  name: string;
+  ownerUserId: string;
+  orgId?: string;
+  visibility: "private" | "team" | "org" | "public";
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  consentRequired?: boolean;
+}
+
+export interface MemorySource {
+  id: string;
+  brainId: string;
+  name: string;
+  kind: "manual" | "chat" | "code" | "docs" | "calendar" | "connector" | "import";
+  uri?: string;
+  defaultConsent?: Partial<ConsentPolicy>;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface AgentRegistration {
+  id: string;
+  name: string;
+  namespace: string;
+  brainIds: string[];
+  permissions: Array<"read" | "write" | "share" | "admin">;
+  personaId?: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface PersonaProfile {
+  id: string;
+  label: string;
+  summaryStyle: "concise" | "descriptive" | "narrative";
+  retrievalWeights?: Partial<RetrievalWeights>;
+  privacyDefault?: ConsentVisibility;
+  domain?: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface AuditEvent {
+  id: string;
+  type: "memory.write" | "memory.update" | "memory.delete" | "memory.share" | "extract.run" | "reflect.run" | "search.run" | "webhook.register" | "marketplace.install" | "inference.run";
+  actorId?: string;
+  userId?: string;
+  brainId?: string;
+  sourceId?: string;
+  memoryId?: string;
+  timestamp: Date | string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface WebhookRegistration {
+  id: string;
+  url: string;
+  events: AuditEvent["type"][];
+  secretRef?: string;
+  createdAt: Date | string;
+  disabledAt?: Date | string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  webhookId: string;
+  eventId: string;
+  status: "queued" | "delivered" | "failed";
+  attempts: number;
+  nextAttemptAt?: Date | string;
+  lastError?: string;
+}
+
+export interface MarketplaceModule {
+  id: string;
+  kind: "connector" | "domain" | "persona" | "retrieval_profile";
+  name: string;
+  version: string;
+  description: string;
+  installState?: "available" | "installed";
+  manifest: Record<string, unknown>;
+}
+
+export interface GraphPath {
+  nodes: Array<{ id: string; kind: "memory" | "entity"; label: string; memoryId?: string }>;
+  edges: Array<{ from: string; to: string; type: RelationType | "mentions"; confidence: number; memoryId?: string }>;
+  score: number;
+  explanation: string[];
+}
+
+export interface GraphQueryResult {
+  query: string;
+  matches: Array<{ memoryId: string; content: string; relation?: MemoryRelation; entities: string[]; trust: number }>;
+  warnings: string[];
+}
+
+export interface InferenceRule {
+  id: string;
+  label: string;
+  when: { left: RelationType; right: RelationType };
+  then: RelationType;
+  confidence?: number;
+}
+
+export interface InferenceReport {
+  rulesEvaluated: number;
+  inferred: Array<{ memoryId: string; relation: MemoryRelation; ruleId: string; evidence: string[] }>;
+}
+
+export interface ComplianceReport {
+  generatedAt: Date | string;
+  totals: { memories: number; auditEvents: number; brains: number; sources: number };
+  consent: Record<ConsentVisibility, number>;
+  encrypted: number;
+  retentionExpired: number;
+  deleteOnRequest: number;
+  auditByType: Record<string, number>;
+  risks: string[];
 }
 
 export interface DomainEvaluationCase {

@@ -15,7 +15,7 @@
   <a href="#documentation">Documentation</a>
 </p>
 
-cognibrain is a local-first TypeScript memory platform for AI agents that need durable context without opaque recall. It stores memories with source quality, trust, citations, lifecycle state, retrieval evidence, and pluggable persistence so teams can see why an agent remembers something before that memory influences real work.
+cognibrain is a local-first TypeScript memory platform for AI agents that need durable context without opaque recall. It stores memories with source quality, trust, citations, lifecycle state, retrieval evidence, graph paths, brain/source scope, audit events, and pluggable persistence so teams can see why an agent remembers something before that memory influences real work.
 
 The project includes the memory engine, HTTP API, CLI, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
 
@@ -43,7 +43,10 @@ It is designed for teams that care about:
 - a platform/operator split: install and run the platform once, then inspect what the operator lets into context,
 - zero-dependency entity linking from proper nouns, paths, quoted phrases, and compound terms,
 - ranked evidence with citations and trust signals,
+- graph-native path explanation and rule-based inferred relations,
+- brain/source/agent/persona primitives for multi-agent team memory,
 - pluggable storage with atomic JSON snapshots or append-only JSONL audit logs,
+- audit, webhook, marketplace, and compliance surfaces,
 - lifecycle maintenance for stale or contradictory facts,
 - clear integration surfaces for coding agents and AI workflows,
 - reproducible benchmark gates instead of unsupported memory claims.
@@ -230,6 +233,12 @@ Local verification:
 npm run verify
 ```
 
+Next-generation feature verification:
+
+```bash
+npm run verify:nextgen
+```
+
 Certified benchmark gate:
 
 ```bash
@@ -256,7 +265,7 @@ The public market gate is a public-claim comparison, not a vendor-signed rerun. 
 ## Architecture
 
 ```text
-src/core/          Memory model, store, retrieval, reflection, health
+src/core/          Memory model, store, graph reasoning, retrieval, reflection, health
 src/api/           Node HTTP API and service facade
 src/cli/           memctl command line interface
 src/connectors/    Harness hook, MCP handlers, MCP server

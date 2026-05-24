@@ -20,18 +20,23 @@
 - Canonical entity registry, typed graph report, encrypted sensitive-memory mode, and dashboard tuning controls
 - Streamable HTTP MCP server mode for remote/shared clients
 - Pluggable persistence with atomic JSON snapshots and append-only JSONL durable audit mode
+- Next-generation epics and sub-issues mirrored from `nextplan.md`
+- Graph path search, safe graph query, and rule-based inferred relation substrate
+- Brain/source/agent/persona primitives with audit events, webhook queues, marketplace modules, and compliance reports
+- `verify:nextgen` self-test loop for graph, inference, multi-tenant audit, webhook, compliance, and marketplace behavior
 
 ## Next
 
-1. Full answer-generation benchmark layer for LoCoMo.
-2. Full answer-generation benchmark layer for LongMemEval.
-3. Full answer-generation benchmark layer for BEAM.
-4. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
-5. Improve LoCoMo category 3 multi-hop evidence recall.
-6. Import more directly comparable vendor artifacts and normalize per-question outputs.
-7. SQLite and Postgres adapters behind the persistence boundary.
-8. Dashboard result browser for historical benchmark artifacts.
-9. Connector packages for Claude Code, Codex, Copilot, and Cursor.
+1. Complete the linked next-generation sub-issues under epics #26-#38.
+2. Full answer-generation benchmark layer for LoCoMo.
+3. Full answer-generation benchmark layer for LongMemEval.
+4. Full answer-generation benchmark layer for BEAM.
+5. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
+6. Improve LoCoMo category 3 multi-hop evidence recall.
+7. Import more directly comparable vendor artifacts and normalize per-question outputs.
+8. SQLite and Postgres adapters behind the persistence boundary.
+9. Dashboard result browser for historical benchmark artifacts.
+10. Connector packages for Claude Code, Codex, Copilot, and Cursor.
 
 ## Completion Bar
 

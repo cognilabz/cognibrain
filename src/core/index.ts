@@ -10,3 +10,4 @@ export * from "./domain";
 export * from "./identity";
 export * from "./evaluation";
 export * from "./entityRegistry";
+export * from "./graphReasoning";

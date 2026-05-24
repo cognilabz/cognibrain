@@ -7,7 +7,26 @@ const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
 const dreamCheckIntervalMinutes = Number(process.env.MEMORY_DREAM_CHECK_INTERVAL_MINUTES ?? 15);
 
+const relationTypeSchema = z.enum([
+  "mentions",
+  "calls",
+  "imports",
+  "defines",
+  "extends",
+  "depends_on",
+  "transitive_depends_on",
+  "works_for",
+  "advisor_of",
+  "supersedes",
+  "contradicts",
+  "confirmed_by",
+  "suggested_by",
+  "executed_by"
+]);
+
 const memoryInputSchema = z.object({
+  brainId: z.string().optional(),
+  sourceId: z.string().optional(),
   userId: z.string().min(1),
   agentId: z.string().optional(),
   sessionId: z.string().optional(),
@@ -34,24 +53,15 @@ const memoryInputSchema = z.object({
   relations: z
     .array(
       z.object({
-        type: z.enum([
-          "mentions",
-          "calls",
-          "imports",
-          "defines",
-          "extends",
-          "depends_on",
-          "works_for",
-          "supersedes",
-          "contradicts",
-          "confirmed_by",
-          "suggested_by",
-          "executed_by"
-        ]),
+        type: relationTypeSchema,
+        sourceEntity: z.string().optional(),
         targetId: z.string().optional(),
         targetEntity: z.string().optional(),
+        direction: z.enum(["out", "in", "undirected"]).optional(),
         confidence: z.number().min(0).max(1).optional(),
-        evidence: z.string().optional()
+        evidence: z.string().optional(),
+        validFrom: z.string().optional(),
+        validUntil: z.string().optional()
       })
     )
     .optional(),
@@ -69,6 +79,8 @@ const memoryInputSchema = z.object({
 });
 
 const searchSchema = z.object({
+  brainId: z.string().optional(),
+  sourceId: z.string().optional(),
   userId: z.string().min(1),
   agentId: z.string().optional(),
   sessionId: z.string().optional(),
@@ -83,7 +95,9 @@ const searchSchema = z.object({
   includePrivate: z.boolean().optional(),
   includeLinkedIdentities: z.boolean().optional(),
   profileId: z.string().optional(),
-  weights: z.record(z.number()).optional()
+  weights: z.record(z.number()).optional(),
+  graphDepth: z.number().int().positive().max(8).optional(),
+  relationTypes: z.array(relationTypeSchema).optional()
 });
 
 const extractSchema = z.object({
@@ -149,6 +163,59 @@ const identityLinkSchema = z.object({
   consent: z.enum(["user", "org"]).optional()
 });
 
+const brainSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1),
+  ownerUserId: z.string().min(1),
+  orgId: z.string().optional(),
+  visibility: z.enum(["private", "team", "org", "public"]),
+  consentRequired: z.boolean().optional()
+});
+
+const sourceSchema = z.object({
+  id: z.string().optional(),
+  brainId: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.enum(["manual", "chat", "code", "docs", "calendar", "connector", "import"]),
+  uri: z.string().optional(),
+  defaultConsent: z.record(z.unknown()).optional()
+});
+
+const agentSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  namespace: z.string().min(1),
+  brainIds: z.array(z.string()),
+  permissions: z.array(z.enum(["read", "write", "share", "admin"])),
+  personaId: z.string().optional()
+});
+
+const personaSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  summaryStyle: z.enum(["concise", "descriptive", "narrative"]),
+  retrievalWeights: z.record(z.number()).optional(),
+  privacyDefault: z.enum(["private", "user", "org", "public"]).optional(),
+  domain: z.string().optional()
+});
+
+const webhookSchema = z.object({
+  id: z.string().optional(),
+  url: z.string().url(),
+  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "extract.run", "reflect.run", "search.run", "webhook.register", "marketplace.install", "inference.run"])),
+  secretRef: z.string().optional()
+});
+
+const marketplaceModuleSchema = z.object({
+  id: z.string().min(1),
+  kind: z.enum(["connector", "domain", "persona", "retrieval_profile"]),
+  name: z.string().min(1),
+  version: z.string().min(1),
+  description: z.string(),
+  installState: z.enum(["available", "installed"]).optional(),
+  manifest: z.record(z.unknown())
+});
+
 export const server = createServer(async (request, response) => {
   try {
     await route(request, response);
@@ -186,6 +253,96 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/graph") {
     send(response, 200, defaultService.graph(url.searchParams.get("userId") ?? undefined));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/graph/paths") {
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
+    if (!from || !to) {
+      send(response, 400, { error: "from and to are required" });
+      return;
+    }
+    send(response, 200, defaultService.graphPaths(from, to, {
+      userId: url.searchParams.get("userId") ?? undefined,
+      maxDepth: url.searchParams.get("maxDepth") ? Number(url.searchParams.get("maxDepth")) : undefined
+    }));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/graph/query") {
+    const body = z.object({ query: z.string().min(1), userId: z.string().optional() }).parse(await json(request));
+    send(response, 200, defaultService.graphQuery(body.query, body.userId));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/graph/infer") {
+    send(response, 202, defaultService.runInference());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/brains") {
+    send(response, 200, defaultService.listBrains());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/brains") {
+    send(response, 201, defaultService.createBrain(brainSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/sources") {
+    send(response, 200, defaultService.listSources(url.searchParams.get("brainId") ?? undefined));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/sources") {
+    send(response, 201, defaultService.createSource(sourceSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/agents") {
+    send(response, 200, defaultService.listAgents());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/agents") {
+    send(response, 201, defaultService.registerAgent(agentSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/personas") {
+    send(response, 200, defaultService.listPersonas());
+    return;
+  }
+
+  if (method === "PUT" && url.pathname === "/personas") {
+    send(response, 200, defaultService.setPersona(personaSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/events") {
+    send(response, 200, defaultService.eventFeed());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/webhooks") {
+    send(response, 201, defaultService.registerWebhook(webhookSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/marketplace") {
+    send(response, 200, defaultService.listMarketplaceModules());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/marketplace/install") {
+    send(response, 202, defaultService.installMarketplaceModule(marketplaceModuleSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/compliance") {
+    send(response, 200, defaultService.complianceReport());
     return;
   }
 
@@ -263,6 +420,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (method === "POST" && url.pathname === "/feedback") {
     const body = feedbackSchema.parse(await json(request));
     send(response, 202, serialize(defaultService.feedback(body)));
+    return;
+  }
+
+  if (method === "POST" && parts[0] === "memories" && parts[2] === "promote") {
+    const body = z.object({ orgId: z.string().min(1) }).parse(await json(request));
+    send(response, 202, serialize(defaultService.promoteSharedMemory(parts[1], body.orgId)));
     return;
   }
 

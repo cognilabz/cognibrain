@@ -27,6 +27,8 @@ Memory writes can include scope, consent, relations, and temporal metadata:
 
 ```json
 {
+  "brainId": "team-brain",
+  "sourceId": "engineering-notes",
   "userId": "dev",
   "sessionId": "session-42",
   "appId": "codex",
@@ -90,6 +92,25 @@ Search accepts optional scope and retrieval-weight overrides:
 
 Results include explanations, graph path hints, and context-verification decisions when available.
 
+## Brains, Sources, Agents, And Personas
+
+```bash
+curl -X POST http://localhost:8787/brains \
+  -H "content-type: application/json" \
+  -d '{"name":"Team Brain","ownerUserId":"dev","orgId":"team-a","visibility":"team"}'
+curl -X POST http://localhost:8787/sources \
+  -H "content-type: application/json" \
+  -d '{"brainId":"team-brain","name":"Engineering Notes","kind":"docs"}'
+curl -X POST http://localhost:8787/agents \
+  -H "content-type: application/json" \
+  -d '{"id":"codex","name":"Codex","namespace":"coding","brainIds":["team-brain"],"permissions":["read","write"]}'
+curl -X PUT http://localhost:8787/personas \
+  -H "content-type: application/json" \
+  -d '{"id":"researcher","label":"Researcher","summaryStyle":"descriptive","privacyDefault":"private"}'
+```
+
+Brains are logical memory databases. Sources are content repositories inside a brain. Agents register namespaces and permissions before writing scoped memories. Personas carry retrieval, summary, and privacy defaults that connectors can apply.
+
 ## Feedback
 
 ```bash
@@ -125,12 +146,33 @@ curl -X POST http://localhost:8787/identity-links \
   -d '{"primaryUserId":"device-b","linkedUserId":"device-a","consentToken":"user-approved-token"}'
 curl http://localhost:8787/timeline/dev
 curl "http://localhost:8787/graph?userId=dev"
+curl "http://localhost:8787/graph/paths?userId=dev&from=atlas&to=redisadapter&maxDepth=3"
+curl -X POST http://localhost:8787/graph/query \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","query":"MATCH (a)-[:depends_on]->(b) WHERE trust>0.8"}'
+curl -X POST http://localhost:8787/graph/infer
 curl -X POST http://localhost:8787/lifecycle/preview \
   -H "content-type: application/json" \
   -d '{"userId":"dev","policy":{"archiveAfterDays":30}}'
 ```
 
-Identity links require an explicit consent token and store only a hash of that token. Timelines expose event time, validity windows, supersession metadata, and day/week/month period groupings. The graph endpoint exposes canonical entities, aliases, and typed relation edges. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
+Identity links require an explicit consent token and store only a hash of that token. Timelines expose event time, validity windows, supersession metadata, and day/week/month period groupings. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, safe graph-query matches, and rule-based inferred relations. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
+
+## Events, Webhooks, Marketplace, And Compliance
+
+```bash
+curl -X POST http://localhost:8787/webhooks \
+  -H "content-type: application/json" \
+  -d '{"url":"https://example.invalid/memory","events":["memory.write","inference.run"]}'
+curl http://localhost:8787/events
+curl -X POST http://localhost:8787/marketplace/install \
+  -H "content-type: application/json" \
+  -d '{"id":"persona-researcher","kind":"persona","name":"Researcher","version":"1.0.0","description":"Citation-heavy defaults","manifest":{"id":"researcher","label":"Researcher","summaryStyle":"descriptive"}}'
+curl http://localhost:8787/marketplace
+curl http://localhost:8787/compliance
+```
+
+Every write/update/delete/search/extract/reflect/share/inference operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Compliance reports summarize storage scope, consent, retention, delete-on-request, encryption metadata, and audit counts.
 
 ## Reflection
 
@@ -188,3 +230,11 @@ curl -X POST http://localhost:8787/domain/evaluate
 ```
 
 When the service is configured with a domain module, this endpoint runs the module's application-level fixtures and records a benchmark metric event.
+
+## Nextgen Verification
+
+```bash
+npm run verify:nextgen
+```
+
+This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph query, multi-tenant audit, webhook event feeds, compliance retention, and marketplace persona installation.

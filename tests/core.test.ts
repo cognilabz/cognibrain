@@ -9,7 +9,7 @@ import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { MemoryService } from "../src/api/service";
 import { CognibrainClient } from "../src/sdk/client";
-import { AppendOnlyLogPersistenceAdapter, CassandraCompatiblePersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, SQLitePersistenceAdapter, sqliteAvailable } from "../src/api/persistence";
+import { AppendOnlyLogPersistenceAdapter, CassandraCompatiblePersistenceAdapter, CassandraRemotePersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, PostgresRemotePersistenceAdapter, SQLitePersistenceAdapter, createPersistenceFromEnv, sqliteAvailable } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
 import { buildLeaderboardArtifact, validateLeaderboardArtifact } from "../src/eval/leaderboard";
 import { publishLeaderboardArtifact } from "../src/eval/publishLeaderboard";
@@ -597,6 +597,12 @@ describe("TypeScript memory core", () => {
     expect(report.learnedRules.some((rule) => rule.kind === "translation")).toBe(true);
     expect(report.memories[0].metadata.extraction).toMatchObject({ stage: "provider" });
     expect(report.enrichmentCandidates.some((candidate) => candidate.entity === "atlas")).toBe(true);
+    const blockedEnrichment = service.runEntityEnrichment({ userId: "u1", entity: "atlas" });
+    expect(blockedEnrichment.status).toBe("blocked");
+    const appliedEnrichment = service.runEntityEnrichment({ userId: "u1", entity: "atlas", approveExternal: true, sourceUri: "https://example.com/atlas" });
+    expect(appliedEnrichment.status).toBe("applied");
+    expect(appliedEnrichment.memories[0].tags).toContain("external-enrichment");
+    expect(appliedEnrichment.memories[0].metadata.enrichment).toMatchObject({ entity: "atlas", sourceUri: "https://example.com/atlas" });
 
     service.add({
       userId: "u1",
@@ -1162,6 +1168,40 @@ describe("TypeScript memory core", () => {
     }
   });
 
+  it("exposes production remote persistence driver capabilities", () => {
+    const postgresRemote = new PostgresRemotePersistenceAdapter("postgres://example.invalid/cognibrain");
+    const cockroachRemote = new PostgresRemotePersistenceAdapter("postgres://example.invalid:26257/cognibrain", { cockroach: true });
+    const cassandraRemote = new CassandraRemotePersistenceAdapter("127.0.0.1", { keyspace: "cognibrain" });
+    expect(postgresRemote.capabilities()).toMatchObject({ distributedReady: true, transactional: true, appendOnly: true, sql: true, replication: "logical" });
+    expect(cockroachRemote.kind).toBe("cockroach-remote");
+    expect(cassandraRemote.capabilities()).toMatchObject({ distributedReady: true, appendOnly: true, replication: "quorum", sharding: "range" });
+    const status = new MemoryService().storageStatus();
+    expect(status.adapters.map((adapter) => adapter.kind)).toEqual(expect.arrayContaining(["postgres-remote", "cockroach-remote", "cassandra-remote"]));
+  });
+
+  it("selects remote persistence drivers from deployment env", () => {
+    const previousBackend = process.env.MEMORY_STORAGE_BACKEND;
+    const previousPostgresUrl = process.env.MEMORY_POSTGRES_URL;
+    const previousContactPoint = process.env.MEMORY_CASSANDRA_CONTACT_POINT;
+    try {
+      process.env.MEMORY_STORAGE_BACKEND = "postgres-remote";
+      process.env.MEMORY_POSTGRES_URL = "postgres://example.invalid/cognibrain";
+      expect(createPersistenceFromEnv().kind).toBe("postgres-remote");
+      process.env.MEMORY_STORAGE_BACKEND = "cockroach-remote";
+      expect(createPersistenceFromEnv().kind).toBe("cockroach-remote");
+      process.env.MEMORY_STORAGE_BACKEND = "cassandra-remote";
+      process.env.MEMORY_CASSANDRA_CONTACT_POINT = "127.0.0.1";
+      expect(createPersistenceFromEnv().kind).toBe("cassandra-remote");
+    } finally {
+      if (previousBackend === undefined) delete process.env.MEMORY_STORAGE_BACKEND;
+      else process.env.MEMORY_STORAGE_BACKEND = previousBackend;
+      if (previousPostgresUrl === undefined) delete process.env.MEMORY_POSTGRES_URL;
+      else process.env.MEMORY_POSTGRES_URL = previousPostgresUrl;
+      if (previousContactPoint === undefined) delete process.env.MEMORY_CASSANDRA_CONTACT_POINT;
+      else process.env.MEMORY_CASSANDRA_CONTACT_POINT = previousContactPoint;
+    }
+  });
+
   it("supports next-gen graph paths, activation, exports, graph queries, and configurable inference rules", () => {
     const service = new MemoryService();
     service.add({
@@ -1667,6 +1707,26 @@ describe("TypeScript memory core", () => {
       expect(feedback.record.payload?.feedbackAdapter).toBe("accepted_change");
       expect(feedback.updatedMemories[0].trust).toBeGreaterThan(initialTrust);
       expect(feedback.feedbackMemory.tags).toContain("connector-feedback");
+      const acceptedTelemetry = service.recordConnectorTelemetry({
+        connectorId: "unit-chat-writeback",
+        harnessId: "cursor",
+        userId: "u1",
+        kind: "accepted_suggestion",
+        content: "Cursor accepted the memory-backed summary.",
+        memoryIds: [memory.id],
+        externalId: "telemetry-1"
+      });
+      expect(acceptedTelemetry.record.payload?.telemetryKind).toBe("accepted_suggestion");
+      expect(acceptedTelemetry.createdMemories[0].tags).toContain("connector-feedback");
+      const toolTelemetry = service.recordConnectorTelemetry({
+        connectorId: "unit-chat-writeback",
+        harnessId: "codex",
+        userId: "u1",
+        kind: "tool_outcome",
+        command: "npm test",
+        tests: [{ name: "unit", status: "passed" }]
+      });
+      expect(toolTelemetry.createdMemories[0].tags).toContain("harness-action");
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
@@ -1962,8 +2022,11 @@ describe("TypeScript memory core", () => {
 
     const pending = service.requestSharedMemory(privateMemory.id, "org1", "agent-review", "Useful for team support.");
     expect((pending.metadata.shared as { status?: string }).status).toBe("pending");
-    const promoted = service.promoteSharedMemory(privateMemory.id, "org1");
+    service.registerAgent({ id: "agent-readonly", name: "Read Only", namespace: "review", brainIds: [team.id], permissions: ["read"] });
+    expect(() => service.reviewSharedMemory(privateMemory.id, { orgId: "org1", reviewerId: "agent-readonly", decision: "approve" })).toThrow(/cannot review/);
+    const promoted = service.reviewSharedMemory(privateMemory.id, { orgId: "org1", reviewerId: "agent-review", decision: "approve", note: "Approved for hosted support workflow." });
     expect((promoted.metadata.shared as { status?: string }).status).toBe("approved");
+    expect((promoted.metadata.shared as { reviewedBy?: string }).reviewedBy).toBe("agent-review");
 
     const federated = service.federatedSearch({ userId: "member", agentId: "agent-review", orgId: "org1", query: "release escalation", brainIds: [team.id, org.id] });
     expect(federated.searchedBrainIds).toContain(team.id);
@@ -1979,6 +2042,10 @@ describe("TypeScript memory core", () => {
 
     const revoked = service.revokeSharedMemory(privateMemory.id, "agent-review", "No longer approved.");
     expect((revoked.metadata.shared as { status?: string }).status).toBe("revoked");
+    const link = service.linkIdentity("member", "member-device", "consent-token-hosted", "user");
+    expect(link.hashedSubject).not.toContain("consent-token-hosted");
+    service.unlinkIdentity(link.id);
+    expect(service.auditTrail({ type: "memory.consent" }).some((event) => (event.metadata?.resource as string | undefined) === "identity-link")).toBe(true);
     expect(service.auditTrail({ memoryId: privateMemory.id }).some((event) => event.type === "memory.share.revoke")).toBe(true);
   });
 

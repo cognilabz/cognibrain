@@ -75,4 +75,43 @@ describe("cognibrain HTTP API contract", () => {
     const webhook = (await response.json()) as { events: string[] };
     expect(webhook.events).toEqual(["policy.violation", "retention.enforce", "security.key.rotate", "privacy.insights"]);
   });
+
+  it("accepts connector telemetry over HTTP", async () => {
+    const baseUrl = await listen();
+    const response = await fetch(`${baseUrl}/connectors/telemetry`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        connectorId: "official-code",
+        harnessId: "codex",
+        userId: "api-telemetry-user",
+        kind: "accepted_suggestion",
+        content: "Accepted the context pack for the API telemetry contract test."
+      })
+    });
+
+    expect(response.status).toBe(202);
+    const body = (await response.json()) as { record: { payload: { telemetryKind: string; harnessId: string } }; createdMemories: Array<{ tags: string[] }> };
+    expect(body.record.payload).toMatchObject({ telemetryKind: "accepted_suggestion", harnessId: "codex" });
+    expect(body.createdMemories[0]?.tags).toContain("connector-feedback");
+  });
+
+  it("gates entity enrichment over HTTP until external approval is explicit", async () => {
+    const baseUrl = await listen();
+    const response = await fetch(`${baseUrl}/entities/enrich`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "api-entity-user",
+        entity: "atlas",
+        approveExternal: false,
+        sourceUri: "https://example.invalid/atlas"
+      })
+    });
+
+    expect(response.status).toBe(202);
+    const body = (await response.json()) as { status: string; memories: unknown[] };
+    expect(["blocked", "skipped"]).toContain(body.status);
+    expect(body.memories).toEqual([]);
+  });
 });

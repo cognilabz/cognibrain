@@ -7,6 +7,7 @@ import { runLocomoBenchmark } from "../src/eval/locomo";
 import { runLongMemEvalBenchmark } from "../src/eval/longmemeval";
 import { runMarketGate } from "../src/eval/marketGate";
 import { runBeamBenchmark } from "../src/eval/beam";
+import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
 
 describe("self verification benchmark loop", () => {
   it("beats local baselines and satisfies the synthetic token-efficiency gate", () => {
@@ -93,7 +94,13 @@ describe("self verification benchmark loop", () => {
     const competitorsPath = join(dir, "competitors.json");
     const outputPath = join(dir, "market.json");
     const reportShape = {
-      ours: { name: "open-memory-harness", accuracy: 0.9, correct: 9, total: 10 },
+      ours: {
+        name: "open-memory-harness",
+        accuracy: 0.9,
+        correct: 9,
+        total: 10,
+        details: [{ id: "fixture-q1", question: "Which session contains the answer?", passed: true, score: 1, expectedEvidence: ["answer-session"], retrievedEvidence: ["answer-session"] }]
+      },
       baselines: [{ name: "keyword-only", accuracy: 0.7, correct: 7, total: 10 }]
     };
     writeFileSync(
@@ -124,7 +131,16 @@ describe("self verification benchmark loop", () => {
                 accuracy: 0.8,
                 comparable: true,
                 topK: 20,
-                notes: "Fixture uses the same dataset, metric and top-K as the local market gate."
+                notes: "Fixture uses the same dataset, metric and top-K as the local market gate.",
+                questions: [
+                  {
+                    id: "fixture-q1",
+                    passed: true,
+                    score: 1,
+                    expected: ["answer-session"],
+                    retrieved: ["answer-session"]
+                  }
+                ]
               }
             ]
           }
@@ -135,6 +151,8 @@ describe("self verification benchmark loop", () => {
     expect(report.passed).toBe(true);
     expect(report.directMarketComparison.configured).toBe(true);
     expect(report.directMarketComparison.passed).toBe(true);
+    expect(report.directMarketComparison.comparisons[0].questions[0]).toMatchObject({ id: "fixture-q1", matched: true });
+    expect(report.benchmarks.find((item) => item.dataset === "LongMemEval-S")?.questions[0].id).toBe("fixture-q1");
   });
 
   it("treats perfect benchmark ties as saturated without allowing lower ties", () => {
@@ -174,5 +192,46 @@ describe("self verification benchmark loop", () => {
     const lowerTie = runMarketGate({ locomoPath, longMemEvalPath, outputPath });
     expect(lowerTie.passed).toBe(false);
     expect(lowerTie.benchmarks.find((item) => item.dataset === "LongMemEval-S")?.saturated).toBe(false);
+  });
+
+  it("runs external answerer and judge commands for answer-generation artifacts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "open-memory-answer-provider-"));
+    const reportPath = join(dir, "nextgen.json");
+    const providerPath = join(dir, "provider.mjs");
+    const outputPath = join(dir, "answers.json");
+    writeFileSync(
+      reportPath,
+      JSON.stringify({
+        suites: [
+          {
+            id: "external-proof",
+            details: [{ id: "q1", question: "What cache is used?", expected: ["redis"], retrieved: ["Redis backs the cache."] }]
+          }
+        ]
+      })
+    );
+    writeFileSync(
+      providerPath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); if (payload.task === "answer") console.log(JSON.stringify({ answer: "Redis backs the cache." })); else console.log(JSON.stringify({ score: 1, passed: true, reason: "external judge matched redis" })); });`
+    );
+    const previousAnswerer = process.env.MEMORY_BENCHMARK_ANSWERER_COMMAND;
+    const previousAnswererArgs = process.env.MEMORY_BENCHMARK_ANSWERER_ARGS;
+    const previousJudge = process.env.MEMORY_BENCHMARK_JUDGE_COMMAND;
+    const previousJudgeArgs = process.env.MEMORY_BENCHMARK_JUDGE_ARGS;
+    try {
+      process.env.MEMORY_BENCHMARK_ANSWERER_COMMAND = process.execPath;
+      process.env.MEMORY_BENCHMARK_ANSWERER_ARGS = providerPath;
+      process.env.MEMORY_BENCHMARK_JUDGE_COMMAND = process.execPath;
+      process.env.MEMORY_BENCHMARK_JUDGE_ARGS = providerPath;
+      const artifact = runAnswerGenerationBenchmark({ reports: [reportPath], outputPath });
+      expect(artifact.datasets[0].questions[0].generatedAnswer).toBe("Redis backs the cache.");
+      expect(artifact.datasets[0].questions[0].judge.reason).toBe("external judge matched redis");
+      expect(artifact.summary.meanScore).toBe(1);
+    } finally {
+      process.env.MEMORY_BENCHMARK_ANSWERER_COMMAND = previousAnswerer;
+      process.env.MEMORY_BENCHMARK_ANSWERER_ARGS = previousAnswererArgs;
+      process.env.MEMORY_BENCHMARK_JUDGE_COMMAND = previousJudge;
+      process.env.MEMORY_BENCHMARK_JUDGE_ARGS = previousJudgeArgs;
+    }
   });
 });

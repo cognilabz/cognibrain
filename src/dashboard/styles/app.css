@@ -1022,7 +1022,7 @@ textarea:focus-visible {
   outline-offset: 3px;
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 1320px) {
   .app-topbar {
     grid-template-columns: 1fr auto;
   }

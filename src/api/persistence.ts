@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
@@ -395,6 +396,157 @@ export class CassandraCompatiblePersistenceAdapter implements MemoryPersistenceA
   }
 }
 
+export class PostgresRemotePersistenceAdapter implements MemoryPersistenceAdapter {
+  readonly kind: string;
+
+  constructor(
+    private readonly url: string,
+    private readonly options: { command?: string; cockroach?: boolean } = {}
+  ) {
+    this.kind = options.cockroach ? "cockroach-remote" : "postgres-remote";
+  }
+
+  load(): PersistedMemoryFile | undefined {
+    this.ensureSchema();
+    const encoded = this.psql("select payload_base64 from cognibrain_snapshots order by id desc limit 1").trim();
+    return encoded ? (JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as PersistedMemoryFile) : undefined;
+  }
+
+  save(payload: PersistedMemoryFile): void {
+    this.ensureSchema();
+    const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
+    this.psql(`begin; insert into cognibrain_snapshots(version, payload_base64) values (${payload.version}, '${encoded}'); insert into cognibrain_persistence_events(event_type, payload_base64) values ('snapshot', '${encoded}'); commit;`);
+  }
+
+  capabilities(): PersistenceCapabilities {
+    return {
+      durable: true,
+      distributedReady: true,
+      transactional: true,
+      appendOnly: true,
+      sql: true,
+      encryptedAtRest: Boolean(process.env.MEMORY_ENCRYPTION_KEY),
+      migrationSafe: true,
+      replication: "logical",
+      sharding: this.options.cockroach ? "external" : "hash",
+      notes: [
+        `${this.options.cockroach ? "CockroachDB" : "Postgres"} remote driver using psql-compatible wire protocol and transactional append-only snapshot tables.`,
+        "Set MEMORY_STORAGE_BACKEND=postgres-remote or cockroach-remote and MEMORY_POSTGRES_URL for production deployments.",
+        "The synchronous persistence boundary shells through psql so local CLI/API startup remains zero-dependency."
+      ]
+    };
+  }
+
+  private ensureSchema(): void {
+    this.psql(`
+      create table if not exists cognibrain_snapshots (
+        id bigserial primary key,
+        created_at timestamptz not null default now(),
+        version integer not null,
+        payload_base64 text not null
+      );
+      create table if not exists cognibrain_persistence_events (
+        id bigserial primary key,
+        created_at timestamptz not null default now(),
+        event_type text not null,
+        payload_base64 text not null
+      );
+      create index if not exists idx_cognibrain_snapshots_created_at on cognibrain_snapshots(created_at);
+      create index if not exists idx_cognibrain_events_created_at on cognibrain_persistence_events(created_at);
+    `);
+  }
+
+  private psql(sql: string): string {
+    return execFileSync(this.options.command ?? process.env.MEMORY_PSQL_COMMAND ?? "psql", [this.url, "-v", "ON_ERROR_STOP=1", "-At", "-c", sql], {
+      encoding: "utf8",
+      timeout: Number(process.env.MEMORY_STORAGE_COMMAND_TIMEOUT_MS ?? 10_000),
+      maxBuffer: 10_000_000
+    });
+  }
+}
+
+export class CassandraRemotePersistenceAdapter implements MemoryPersistenceAdapter {
+  readonly kind = "cassandra-remote";
+
+  constructor(
+    private readonly contactPoint: string,
+    private readonly options: { command?: string; keyspace?: string; args?: string[] } = {}
+  ) {}
+
+  load(): PersistedMemoryFile | undefined {
+    this.ensureSchema();
+    const output = this.cql(`select payload_base64 from ${this.keyspace()}.cognibrain_snapshots limit 1;`).trim();
+    const encoded = output.split(/\r?\n/).find((line) => /^[A-Za-z0-9+/=]+$/.test(line.trim()))?.trim();
+    return encoded ? (JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as PersistedMemoryFile) : undefined;
+  }
+
+  save(payload: PersistedMemoryFile): void {
+    this.ensureSchema();
+    const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
+    const partition = partitionKey(payload, Math.max(1, Number(process.env.MEMORY_STORAGE_SHARDS ?? 1))).replace(/'/g, "''");
+    const clustering = new Date().toISOString();
+    this.cql(`insert into ${this.keyspace()}.cognibrain_snapshots(partition_key, clustering_key, version, payload_base64) values ('${partition}', '${clustering}', ${payload.version}, '${encoded}'); insert into ${this.keyspace()}.cognibrain_persistence_events(partition_key, clustering_key, event_type, payload_base64) values ('${partition}', '${clustering}#event', 'snapshot', '${encoded}');`);
+  }
+
+  capabilities(): PersistenceCapabilities {
+    return {
+      durable: true,
+      distributedReady: true,
+      transactional: false,
+      appendOnly: true,
+      sql: false,
+      encryptedAtRest: Boolean(process.env.MEMORY_ENCRYPTION_KEY),
+      migrationSafe: true,
+      replication: "quorum",
+      sharding: "range",
+      notes: [
+        "Cassandra remote driver using cqlsh-compatible CQL with append-only wide-column snapshot tables.",
+        "Set MEMORY_STORAGE_BACKEND=cassandra-remote, MEMORY_CASSANDRA_CONTACT_POINT and MEMORY_CASSANDRA_KEYSPACE for production deployments.",
+        "Consistency, replication and sharding are delegated to the configured Cassandra cluster."
+      ]
+    };
+  }
+
+  private ensureSchema(): void {
+    this.cql(`
+      create keyspace if not exists ${this.keyspace()} with replication = ${this.replicationClause()};
+      create table if not exists ${this.keyspace()}.cognibrain_snapshots (
+        partition_key text,
+        clustering_key text,
+        version int,
+        payload_base64 text,
+        primary key (partition_key, clustering_key)
+      ) with clustering order by (clustering_key desc);
+      create table if not exists ${this.keyspace()}.cognibrain_persistence_events (
+        partition_key text,
+        clustering_key text,
+        event_type text,
+        payload_base64 text,
+        primary key (partition_key, clustering_key)
+      ) with clustering order by (clustering_key desc);
+    `);
+  }
+
+  private cql(cql: string): string {
+    return execFileSync(this.options.command ?? process.env.MEMORY_CQLSH_COMMAND ?? "cqlsh", [this.contactPoint, ...(this.options.args ?? cqlshArgsFromEnv()), "-e", cql], {
+      encoding: "utf8",
+      timeout: Number(process.env.MEMORY_STORAGE_COMMAND_TIMEOUT_MS ?? 10_000),
+      maxBuffer: 10_000_000
+    });
+  }
+
+  private keyspace(): string {
+    return (this.options.keyspace ?? process.env.MEMORY_CASSANDRA_KEYSPACE ?? "cognibrain").replace(/[^a-zA-Z0-9_]/g, "");
+  }
+
+  private replicationClause(): string {
+    if (process.env.MEMORY_CASSANDRA_REPLICATION_CQL) return process.env.MEMORY_CASSANDRA_REPLICATION_CQL;
+    const strategy = process.env.MEMORY_CASSANDRA_REPLICATION_STRATEGY ?? "SimpleStrategy";
+    const factor = Math.max(1, Number(process.env.MEMORY_CASSANDRA_REPLICATION_FACTOR ?? 3));
+    return `{'class': '${strategy.replace(/'/g, "''")}', 'replication_factor': ${factor}}`;
+  }
+}
+
 export function createPersistenceFromEnv(defaultPath = ".memory-harness.json"): MemoryPersistenceAdapter {
   const backend = process.env.MEMORY_STORAGE_BACKEND ?? "json";
   if (backend === "jsonl" || backend === "append-only" || backend === "log") {
@@ -403,8 +555,17 @@ export function createPersistenceFromEnv(defaultPath = ".memory-harness.json"): 
   if (backend === "sqlite" || backend === "sql") {
     return new SQLitePersistenceAdapter(process.env.MEMORY_SQLITE_PATH ?? defaultPath.replace(/\.json$/i, ".sqlite"));
   }
+  if ((backend === "postgres-remote" || backend === "postgres-production") && process.env.MEMORY_POSTGRES_URL) {
+    return new PostgresRemotePersistenceAdapter(process.env.MEMORY_POSTGRES_URL);
+  }
+  if ((backend === "cockroach-remote" || backend === "cockroach-production") && process.env.MEMORY_POSTGRES_URL) {
+    return new PostgresRemotePersistenceAdapter(process.env.MEMORY_POSTGRES_URL, { cockroach: true });
+  }
   if (backend === "postgres" || backend === "postgres-compatible" || backend === "cockroach") {
     return new PostgresCompatiblePersistenceAdapter(process.env.MEMORY_POSTGRES_COMPAT_PATH ?? defaultPath.replace(/\.json$/i, ".postgres.json"));
+  }
+  if ((backend === "cassandra-remote" || backend === "cassandra-production") && process.env.MEMORY_CASSANDRA_CONTACT_POINT) {
+    return new CassandraRemotePersistenceAdapter(process.env.MEMORY_CASSANDRA_CONTACT_POINT);
   }
   if (backend === "cassandra" || backend === "cassandra-compatible" || backend === "wide-column") {
     return new CassandraCompatiblePersistenceAdapter(process.env.MEMORY_CASSANDRA_COMPAT_PATH ?? defaultPath.replace(/\.json$/i, ".cassandra.json"));
@@ -472,7 +633,7 @@ function emptyCassandraCompatibleDatabase(): CassandraCompatibleDatabase {
     schemaVersion: 1,
     tables: { snapshots: [], persistence_events: [] },
     replication: {
-      strategy: process.env.MEMORY_CASSANDRA_REPLICATION_STRATEGY ?? "NetworkTopologyStrategy",
+      strategy: process.env.MEMORY_CASSANDRA_REPLICATION_STRATEGY ?? "SimpleStrategy",
       consistency: process.env.MEMORY_CASSANDRA_CONSISTENCY ?? "QUORUM",
       shardCount: Math.max(1, Number(process.env.MEMORY_STORAGE_SHARDS ?? 1))
     }
@@ -485,6 +646,10 @@ function partitionKey(payload: PersistedMemoryFile, shardCount: number): string 
   let hash = 0;
   for (const char of anchor) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
   return `${anchor}#${Math.abs(hash) % shardCount}`;
+}
+
+function cqlshArgsFromEnv(): string[] {
+  return process.env.MEMORY_CQLSH_ARGS ? process.env.MEMORY_CQLSH_ARGS.split(/\s+/).filter(Boolean) : [];
 }
 
 function loadSQLite(): new (path: string) => SQLiteDatabase {

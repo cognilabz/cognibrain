@@ -187,7 +187,12 @@ Postgres-compatible mode stores SQL-shaped tables in a local file for CI, offlin
 MEMORY_STORAGE_BACKEND=postgres MEMORY_POSTGRES_COMPAT_PATH=.memory-harness.postgres.json npm run start:local
 ```
 
-CockroachDB can use the same PostgreSQL-compatible contract through `MEMORY_STORAGE_BACKEND=cockroach`; production deployments should set a real PostgreSQL/Cockroach connection driver when one is installed. Cassandra-class storage is reported as a strategy-only target: it is suitable for planning and export/import boundaries, but not selectable as a runtime adapter until a dedicated wide-column adapter exists.
+Remote Postgres and CockroachDB deployments can use the psql-backed production driver. It keeps the synchronous local persistence boundary while writing transactional append-only snapshot tables to a real cluster:
+
+```bash
+MEMORY_STORAGE_BACKEND=postgres-remote MEMORY_POSTGRES_URL=postgres://user:pass@host:5432/cognibrain npm run start:local
+MEMORY_STORAGE_BACKEND=cockroach-remote MEMORY_POSTGRES_URL=postgres://user:pass@host:26257/cognibrain npm run start:local
+```
 
 Cassandra-compatible mode stores wide-column shaped snapshots and append-only events in a local file for CI, migration, and package validation. It models keyspace, partition key, clustering key, quorum consistency and range sharding:
 
@@ -195,7 +200,15 @@ Cassandra-compatible mode stores wide-column shaped snapshots and append-only ev
 MEMORY_STORAGE_BACKEND=cassandra MEMORY_CASSANDRA_COMPAT_PATH=.memory-harness.cassandra.json MEMORY_STORAGE_SHARDS=8 npm run start:local
 ```
 
-`GET /storage` and `memctl storage` expose the active backend plus adapter capabilities, including durability, transactionality, append-only support, SQL support, replication, sharding and migration safety. JSON, JSONL, SQLite, Postgres-compatible and Cassandra-compatible migration paths are covered by tests.
+Remote Cassandra deployments can use the cqlsh-backed production driver when a cluster and keyspace policy are available:
+
+```bash
+MEMORY_STORAGE_BACKEND=cassandra-remote MEMORY_CASSANDRA_CONTACT_POINT=127.0.0.1 MEMORY_CASSANDRA_KEYSPACE=cognibrain npm run start:local
+```
+
+By default the remote driver creates a `SimpleStrategy` keyspace with `MEMORY_CASSANDRA_REPLICATION_FACTOR=3`. Operators can set `MEMORY_CASSANDRA_REPLICATION_CQL` to the complete CQL map for multi-datacenter `NetworkTopologyStrategy` deployments, or set `MEMORY_CASSANDRA_REPLICATION_STRATEGY` and `MEMORY_CASSANDRA_REPLICATION_FACTOR` for simpler clusters.
+
+`GET /storage` and `memctl storage` expose the active backend plus adapter capabilities, including durability, transactionality, append-only support, SQL support, replication, sharding and migration safety. JSON, JSONL, SQLite, Postgres-compatible, Cassandra-compatible, and remote-driver capability paths are covered by tests.
 
 ## Security And Managed Deployment
 

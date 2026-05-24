@@ -5,8 +5,20 @@ interface BenchmarkReport {
   generatedAt?: string;
   source?: { name?: string; metric?: string; repository?: string; paper?: string; split?: string };
   config?: { split?: string };
-  ours: { name: string; accuracy: number; correct: number; total: number };
+  ours: { name: string; accuracy: number; correct: number; total: number; details?: BenchmarkDetail[] };
   baselines: Array<{ name: string; accuracy: number; correct: number; total: number }>;
+}
+
+interface BenchmarkDetail {
+  id: string;
+  question?: string;
+  questionType?: string;
+  passed?: boolean;
+  score?: number;
+  expected?: string[];
+  expectedEvidence?: string[];
+  retrieved?: string[];
+  retrievedEvidence?: string[];
 }
 
 interface GateOptions {
@@ -26,6 +38,17 @@ interface GateBenchmarkSummary {
   ours: { correct: number; total: number; accuracy: number };
   bestBaseline: { name: string; correct: number; total: number; accuracy: number };
   margin: number;
+  questions: GateQuestionRow[];
+}
+
+interface GateQuestionRow {
+  id: string;
+  question?: string;
+  questionType?: string;
+  passed: boolean;
+  score?: number;
+  expected: string[];
+  retrieved: string[];
 }
 
 interface CompetitorArtifact {
@@ -49,6 +72,16 @@ interface CompetitorBenchmarkResult {
   topK?: number;
   meanTokens?: number;
   comparable: boolean;
+  notes?: string;
+  questions?: CompetitorQuestionRow[];
+}
+
+interface CompetitorQuestionRow {
+  id: string;
+  passed?: boolean;
+  score?: number;
+  expected?: string[];
+  retrieved?: string[];
   notes?: string;
 }
 
@@ -133,7 +166,8 @@ function normalizeCompetitorArtifact(raw: unknown): CompetitorArtifact {
         topK: numberField(row.topK ?? row.top_k ?? row.k),
         meanTokens: numberField(row.meanTokens ?? row.mean_tokens),
         comparable: row.comparable === true,
-        notes: stringField(row.notes)
+        notes: stringField(row.notes),
+        questions: normalizeQuestionRows(row.questions ?? row.details ?? row.perQuestion ?? row.per_question)
       }
     ]);
   }
@@ -156,7 +190,8 @@ function summarizeBenchmark(report: BenchmarkReport, fallbackDataset: string): G
     saturated,
     ours: pickScore(report.ours),
     bestBaseline: { name: bestBaseline.name, ...pickScore(bestBaseline) },
-    margin
+    margin,
+    questions: normalizeBenchmarkQuestions(report.ours.details ?? [])
   };
 }
 
@@ -192,7 +227,8 @@ function compareCompetitors(benchmarks: GateBenchmarkSummary[], artifact?: Compe
           competitorAccuracy: result.accuracy,
           margin: benchmark.ours.accuracy - result.accuracy,
           passed: benchmark.ours.accuracy > result.accuracy,
-          notes: result.notes ?? competitor.notes
+          notes: result.notes ?? competitor.notes,
+          questions: compareQuestionRows(benchmark.questions, result.questions ?? [])
         }))
     );
     comparisons.push(...comparable);
@@ -225,9 +261,55 @@ function competitorMethodologyFailures(artifact: CompetitorArtifact) {
       if (!competitor.sourceUrl) failures.push({ competitor: competitor.name, dataset: benchmark.dataset, metric: benchmark.metric, reason: "comparable claim requires sourceUrl" });
       if (!benchmark.notes) failures.push({ competitor: competitor.name, dataset: benchmark.dataset, metric: benchmark.metric, reason: "comparable claim requires methodology notes" });
       if (benchmark.topK === undefined) failures.push({ competitor: competitor.name, dataset: benchmark.dataset, metric: benchmark.metric, reason: "comparable claim requires topK" });
+      if (!benchmark.questions?.length) failures.push({ competitor: competitor.name, dataset: benchmark.dataset, metric: benchmark.metric, reason: "comparable claim requires per-question rows" });
     }
   }
   return failures;
+}
+
+function normalizeBenchmarkQuestions(details: BenchmarkDetail[]): GateQuestionRow[] {
+  return details.map((detail) => ({
+    id: detail.id,
+    question: detail.question,
+    questionType: detail.questionType,
+    passed: detail.passed === true,
+    score: detail.score,
+    expected: [...(detail.expected ?? []), ...(detail.expectedEvidence ?? [])].map(String),
+    retrieved: [...(detail.retrieved ?? []), ...(detail.retrievedEvidence ?? [])].map(String)
+  }));
+}
+
+function normalizeQuestionRows(value: unknown): CompetitorQuestionRow[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .filter(isRecord)
+    .flatMap((row): CompetitorQuestionRow[] => {
+      const id = stringField(row.id ?? row.question_id ?? row.questionId);
+      if (!id) return [];
+      return [{
+        id,
+        passed: typeof row.passed === "boolean" ? row.passed : undefined,
+        score: numberField(row.score ?? row.accuracy),
+        expected: arrayOfStrings(row.expected ?? row.expectedEvidence ?? row.expected_evidence),
+        retrieved: arrayOfStrings(row.retrieved ?? row.retrievedEvidence ?? row.retrieved_evidence),
+        notes: stringField(row.notes)
+      }];
+    });
+}
+
+function compareQuestionRows(ours: GateQuestionRow[], competitor: CompetitorQuestionRow[]) {
+  const competitorById = new Map(competitor.map((row) => [row.id, row]));
+  return ours.map((row) => {
+    const other = competitorById.get(row.id);
+    return {
+      id: row.id,
+      oursPassed: row.passed,
+      competitorPassed: other?.passed,
+      oursScore: row.score,
+      competitorScore: other?.score,
+      matched: Boolean(other)
+    };
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -240,6 +322,11 @@ function stringField(value: unknown): string | undefined {
 
 function numberField(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function arrayOfStrings(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.map(String);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

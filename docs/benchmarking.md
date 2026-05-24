@@ -29,7 +29,7 @@ npm run benchmark:locomo -- --max-questions 80 --top-k 10 --out artifacts/locomo
 
 ## Metric
 
-The certified runner reports `evidence_recall_at_k`: a question passes when at least one official LoCoMo evidence dialog ID appears in the retrieved top-K memories. `benchmark:certified` now also emits `artifacts/answer-generation.json` unless `--retrieval-only` is passed. That artifact stores per-question prompts, generated extractive answers, retrieved evidence ids, retrieved evidence text, expected terms and deterministic judge decisions. Set `MEMORY_BENCHMARK_ANSWERER` or `MEMORY_BENCHMARK_JUDGE` to label an external answerer or judge when running a comparable evaluation.
+The certified runner reports `evidence_recall_at_k`: a question passes when at least one official LoCoMo evidence dialog ID appears in the retrieved top-K memories. `benchmark:certified` now also emits `artifacts/answer-generation.json` unless `--retrieval-only` is passed. That artifact stores per-question prompts, generated extractive answers, retrieved evidence ids, retrieved evidence text, expected terms and judge decisions. Set `MEMORY_BENCHMARK_ANSWERER` or `MEMORY_BENCHMARK_JUDGE` to label an external answerer or judge. Set `MEMORY_BENCHMARK_ANSWERER_COMMAND` and `MEMORY_BENCHMARK_JUDGE_COMMAND` with optional `*_ARGS` to run JSON-command answerer/judge providers; each command receives `{task, prompt, retrievedEvidence, expected}` on stdin and returns `{answer}` or `{score, passed, reason}`.
 
 The query contains only the benchmark question. The runner does not use the ground-truth answer text for query expansion.
 
@@ -114,7 +114,7 @@ Direct competitor comparison is opt-in and artifact-driven:
 npm run benchmark:market -- --competitors path/to/competitors.json --out artifacts/market-gate.json
 ```
 
-The competitor artifact format is documented in `docs/market-comparison.md` and illustrated by `docs/market-claims.sample.json`.
+The competitor artifact format is documented in `docs/market-comparison.md` and illustrated by `docs/market-claims.sample.json`. Any artifact that sets `comparable:true` must include per-question rows, so the market gate and dashboard can inspect failed or unmatched questions instead of relying on headline scores.
 
 ## Current Market Context
 

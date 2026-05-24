@@ -303,6 +303,12 @@ switch (command) {
     console.log(JSON.stringify(service.entityCatalog(userId), null, 2));
     break;
   }
+  case "entity-enrich": {
+    const entity = args.join(" ");
+    if (!entity) fail("Usage: memctl entity-enrich <entity>");
+    console.log(JSON.stringify(service.runEntityEnrichment({ userId, entity, approveExternal: process.env.MEMORY_APPROVE_EXTERNAL === "true", sourceUri: process.env.MEMORY_SOURCE_URI }), null, 2));
+    break;
+  }
   case "entity-merge": {
     const [canonical, ...aliases] = args;
     if (!canonical || aliases.length === 0) fail("Usage: memctl entity-merge <canonical> <alias...>");
@@ -456,16 +462,18 @@ switch (command) {
     break;
   }
   case "share-approve": {
-    const [memoryId, orgId] = args;
+    const [memoryId, orgId, ...note] = args;
     if (!memoryId || !orgId) fail("Usage: memctl share-approve <memory-id> <org-id>");
-    console.log(JSON.stringify(service.promoteSharedMemory(memoryId, orgId), null, 2));
+    const reviewerId = process.env.MEMORY_REVIEWER_ID ?? process.env.MEMORY_AGENT_ID ?? userId;
+    console.log(JSON.stringify(service.reviewSharedMemory(memoryId, { orgId, reviewerId, decision: "approve", note: note.join(" ") || undefined }), null, 2));
     break;
   }
   case "promote":
   case "review": {
-    const [memoryId, orgId = process.env.MEMORY_ORG_ID ?? "org"] = args;
+    const [memoryId, orgId = process.env.MEMORY_ORG_ID ?? "org", ...note] = args;
     if (!memoryId || !orgId) fail(`Usage: memctl ${command} <memory-id> <org-id>`);
-    console.log(JSON.stringify(service.promoteSharedMemory(memoryId, orgId), null, 2));
+    const reviewerId = process.env.MEMORY_REVIEWER_ID ?? process.env.MEMORY_AGENT_ID ?? userId;
+    console.log(JSON.stringify(service.reviewSharedMemory(memoryId, { orgId, reviewerId, decision: "approve", note: note.join(" ") || undefined }), null, 2));
     break;
   }
   case "share-revoke": {
@@ -840,6 +848,33 @@ switch (command) {
     );
     break;
   }
+  case "connector-telemetry": {
+    const [connectorId, kind, ...contentParts] = args;
+    if (!connectorId || !kind || !isConnectorTelemetryKind(kind)) fail("Usage: memctl connector-telemetry <connector-id> <accepted_suggestion|rejected_suggestion|context_pack_feedback|tool_outcome> [content]");
+    console.log(
+      JSON.stringify(
+        service.recordConnectorTelemetry({
+          connectorId,
+          userId,
+          harnessId: process.env.MEMORY_HARNESS_ID ?? process.env.MEMORY_AGENT_ID,
+          kind,
+          content: contentParts.join(" ") || undefined,
+          query: process.env.MEMORY_QUERY,
+          memoryIds: csvList(process.env.MEMORY_MEMORY_IDS),
+          acceptedMemoryIds: csvList(process.env.MEMORY_ACCEPTED_IDS),
+          rejectedMemoryIds: csvList(process.env.MEMORY_REJECTED_IDS),
+          command: process.env.MEMORY_COMMAND,
+          filesChanged: csvList(process.env.MEMORY_FILES_CHANGED),
+          tests: process.env.MEMORY_TESTS_JSON ? JSON.parse(process.env.MEMORY_TESTS_JSON) : undefined,
+          externalId: process.env.MEMORY_EXTERNAL_ID,
+          metadata: metadataFromEnv()
+        }),
+        null,
+        2
+      )
+    );
+    break;
+  }
   case "media-ingest": {
     const content = args.join(" ");
     if (!content) fail("Usage: memctl media-ingest <content-or-transcript>");
@@ -952,7 +987,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|action|search|inspect|route|intent|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|action|search|inspect|route|intent|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-enrich|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|connector-telemetry|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -1014,6 +1049,10 @@ function connectorOperationFromEnv() {
 
 function isConnectorFeedbackKind(value: string): value is "accepted_change" | "rejected_suggestion" | "failing_test" | "user_correction" {
   return value === "accepted_change" || value === "rejected_suggestion" || value === "failing_test" || value === "user_correction";
+}
+
+function isConnectorTelemetryKind(value: string): value is "accepted_suggestion" | "rejected_suggestion" | "context_pack_feedback" | "tool_outcome" {
+  return value === "accepted_suggestion" || value === "rejected_suggestion" || value === "context_pack_feedback" || value === "tool_outcome";
 }
 
 function mediaTypeFromEnv() {

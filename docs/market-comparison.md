@@ -25,7 +25,7 @@ Use `docs/market-claims.sample.json` as the canonical schema shape. The importer
 - same metric,
 - same top-K or token budget,
 - no answer leakage,
-- enough per-run metadata to audit the result,
+- enough per-run metadata and per-question rows to audit the result,
 - `comparable` is set to `true`.
 
 Run the direct-import gate:

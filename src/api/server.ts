@@ -187,6 +187,13 @@ const entityMergeSchema = z.object({
   userId: z.string().optional()
 });
 
+const entityEnrichmentSchema = z.object({
+  userId: z.string().min(1),
+  entity: z.string().min(1),
+  approveExternal: z.boolean().optional(),
+  sourceUri: z.string().optional()
+});
+
 const timelineSummarySchema = z.object({
   granularity: z.enum(["hour", "day", "week", "month", "all"]).optional(),
   persist: z.boolean().optional(),
@@ -505,6 +512,23 @@ const connectorFeedbackSchema = z.object({
   metadata: z.record(z.unknown()).optional()
 });
 
+const connectorTelemetrySchema = z.object({
+  connectorId: z.string().min(1),
+  harnessId: z.string().optional(),
+  userId: z.string().min(1),
+  kind: z.enum(["accepted_suggestion", "rejected_suggestion", "context_pack_feedback", "tool_outcome"]),
+  content: z.string().optional(),
+  query: z.string().optional(),
+  memoryIds: z.array(z.string()).optional(),
+  acceptedMemoryIds: z.array(z.string()).optional(),
+  rejectedMemoryIds: z.array(z.string()).optional(),
+  command: z.string().optional(),
+  filesChanged: z.array(z.string()).optional(),
+  tests: z.array(z.object({ name: z.string(), status: z.enum(["passed", "failed", "skipped"]), output: z.string().optional() })).optional(),
+  externalId: z.string().optional(),
+  metadata: z.record(z.unknown()).optional()
+});
+
 const connectorPollSchema = z.object({
   connectorId: z.string().min(1),
   userId: z.string().min(1),
@@ -628,6 +652,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/entities") {
     send(response, 200, defaultService.entityCatalog(url.searchParams.get("userId") ?? undefined));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/entities/enrich") {
+    send(response, 202, defaultService.runEntityEnrichment(entityEnrichmentSchema.parse(await json(request))));
     return;
   }
 
@@ -1089,6 +1118,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && url.pathname === "/connectors/telemetry") {
+    send(response, 202, defaultService.recordConnectorTelemetry(connectorTelemetrySchema.parse(await json(request))));
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/profiles") {
     send(response, 200, defaultService.getRetrievalProfiles());
     return;
@@ -1279,8 +1313,8 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (method === "POST" && parts[0] === "memories" && parts[2] === "promote") {
-    const body = z.object({ orgId: z.string().min(1) }).parse(await json(request));
-    send(response, 202, serialize(defaultService.promoteSharedMemory(parts[1], body.orgId)));
+    const body = z.object({ orgId: z.string().min(1), reviewerId: z.string().optional(), note: z.string().optional() }).parse(await json(request));
+    send(response, 202, serialize(body.reviewerId ? defaultService.reviewSharedMemory(parts[1], { orgId: body.orgId, reviewerId: body.reviewerId, decision: "approve", note: body.note }) : defaultService.promoteSharedMemory(parts[1], body.orgId)));
     return;
   }
 

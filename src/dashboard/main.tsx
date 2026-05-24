@@ -1467,13 +1467,55 @@ function summarizeArtifact(value: string): string[] {
       proofLevel?: string;
       source?: { name?: string };
       ours?: { correct?: number; total?: number; accuracy?: number };
-      benchmarks?: Array<{ dataset: string; margin: number; ours: { correct: number; total: number } }>;
+      benchmarks?: Array<{
+        dataset?: string;
+        name?: string;
+        margin?: number;
+        accuracy?: number;
+        ours?: { correct?: number; total?: number; accuracy?: number };
+        questions?: Array<{ id: string; passed?: boolean; score?: number; expected?: string[]; retrieved?: string[] }>;
+      }>;
+      datasets?: Array<{
+        dataset: string;
+        score: number;
+        total?: number;
+        questions?: Array<{ id: string; generatedAnswer?: string; expected?: string[]; judge?: { passed?: boolean; score?: number; reason?: string } }>;
+      }>;
     };
     if (parsed.benchmarks) {
+      const failedRows = parsed.benchmarks.flatMap((benchmark) =>
+        (benchmark.questions ?? [])
+          .filter((question) => question.passed === false)
+          .slice(0, 4)
+          .map((question) => `${benchmark.dataset ?? benchmark.name ?? "benchmark"}/${question.id}: failed, expected ${(question.expected ?? []).slice(0, 3).join(", ") || "n/a"}`)
+      );
       return [
-        `passed=${String(parsed.passed)}`,
+        `passed=${parsed.passed === undefined ? "not provided" : String(parsed.passed)}`,
         `proof=${parsed.proofLevel ?? "unknown"}`,
-        ...parsed.benchmarks.map((benchmark) => `${benchmark.dataset}: ${benchmark.ours.correct}/${benchmark.ours.total}, margin ${(benchmark.margin * 100).toFixed(2)}pp`)
+        ...parsed.benchmarks.map((benchmark) => {
+          const label = benchmark.dataset ?? benchmark.name ?? "benchmark";
+          const score = benchmark.ours?.correct !== undefined && benchmark.ours?.total !== undefined
+            ? `${benchmark.ours.correct}/${benchmark.ours.total}`
+            : benchmark.accuracy !== undefined
+              ? `${(benchmark.accuracy * 100).toFixed(2)}%`
+              : "score unavailable";
+          const margin = benchmark.margin !== undefined ? `, margin ${(benchmark.margin * 100).toFixed(2)}pp` : "";
+          return `${label}: ${score}${margin}, questions=${benchmark.questions?.length ?? 0}`;
+        }),
+        ...(failedRows.length ? ["Failed question rows:", ...failedRows] : ["Failed question rows: none in artifact"])
+      ];
+    }
+    if (parsed.datasets) {
+      const failedRows = parsed.datasets.flatMap((dataset) =>
+        (dataset.questions ?? [])
+          .filter((question) => question.judge?.passed === false)
+          .slice(0, 4)
+          .map((question) => `${dataset.dataset}/${question.id}: score ${(question.judge?.score ?? 0).toFixed(2)}, expected ${(question.expected ?? []).slice(0, 3).join(", ") || "n/a"}`)
+      );
+      return [
+        `answer-artifact datasets=${parsed.datasets.length}`,
+        ...parsed.datasets.map((dataset) => `${dataset.dataset}: score ${(dataset.score * 100).toFixed(2)}%, questions=${dataset.total ?? dataset.questions?.length ?? 0}`),
+        ...(failedRows.length ? ["Failed judged rows:", ...failedRows] : ["Failed judged rows: none in artifact"])
       ];
     }
     if (parsed.ours) {

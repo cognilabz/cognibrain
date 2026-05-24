@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -129,9 +130,26 @@ function buildDataset(path: string, dataset: string, details: BenchmarkDetail[],
 function questionArtifact(dataset: string, detail: BenchmarkDetail, answerer: string, judgeName: string): AnswerQuestionArtifact {
   const prompt = detail.question ?? detail.id;
   const retrievedEvidence = detail.retrieved ?? [];
-  const generatedAnswer = detail.actual ?? (retrievedEvidence.slice(0, 3).join(" ") || "No sufficient evidence retrieved.");
+  const generatedAnswer =
+    detail.actual ??
+    callBenchmarkCommand("answer", process.env.MEMORY_BENCHMARK_ANSWERER_COMMAND, process.env.MEMORY_BENCHMARK_ANSWERER_ARGS, {
+      dataset,
+      id: detail.id,
+      prompt,
+      retrievedEvidence,
+      expected: expectedTerms(detail)
+    })?.answer ??
+    (retrievedEvidence.slice(0, 3).join(" ") || "No sufficient evidence retrieved.");
   const expected = expectedTerms(detail);
-  const judge = judgeAnswer(generatedAnswer, expected, detail);
+  const providerJudge = callBenchmarkCommand("judge", process.env.MEMORY_BENCHMARK_JUDGE_COMMAND, process.env.MEMORY_BENCHMARK_JUDGE_ARGS, {
+    dataset,
+    id: detail.id,
+    prompt,
+    generatedAnswer,
+    expected,
+    retrievedEvidence
+  });
+  const judge: { score: number; passed: boolean; reason?: string } = providerJudge ? normalizeJudge(providerJudge, judgeName) : judgeAnswer(generatedAnswer, expected, detail);
   return {
     id: detail.id,
     dataset,
@@ -141,7 +159,36 @@ function questionArtifact(dataset: string, detail: BenchmarkDetail, answerer: st
     expected,
     retrievedEvidenceIds: detail.retrievedEvidence ?? [],
     retrievedEvidence,
-    judge: { name: judgeName, ...judge, reason: `${answerer} answer judged against benchmark expected terms/evidence.` }
+    judge: { name: judgeName, ...judge, reason: judge.reason ?? `${answerer} answer judged against benchmark expected terms/evidence.` }
+  };
+}
+
+function callBenchmarkCommand(task: "answer" | "judge", command: string | undefined, argsValue: string | undefined, payload: Record<string, unknown>): Record<string, any> | undefined {
+  if (!command) return undefined;
+  try {
+    const stdout = execFileSync(command, [...splitArgs(argsValue), task], {
+      input: JSON.stringify({ task, ...payload }),
+      encoding: "utf8",
+      timeout: Number(process.env.MEMORY_BENCHMARK_COMMAND_TIMEOUT_MS ?? 5000),
+      maxBuffer: 1_000_000
+    });
+    const parsed = JSON.parse(stdout);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function splitArgs(value: string | undefined): string[] {
+  return value ? value.split(/\s+/).filter(Boolean) : [];
+}
+
+function normalizeJudge(output: Record<string, any>, judgeName: string) {
+  const score = typeof output.score === "number" && Number.isFinite(output.score) ? Math.max(0, Math.min(1, output.score)) : 0;
+  return {
+    score,
+    passed: typeof output.passed === "boolean" ? output.passed : score >= 0.5,
+    reason: typeof output.reason === "string" ? output.reason : `${judgeName} provider score`
   };
 }
 

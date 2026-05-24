@@ -6,7 +6,9 @@ import {
   createPersistenceFromEnv,
   AppendOnlyLogPersistenceAdapter,
   CassandraCompatiblePersistenceAdapter,
+  CassandraRemotePersistenceAdapter,
   JsonFilePersistenceAdapter,
+  PostgresRemotePersistenceAdapter,
   PostgresCompatiblePersistenceAdapter,
   SQLitePersistenceAdapter,
   type MemoryPersistenceAdapter,
@@ -844,6 +846,81 @@ export class MemoryService {
     return { record, feedbackMemory, updatedMemories };
   }
 
+  recordConnectorTelemetry(input: {
+    connectorId: string;
+    harnessId?: string;
+    userId: string;
+    kind: "accepted_suggestion" | "rejected_suggestion" | "context_pack_feedback" | "tool_outcome";
+    content?: string;
+    query?: string;
+    memoryIds?: string[];
+    acceptedMemoryIds?: string[];
+    rejectedMemoryIds?: string[];
+    command?: string;
+    filesChanged?: string[];
+    tests?: HarnessActionInput["tests"];
+    externalId?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const manifest = this.connectorManifests.get(input.connectorId);
+    if (!manifest) throw new Error(`Connector manifest not found: ${input.connectorId}`);
+    const createdMemories: Memory[] = [];
+    const reports: Record<string, unknown>[] = [];
+    if (input.kind === "tool_outcome") {
+      const action = this.recordHarnessAction({
+        userId: input.userId,
+        agentId: input.harnessId,
+        command: input.command ?? input.content,
+        filesChanged: input.filesChanged,
+        tests: input.tests,
+        content: input.content,
+        timestamp: new Date().toISOString()
+      });
+      createdMemories.push(action);
+      reports.push({ kind: "harness-action", memoryId: action.id });
+    } else if (input.kind === "context_pack_feedback" && input.query && input.memoryIds?.length) {
+      const outcome = input.rejectedMemoryIds?.length && !input.acceptedMemoryIds?.length ? "rejected" : "accepted";
+      const report = this.recordInjectionFeedback({
+        userId: input.userId,
+        query: input.query,
+        injectedMemoryIds: input.memoryIds,
+        acceptedMemoryIds: input.acceptedMemoryIds,
+        rejectedMemoryIds: input.rejectedMemoryIds,
+        outcome,
+        note: input.content,
+        timestamp: new Date().toISOString()
+      });
+      reports.push({ kind: "injection-feedback", trainingSample: report.trainingSample, updated: report.updatedMemories.map((memory) => memory.id) });
+    } else {
+      const feedback = this.recordConnectorFeedback({
+        connectorId: input.connectorId,
+        userId: input.userId,
+        kind: input.kind === "accepted_suggestion" ? "accepted_change" : "rejected_suggestion",
+        content: input.content ?? `${input.harnessId ?? input.connectorId} ${input.kind}`,
+        memoryIds: input.memoryIds,
+        externalId: input.externalId,
+        metadata: { harnessId: input.harnessId, telemetryKind: input.kind, ...(input.metadata ?? {}) }
+      });
+      createdMemories.push(feedback.feedbackMemory, ...feedback.updatedMemories);
+      reports.push({ kind: "connector-feedback", recordId: feedback.record.id, memoryIds: feedback.record.memoryIds });
+    }
+    const record: ConnectorSyncRecord = {
+      id: `sync_${contentHash(`${input.connectorId}:telemetry:${Date.now()}:${this.connectorSyncRecords.length}`).slice(2)}`,
+      connectorId: input.connectorId,
+      direction: "ingest",
+      status: "applied",
+      memoryIds: createdMemories.map((memory) => memory.id),
+      externalIds: input.externalId ? [input.externalId] : [],
+      timestamp: new Date().toISOString(),
+      operation: "memory_link",
+      payload: { telemetryKind: input.kind, harnessId: input.harnessId, reports, metadata: input.metadata ?? {} }
+    };
+    this.connectorSyncRecords.push(record);
+    this.recordAudit("connector.sync", { userId: input.userId, metadata: { connectorId: input.connectorId, telemetryKind: input.kind, harnessId: input.harnessId, memories: record.memoryIds.length } });
+    this.persist();
+    return { record, createdMemories, reports };
+  }
+
   exportUser(userId: string): Memory[] {
     const denied: PolicyDecision[] = [];
     const allowed = this.store.list(userId).filter((memory) => {
@@ -1329,6 +1406,9 @@ export class MemoryService {
     const postgres = { kind: "postgres-compatible", ...new PostgresCompatiblePersistenceAdapter(".memory-harness.postgres.json").capabilities() };
     const cockroach = { kind: "cockroach-compatible", ...new PostgresCompatiblePersistenceAdapter(".memory-harness.cockroach.json").capabilities(), notes: ["CockroachDB-compatible mode uses the PostgreSQL wire-protocol adapter and external quorum replication.", "Set MEMORY_STORAGE_BACKEND=cockroach with MEMORY_POSTGRES_URL in production."] };
     const cassandra = { kind: "cassandra-compatible", ...new CassandraCompatiblePersistenceAdapter(".memory-harness.cassandra.json").capabilities() };
+    const postgresRemote = { kind: "postgres-remote", ...new PostgresRemotePersistenceAdapter(process.env.MEMORY_POSTGRES_URL ?? "postgres://user:pass@host:5432/cognibrain").capabilities() };
+    const cockroachRemote = { kind: "cockroach-remote", ...new PostgresRemotePersistenceAdapter(process.env.MEMORY_POSTGRES_URL ?? "postgres://user:pass@host:26257/cognibrain", { cockroach: true }).capabilities() };
+    const cassandraRemote = { kind: "cassandra-remote", ...new CassandraRemotePersistenceAdapter(process.env.MEMORY_CASSANDRA_CONTACT_POINT ?? "127.0.0.1").capabilities() };
     const sqlite = sqliteAvailable()
       ? { kind: "sqlite", ...new SQLitePersistenceAdapter(".memory-harness.sqlite").capabilities() }
       : {
@@ -1344,7 +1424,7 @@ export class MemoryService {
         };
     return {
       active: this.persistence?.kind ?? "memory",
-      adapters: [memory, json, jsonl, sqlite, postgres, cockroach, cassandra]
+      adapters: [memory, json, jsonl, sqlite, postgres, cockroach, cassandra, postgresRemote, cockroachRemote, cassandraRemote]
     };
   }
 
@@ -1464,12 +1544,28 @@ export class MemoryService {
 
   promoteSharedMemory(memoryId: string, orgId: string): Memory {
     const memory = this.store.get(memoryId);
+    return this.reviewSharedMemory(memoryId, { orgId, reviewerId: memory.userId, decision: "approve" });
+  }
+
+  reviewSharedMemory(memoryId: string, input: { orgId: string; reviewerId: string; decision: "approve" | "reject"; note?: string }): Memory {
+    const memory = this.store.get(memoryId);
+    if (!this.canReviewSharedMemory(memory, input.reviewerId, input.orgId)) throw new Error(`Reviewer ${input.reviewerId} cannot review memory ${memoryId}`);
+    const approved = input.decision === "approve";
     const updated = this.store.update(memoryId, {
-      orgId,
-      consent: { ...memory.consent, visibility: "org" },
-      metadata: { shared: { status: "approved", promotedAt: new Date().toISOString(), orgId } }
+      orgId: approved ? input.orgId : memory.orgId,
+      consent: approved ? { ...memory.consent, visibility: "org" } : memory.consent,
+      metadata: {
+        shared: {
+          ...(memory.metadata.shared as Record<string, unknown> | undefined),
+          status: approved ? "approved" : "rejected",
+          orgId: input.orgId,
+          reviewedAt: new Date().toISOString(),
+          reviewedBy: input.reviewerId,
+          note: input.note
+        }
+      }
     });
-    this.recordAudit("memory.share", { userId: updated.userId, brainId: updated.brainId, sourceId: updated.sourceId, memoryId: updated.id, metadata: { orgId } });
+    this.recordAudit(approved ? "memory.share" : "memory.share.revoke", { actorId: input.reviewerId, userId: updated.userId, brainId: updated.brainId, sourceId: updated.sourceId, memoryId: updated.id, metadata: { orgId: input.orgId, decision: input.decision, note: input.note } });
     this.persist();
     return updated;
   }
@@ -2549,12 +2645,14 @@ export class MemoryService {
 
   linkIdentity(primaryUserId: string, linkedUserId: string, consentToken: string, consent: IdentityLink["consent"] = "user"): IdentityLink {
     const link = this.identities.link(primaryUserId, linkedUserId, consentToken, consent);
+    this.recordAudit("memory.consent", { userId: primaryUserId, metadata: { resource: "identity-link", linkedUserId, consent, linkId: link.id, hashedSubject: link.hashedSubject } });
     this.persist();
     return link;
   }
 
   unlinkIdentity(id: string): IdentityLink {
     const link = this.identities.unlink(id);
+    this.recordAudit("memory.consent", { userId: link.primaryUserId, metadata: { resource: "identity-link", linkedUserId: link.linkedUserId, linkId: link.id, revoked: true } });
     this.persist();
     return link;
   }
@@ -2810,6 +2908,45 @@ export class MemoryService {
     };
   }
 
+  runEntityEnrichment(input: { userId: string; entity: string; approveExternal?: boolean; sourceUri?: string }) {
+    const candidates = this.entityCatalog(input.userId).enrichmentCandidates;
+    const candidate = candidates.find((item) => item.entity.toLowerCase() === input.entity.toLowerCase());
+    const externalAllowed = input.approveExternal === true || process.env.MEMORY_ENRICHMENT_ALLOW_NETWORK === "true";
+    if (!candidate) return { status: "skipped" as const, entity: input.entity, reason: "entity has not crossed enrichment threshold", memories: [] as Memory[] };
+    if (!externalAllowed) return { status: "blocked" as const, entity: candidate.entity, reason: "external enrichment requires approval or MEMORY_ENRICHMENT_ALLOW_NETWORK=true", candidate, memories: [] as Memory[] };
+    if (!this.defaultExtractor) return { status: "skipped" as const, entity: candidate.entity, reason: "no provider extractor configured for enrichment", candidate, memories: [] as Memory[] };
+    const extracted = this.defaultExtractor.extract({
+      events: [{
+        role: "operator",
+        content: `Enrich entity ${candidate.entity} with approved external source facts.`,
+        source: { kind: "import", uri: input.sourceUri, confidence: 0.7 },
+        metadata: { enrichment: { entity: candidate.entity, action: candidate.suggestedAction, memoryIds: candidate.memoryIds } }
+      }],
+      scope: { userId: input.userId },
+      existing: this.store.list(input.userId),
+      now: new Date()
+    });
+    const memories = extracted.map((memory) =>
+      this.add({
+        ...memory,
+        userId: input.userId,
+        type: memory.type ?? "reference",
+        layer: memory.layer ?? "long_term",
+        source: memory.source ?? { kind: "import", uri: input.sourceUri, confidence: 0.72 },
+        tags: [...new Set([...(memory.tags ?? []), "external-enrichment", candidate.entity])],
+        entities: [...new Set([...(memory.entities ?? []), candidate.entity])],
+        metadata: {
+          ...(memory.metadata ?? {}),
+          enrichment: { entity: candidate.entity, action: candidate.suggestedAction, sourceUri: input.sourceUri, sourceMemoryIds: candidate.memoryIds },
+          addOnly: true
+        }
+      })
+    );
+    this.recordAudit("provider.call", { userId: input.userId, metadata: { task: "entity-enrichment", entity: candidate.entity, status: memories.length ? "applied" : "empty", memories: memories.map((memory) => memory.id) } });
+    this.persist();
+    return { status: memories.length ? "applied" as const : "empty" as const, entity: candidate.entity, candidate, memories };
+  }
+
   mergeEntity(canonical: string, aliases: string[], userId?: string): EntityRecord {
     const memories = this.store.list(userId);
     const record = this.entities.merge(canonical, aliases, memories);
@@ -2989,6 +3126,19 @@ export class MemoryService {
         return brain.visibility === "public";
       })
       .map((brain) => brain.id);
+  }
+
+  private canReviewSharedMemory(memory: Memory, reviewerId: string, orgId: string): boolean {
+    if (reviewerId === memory.userId) return true;
+    const brain = memory.brainId ? this.brains.get(memory.brainId) : undefined;
+    if (brain?.ownerUserId === reviewerId) return true;
+    if (brain?.orgId && brain.orgId !== orgId) return false;
+    const agent = this.agents.get(reviewerId);
+    if (!agent) return false;
+    if (agent.permissions.includes("admin")) return true;
+    if (!agent.permissions.includes("share")) return false;
+    if (memory.brainId && !agent.brainIds.includes(memory.brainId) && !brain?.allowedAgentIds?.includes(agent.id)) return false;
+    return !brain?.orgId || brain.orgId === orgId;
   }
 
   private personaForAgent(agentId: string): PersonaProfile | undefined {

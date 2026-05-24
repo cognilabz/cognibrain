@@ -14,7 +14,17 @@
           "total": 500,
           "topK": 20,
           "comparable": false,
-          "notes": "Example shape only. Replace with a real vendor artifact before making market claims."
+          "notes": "Example shape only. Replace with a real vendor artifact before making market claims.",
+          "questions": [
+            {
+              "id": "example-question-id",
+              "passed": true,
+              "score": 1,
+              "expected": ["answer-session-id"],
+              "retrieved": ["answer-session-id"],
+              "notes": "Comparable=true requires per-question rows so failures can be inspected."
+            }
+          ]
         },
         {
           "dataset": "LoCoMo",

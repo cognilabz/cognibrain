@@ -537,6 +537,47 @@ describe("TypeScript memory core", () => {
     expect(service.getRetrievalProfiles().some((profile) => profile.id === "team-learned")).toBe(true);
   });
 
+  it("supports retrieval modes, query expansion, scoped learning, and contradiction decisions", () => {
+    const service = new MemoryService();
+    const commandLine = service.add({
+      userId: "u1",
+      projectId: "p1",
+      content: "The command line workflow starts the package installer.",
+      entities: ["command line", "installer"],
+      source: { kind: "human", confidence: 0.94 }
+    });
+    service.add({
+      userId: "u1",
+      projectId: "p1",
+      content: "Atlas should use Redis for shared cache.",
+      entities: ["atlas", "redis"],
+      source: { kind: "reviewed_code", confidence: 0.98 }
+    });
+    service.add({
+      userId: "u1",
+      projectId: "p1",
+      content: "Atlas should not use Redis for shared cache.",
+      entities: ["atlas", "redis"],
+      source: { kind: "transcript", confidence: 0.35 }
+    });
+
+    const expanded = service.search({ userId: "u1", query: "cli workflow", expandQuery: true, mode: "rrf" });
+    expect(expanded[0].memory.id).toBe(commandLine.id);
+    expect(expanded[0].retrievalMode).toBe("rrf");
+    expect(expanded[0].fusion?.rank).toBe(1);
+    expect(expanded[0].expandedQueries?.some((query) => query.includes("command line"))).toBe(true);
+
+    const contradictions = service.search({ userId: "u1", query: "Atlas Redis shared cache", mode: "path" });
+    expect(contradictions.some((result) => result.contradiction && result.decision === "exclude")).toBe(true);
+    expect(contradictions.some((result) => result.retrievalMode === "path" && result.explanation?.some((item) => item.includes("mode path")))).toBe(true);
+
+    service.addTrainingSample({ userId: "u1", query: "cli workflow", outcome: "accepted", signals: { keyword: 0.9, semantic: 0.7 } });
+    service.addTrainingSample({ userId: "u2", query: "other", outcome: "accepted", signals: { graph: 1 } });
+    const learned = service.learnRetrievalProfile("p1-learned", "Project profile", { scope: { userId: "u1", projectId: "p1" } });
+    expect(learned.samples).toBe(1);
+    expect(learned.profile.scope?.projectId).toBe("p1");
+  });
+
   it("loads retrieval profiles and aliases from runtime config", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-config-"));
     try {

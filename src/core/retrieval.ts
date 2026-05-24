@@ -11,7 +11,9 @@ export class RetrievalEngine {
 
   search(options: SearchOptions): SearchResult[] {
     const now = options.now ?? new Date();
-    const queryTokens = tokenize(options.query);
+    const expandedQueries = queryVariants(options);
+    const expandedQueryText = expandedQueries.join(" ");
+    const queryTokens = tokenize(expandedQueryText);
     const queryEntities = new Set(queryTokens);
     const temporalConstraint = parseTemporalConstraint(options.query, now);
     const userIds = new Set([options.userId, ...((options as SearchOptions & { linkedUserIds?: string[] }).linkedUserIds ?? [])]);
@@ -36,20 +38,23 @@ export class RetrievalEngine {
     });
 
     const queryText = queryTokens.join(" ");
-    const weights = normalizeRetrievalWeights({ ...this.defaultWeights, ...(options.weights ?? {}) });
+    const mode = options.mode ?? "hybrid";
+    const weights = weightsForMode(mode, normalizeRetrievalWeights({ ...this.defaultWeights, ...(options.weights ?? {}) }));
     const graphBoosts = this.graphBoosts(candidates, queryTokens, queryText, options);
-    const results = candidates
+    const scored = candidates
       .map((memory) => {
         const graph = graphBoosts.get(memory.id);
-        return this.score(memory, queryTokens, queryEntities, queryText, now, graph?.score ?? 0, graph?.paths ?? [], weights);
+        return this.score(memory, queryTokens, queryEntities, queryText, now, graph?.score ?? 0, graph?.paths ?? [], weights, mode, expandedQueries);
       })
       .filter((result) => result.score > 0.05 && relevanceEvidence(result) > 0.08)
       .sort((a, b) => b.score - a.score)
-      .filter((result, _index, all) => !isSuppressedContradiction(result, all))
-      .slice(0, options.limit ?? 8);
+      .filter((result, _index, all) => !isSuppressedContradiction(result, all));
+
+    const results = fuseResults(scored, mode).slice(0, options.limit ?? 8);
 
     const reranked = options.reranker ? options.reranker.rerank({ query: options.query, results, now }) : heuristicRerank(options.query, results);
-    const verified = options.verifier ? options.verifier.verify({ query: options.query, results: reranked, now }) : heuristicVerify(options.query, reranked);
+    const contradicted = applyContradictionDecisions(reranked);
+    const verified = options.verifier ? options.verifier.verify({ query: options.query, results: contradicted, now }) : heuristicVerify(options.query, contradicted);
 
     for (const result of verified) this.store.markAccessed(result.memory.id);
     return verified;
@@ -79,7 +84,9 @@ export class RetrievalEngine {
     now: Date,
     graph: number,
     graphPaths: string[],
-    weights: RetrievalWeights
+    weights: RetrievalWeights,
+    mode: NonNullable<SearchOptions["mode"]>,
+    expandedQueries: string[]
   ): SearchResult {
     const memoryTokens = tokenize(`${memory.content} ${memory.tags.join(" ")}`);
     const semantic = cosineLike(queryTokens, memoryTokens);
@@ -108,7 +115,10 @@ export class RetrievalEngine {
       score,
       initialScore: score,
       decision: "include",
-      explanation: explainSignals({ semantic, keyword, entity, temporal, behavioral, trust, graph, access }, graphPaths),
+      explanation: [...explainSignals({ semantic, keyword, entity, temporal, behavioral, trust, graph, access }, graphPaths), ...(expandedQueries.length > 1 ? [`expanded ${expandedQueries.slice(1, 3).join(" | ")}`] : []), `mode ${mode}`],
+      retrievalMode: mode,
+      expandedQueries: expandedQueries.length > 1 ? expandedQueries : undefined,
+      fusion: { strategy: mode, scoreBeforeFusion: score, components: { semantic, keyword, entity, temporal, behavioral, trust, graph, access } },
       signals: { semantic, keyword, entity, temporal, behavioral, trust, graph, access },
       graphPaths,
       citation: citationFor(memory),
@@ -200,6 +210,83 @@ function parseTemporalConstraint(query: string, now: Date): { after?: Date; befo
     return { after, before };
   }
   return {};
+}
+
+function queryVariants(options: SearchOptions): string[] {
+  const variants = [options.query, ...((options.expandQuery ? deterministicQueryExpansions(options.query) : [])), ...(options.queryExpansions ?? [])];
+  return [...new Set(variants.map((variant) => variant.trim()).filter(Boolean))].slice(0, 12);
+}
+
+function deterministicQueryExpansions(query: string): string[] {
+  const lower = query.toLowerCase();
+  const groups = [
+    ["cli", "command line", "terminal", "shell"],
+    ["ui", "dashboard", "frontend", "operator console"],
+    ["bug", "issue", "defect", "regression"],
+    ["memory", "recall", "context", "knowledge"],
+    ["auth", "login", "session", "identity"],
+    ["database", "storage", "persistence", "store"],
+    ["sync", "replay", "offline", "replication"],
+    ["release", "launch", "deployment", "ship"]
+  ];
+  const expansions = new Set<string>();
+  for (const group of groups) {
+    const matched = group.find((term) => lower.includes(term));
+    if (!matched) continue;
+    for (const term of group) expansions.add(query.replace(new RegExp(escapeRegExp(matched), "i"), term));
+    expansions.add(`${query} ${group.join(" ")}`);
+  }
+  return [...expansions];
+}
+
+function weightsForMode(mode: NonNullable<SearchOptions["mode"]>, weights: RetrievalWeights): RetrievalWeights {
+  if (mode === "graph" || mode === "path") return normalizeRetrievalWeights({ ...weights, graph: weights.graph + 0.35, entity: weights.entity + 0.12 });
+  if (mode === "rrf") return normalizeRetrievalWeights({ ...weights, semantic: weights.semantic + 0.05, keyword: weights.keyword + 0.05, graph: weights.graph + 0.08 });
+  return weights;
+}
+
+function fuseResults(results: SearchResult[], mode: NonNullable<SearchOptions["mode"]>): SearchResult[] {
+  if (mode !== "rrf") return results.map((result, index) => ({ ...result, fusion: { ...(result.fusion ?? { strategy: mode }), strategy: mode, rank: index + 1 } }));
+  const signalKeys: Array<keyof RetrievalWeights> = ["semantic", "keyword", "entity", "temporal", "behavioral", "trust", "graph", "access"];
+  const totals = new Map<string, number>();
+  for (const key of signalKeys) {
+    const ranked = [...results].sort((a, b) => Number(b.signals[key] ?? 0) - Number(a.signals[key] ?? 0));
+    for (const [index, result] of ranked.entries()) {
+      if (Number(result.signals[key] ?? 0) <= 0) continue;
+      totals.set(result.memory.id, (totals.get(result.memory.id) ?? 0) + 1 / (60 + index + 1));
+    }
+  }
+  return [...results]
+    .map((result) => ({ ...result, score: clamp((totals.get(result.memory.id) ?? 0) * 8), fusion: { ...(result.fusion ?? { strategy: mode }), strategy: mode, scoreBeforeFusion: result.score } }))
+    .sort((a, b) => b.score - a.score)
+    .map((result, index) => ({ ...result, fusion: { ...(result.fusion ?? { strategy: mode }), strategy: mode, rank: index + 1 }, explanation: [...(result.explanation ?? []), `rrf rank ${index + 1}`] }));
+}
+
+function applyContradictionDecisions(results: SearchResult[]): SearchResult[] {
+  return results.map((result) => {
+    const conflict = results.find((other) => other.memory.id !== result.memory.id && isLikelyContradiction(result.memory, other.memory) && other.memory.trust >= result.memory.trust);
+    if (!conflict) return result;
+    const action = conflict.memory.trust - result.memory.trust > 0.08 ? "exclude" : "review";
+    return {
+      ...result,
+      decision: action,
+      contradiction: { memoryId: conflict.memory.id, reason: "higher-trust conflicting memory selected in same context", action },
+      explanation: [...(result.explanation ?? []), `contradiction with ${conflict.memory.id}`]
+    };
+  });
+}
+
+function isLikelyContradiction(a: Memory, b: Memory): boolean {
+  if (a.relations.some((relation) => relation.type === "contradicts" && (relation.targetId === b.id || (relation.targetEntity && b.entities.includes(relation.targetEntity))))) return true;
+  if (b.relations.some((relation) => relation.type === "contradicts" && (relation.targetId === a.id || (relation.targetEntity && a.entities.includes(relation.targetEntity))))) return true;
+  if (!a.entities.some((entity) => b.entities.includes(entity))) return false;
+  const left = a.content.toLowerCase();
+  const right = b.content.toLowerCase();
+  return (/\b(no|not|never|does not|should not|without|nicht|kein)\b/.test(left) && /\b(should|does|has|uses|with|use|is|always)\b/.test(right)) || (/\b(no|not|never|does not|should not|without|nicht|kein)\b/.test(right) && /\b(should|does|has|uses|with|use|is|always)\b/.test(left));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function temporalAllows(memory: Memory, constraint: { after?: Date; before?: Date }): boolean {

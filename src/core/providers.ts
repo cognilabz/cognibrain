@@ -8,6 +8,7 @@ import type {
   MemoryExtractor,
   MemoryInput,
   MemoryScope,
+  QueryExpander,
   ReflectionSummarizer,
   SearchResult,
   SourceKind
@@ -19,9 +20,9 @@ export interface JsonCommandProviderOptions {
   timeoutMs?: number;
 }
 
-type ProviderTask = "contradiction" | "rerank" | "verify" | "summarize" | "extract";
+type ProviderTask = "contradiction" | "rerank" | "verify" | "summarize" | "extract" | "expand";
 
-export class JsonCommandMemoryIntelligence implements ContradictionDetector, ContextReranker, ContextVerifier, ReflectionSummarizer, MemoryExtractor {
+export class JsonCommandMemoryIntelligence implements ContradictionDetector, ContextReranker, ContextVerifier, ReflectionSummarizer, MemoryExtractor, QueryExpander {
   constructor(private readonly options: JsonCommandProviderOptions) {}
 
   classify(input: { a: Memory; b: Memory; key?: string }) {
@@ -99,6 +100,16 @@ export class JsonCommandMemoryIntelligence implements ContradictionDetector, Con
     });
     if (!Array.isArray(output.memories)) return [];
     return output.memories.flatMap((item) => normalizeProviderMemory(item, input.scope));
+  }
+
+  expand(input: { query: string; userId: string; now: Date; memories?: Memory[] }): string[] {
+    const output = this.call("expand", {
+      query: input.query,
+      userId: input.userId,
+      now: input.now.toISOString(),
+      memories: (input.memories ?? []).slice(0, 25).map(memoryForProvider)
+    });
+    return Array.isArray(output.expansions) ? output.expansions.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 8) : [];
   }
 
   private call(task: ProviderTask, payload: Record<string, unknown>): Record<string, any> {

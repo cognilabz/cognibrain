@@ -27,6 +27,7 @@ export type FeedbackKind =
   | "shareable"
   | "approve_pattern"
   | "reject_pattern";
+export type RetrievalMode = "hybrid" | "rrf" | "graph" | "path";
 
 export interface Provenance {
   kind: SourceKind;
@@ -151,6 +152,9 @@ export interface SearchOptions {
   runId?: string;
   scopeMode?: "user" | "session" | "app" | "org" | "project" | "all";
   query: string;
+  mode?: RetrievalMode;
+  expandQuery?: boolean;
+  queryExpansions?: string[];
   limit?: number;
   now?: Date;
   includeArchived?: boolean;
@@ -178,6 +182,19 @@ export interface SearchResult {
   initialScore?: number;
   decision?: "include" | "exclude" | "warn" | "review";
   explanation?: string[];
+  retrievalMode?: RetrievalMode;
+  expandedQueries?: string[];
+  fusion?: {
+    strategy: RetrievalMode;
+    rank?: number;
+    scoreBeforeFusion?: number;
+    components?: Partial<Record<keyof RetrievalWeights, number>>;
+  };
+  contradiction?: {
+    memoryId: string;
+    reason: string;
+    action: "exclude" | "review";
+  };
   signals: {
     semantic: number;
     keyword: number;
@@ -267,6 +284,10 @@ export interface MemoryExtractor {
     existing: Memory[];
     now: Date;
   }): MemoryInput[];
+}
+
+export interface QueryExpander {
+  expand(input: { query: string; userId: string; now: Date; memories?: Memory[] }): string[];
 }
 
 export interface HealthReport {

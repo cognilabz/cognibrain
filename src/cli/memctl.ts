@@ -61,7 +61,10 @@ switch (command) {
       includeLinkedIdentities: process.env.MEMORY_INCLUDE_LINKED === "true",
       includeSharedBrains: process.env.MEMORY_INCLUDE_SHARED_BRAINS === "true",
       brainIds: process.env.MEMORY_BRAIN_IDS ? process.env.MEMORY_BRAIN_IDS.split(",").map((item) => item.trim()).filter(Boolean) : undefined,
-      orgId: process.env.MEMORY_ORG_ID
+      orgId: process.env.MEMORY_ORG_ID,
+      mode: retrievalModeFromEnv(),
+      expandQuery: process.env.MEMORY_EXPAND_QUERY === "true",
+      queryExpansions: process.env.MEMORY_QUERY_EXPANSIONS ? process.env.MEMORY_QUERY_EXPANSIONS.split("|").map((item) => item.trim()).filter(Boolean) : undefined
     });
     console.log(
       results
@@ -118,7 +121,21 @@ switch (command) {
     break;
   }
   case "profile-learn": {
-    console.log(JSON.stringify(service.learnRetrievalProfile(args[0] ?? "learned"), null, 2));
+    console.log(
+      JSON.stringify(
+        service.learnRetrievalProfile(args[0] ?? "learned", args[1] ?? "Learned feedback profile", {
+          scope: {
+            userId: process.env.MEMORY_PROFILE_USER_ID,
+            projectId: process.env.MEMORY_PROJECT_ID,
+            appId: process.env.MEMORY_APP_ID,
+            orgId: process.env.MEMORY_ORG_ID,
+            agentId: process.env.MEMORY_AGENT_ID
+          }
+        }),
+        null,
+        2
+      )
+    );
     break;
   }
   case "profile-sample": {
@@ -324,4 +341,9 @@ function isFeedbackKind(value: string): value is FeedbackKind {
 
 function relationTypesFromEnv() {
   return process.env.MEMORY_RELATION_TYPES ? process.env.MEMORY_RELATION_TYPES.split(",").map((item) => item.trim()).filter(Boolean) as any : undefined;
+}
+
+function retrievalModeFromEnv() {
+  const value = process.env.MEMORY_RETRIEVAL_MODE;
+  return value === "rrf" || value === "graph" || value === "path" || value === "hybrid" ? value : undefined;
 }

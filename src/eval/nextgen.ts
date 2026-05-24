@@ -119,6 +119,28 @@ export function runNextgenEvaluation() {
     }
   });
   const sync = service.syncOfflineOperations();
+  service.add({
+    brainId: brain.id,
+    sourceId: source.id,
+    userId: "bench",
+    orgId: "org-bench",
+    content: "The command line launcher starts the local memory backend.",
+    entities: ["command line", "launcher"],
+    source: { kind: "human", confidence: 0.95 }
+  });
+  service.add({
+    brainId: brain.id,
+    sourceId: source.id,
+    userId: "bench",
+    orgId: "org-bench",
+    content: "Atlas should not use CacheClient for cache reads.",
+    entities: ["atlas", "cacheclient"],
+    source: { kind: "transcript", confidence: 0.32 }
+  });
+  service.addTrainingSample({ userId: "bench", query: "cli launcher", outcome: "accepted", signals: { keyword: 0.9, semantic: 0.7 } });
+  const learnedRetrieval = service.learnRetrievalProfile("bench-retrieval", "Bench retrieval", { scope: { userId: "bench" } });
+  const expandedRetrieval = service.search({ userId: "bench", query: "cli launcher", expandQuery: true, mode: "rrf" });
+  const contradictionRetrieval = service.search({ userId: "bench", query: "Atlas CacheClient cache reads", mode: "path" });
   const compliance = service.complianceReport(new Date("2026-01-01T00:00:00.000Z"));
   const events = service.eventFeed();
   const audit = service.auditTrail({ memoryId: atlas.id });
@@ -159,6 +181,14 @@ export function runNextgenEvaluation() {
     id: "offline-storage-sync",
     passed: sync.applied.length === 1 && sync.remaining.length === 0 && storage.adapters.some((adapter) => adapter.kind === "append-only-log" && adapter.distributedReady),
     detail: `${sync.applied.length} sync operations applied through ${storage.active}`
+  });
+  checks.push({
+    id: "retrieval-ranking",
+    passed:
+      expandedRetrieval.some((result) => result.retrievalMode === "rrf" && result.expandedQueries?.some((query) => query.includes("command line"))) &&
+      contradictionRetrieval.some((result) => result.contradiction?.action === "exclude") &&
+      learnedRetrieval.samples >= 1,
+    detail: `${expandedRetrieval.length} expanded RRF results, ${contradictionRetrieval.filter((result) => result.contradiction).length} contradictions, ${learnedRetrieval.samples} learned samples`
   });
   checks.push({
     id: "webhook-event-feed",

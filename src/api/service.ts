@@ -62,6 +62,7 @@ import type {
   StorageBackendStatus,
   SyncReport,
   ConsentPolicy,
+  QueryExpander,
   BehavioralPatternReport,
   TemporalQueryReport,
   TimelineSummaryReport,
@@ -90,6 +91,7 @@ export interface MemoryServiceOptions {
     contradictionDetector?: ContradictionDetector;
     summarizer?: ReflectionSummarizer;
     extractor?: MemoryExtractor;
+    queryExpander?: QueryExpander;
   };
 }
 
@@ -179,6 +181,7 @@ export class MemoryService {
     this.defaultVerifier = provider.verifier;
     this.defaultExtractor = provider.extractor;
     this.defaultSummarizer = provider.summarizer;
+    this.defaultQueryExpander = provider.queryExpander;
     this.load();
   }
 
@@ -186,6 +189,7 @@ export class MemoryService {
   private readonly defaultVerifier?: SearchOptions["verifier"];
   private readonly defaultExtractor?: MemoryExtractor;
   private readonly defaultSummarizer?: ReflectionSummarizer;
+  private readonly defaultQueryExpander?: QueryExpander;
 
   add(input: MemoryInput) {
     const sourceDefaultConsent = input.sourceId ? this.sources.get(input.sourceId)?.defaultConsent : undefined;
@@ -277,10 +281,12 @@ export class MemoryService {
     const profile = options.profileId ? this.retrievalProfiles.get(options.profileId) : this.profileFor(options);
     const linkedUserIds = options.includeLinkedIdentities ? this.identities.resolve(options.userId).filter((id) => id !== options.userId) : [];
     const federatedBrainIds = options.includeSharedBrains ? options.brainIds ?? this.accessibleBrainIds(options) : options.brainIds;
+    const queryExpansions = this.expandSearchQuery(options);
     const results = this.retrieval.search({
       ...options,
       brainIds: federatedBrainIds,
       linkedUserIds,
+      queryExpansions,
       weights: options.weights ?? profile?.weights,
       reranker: options.reranker ?? this.defaultReranker,
       verifier: options.verifier ?? this.defaultVerifier
@@ -668,13 +674,14 @@ export class MemoryService {
     return [...this.retrievalProfiles.values()];
   }
 
-  learnRetrievalProfile(id = "learned", label = "Learned feedback profile"): LearnedProfileReport {
+  learnRetrievalProfile(id = "learned", label = "Learned feedback profile", options: { scope?: RetrievalProfile["scope"] } = {}): LearnedProfileReport {
     const positiveSignals: Partial<RetrievalWeights> = {};
     const negativeSignals: Partial<RetrievalWeights> = {};
     let samples = 0;
     for (const event of this.feedbackEvents) {
       const memory = safeGet(this.store, event.memoryId);
       if (!memory) continue;
+      if (!memoryMatchesProfileScope(memory, options.scope)) continue;
       const bucket = event.kind === "helpful" || event.kind === "always_include" ? positiveSignals : event.kind === "wrong" || event.kind === "never_include" ? negativeSignals : undefined;
       if (!bucket) continue;
       samples += 1;
@@ -683,7 +690,8 @@ export class MemoryService {
       bucket.temporal = (bucket.temporal ?? 0) + (memory.lastAccessedAt ? 0.6 : 0.2);
       bucket.access = (bucket.access ?? 0) + Math.min(1, Math.log1p(memory.accessCount) / 4);
     }
-    for (const sample of this.trainingSamples) {
+    const trainingSamples = this.trainingSamples.filter((sample) => sampleMatchesProfileScope(sample, options.scope));
+    for (const sample of trainingSamples) {
       const bucket = sample.outcome === "helpful" || sample.outcome === "accepted" ? positiveSignals : negativeSignals;
       samples += 1;
       for (const key of Object.keys(baseSignalTemplate()) as Array<keyof RetrievalWeights>) {
@@ -691,7 +699,7 @@ export class MemoryService {
       }
     }
     const base = this.retrievalProfiles.get("default")?.weights ?? normalizeRetrievalWeights();
-    const lossBefore = profileLoss(base, this.trainingSamples);
+    const lossBefore = profileLoss(base, trainingSamples);
     const learned = { ...base };
     if (samples) {
       for (const key of Object.keys(base) as Array<keyof RetrievalWeights>) {
@@ -702,12 +710,13 @@ export class MemoryService {
       id,
       label,
       weights: learned,
+      scope: options.scope,
       learned: true,
       trainingSamples: samples,
       benchmarkDelta: 0,
       provenance: "feedback coordinate update"
     });
-    return { profile, samples, positiveSignals, negativeSignals, lossBefore, lossAfter: profileLoss(profile.weights, this.trainingSamples) };
+    return { profile, samples, positiveSignals, negativeSignals, lossBefore, lossAfter: profileLoss(profile.weights, trainingSamples) };
   }
 
   linkIdentity(primaryUserId: string, linkedUserId: string, consentToken: string, consent: IdentityLink["consent"] = "user"): IdentityLink {
@@ -1046,6 +1055,20 @@ export class MemoryService {
         return brain.visibility === "public";
       })
       .map((brain) => brain.id);
+  }
+
+  private expandSearchQuery(options: SearchOptions): string[] | undefined {
+    const explicit = options.queryExpansions ?? [];
+    if (!options.expandQuery) return explicit.length ? explicit : undefined;
+    const provider = this.defaultQueryExpander?.expand({
+      query: options.query,
+      userId: options.userId,
+      now: options.now ?? new Date(),
+      memories: this.store.list(options.userId).slice(0, 50)
+    }) ?? [];
+    const deterministic = deterministicQueryExpansions(options.query);
+    const expansions = [...new Set([...explicit, ...provider, ...deterministic].map((item) => item.trim()).filter(Boolean))].filter((item) => item.toLowerCase() !== options.query.toLowerCase());
+    return expansions.slice(0, 10);
   }
 
   private restoreMemorySnapshot(snapshot: Memory): Memory {
@@ -1397,7 +1420,8 @@ function providerFromEnv(): NonNullable<MemoryServiceOptions["intelligence"]> {
     verifier: provider,
     contradictionDetector: provider,
     summarizer: provider,
-    extractor: provider
+    extractor: provider,
+    queryExpander: provider
   };
 }
 
@@ -1418,6 +1442,43 @@ function profileLoss(weights: RetrievalWeights, samples: RetrievalTrainingSample
 
 function dot(weights: RetrievalWeights, signals: Partial<RetrievalWeights>): number {
   return (Object.keys(weights) as Array<keyof RetrievalWeights>).reduce((sum, key) => sum + weights[key] * (signals[key] ?? 0), 0);
+}
+
+function memoryMatchesProfileScope(memory: Memory, scope: RetrievalProfile["scope"] | undefined): boolean {
+  if (!scope) return true;
+  return (
+    (!scope.userId || memory.userId === scope.userId) &&
+    (!scope.projectId || memory.projectId === scope.projectId) &&
+    (!scope.appId || memory.appId === scope.appId) &&
+    (!scope.orgId || memory.orgId === scope.orgId) &&
+    (!scope.agentId || memory.agentId === scope.agentId)
+  );
+}
+
+function sampleMatchesProfileScope(sample: RetrievalTrainingSample, scope: RetrievalProfile["scope"] | undefined): boolean {
+  if (!scope) return true;
+  return !scope.userId || sample.userId === scope.userId;
+}
+
+function deterministicQueryExpansions(query: string): string[] {
+  const lower = query.toLowerCase();
+  const groups = [
+    ["cli", "command line", "terminal", "shell"],
+    ["ui", "dashboard", "frontend", "operator console"],
+    ["bug", "issue", "defect", "regression"],
+    ["memory", "recall", "context", "knowledge"],
+    ["auth", "login", "session", "identity"],
+    ["database", "storage", "persistence", "store"],
+    ["sync", "replay", "offline", "replication"],
+    ["release", "launch", "deployment", "ship"]
+  ];
+  const expansions = new Set<string>();
+  for (const group of groups) {
+    if (!group.some((term) => lower.includes(term))) continue;
+    for (const term of group) expansions.add(query.replace(new RegExp(group.find((item) => lower.includes(item)) ?? group[0], "i"), term));
+    expansions.add(`${query} ${group.join(" ")}`);
+  }
+  return [...expansions];
 }
 
 function mineRecurringPatterns(memories: Memory[]): BehavioralPatternReport["patterns"] {

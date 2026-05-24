@@ -91,6 +91,9 @@ const searchSchema = z.object({
   runId: z.string().optional(),
   scopeMode: z.enum(["user", "session", "app", "org", "project", "all"]).optional(),
   query: z.string().min(1),
+  mode: z.enum(["hybrid", "rrf", "graph", "path"]).optional(),
+  expandQuery: z.boolean().optional(),
+  queryExpansions: z.array(z.string()).optional(),
   limit: z.number().int().positive().max(50).optional(),
   includeArchived: z.boolean().optional(),
   includePrivate: z.boolean().optional(),
@@ -498,8 +501,22 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (method === "POST" && url.pathname === "/profiles/learn") {
-    const body = z.object({ id: z.string().optional(), label: z.string().optional() }).parse(await json(request));
-    send(response, 202, defaultService.learnRetrievalProfile(body.id, body.label));
+    const body = z
+      .object({
+        id: z.string().optional(),
+        label: z.string().optional(),
+        scope: z
+          .object({
+            userId: z.string().optional(),
+            projectId: z.string().optional(),
+            appId: z.string().optional(),
+            orgId: z.string().optional(),
+            agentId: z.string().optional()
+          })
+          .optional()
+      })
+      .parse(await json(request));
+    send(response, 202, defaultService.learnRetrievalProfile(body.id, body.label, { scope: body.scope }));
     return;
   }
 

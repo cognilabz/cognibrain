@@ -84,7 +84,7 @@ curl "http://localhost:8787/memories?userId=dev"
 ```bash
 curl -X POST http://localhost:8787/search \
   -H "content-type: application/json" \
-  -d '{"userId": "dev", "query": "What language should Atlas use?", "limit": 5}'
+  -d '{"userId":"dev","query":"What language should Atlas use?","limit":5,"mode":"rrf","expandQuery":true}'
 ```
 
 Search results include ranked memories, signal breakdowns, citations, and stale flags.
@@ -98,13 +98,16 @@ Search accepts optional scope and retrieval-weight overrides:
   "appId": "codex",
   "scopeMode": "session",
   "profileId": "coding",
+  "mode": "path",
+  "expandQuery": true,
+  "queryExpansions": ["command line", "terminal"],
   "includeLinkedIdentities": true,
   "includePrivate": false,
   "weights": {"temporal": 0.4, "trust": 0.3}
 }
 ```
 
-Results include explanations, graph path hints, and context-verification decisions when available.
+Search modes are `hybrid`, `rrf`, `graph`, and `path`. Expansion can be deterministic, provider-backed through the JSON-command intelligence adapter, or caller-supplied with `queryExpansions`. Results include explanations, `retrievalMode`, `expandedQueries`, `fusion`, graph path hints, optional contradiction metadata, and context-verification decisions when available.
 
 ## Brains, Sources, Agents, And Personas
 
@@ -144,13 +147,13 @@ curl -X PUT http://localhost:8787/profiles \
   -d '{"id":"coding","label":"Coding","weights":{"trust":0.4,"entity":0.3,"graph":0.2,"keyword":0.1}}'
 curl -X POST http://localhost:8787/profiles/learn \
   -H "content-type: application/json" \
-  -d '{"id":"learned-coding"}'
+  -d '{"id":"learned-coding","scope":{"userId":"dev","projectId":"atlas"}}'
 curl -X POST http://localhost:8787/profiles/training-samples \
   -H "content-type: application/json" \
   -d '{"userId":"dev","query":"Redis cache","outcome":"accepted","signals":{"entity":1,"trust":0.8}}'
 ```
 
-Profiles store normalized weights with provenance. The learning endpoint derives a bounded profile from accumulated feedback events and labeled training samples, then records sample count and loss metadata.
+Profiles store normalized weights with provenance. The learning endpoint derives a bounded profile from accumulated feedback events and labeled training samples, can scope learning by user/project/app/org/agent, then records sample count and loss metadata.
 
 ## Identity Links And Timelines
 

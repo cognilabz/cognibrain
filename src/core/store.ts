@@ -53,7 +53,7 @@ export class MemoryStore {
       scope,
       confidence,
       beliefState,
-      provenance: { source, citations: citationsFor(source) },
+      provenance: { source, citations: citationsFor(source), extractedFromEpisodeId: typeof input.metadata?.episodeId === "string" ? input.metadata.episodeId : undefined },
       audit: [{ type: "created", at: now, actor: source.kind, nextState: beliefState }],
       pinned: input.pinned ?? false,
       metadata: input.metadata ?? {},

@@ -124,6 +124,8 @@ The entity catalog returns canonical records, merge suggestions, and enrichment 
 
 ```bash
 curl "http://localhost:8787/memories?userId=dev"
+curl "http://localhost:8787/episodes?userId=dev"
+curl "http://localhost:8787/episodes/ep_abc123"
 ```
 
 ## Search
@@ -159,6 +161,8 @@ curl -X POST http://localhost:8787/evidence-pack \
 ```
 
 Evidence packs are the canonical "why was this memory used?" artifact. The response includes the compact context block plus per-memory source, scope, consent, validity window, stale/decision state, score signals, graph paths, citation and explanation. CLI users can run `cognibrain memory why-used "<query>"` or `cognibrain memory evidence-pack "<query>"`; MCP users receive the same structure through `memory_context_pack`.
+
+Episodes preserve the raw extraction ground truth. `memory extract` creates an episode with raw conversation events, tool-call outputs, touched files from metadata, a stable hash and the derived memory ids. Extracted memories reference the episode through `metadata.episodeId` and `provenance.extractedFromEpisodeId`, so operators can inspect the original context before trusting a fact.
 
 Search accepts optional scope and retrieval-weight overrides:
 

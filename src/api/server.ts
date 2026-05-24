@@ -1083,6 +1083,16 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && url.pathname === "/episodes") {
+    send(response, 200, defaultService.listEpisodes(url.searchParams.get("userId") ?? undefined));
+    return;
+  }
+
+  if (method === "GET" && parts[0] === "episodes" && parts[1]) {
+    send(response, 200, defaultService.getEpisode(parts[1]));
+    return;
+  }
+
   if (parts[0] === "memories" && parts[1]) {
     if (method === "GET") {
       send(response, 200, serialize(defaultService.get(parts[1])));

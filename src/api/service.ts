@@ -45,6 +45,8 @@ import type {
   ConnectorAuthSession,
   ConnectorSyncRecord,
   EnrichmentCandidate,
+  EpisodeInput,
+  EpisodeRecord,
   EntityMergeSuggestion,
   EntityRecord,
   EvidencePack,
@@ -64,6 +66,7 @@ import type {
   MemoryExtractor,
   MemoryInput,
   MemoryRouteReport,
+  MemoryScope,
   MemorySource,
   MarketplaceModule,
   MarketplaceInstallPlan,
@@ -180,6 +183,7 @@ export class MemoryService {
   private retrievalProfiles = new Map<string, RetrievalProfile>();
   private domainEvaluations: DomainEvaluationReport[] = [];
   private trainingSamples: RetrievalTrainingSample[] = [];
+  private episodes = new Map<string, EpisodeRecord>();
   private brains = new Map<string, Brain>();
   private sources = new Map<string, MemorySource>();
   private agents = new Map<string, AgentRegistration>();
@@ -287,11 +291,43 @@ export class MemoryService {
     return memory;
   }
 
+  createEpisode(input: EpisodeInput): EpisodeRecord {
+    const now = new Date().toISOString();
+    const hash = contentHash(JSON.stringify({ scope: input.scope, events: input.events, toolCalls: input.toolCalls ?? [], filesTouched: input.filesTouched ?? [] }));
+    const episode: EpisodeRecord = {
+      id: `ep_${hash.slice(2, 14)}`,
+      userId: input.scope.userId,
+      scope: input.scope,
+      rawConversation: input.events,
+      toolCalls: input.toolCalls ?? input.events.filter((event) => event.role === "tool").map((event) => ({ name: event.metadata?.toolName as string | undefined, output: event.content, timestamp: event.timestamp })),
+      filesTouched: input.filesTouched ?? input.events.flatMap((event) => Array.isArray(event.metadata?.filesTouched) ? event.metadata.filesTouched.filter((item): item is string => typeof item === "string") : []),
+      source: input.source ?? input.events.find((event) => event.source)?.source,
+      hash,
+      memoryIds: [],
+      createdAt: now
+    };
+    this.episodes.set(episode.id, episode);
+    this.recordAudit("memory.write", { userId: episode.userId, brainId: episode.scope.brainId, sourceId: episode.scope.sourceId, metadata: { resource: "episode", episodeId: episode.id, events: episode.rawConversation.length } });
+    this.persist();
+    return episode;
+  }
+
+  listEpisodes(userId?: string): EpisodeRecord[] {
+    return [...this.episodes.values()].filter((episode) => !userId || episode.userId === userId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  getEpisode(id: string): EpisodeRecord {
+    const episode = this.episodes.get(id);
+    if (!episode) throw new Error(`Episode not found: ${id}`);
+    return episode;
+  }
+
   extract(
     events: MemoryExtractionEvent[],
     scope: Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId" | "deviceId" | "runId">
   ): ExtractionReport {
     const normalizedEvents = events.map(normalizeMediaExtractionEvent);
+    const episode = this.createEpisode({ scope: scope as MemoryScope, events: normalizedEvents });
     const existing = this.store.list(scope.userId);
     const failures = ruleExtractionFailures(normalizedEvents);
     const ruleInputs = extractAddOnlyMemories(normalizedEvents, scope).map((input) => markExtractionStage(input, "rules"));
@@ -307,12 +343,14 @@ export class MemoryService {
     const seenHashes = new Set<string>();
     const inputs = [...ruleInputs, ...providerInputs].filter((input) => {
       const hash = contentHash(`${input.content}:${input.source?.kind ?? ""}:${input.timestamp ?? ""}`);
-      input.metadata = { ...(input.metadata ?? {}), contentHash: hash };
+      input.metadata = { ...(input.metadata ?? {}), contentHash: hash, episodeId: episode.id };
       if (existingHashes.has(hash) || seenHashes.has(hash)) return false;
       seenHashes.add(hash);
       return true;
     });
     const memories = inputs.map((input) => this.add(linkStateChange(input, this.store.list(scope.userId))));
+    this.episodes.set(episode.id, { ...episode, memoryIds: memories.map((memory) => memory.id) });
+    this.persist();
     const enrichmentCandidates = enrichmentCandidatesFor(this.store.list(scope.userId));
     const learnedRules = learnedRuleSuggestions(normalizedEvents, failures);
     stages.push({
@@ -1641,6 +1679,8 @@ export class MemoryService {
       info: { title: "cognibrain API", version: "0.1.0" },
       paths: {
         "/memories": ["GET", "POST"],
+        "/episodes": ["GET"],
+        "/episodes/{id}": ["GET"],
         "/search": ["POST"],
         "/route": ["POST"],
         "/intent": ["POST"],
@@ -1692,6 +1732,7 @@ export class MemoryService {
       target,
       counts: {
         memories: this.store.list().length,
+        episodes: this.episodes.size,
         profiles: this.retrievalProfiles.size,
         personas: this.personas.size,
         connectors: this.connectorManifests.size,
@@ -1709,6 +1750,7 @@ export class MemoryService {
       deployment: this.managedDeploymentPlan({ target, ssoProvider: options.ssoProvider, secretManager: options.secretManager }),
       manifest: {
         memories: this.store.export(),
+        episodes: [...this.episodes.values()],
         retrievalProfiles: [...this.retrievalProfiles.values()],
         personas: [...this.personas.values()],
         connectors: [...this.connectorManifests.values()],
@@ -1719,9 +1761,10 @@ export class MemoryService {
     };
   }
 
-  importMigrationBundle(bundle: ManagedMigrationBundle): { importedMemories: number; importedProfiles: number; importedPersonas: number; importedConnectors: number; importedRetentionRules: number } {
+  importMigrationBundle(bundle: ManagedMigrationBundle): { importedMemories: number; importedEpisodes: number; importedProfiles: number; importedPersonas: number; importedConnectors: number; importedRetentionRules: number } {
     const manifest = bundle.manifest as {
       memories?: Memory[];
+      episodes?: EpisodeRecord[];
       retrievalProfiles?: RetrievalProfile[];
       personas?: PersonaProfile[];
       connectors?: ConnectorManifest[];
@@ -1729,6 +1772,7 @@ export class MemoryService {
       retentionRules?: RetentionRule[];
     };
     const imported = manifest.memories?.length ? this.store.import(manifest.memories) : [];
+    for (const episode of manifest.episodes ?? []) this.episodes.set(episode.id, episode);
     for (const profile of manifest.retrievalProfiles ?? []) this.setRetrievalProfile({ ...profile, updatedAt: new Date(profile.updatedAt).toISOString() });
     for (const persona of manifest.personas ?? []) this.personas.set(persona.id, persona);
     for (const connector of manifest.connectors ?? []) this.connectorManifests.set(connector.id, connector);
@@ -1738,6 +1782,7 @@ export class MemoryService {
     this.persist();
     return {
       importedMemories: imported.length,
+      importedEpisodes: manifest.episodes?.length ?? 0,
       importedProfiles: manifest.retrievalProfiles?.length ?? 0,
       importedPersonas: manifest.personas?.length ?? 0,
       importedConnectors: manifest.connectors?.length ?? 0,
@@ -2855,6 +2900,7 @@ export class MemoryService {
     this.maintenance = raw.maintenance ?? { users: {} };
     this.metrics = raw.metrics ?? this.metrics;
     this.feedbackEvents = raw.feedback ?? [];
+    this.episodes = new Map((raw.episodes ?? []).map((episode) => [episode.id, episode]));
     this.retrievalProfiles = new Map((raw.retrievalProfiles ?? []).map((profile) => [profile.id, profile]));
     if (!this.retrievalProfiles.has("default")) {
       this.retrievalProfiles.set("default", {
@@ -2893,6 +2939,7 @@ export class MemoryService {
     const payload: PersistedMemoryFile = {
       version: 2,
       memories: this.store.export(),
+      episodes: [...this.episodes.values()],
       maintenance: this.maintenance,
       metrics: this.metrics,
       feedback: this.feedbackEvents,

@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import type {
   DomainEvaluationReport,
+  EpisodeRecord,
   EntityRecord,
   FeedbackEvent,
   AgentRegistration,
@@ -30,6 +31,7 @@ import type {
 export interface PersistedMemoryFile {
   version: 1 | 2;
   memories: Memory[];
+  episodes?: EpisodeRecord[];
   maintenance: {
     users: Record<string, { lastDreamAt?: string; writesSinceDream: number }>;
   };

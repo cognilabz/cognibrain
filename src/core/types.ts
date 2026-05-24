@@ -421,6 +421,27 @@ export interface MemoryExtractor {
   }): MemoryInput[];
 }
 
+export interface EpisodeRecord {
+  id: string;
+  userId: string;
+  scope: MemoryScope;
+  rawConversation: MemoryExtractionEvent[];
+  toolCalls: Array<{ name?: string; input?: unknown; output?: unknown; timestamp?: Date | string }>;
+  filesTouched: string[];
+  source?: Provenance;
+  hash: string;
+  memoryIds: string[];
+  createdAt: Date | string;
+}
+
+export interface EpisodeInput {
+  scope: MemoryScope;
+  events: MemoryExtractionEvent[];
+  toolCalls?: EpisodeRecord["toolCalls"];
+  filesTouched?: string[];
+  source?: Provenance;
+}
+
 export interface QueryExpander {
   expand(input: { query: string; userId: string; now: Date; memories?: Memory[] }): string[];
 }
@@ -846,6 +867,7 @@ export interface ManagedMigrationBundle {
   target: "self_hosted" | "managed" | "backup";
   counts: {
     memories: number;
+    episodes?: number;
     profiles: number;
     personas: number;
     connectors: number;

@@ -1,4 +1,4 @@
-import type { EvidencePack, FeedbackKind, GraphExplainReport, MarketplaceModule, Memory, MemoryInput, MemoryRouteReport, QueryIntentReport, SearchOptions, SearchResult } from "../core";
+import type { EpisodeRecord, EvidencePack, FeedbackKind, GraphExplainReport, MarketplaceModule, Memory, MemoryInput, MemoryRouteReport, QueryIntentReport, SearchOptions, SearchResult } from "../core";
 
 export interface CognibrainClientOptions {
   baseUrl?: string;
@@ -40,6 +40,10 @@ export class CognibrainClient {
 
   graph(userId?: string): Promise<unknown> {
     return this.request(`/graph${userId ? `?userId=${encodeURIComponent(userId)}` : ""}`);
+  }
+
+  episodes(userId?: string): Promise<EpisodeRecord[]> {
+    return this.request(`/episodes${userId ? `?userId=${encodeURIComponent(userId)}` : ""}`);
   }
 
   graphQuery(query: string, userId?: string): Promise<unknown> {

@@ -522,6 +522,11 @@ describe("TypeScript memory core", () => {
     );
     expect(extracted.memories.length).toBeGreaterThan(1);
     expect(Object.keys(extracted.entityLinks).length).toBeGreaterThan(0);
+    const episode = service.listEpisodes("u1")[0];
+    expect(episode.rawConversation).toHaveLength(2);
+    expect(episode.toolCalls.length).toBe(1);
+    expect(episode.memoryIds).toEqual(extracted.memories.map((memory) => memory.id));
+    expect(extracted.memories.every((memory) => memory.metadata.episodeId === episode.id && memory.provenance.extractedFromEpisodeId === episode.id)).toBe(true);
 
     const before = extracted.memories[0].importance;
     const updated = service.feedback({ memoryId: extracted.memories[0].id, kind: "helpful", userId: "u1" });

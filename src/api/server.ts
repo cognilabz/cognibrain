@@ -278,7 +278,7 @@ const personaSchema = z.object({
 const webhookSchema = z.object({
   id: z.string().optional(),
   url: z.string().url(),
-  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "managed.tenant", "inference.run", "entity.merge", "entity.split"])),
+  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "managed.tenant", "privacy.compute", "inference.run", "entity.merge", "entity.split"])),
   secretRef: z.string().optional()
 });
 
@@ -353,6 +353,13 @@ const managedTenantSchema = z.object({
     backupRef: z.string().optional(),
     lastVerifiedAt: z.union([z.string(), z.date()]).optional()
   }).optional()
+});
+
+const crossBrainPrivacyComputeSchema = z.object({
+  brainIds: z.array(z.string().min(1)).min(2),
+  salt: z.string().optional(),
+  minK: z.number().int().min(2).optional(),
+  dimensions: z.array(z.enum(["entities", "tags", "relations"])).optional()
 });
 
 const connectorManifestSchema = z.object({
@@ -472,7 +479,7 @@ const connectorPollSchema = z.object({
   projectId: z.string().optional()
 });
 
-const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "inference.run", "entity.merge", "entity.split", "retention.enforce", "security.key.rotate", "privacy.insights"]);
+const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "managed.tenant", "inference.run", "entity.merge", "entity.split", "retention.enforce", "security.key.rotate", "privacy.insights", "privacy.compute"]);
 
 const retentionRuleSchema = z.object({
   id: z.string().optional(),
@@ -861,6 +868,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       kAnonymity: url.searchParams.get("k") ? Number(url.searchParams.get("k")) : undefined,
       includeExact: url.searchParams.get("includeExact") === "true"
     }));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/privacy/cross-brain-compute") {
+    send(response, 200, defaultService.privacyPreservingCrossBrainCompute(crossBrainPrivacyComputeSchema.parse(await json(request))));
     return;
   }
 

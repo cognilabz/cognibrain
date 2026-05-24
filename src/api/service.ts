@@ -85,6 +85,7 @@ import type {
   StorageBackendStatus,
   SyncReport,
   ConsentPolicy,
+  CrossBrainPrivacyComputeReport,
   QueryExpander,
   TranslationProvider,
   ProviderAdapterStatus,
@@ -1481,6 +1482,7 @@ export class MemoryService {
         "/migration/import": ["POST"],
         "/backup/verify": ["POST"],
         "/privacy/insights": ["GET"],
+        "/privacy/cross-brain-compute": ["POST"],
         "/security/key-provider": ["GET"],
         "/security/transport": ["GET"],
         "/compliance/export": ["GET"]
@@ -1913,6 +1915,87 @@ export class MemoryService {
       notes: ["Groups below k-anonymity are suppressed.", "Counts use deterministic Laplace-style noise for local reproducibility."]
     };
     this.recordAudit("privacy.insights", { metadata: { epsilon, kAnonymity, suppressedGroups, aggregates: aggregates.length } });
+    this.persist();
+    return report;
+  }
+
+  privacyPreservingCrossBrainCompute(options: {
+    brainIds: string[];
+    salt?: string;
+    minK?: number;
+    dimensions?: Array<"entities" | "tags" | "relations">;
+  }): CrossBrainPrivacyComputeReport {
+    const brainIds = [...new Set(options.brainIds.filter(Boolean))].sort();
+    if (brainIds.length < 2) throw new Error("At least two brainIds are required for cross-brain compute.");
+    const dimensions = options.dimensions?.length ? [...new Set(options.dimensions)] : ["entities", "tags", "relations"] as Array<"entities" | "tags" | "relations">;
+    const minK = Math.max(2, Math.round(options.minK ?? 2));
+    const salt = options.salt ?? process.env.MEMORY_PRIVACY_COMPUTE_SALT ?? "local-cross-brain-compute";
+    const saltHash = contentHash(salt);
+    const byHash = new Map<string, { dimensions: Set<"entities" | "tags" | "relations">; brainIds: Set<string>; memoryIds: Set<string> }>();
+    const brainStats = new Map<string, { memoriesScanned: number; hashes: Set<string> }>();
+
+    for (const brainId of brainIds) {
+      const memories = this.store.list().filter((memory) => memory.brainId === brainId && !memory.archivedAt);
+      const hashes = new Set<string>();
+      for (const memory of memories) {
+        for (const token of privacyComputeTokens(memory, dimensions)) {
+          const hash = createHmac("sha256", salt).update(`${token.dimension}:${token.value}`).digest("hex");
+          hashes.add(hash);
+          const aggregate = byHash.get(hash) ?? { dimensions: new Set(), brainIds: new Set(), memoryIds: new Set() };
+          aggregate.dimensions.add(token.dimension);
+          aggregate.brainIds.add(brainId);
+          aggregate.memoryIds.add(memory.id);
+          byHash.set(hash, aggregate);
+        }
+      }
+      brainStats.set(brainId, { memoriesScanned: memories.length, hashes });
+    }
+
+    const intersections = [...byHash.entries()]
+      .filter(([, aggregate]) => aggregate.brainIds.size >= minK)
+      .sort((a, b) => b[1].brainIds.size - a[1].brainIds.size || a[0].localeCompare(b[0]))
+      .map(([hash, aggregate]) => ({
+        hash,
+        dimensions: [...aggregate.dimensions].sort(),
+        participantBrainIds: [...aggregate.brainIds].sort(),
+        brainCount: aggregate.brainIds.size,
+        memoryCount: aggregate.memoryIds.size
+      }));
+    const releasedHashes = new Set(intersections.map((item) => item.hash));
+    const brains = [...brainStats.entries()].map(([brainId, stats]) => {
+      const released = [...stats.hashes].filter((hash) => releasedHashes.has(hash)).length;
+      return {
+        brainId,
+        memoriesScanned: stats.memoriesScanned,
+        contributedHashes: stats.hashes.size,
+        releasedHashes: released,
+        suppressedHashes: stats.hashes.size - released
+      };
+    });
+    const candidateHashes = byHash.size;
+    const report: CrossBrainPrivacyComputeReport = {
+      generatedAt: new Date().toISOString(),
+      brainIds,
+      dimensions,
+      minK,
+      hashAlgorithm: "hmac-sha256",
+      saltHash,
+      noRawMemoryData: true,
+      totals: {
+        memoriesScanned: brains.reduce((sum, brain) => sum + brain.memoriesScanned, 0),
+        candidateHashes,
+        releasedHashes: releasedHashes.size,
+        suppressedHashes: candidateHashes - releasedHashes.size
+      },
+      brains,
+      intersections,
+      notes: [
+        "Only HMAC hashes, counts, and participant brain ids are returned.",
+        "Raw memory content, entity labels, tags, and relation labels are never included in this report.",
+        "Hashes below minK participant brains are suppressed."
+      ]
+    };
+    this.recordAudit("privacy.compute", { metadata: { brainIds, dimensions, minK, releasedHashes: report.totals.releasedHashes, suppressedHashes: report.totals.suppressedHashes } });
     this.persist();
     return report;
   }
@@ -3344,6 +3427,26 @@ function deterministicLaplaceNoise(seed: string, epsilon: number): number {
   const u = Math.min(0.999999, Math.max(0.000001, (integer % 1_000_000) / 1_000_000));
   const centered = u - 0.5;
   return -(Math.sign(centered) || 1) * Math.log(1 - 2 * Math.abs(centered)) / epsilon;
+}
+
+function privacyComputeTokens(memory: Memory, dimensions: Array<"entities" | "tags" | "relations">): Array<{ dimension: "entities" | "tags" | "relations"; value: string }> {
+  const tokens: Array<{ dimension: "entities" | "tags" | "relations"; value: string }> = [];
+  if (dimensions.includes("entities")) {
+    for (const entity of memory.entities) {
+      const normalized = entity.trim().toLowerCase();
+      if (normalized) tokens.push({ dimension: "entities", value: normalized });
+    }
+  }
+  if (dimensions.includes("tags")) {
+    for (const tag of memory.tags) {
+      const normalized = tag.trim().toLowerCase();
+      if (normalized) tokens.push({ dimension: "tags", value: normalized });
+    }
+  }
+  if (dimensions.includes("relations")) {
+    for (const relation of memory.relations) tokens.push({ dimension: "relations", value: relation.type });
+  }
+  return tokens;
 }
 
 function deterministicObservation(label: string, memories: Memory[], style: ObservationReport["style"]): string {

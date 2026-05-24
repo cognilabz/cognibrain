@@ -226,6 +226,16 @@ The report is backed by persisted tenant state plus live storage, key-provider, 
 
 `doctor --publish` emits a warning when `MEMORY_DEPLOYMENT_MODE=managed`, `self_hosted`, or `production` uses a non-HTTPS `MEMORY_PUBLIC_URL` without `MEMORY_TLS_TERMINATED_BY`. Set `MEMORY_TLS_TERMINATED_BY=ingress` or expose an `https://` public URL before claiming production transport security. Concrete deployment artifacts live in `docker/` and `deploy/kubernetes/cognibrain.yaml`.
 
+Cross-brain privacy compute uses HMAC hashes over entities, tags and relation types. Set `MEMORY_PRIVACY_COMPUTE_SALT` per deployment, then run:
+
+```bash
+MEMORY_PRIVACY_COMPUTE_SALT="replace-with-secret" \
+MEMORY_PRIVACY_COMPUTE_MIN_K=2 \
+npm run cli -- privacy-cross-brain brain_alpha brain_beta
+```
+
+The result intentionally excludes raw memory text, raw entities, raw tags, and raw relation labels.
+
 Offline clients can queue operations while disconnected and replay them later:
 
 ```bash

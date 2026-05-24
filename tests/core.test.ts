@@ -615,6 +615,31 @@ describe("TypeScript memory core", () => {
     expect(service.auditTrail({ type: "retention.enforce" }).length).toBeGreaterThan(0);
   });
 
+  it("runs privacy-preserving cross-brain compute without raw labels", () => {
+    const service = new MemoryService();
+    const alpha = service.createBrain({ id: "brain_alpha", name: "Alpha", ownerUserId: "owner", visibility: "team" });
+    const beta = service.createBrain({ id: "brain_beta", name: "Beta", ownerUserId: "owner", visibility: "team" });
+    const gamma = service.createBrain({ id: "brain_gamma", name: "Gamma", ownerUserId: "owner", visibility: "team" });
+    service.add({ userId: "owner", brainId: alpha.id, content: "Alpha Atlas retrieval.", entities: ["Atlas"], tags: ["retrieval"], source: { kind: "human", confidence: 0.95 } });
+    service.add({ userId: "owner", brainId: beta.id, content: "Beta Atlas memory.", entities: ["Atlas"], tags: ["memory"], source: { kind: "human", confidence: 0.95 } });
+    service.add({ userId: "owner", brainId: gamma.id, content: "Gamma has a private-only unique concept.", entities: ["UniqueSecret"], tags: ["private-only"], source: { kind: "human", confidence: 0.95 } });
+
+    const report = service.privacyPreservingCrossBrainCompute({
+      brainIds: [alpha.id, beta.id, gamma.id],
+      salt: "unit-secret-salt",
+      minK: 2,
+      dimensions: ["entities", "tags"]
+    });
+
+    expect(report.noRawMemoryData).toBe(true);
+    expect(report.intersections).toHaveLength(1);
+    expect(report.intersections[0].participantBrainIds).toEqual([alpha.id, beta.id]);
+    expect(JSON.stringify(report)).not.toContain("Atlas");
+    expect(JSON.stringify(report)).not.toContain("UniqueSecret");
+    expect(report.totals.suppressedHashes).toBeGreaterThan(0);
+    expect(service.auditTrail({ type: "privacy.compute" })).toHaveLength(1);
+  });
+
   it("manages retrieval profiles and learns a bounded profile from feedback", () => {
     const service = new MemoryService();
     const memory = service.add({

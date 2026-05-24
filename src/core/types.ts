@@ -584,7 +584,8 @@ export interface AuditEvent {
     | "entity.split"
     | "retention.enforce"
     | "security.key.rotate"
-    | "privacy.insights";
+    | "privacy.insights"
+    | "privacy.compute";
   actorId?: string;
   userId?: string;
   brainId?: string;
@@ -957,6 +958,37 @@ export interface DifferentialPrivacyReport {
     noisyCount: number;
     exactCount?: number;
     suppressed: boolean;
+  }>;
+  notes: string[];
+}
+
+export interface CrossBrainPrivacyComputeReport {
+  generatedAt: Date | string;
+  brainIds: string[];
+  dimensions: Array<"entities" | "tags" | "relations">;
+  minK: number;
+  hashAlgorithm: "hmac-sha256";
+  saltHash: string;
+  noRawMemoryData: true;
+  totals: {
+    memoriesScanned: number;
+    candidateHashes: number;
+    releasedHashes: number;
+    suppressedHashes: number;
+  };
+  brains: Array<{
+    brainId: string;
+    memoriesScanned: number;
+    contributedHashes: number;
+    releasedHashes: number;
+    suppressedHashes: number;
+  }>;
+  intersections: Array<{
+    hash: string;
+    dimensions: Array<"entities" | "tags" | "relations">;
+    participantBrainIds: string[];
+    brainCount: number;
+    memoryCount: number;
   }>;
   notes: string[];
 }

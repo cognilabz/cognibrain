@@ -74,6 +74,8 @@ Every core action records an append-only audit event: memory write/update/delete
 
 Compliance reports summarize memory counts, brain/source counts, consent visibility, retention rules, encrypted entries, key ids/versions, key-provider scope, backup recovery status, transport-security state, backup references, expired retention entries, delete-on-request flags, data-flow counts, and audit counts by type. This gives operators a concrete exportable control surface instead of a policy note buried in documentation.
 
+Privacy-preserving cross-brain compute is available through `privacyPreservingCrossBrainCompute()` and `/privacy/cross-brain-compute`. It HMAC-hashes canonical entity, tag, and relation signals with a deployment salt, releases only hashes that appear in at least `minK` participant brains, and returns counts plus participant brain ids without raw memory content or labels. This gives teams an inspectable secure-aggregation boundary for cross-brain analytics while keeping full cryptographic MPC or vendor-specific private set intersection behind a future adapter.
+
 ## Offline Sync And Storage
 
 `storageStatus()` exposes the active adapter and the supported local-first backend contracts: in-memory for tests, atomic JSON snapshots for desktop/CLI, append-only JSONL for replayable durable logs, SQLite transactional snapshots with an append-only SQL event table when `node:sqlite` is available, Postgres/Cockroach-compatible SQL-shaped snapshots, and Cassandra-compatible wide-column snapshots with partition/clustering keys. JSON-to-SQL and Cassandra-compatible migration boundaries are covered by tests; remote production clusters still require deployment-specific drivers and credentials.

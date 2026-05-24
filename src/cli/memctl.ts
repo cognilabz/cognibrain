@@ -406,6 +406,17 @@ switch (command) {
     console.log(JSON.stringify(service.privacyInsights({ epsilon: args[0] ? Number(args[0]) : undefined, kAnonymity: args[1] ? Number(args[1]) : undefined, includeExact: process.env.MEMORY_PRIVACY_INCLUDE_EXACT === "true" }), null, 2));
     break;
   }
+  case "privacy-cross-brain": {
+    const brainIds = args.length ? args : csvList(process.env.MEMORY_BRAIN_IDS);
+    if (brainIds.length < 2) fail("Usage: memctl privacy-cross-brain <brain-id> <brain-id> [...]");
+    console.log(JSON.stringify(service.privacyPreservingCrossBrainCompute({
+      brainIds,
+      salt: process.env.MEMORY_PRIVACY_COMPUTE_SALT,
+      minK: process.env.MEMORY_PRIVACY_COMPUTE_MIN_K ? Number(process.env.MEMORY_PRIVACY_COMPUTE_MIN_K) : undefined,
+      dimensions: privacyComputeDimensionsFromEnv()
+    }), null, 2));
+    break;
+  }
   case "storage": {
     console.log(JSON.stringify(service.storageStatus(), null, 2));
     break;
@@ -799,7 +810,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -871,6 +882,12 @@ function managedPlanFromEnv() {
 function managedTenantStatusFromEnv() {
   const value = process.env.MEMORY_MANAGED_TENANT_STATUS;
   return value === "provisioning" || value === "active" || value === "paused" ? value : undefined;
+}
+
+function privacyComputeDimensionsFromEnv() {
+  const values = csvList(process.env.MEMORY_PRIVACY_COMPUTE_DIMENSIONS);
+  const dimensions = values.filter((value): value is "entities" | "tags" | "relations" => value === "entities" || value === "tags" || value === "relations");
+  return dimensions.length ? dimensions : undefined;
 }
 
 function metadataFromEnv() {

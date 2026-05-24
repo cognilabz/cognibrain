@@ -1287,6 +1287,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && parts[0] === "evidence-pack" && parts[1]) {
+    send(response, 200, defaultService.getEvidencePack(parts[1]));
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/federation/search") {
     const body = searchSchema.extend({ brainIds: z.array(z.string()).min(1) }).parse(await json(request));
     const report = defaultService.federatedSearch(body);

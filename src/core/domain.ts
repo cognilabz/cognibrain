@@ -87,6 +87,68 @@ export const FINANCE_DOMAIN_MODULE: DomainModule = {
   }
 };
 
+export const SALES_DOMAIN_MODULE: DomainModule = {
+  id: "sales",
+  label: "Sales and customer revenue",
+  retrievalWeights: { entity: 0.22, temporal: 0.18, trust: 0.22, keyword: 0.2 },
+  aliases: {
+    account: ["customer", "prospect", "client"],
+    opportunity: ["deal", "pipeline"],
+    champion: ["buyer", "sponsor"]
+  },
+  evaluationCases: [
+    {
+      id: "sales-opportunity-owner",
+      query: "Who owns the renewal opportunity for Acme?",
+      expected: ["Acme", "renewal", "Mira"],
+      memories: [
+        {
+          userId: "domain-eval",
+          content: "Mira owns the Acme renewal opportunity and tracks the champion in the enterprise pipeline.",
+          source: { kind: "human", confidence: 0.94 },
+          tags: ["sales"]
+        }
+      ]
+    }
+  ],
+  enrich(input) {
+    return /(?:account|customer|prospect|client|opportunity|deal|pipeline|renewal|champion|buyer|sponsor|sales)/i.test(input.content)
+      ? { ...input, tags: [...(input.tags ?? []), "sales"] }
+      : input;
+  }
+};
+
+export const SUPPORT_DOMAIN_MODULE: DomainModule = {
+  id: "support",
+  label: "Support and customer operations",
+  retrievalWeights: { temporal: 0.22, trust: 0.24, entity: 0.2, keyword: 0.2 },
+  aliases: {
+    ticket: ["case", "issue"],
+    incident: ["outage", "escalation"],
+    customer: ["user", "requester"]
+  },
+  evaluationCases: [
+    {
+      id: "support-escalation-status",
+      query: "Which support case is escalated?",
+      expected: ["ticket", "escalated", "Atlas"],
+      memories: [
+        {
+          userId: "domain-eval",
+          content: "Support ticket Atlas-42 is escalated after the customer reported a failed sync.",
+          source: { kind: "transcript", confidence: 0.9 },
+          tags: ["support"]
+        }
+      ]
+    }
+  ],
+  enrich(input) {
+    return /(?:support|ticket|case|issue|incident|outage|escalation|sla|customer|requester)/i.test(input.content)
+      ? { ...input, tags: [...(input.tags ?? []), "support"] }
+      : input;
+  }
+};
+
 export const HEALTHCARE_DOMAIN_MODULE: DomainModule = {
   id: "healthcare",
   label: "Healthcare privacy",
@@ -115,6 +177,8 @@ export const DOMAIN_MODULES: DomainModule[] = [
   CODING_DOMAIN_MODULE,
   RESEARCH_DOMAIN_MODULE,
   LEGAL_DOMAIN_MODULE,
+  SALES_DOMAIN_MODULE,
+  SUPPORT_DOMAIN_MODULE,
   FINANCE_DOMAIN_MODULE,
   HEALTHCARE_DOMAIN_MODULE,
   SECURITY_DOMAIN_MODULE,

@@ -42,7 +42,38 @@ describe("cognibrain CLI", () => {
     }
   });
 
-  it("generates reviewable harness packages for Codex, Claude, Copilot, and Cursor", () => {
+  it("exports and reloads evidence packs by context-pack id through the CLI", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-evidence-"));
+    try {
+      const env = {
+        ...process.env,
+        MEMORY_DB_PATH: join(dir, "memory.json"),
+        MEMORY_USER_ID: "cli-evidence",
+        MEMORY_AUTO_DREAM: "false"
+      };
+      execFileSync(process.execPath, [cli, "memory", "add", "Atlas evidence packs can be reloaded by context id."], {
+        cwd: root,
+        env,
+        encoding: "utf8"
+      });
+      const created = JSON.parse(execFileSync(process.execPath, [cli, "memory", "evidence-pack", "Atlas evidence packs"], {
+        cwd: root,
+        env,
+        encoding: "utf8"
+      }));
+      const loaded = JSON.parse(execFileSync(process.execPath, [cli, "memory", "evidence", created.id], {
+        cwd: root,
+        env,
+        encoding: "utf8"
+      }));
+      expect(loaded.id).toBe(created.id);
+      expect(loaded.context).toContain("Atlas evidence packs");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("generates reviewable harness packages for all nextplan connector targets", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-"));
     const codexHome = join(dir, ".codex");
     try {
@@ -62,6 +93,15 @@ describe("cognibrain CLI", () => {
         join(dir, ".github", "instructions", "cognibrain.instructions.md"),
         join(dir, ".cursor", "mcp.json"),
         join(dir, ".cursor", "rules", "open-memory.mdc"),
+        join(dir, ".vscode", "mcp.json"),
+        join(dir, ".opencode", "mcp.json"),
+        join(dir, ".opencode", "cognibrain.md"),
+        join(dir, ".openclaw", "mcp.json"),
+        join(dir, ".openclaw", "cognibrain.md"),
+        join(dir, "langgraph.cognibrain.json"),
+        join(dir, "langgraph-cognibrain.ts"),
+        join(dir, "crewai.cognibrain.json"),
+        join(dir, "crewai_cognibrain.py"),
         join(dir, ".cognibrain-harness-package.json")
       ];
       for (const path of expected) expect(existsSync(path), path).toBe(true);
@@ -69,12 +109,18 @@ describe("cognibrain CLI", () => {
       expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toBe(readFileSync(join(root, "templates", "codex", "AGENTS.md"), "utf8"));
       expect(readFileSync(join(dir, ".cursor", "rules", "open-memory.mdc"), "utf8")).toBe(readFileSync(join(root, "templates", "cursor", "open-memory.mdc"), "utf8"));
       expect(readFileSync(join(dir, ".github", "copilot-instructions.md"), "utf8")).toBe(readFileSync(join(root, "templates", "copilot", "copilot-instructions.md"), "utf8"));
+      expect(readFileSync(join(dir, ".opencode", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "opencode", "cognibrain.md"), "utf8"));
+      expect(readFileSync(join(dir, ".openclaw", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "openclaw", "cognibrain.md"), "utf8"));
+      expect(readFileSync(join(dir, "langgraph-cognibrain.ts"), "utf8")).toBe(readFileSync(join(root, "templates", "langgraph", "langgraph-cognibrain.ts"), "utf8"));
+      expect(readFileSync(join(dir, "crewai_cognibrain.py"), "utf8")).toBe(readFileSync(join(root, "templates", "crewai", "crewai_cognibrain.py"), "utf8"));
       const claude = readFileSync(join(dir, ".claude", "settings.json"), "utf8");
       expect(claude).toContain(root);
       expect(claude).not.toContain("/ABSOLUTE/PATH/TO/cognibrain");
       const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8"));
-      expect(Object.keys(manifest.harnesses)).toEqual(["codex", "claude", "copilot", "cursor"]);
+      expect(Object.keys(manifest.harnesses)).toEqual(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai"]);
       expect(manifest.harnesses.copilot.feedback).toContain("accepted_change");
+      expect(manifest.harnesses.langgraph.feedback).toContain("tool outcome telemetry");
+      expect(manifest.harnesses.crewai.feedback).toContain("tool outcome telemetry");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -98,6 +144,27 @@ describe("cognibrain CLI", () => {
       expect(manifest.harnesses.claude.feedback).toContain("memory feedback-injection");
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("offers package-style installers for OpenCode, OpenClaw, LangGraph, and CrewAI", () => {
+    for (const target of ["opencode", "openclaw", "langgraph", "crewai"]) {
+      const dir = mkdtempSync(join(tmpdir(), `cognibrain-connect-${target}-`));
+      const codexHome = join(dir, ".codex");
+      try {
+        const output = execFileSync(process.execPath, [connectCli, target, "--no-start", "--no-doctor"], {
+          cwd: dir,
+          env: { ...process.env, CODEX_HOME: codexHome, MEMORY_AUTO_DREAM: "false" },
+          encoding: "utf8"
+        });
+
+        expect(output).toContain(`cognibrain connector package ready for ${target}`);
+        expect(output).toContain("doctor --publish");
+        const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8"));
+        expect(manifest.harnesses[target]).toBeDefined();
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     }
   });
 });

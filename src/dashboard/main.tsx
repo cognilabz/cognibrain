@@ -76,6 +76,11 @@ type MarketplaceModuleCard = {
   manifest: Record<string, unknown>;
   securityStatus?: string;
 };
+type RoutePreview = {
+  selectedScopes: Array<{ kind: string; id: string; reason: string }>;
+  excludedScopes: Array<{ kind: string; id: string; reason: string }>;
+  reasoning: string[];
+};
 
 const viewItems: Array<{ id: ViewId; label: string; icon: React.ElementType; note: string }> = [
   { id: "memories", label: "Store", icon: Database, note: "Inspect facts" },
@@ -325,6 +330,7 @@ function App() {
   const filteredMemories = filterMemories(memories, filter);
   const selectedMemory = selectedId ? findMemory(memories, selectedId) : filteredMemories[0] ?? memories[0] ?? null;
   const results = retrieval.search({ userId: "demo", query, limit: 5, weights: retrievalWeights, graphDepth });
+  const routePreview = useMemo(() => previewRoute(query, memories, results), [query, memories, results]);
   const artifactSummary = useMemo(() => summarizeArtifact(artifactText), [artifactText]);
   const reviewCount = memories.filter(needsReview).length;
 
@@ -659,6 +665,7 @@ function App() {
             results={results}
             selectedMemory={selectedMemory}
             selectMemory={(memory) => setSelectedId(memory.id)}
+            routePreview={routePreview}
             retrievalWeights={retrievalWeights}
             setRetrievalWeights={setRetrievalWeights}
             graphDepth={graphDepth}
@@ -884,6 +891,7 @@ function RecallView({
   results,
   selectedMemory,
   selectMemory,
+  routePreview,
   retrievalWeights,
   setRetrievalWeights,
   graphDepth,
@@ -894,6 +902,7 @@ function RecallView({
   results: SearchResult[];
   selectedMemory: Memory | null;
   selectMemory: (memory: Memory) => void;
+  routePreview: RoutePreview;
   retrievalWeights: Record<string, number>;
   setRetrievalWeights: React.Dispatch<React.SetStateAction<{ semantic: number; keyword: number; entity: number; temporal: number; behavioral: number; trust: number; graph: number; access: number }>>;
   graphDepth: number;
@@ -913,6 +922,24 @@ function RecallView({
         <div className="query-row">
           <input id="query" value={query} onChange={(event) => setQuery(event.target.value)} />
           <button><Search size={17} /> Search</button>
+        </div>
+        <div className="route-preview" aria-label="Memory route preview">
+          <div>
+            <strong>Route Preview</strong>
+            <small>{routePreview.reasoning.join(" ")}</small>
+          </div>
+          <div className="route-scope-grid">
+            {routePreview.selectedScopes.map((scope) => (
+              <span key={`${scope.kind}:${scope.id}`} title={scope.reason}>{scope.kind}: {scope.id}</span>
+            ))}
+          </div>
+          {routePreview.excludedScopes.length ? (
+            <div className="route-excluded">
+              {routePreview.excludedScopes.map((scope) => (
+                <span key={`${scope.kind}:${scope.id}`} title={scope.reason}>blocked {scope.kind}: {scope.id}</span>
+              ))}
+            </div>
+          ) : <small>No scope excluded for this query.</small>}
         </div>
         <div className="result-list">
           {results.map((result) => (
@@ -1566,6 +1593,43 @@ function shortId(memory: Memory): string {
 
 function scopeLabel(memory: Memory): string {
   return [memory.orgId, memory.appId, memory.sessionId, memory.projectId].filter(Boolean).join(" / ") || "user";
+}
+
+function previewRoute(query: string, memories: Memory[], results: SearchResult[]): RoutePreview {
+  const selected = new Map<string, { kind: string; id: string; reason: string }>();
+  const excluded = new Map<string, { kind: string; id: string; reason: string }>();
+  const topMemories = results.map((result) => result.memory);
+  const addSelected = (kind: string, id: string | undefined, reason: string) => {
+    if (!id) return;
+    selected.set(`${kind}:${id}`, { kind, id, reason });
+  };
+  const addExcluded = (kind: string, id: string | undefined, reason: string) => {
+    if (!id) return;
+    excluded.set(`${kind}:${id}`, { kind, id, reason });
+  };
+
+  addSelected("user", "demo", "demo user is the base route");
+  for (const memory of topMemories) {
+    addSelected("session", memory.sessionId, "top evidence contains this session scope");
+    addSelected("app", memory.appId, "top evidence contains this app scope");
+    addSelected("project", memory.projectId, "top evidence contains this project scope");
+    addSelected("org", memory.orgId, "top evidence contains this org scope");
+    addSelected("brain", memory.brainId, "top evidence contains this brain scope");
+    addSelected("agent", memory.agentId, "top evidence contains this agent scope");
+    addSelected("persona", typeof memory.metadata.personaId === "string" ? memory.metadata.personaId : undefined, "top evidence contains this persona scope");
+  }
+
+  const privateOffRoute = memories
+    .filter((memory) => !topMemories.some((top) => top.id === memory.id))
+    .filter((memory) => memory.consent.visibility === "private" && query.toLowerCase().includes("team"))
+    .slice(0, 3);
+  for (const memory of privateOffRoute) addExcluded("private", shortId(memory), "private memory is held back from team-style routing");
+
+  const reasoning = [
+    topMemories.some((memory) => memory.projectId || memory.brainId) ? "Project and brain scopes are selected from ranked evidence." : "Base route uses user memory plus matching evidence scopes.",
+    query.toLowerCase().includes("team") ? "Team wording keeps private memories out unless consent allows sharing." : "Consent gates are checked before context injection."
+  ];
+  return { selectedScopes: [...selected.values()], excludedScopes: [...excluded.values()], reasoning };
 }
 
 function ageLabel(date: Date): string {

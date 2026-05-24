@@ -167,6 +167,18 @@ export interface MemoryAuditEvent {
   nextState?: BeliefState;
 }
 
+export interface ProceduralMemoryMetadata {
+  triggerConditions: string[];
+  applicabilityScope: Partial<MemoryScope>;
+  confidence: number;
+  lastOutcome: "success" | "failure" | "unknown";
+  successCount: number;
+  failureCount: number;
+  lastSuccessAt?: Date | string;
+  lastFailureAt?: Date | string;
+  feedback: Array<{ kind: FeedbackKind | "observed"; at: Date | string; note?: string }>;
+}
+
 export interface MemoryInput {
   brainId?: string;
   sourceId?: string;

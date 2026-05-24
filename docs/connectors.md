@@ -15,7 +15,8 @@ npx cognibrain-connect all --no-start
 ```
 
 This mirrors the current AI-tooling direction: make the install path a small memorable command, then let each harness opt into deeper integration.
-`cognibrain-connect` is the npm-bin surface for that path. It accepts `codex`, `claude-code`, `cursor`, `github-copilot`, `vscode`, or `all`, delegates to the same setup engine, writes `.cognibrain-harness-package.json`, and prints a `doctor --publish` health command after installation.
+`cognibrain-connect` is the npm-bin surface for that path. It accepts `codex`, `claude-code`, `cursor`, `github-copilot`, `vscode`, `opencode`, `openclaw`, `langgraph`, `crewai`, or `all`, delegates to the same setup engine, writes `.cognibrain-harness-package.json`, and prints a `doctor --publish` health command after installation.
+`cognibrain-connect` also ships package-style setup for OpenCode, OpenClaw, LangGraph, and CrewAI. Those targets install MCP configs or helper files that fetch evidence packs and send tool-outcome telemetry through the same HTTP API.
 
 Harness config commands:
 
@@ -25,6 +26,10 @@ Harness config commands:
 ./bin/cognibrain.mjs config copilot
 ./bin/cognibrain.mjs config cursor
 ./bin/cognibrain.mjs config vscode
+./bin/cognibrain.mjs config opencode
+./bin/cognibrain.mjs config openclaw
+./bin/cognibrain.mjs config langgraph
+./bin/cognibrain.mjs config crewai
 ```
 
 Generated harness packages call the packaged CLI with `--runtime-root <project>`, so an npm-installed package stores memory in the target project instead of inside `node_modules`. `setup --all-harnesses` writes:
@@ -33,6 +38,11 @@ Generated harness packages call the packaged CLI with `--runtime-root <project>`
 - Claude Code: project `.mcp.json` and `.claude/settings.json` hooks.
 - GitHub Copilot: `.github/copilot-instructions.md` and `.github/instructions/cognibrain.instructions.md`.
 - Cursor: `.cursor/mcp.json` and `.cursor/rules/open-memory.mdc`.
+- VS Code: `.vscode/mcp.json`.
+- OpenCode: `.opencode/mcp.json` and `.opencode/cognibrain.md`.
+- OpenClaw: `.openclaw/mcp.json` and `.openclaw/cognibrain.md`.
+- LangGraph: `langgraph.cognibrain.json` and `langgraph-cognibrain.ts`.
+- CrewAI: `crewai.cognibrain.json` and `crewai_cognibrain.py`.
 - Review manifest: `.cognibrain-harness-package.json` with feedback adapters and generated paths.
 
 Existing non-cognibrain instruction files are not overwritten; a `.cognibrain` sidecar is written for review.
@@ -43,7 +53,7 @@ Install, update, uninstall:
 ./bin/cognibrain.mjs setup --all-harnesses
 ./bin/cognibrain.mjs setup --all-harnesses --no-start
 ./bin/cognibrain.mjs doctor --publish
-rm -f AGENTS.md.cognibrain .github/copilot-instructions.md.cognibrain .github/instructions/cognibrain.instructions.md .claude/settings.json.cognibrain .cursor/rules/open-memory.mdc.cognibrain .cognibrain-harness-package.json
+rm -f AGENTS.md.cognibrain .github/copilot-instructions.md.cognibrain .github/instructions/cognibrain.instructions.md .claude/settings.json.cognibrain .cursor/rules/open-memory.mdc.cognibrain .opencode/cognibrain.md.cognibrain .openclaw/cognibrain.md.cognibrain langgraph.cognibrain.json langgraph-cognibrain.ts crewai.cognibrain.json crewai_cognibrain.py .cognibrain-harness-package.json
 ```
 
 ## Official Connector Manifests
@@ -57,8 +67,16 @@ The runtime seeds official manifests for common work systems:
 - `official-code`
 - `official-calendar`
 - `official-cloud_storage`
+- `official-github`
+- `official-jira`
+- `official-linear`
+- `official-slack`
+- `official-notion`
+- `official-google-drive`
+- `official-gmail`
+- `official-google-calendar`
 
-Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, optional list/poll endpoints, and optional writeback configuration. Custom manifests can be registered through the CLI or HTTP API:
+Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, OAuth scope references, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, list/poll endpoints, and writeback configuration when supported. Service-specific manifests map GitHub issues and pull requests, Jira and Linear work items, Slack decisions, Notion pages, Google Drive files, Gmail threads, and Google Calendar events into auditable memory events. Custom manifests can be registered through the CLI or HTTP API:
 
 ```bash
 ./bin/cognibrain.mjs memory connector-register '{"id":"support-chat","name":"Support Chat","kind":"chat","version":"1.0.0","direction":"two_way","capabilities":["ingest","webhook","writeback"],"auth":"token","defaultSourceKind":"transcript","metadataMapping":{"channel":"metadata.channel","messageId":"externalId"}}'
@@ -85,7 +103,7 @@ OAuth connectors can declare an `oauth` block. The runtime then manages a statef
 
 List/poll-capable manifests can include endpoint blocks. `connector-list` returns external items without writing memory. `connector-poll` expects a JSON body with `events`, then routes those events through the same add-only extraction path as `connector-sync`. Set `privacyPolicy:"never_store"` for connectors that should prove polling without storing any event content. Writeback-capable manifests can include a `writeback` block with an endpoint, method, auth reference, and allowed operations. Without an endpoint, `connector-writeback` and `/connectors/writeback` create a queued dry-run plan for review. With an endpoint and `dryRun:false`, Cognibrain sends the source-specific payload as HTTP using `x-cognibrain-connector`, `x-cognibrain-operation`, and optional HMAC `x-cognibrain-signature` headers. `connector-feedback` and `/connectors/feedback` convert accepted changes, rejected suggestions, failing tests, and user corrections into trust/importance updates plus a durable feedback memory.
 
-Native harness packages should prefer `connector-telemetry` or `POST /connectors/telemetry` over asking users to run manual feedback commands. The telemetry endpoint accepts `accepted_suggestion`, `rejected_suggestion`, `context_pack_feedback`, and `tool_outcome` events. Accepted/rejected suggestion events become connector feedback memories and update linked memory trust. Context-pack feedback creates retrieval training samples and learned profile updates. Tool outcomes become first-class harness action memories, so later retrieval can answer what command, test, or fix worked last time.
+Native harness packages should prefer `connector-telemetry` or `POST /connectors/telemetry` over asking users to run manual feedback commands. The telemetry endpoint accepts `accepted_suggestion`, `rejected_suggestion`, `context_pack_feedback`, and `tool_outcome` events. Accepted/rejected suggestion events become connector feedback memories and update linked memory trust. Context-pack feedback creates retrieval training samples and learned profile updates. Tool outcomes become first-class harness action memories, so retrieval can answer what command, test, or fix worked last time.
 
 ## Provider And Media Hooks
 
@@ -250,7 +268,7 @@ The highest-value connector enhancement is not another storage API. It is feedba
 - user corrections become high-confidence preference or repo-convention memories,
 - benchmark misses become evaluation memories tagged by dataset, metric, and failure mode.
 
-Connectors should not store every turn. They should store small, verified, reusable facts with enough provenance to delete or audit later.
+Connectors should not store every turn. They should store small, verified, reusable facts with enough provenance to delete or audit.
 
 Source: https://docs.cursor.com/context/model-context-protocol
 
@@ -262,17 +280,22 @@ Source: https://docs.cursor.com/context/model-context-protocol
 | GitHub Copilot | instruction templates plus MCP-compatible server | `setup --all-harnesses` writes repository and scoped instruction files with feedback commands | Generated files match templates plus scoped feedback adapter |
 | OpenAI Codex | stdio MCP plus `AGENTS.md` and Skill template | Installs Skill, starts backend/dashboard with one command, and generates compact project memory policy | `memory_maintenance_status` works and `memory_search` returns project memories |
 | Cursor | stdio MCP plus project rule template | `setup --all-harnesses` writes `.cursor/mcp.json` and `.cursor/rules/open-memory.mdc` | Cursor MCP config and rule file are generated deterministically |
+| VS Code | MCP server config | `setup --all-harnesses` writes `.vscode/mcp.json` | VS Code MCP config is generated deterministically |
+| OpenCode | MCP server config plus local instruction package | `setup --all-harnesses` writes `.opencode/mcp.json` and `.opencode/cognibrain.md` | OpenCode package files are generated deterministically |
+| OpenClaw | MCP server config plus local instruction package | `setup --all-harnesses` writes `.openclaw/mcp.json` and `.openclaw/cognibrain.md` | OpenClaw package files are generated deterministically |
+| LangGraph | HTTP helper package for graph state | `setup --all-harnesses` writes `langgraph.cognibrain.json` and `langgraph-cognibrain.ts` | Helper fetches evidence packs and records tool telemetry |
+| CrewAI | HTTP helper package for crew tasks | `setup --all-harnesses` writes `crewai.cognibrain.json` and `crewai_cognibrain.py` | Helper fetches evidence packs and records tool telemetry |
 
-The implemented baseline is instruction-file generation plus MCP config because it is low risk, reviewable in git, and works even when an IDE's dynamic MCP support is disabled. The remaining product work is native telemetry from each IDE or harness: accepted/rejected suggestions, tool outcomes, and context-pack feedback without relying on users to run feedback commands manually.
+The implemented package surface is instruction-file generation, MCP config, and HTTP helper code. Native or scripted harness telemetry uses `connector-telemetry` or `POST /connectors/telemetry` for accepted/rejected suggestions, tool outcomes, and context-pack feedback without requiring a custom schema per harness.
 
-## Connector Roadmap
+## Connector Proof Surface
 
-Highest leverage next work:
+The packaged connector proof surface consists of:
 
-1. Deepen packaged installers for Claude Code, Codex, Copilot, and Cursor with harness-native health checks and telemetry.
-2. Add connector-specific writeback adapters for GitHub, Jira, Linear, Slack, Notion, Drive, Gmail and Calendar.
-3. Add typed connector packages that collect accepted/rejected suggestion feedback automatically.
-4. Add operator controls for connector consent, retention, and project-only scoping.
-5. Publish per-connector examples that prove context-pack injection, feedback, and writeback end to end.
+1. One-command setup for Claude Code, Codex, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI.
+2. Manifest-driven two-way source connectors for email, chat, project management, docs, code review, calendar, cloud storage, and custom systems.
+3. Shared telemetry for accepted/rejected suggestion feedback, context-pack feedback, and tool outcomes.
+4. Operator-visible consent, retention, health, sync, writeback, and audit surfaces.
+5. Per-connector examples that prove context-pack injection, feedback, and writeback end to end.
 
 Webhook delivery is no longer only a placeholder queue. The HTTP API and CLI can drain queued deliveries through real outbound `POST` calls with delivery ids, event-type headers, optional HMAC signatures, status-code capture, and retry backoff. Keep connector-specific writeback separate from this generic webhook transport so source APIs can enforce their own auth, rate limits, and conflict handling.

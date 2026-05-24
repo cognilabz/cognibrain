@@ -85,6 +85,7 @@ import type {
   OfflineOperation,
   PersonaProfile,
   PolicyDecision,
+  ProceduralMemoryMetadata,
   RelationType,
   RetrievalProfile,
   RetrievalTrainingSample,
@@ -207,6 +208,7 @@ export class MemoryService {
   private connectorManifests = new Map<string, ConnectorManifest>();
   private connectorAuthSessions = new Map<string, ConnectorAuthSession>();
   private connectorSyncRecords: ConnectorSyncRecord[] = [];
+  private evidencePacks = new Map<string, EvidencePack>();
   private policyRules = new Map<string, MemoryPolicyRule>();
   private retentionRules = new Map<string, RetentionRule>();
   private searchEvents: Array<{
@@ -288,13 +290,14 @@ export class MemoryService {
     const personaConsent = agentPersona?.privacyDefault ? { visibility: agentPersona.privacyDefault } : undefined;
     const scopedInput = { ...input, consent: { ...personaConsent, ...sourceDefaultConsent, ...(input.consent ?? {}) } };
     const enriched = this.applyDomainEnrichment(scopedInput);
-    this.ensureScopedAccess(enriched);
-    const writeDecision = this.evaluatePolicy("write", enriched);
+    const proceduralized = withProceduralMetadata(enriched);
+    this.ensureScopedAccess(proceduralized);
+    const writeDecision = this.evaluatePolicy("write", proceduralized);
     if (!writeDecision.allowed) {
-      this.recordAudit("policy.violation", { userId: enriched.userId, brainId: enriched.brainId, sourceId: enriched.sourceId, metadata: { operation: "write", decision: writeDecision } });
+      this.recordAudit("policy.violation", { userId: proceduralized.userId, brainId: proceduralized.brainId, sourceId: proceduralized.sourceId, metadata: { operation: "write", decision: writeDecision } });
       throw new Error(`Memory write denied by policy: ${writeDecision.reasons.join("; ")}`);
     }
-    const checked = applyRedactionPolicy(enriched, this.redactionPolicy);
+    const checked = applyRedactionPolicy(proceduralized, this.redactionPolicy);
     if (checked.rejected || !checked.input) {
       throw new Error(`Memory rejected by redaction policy: ${checked.matches.map((match) => match.detector).join(", ")}`);
     }
@@ -566,7 +569,7 @@ export class MemoryService {
     const context = this.retrieval.contextPack(results, tokenBudget);
     const includedResults = results.filter((result) => result.decision !== "exclude" && context.includes(`[${result.memory.id}]`));
     const id = `ctx_${contentHash(`${options.userId}:${options.query}:${includedResults.map((result) => result.memory.id).join(",")}:${tokenBudget}`).slice(2, 14)}`;
-    return {
+    const pack: EvidencePack = {
       schemaVersion: "1.0",
       id,
       generatedAt: new Date().toISOString(),
@@ -626,6 +629,16 @@ export class MemoryService {
         contradictions: includedResults.filter((result) => result.contradiction).length
       }
     };
+    this.evidencePacks.set(pack.id, pack);
+    this.recordAudit("search.run", { userId: options.userId, metadata: { resource: "evidence-pack", contextPackId: pack.id, query: options.query, memories: pack.results.length } });
+    this.persist();
+    return pack;
+  }
+
+  getEvidencePack(id: string): EvidencePack {
+    const pack = this.evidencePacks.get(id);
+    if (!pack) throw new Error(`Evidence pack not found: ${id}`);
+    return pack;
   }
 
   federatedSearch(options: SearchOptions & { brainIds: string[] }): FederatedSearchReport {
@@ -3326,6 +3339,7 @@ export class MemoryService {
     for (const manifest of raw.connectorManifests ?? []) this.connectorManifests.set(manifest.id, manifest);
     this.connectorAuthSessions = new Map((raw.connectorAuthSessions ?? []).map((session) => [session.id, session]));
     this.connectorSyncRecords = raw.connectorSyncRecords ?? [];
+    this.evidencePacks = new Map((raw.evidencePacks ?? []).map((pack) => [pack.id, pack]));
     this.policyRules = new Map((raw.policyRules ?? []).map((rule) => [rule.id, rule]));
     this.retentionRules = new Map((raw.retentionRules ?? []).map((rule) => [rule.id, rule]));
     this.store.import(raw.memories ?? []);
@@ -3360,6 +3374,7 @@ export class MemoryService {
       connectorManifests: [...this.connectorManifests.values()],
       connectorAuthSessions: [...this.connectorAuthSessions.values()],
       connectorSyncRecords: this.connectorSyncRecords,
+      evidencePacks: [...this.evidencePacks.values()],
       policyRules: [...this.policyRules.values()],
       retentionRules: [...this.retentionRules.values()]
     };
@@ -3742,6 +3757,67 @@ function providerFromEnv(): NonNullable<MemoryServiceOptions["intelligence"]> {
   };
 }
 
+function withProceduralMetadata(input: MemoryInput): MemoryInput {
+  const content = input.content.toLowerCase();
+  const tags = new Set((input.tags ?? []).map((tag) => tag.toLowerCase()));
+  const looksProcedural =
+    input.type === "procedural" ||
+    input.layer === "procedural" ||
+    tags.has("procedure") ||
+    tags.has("workflow") ||
+    /\b(always|before|after|when|if|run|verify|deploy|release|test|checklist|procedure|workflow|must|should)\b/.test(content);
+  if (!looksProcedural) return input;
+  const previous = input.metadata?.procedure as Partial<ProceduralMemoryMetadata> | undefined;
+  const tests = Array.isArray((input.metadata?.action as { tests?: unknown } | undefined)?.tests)
+    ? ((input.metadata?.action as { tests?: Array<{ status?: string }> }).tests ?? [])
+    : [];
+  const passed = tests.filter((test) => test.status === "passed").length;
+  const failed = tests.filter((test) => test.status === "failed").length;
+  const at = input.timestamp ?? new Date().toISOString();
+  const triggerConditions = previous?.triggerConditions?.length
+    ? previous.triggerConditions
+    : inferProcedureTriggers(input.content, input.tags ?? []);
+  const procedure: ProceduralMemoryMetadata = {
+    triggerConditions,
+    applicabilityScope: {
+      userId: input.userId,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      appId: input.appId,
+      orgId: input.orgId,
+      projectId: input.projectId,
+      brainId: input.brainId,
+      sourceId: input.sourceId
+    },
+    confidence: previous?.confidence ?? input.confidence ?? input.source?.confidence ?? 0.72,
+    lastOutcome: failed ? "failure" : passed ? "success" : previous?.lastOutcome ?? "unknown",
+    successCount: (previous?.successCount ?? 0) + passed,
+    failureCount: (previous?.failureCount ?? 0) + failed,
+    lastSuccessAt: passed ? at : previous?.lastSuccessAt,
+    lastFailureAt: failed ? at : previous?.lastFailureAt,
+    feedback: previous?.feedback?.length ? previous.feedback : [{ kind: "observed", at }]
+  };
+  return {
+    ...input,
+    type: input.type ?? "procedural",
+    layer: input.layer ?? "procedural",
+    tags: Array.from(new Set([...(input.tags ?? []), "procedure"])),
+    metadata: { ...(input.metadata ?? {}), procedure }
+  };
+}
+
+function inferProcedureTriggers(content: string, tags: string[]): string[] {
+  const triggers = new Set<string>();
+  const lower = content.toLowerCase();
+  if (/\brelease|deploy|ship\b/.test(lower) || tags.includes("release")) triggers.add("before release or deploy work");
+  if (/\btest|verify|ci|build\b/.test(lower) || tags.includes("test")) triggers.add("before validation or CI-sensitive changes");
+  if (/\bpr|pull request|merge\b/.test(lower)) triggers.add("before pull-request or merge workflows");
+  if (/\bwhen\s+([^,.]+)/i.test(content)) triggers.add(content.match(/\bwhen\s+([^,.]+)/i)?.[1]?.trim() ?? "conditional workflow");
+  if (/\bif\s+([^,.]+)/i.test(content)) triggers.add(content.match(/\bif\s+([^,.]+)/i)?.[1]?.trim() ?? "conditional workflow");
+  if (!triggers.size) triggers.add("matching workflow intent");
+  return [...triggers];
+}
+
 function officialConnectorManifests(): ConnectorManifest[] {
   const now = "2026-01-01T00:00:00.000Z";
   const base = (kind: ConnectorManifest["kind"], name: string, capabilities: ConnectorManifest["capabilities"], metadataMapping: Record<string, string>, defaultSourceKind: ConnectorManifest["defaultSourceKind"] = "import"): ConnectorManifest => ({
@@ -3759,6 +3835,29 @@ function officialConnectorManifests(): ConnectorManifest[] {
     createdAt: now,
     updatedAt: now
   });
+  const service = (
+    id: string,
+    name: string,
+    kind: ConnectorManifest["kind"],
+    capabilities: ConnectorManifest["capabilities"],
+    metadataMapping: Record<string, string>,
+    defaultSourceKind: ConnectorManifest["defaultSourceKind"],
+    oauthScopes: string[]
+  ): ConnectorManifest => ({
+    ...base(kind, name, capabilities, metadataMapping, defaultSourceKind),
+    id,
+    name,
+    oauth: {
+      authorizeUrl: `https://connectors.cognibrain.local/${id.replace(/^official-/, "")}/oauth/authorize`,
+      tokenUrl: `https://connectors.cognibrain.local/${id.replace(/^official-/, "")}/oauth/token`,
+      clientIdRef: `secret://${id}/client-id`,
+      scopes: oauthScopes,
+      redirectUri: "http://localhost:8787/connectors/auth/callback"
+    },
+    list: { endpoint: `connector://${id}/list`, method: "POST" },
+    poll: capabilities.includes("poll") ? { endpoint: `connector://${id}/poll`, method: "POST" } : undefined,
+    writeback: capabilities.includes("writeback") ? { operations: connectorWritebackOperations(kind), endpoint: `connector://${id}/writeback`, method: "POST" } : undefined
+  });
   return [
     base("email", "Email", ["ingest", "export", "webhook", "poll", "writeback"], { subject: "content.title", from: "source.author", messageId: "externalId", threadId: "metadata.threadId" }, "human"),
     base("chat", "Chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageId: "externalId", text: "content" }, "transcript"),
@@ -3766,7 +3865,15 @@ function officialConnectorManifests(): ConnectorManifest[] {
     base("docs", "Docs", ["ingest", "webhook", "poll", "writeback"], { url: "source.uri", title: "content.title", workspace: "metadata.workspace" }, "import"),
     base("code", "Code", ["ingest", "webhook", "poll", "writeback"], { repo: "metadata.repo", path: "source.uri", commit: "source.commit", symbol: "entities.symbol" }, "reviewed_code"),
     base("calendar", "Calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", attendees: "entities.attendees", start: "temporal.eventAt" }, "human"),
-    base("cloud_storage", "Cloud Storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title" }, "import")
+    base("cloud_storage", "Cloud Storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title" }, "import"),
+    service("official-github", "GitHub", "code", ["ingest", "export", "webhook", "poll", "writeback"], { repo: "metadata.repo", issueNumber: "externalId", pullRequest: "metadata.pullRequest", commit: "source.commit", actor: "source.author", url: "source.uri" }, "reviewed_code", ["repo:read", "issues:read", "pull_requests:read", "contents:read"]),
+    service("official-jira", "Jira", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueKey: "externalId", status: "metadata.status", assignee: "entities.assignee", sprint: "metadata.sprint", project: "metadata.project", url: "source.uri" }, "import", ["read:jira-work", "write:jira-work"]),
+    service("official-linear", "Linear", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueId: "externalId", team: "metadata.team", status: "metadata.status", assignee: "entities.assignee", label: "tags", url: "source.uri" }, "import", ["read", "write"]),
+    service("official-slack", "Slack", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageTs: "externalId", threadTs: "metadata.threadId", permalink: "source.uri" }, "transcript", ["channels:history", "groups:history", "chat:write"]),
+    service("official-notion", "Notion", "docs", ["ingest", "webhook", "poll", "writeback"], { pageId: "externalId", workspace: "metadata.workspace", title: "content.title", url: "source.uri", lastEditedBy: "source.author" }, "import", ["read_content", "update_content"]),
+    service("official-google-drive", "Google Drive", "cloud_storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title", owner: "source.author" }, "import", ["drive.readonly"]),
+    service("official-gmail", "Gmail", "email", ["ingest", "export", "webhook", "poll", "writeback"], { messageId: "externalId", threadId: "metadata.threadId", subject: "content.title", from: "source.author", labelIds: "tags" }, "human", ["gmail.readonly", "gmail.modify"]),
+    service("official-google-calendar", "Google Calendar", "calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", calendarId: "metadata.calendarId", attendees: "entities.attendees", start: "temporal.eventAt", url: "source.uri" }, "human", ["calendar.readonly", "calendar.events"])
   ];
 }
 

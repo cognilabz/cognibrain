@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "name": "cognibrain-crewai",
+  "runtime": {
+    "apiUrl": "http://localhost:8787",
+    "startCommand": "node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs start",
+    "healthCommand": "node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor --publish"
+  },
+  "integration": {
+    "beforeTask": "fetch a cognibrain evidence context pack for the crew task",
+    "afterTool": "send tool outcome telemetry through /connectors/telemetry",
+    "feedback": "record accepted, rejected, partially useful, or harmful context packs"
+  }
+}

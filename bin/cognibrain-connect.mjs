@@ -20,7 +20,14 @@ const aliases = new Map([
   ["github-copilot", "copilot"],
   ["cursor", "cursor"],
   ["vscode", "vscode"],
-  ["vs-code", "vscode"]
+  ["vs-code", "vscode"],
+  ["opencode", "opencode"],
+  ["open-code", "opencode"],
+  ["openclaw", "openclaw"],
+  ["open-claw", "openclaw"],
+  ["langgraph", "langgraph"],
+  ["crew-ai", "crewai"],
+  ["crewai", "crewai"]
 ]);
 
 if (rawArgs.includes("--help") || rawArgs.includes("-h") || rawArgs.includes("help")) usage(0);
@@ -88,11 +95,12 @@ function usage(exitCode) {
   console.log(`cognibrain-connect
 
 Usage:
-  npx cognibrain-connect <codex|claude-code|cursor|github-copilot|vscode|all> [--runtime-root <path>] [--no-start] [--no-doctor]
+  npx cognibrain-connect <codex|claude-code|cursor|github-copilot|vscode|opencode|openclaw|langgraph|crewai|all> [--runtime-root <path>] [--no-start] [--no-doctor]
 
 Examples:
   npx cognibrain-connect claude-code
   npx cognibrain-connect codex --no-start
+  npx cognibrain-connect langgraph --no-start
   npx cognibrain-connect all --runtime-root ${join(homedir(), "project")}
 
 The command installs the packaged skill/config for the selected harness, writes a reviewable

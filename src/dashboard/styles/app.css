@@ -627,6 +627,51 @@ textarea {
   margin-bottom: 14px;
 }
 
+.route-preview {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-cool);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.route-preview strong,
+.route-preview small {
+  display: block;
+}
+
+.route-preview small {
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.route-scope-grid,
+.route-excluded {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.route-scope-grid span,
+.route-excluded span {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  color: var(--ink-soft);
+  padding: 7px 9px;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.route-excluded span {
+  border-color: oklch(82% 0.07 54);
+  background: oklch(96.8% 0.02 68);
+  color: oklch(42% 0.12 54);
+}
+
 .result {
   width: 100%;
   text-align: left;
@@ -648,7 +693,7 @@ textarea {
 }
 
 .result span {
-  grid-row: span 2;
+  grid-row: 1 / -1;
   color: var(--blue);
   font-weight: 860;
 }
@@ -656,6 +701,7 @@ textarea {
 .result strong,
 .result small {
   display: block;
+  grid-column: 2;
   overflow-wrap: anywhere;
 }
 

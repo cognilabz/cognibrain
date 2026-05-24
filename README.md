@@ -51,6 +51,16 @@ The core question is not just “can the agent remember?” It is:
 - Which graph path, temporal signal, trust score, source citation, consent rule, and retrieval profile allowed it into context?
 - Can the same memory be reused safely across Codex, Claude Code, Cursor, Copilot, MCP and HTTP workflows?
 
+```mermaid
+flowchart LR
+  Agent["Agent or CLI"] --> Router["Memory Router"]
+  Router --> Scopes["User / session / app / project / org / brain / source / agent / persona scopes"]
+  Scopes --> Evidence["Evidence Graph"]
+  Evidence --> Verifier["Policy, validity, contradiction and trust gates"]
+  Verifier --> Pack["Inspectable Context Pack"]
+  Pack --> Agent
+```
+
 That makes cognibrain different from narrower memory products:
 
 | Product category | Main promise | cognibrain position |
@@ -107,10 +117,13 @@ After publishing the package, the same one-click path is:
 npx cognibrain setup --all-harnesses
 npx cognibrain-connect claude-code
 npx cognibrain-connect codex --no-start
+npx cognibrain-connect opencode --no-start
+npx cognibrain-connect langgraph --no-start
+npx cognibrain-connect crewai --no-start
 npx cognibrain-connect all
 ```
 
-`setup` installs the Codex Skill, optionally writes MCP configs for Codex, Claude, Cursor, and VS Code, starts the API plus dashboard, and runs `doctor`.
+`setup` installs the Codex Skill, optionally writes MCP/config/helper packages for Codex, Claude Code, Cursor, GitHub Copilot, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI, starts the API plus dashboard, and runs `doctor`.
 `cognibrain-connect` is the dedicated package-style connector installer: it writes the same reviewable harness package manifest, starts the local API/dashboard unless disabled, and prints the publish doctor command so teams can verify connector health after installation.
 
 Then open the printed dashboard URL. Runtime and publish helpers:
@@ -153,9 +166,10 @@ Explain why memories were used and export the same evidence an agent would recei
 ```bash
 ./bin/cognibrain.mjs memory why-used "Why should Atlas run tests before release?"
 ./bin/cognibrain.mjs memory evidence-pack "Why should Atlas run tests before release?"
+./bin/cognibrain.mjs memory evidence <context-pack-id>
 ```
 
-The returned evidence pack is the first-five-minutes proof surface: it contains the compact context block plus per-memory source citation, consent boundary, scope, validity window, stale/decision state, retrieval signals, graph paths and reason phrases. The same artifact is available through `POST /evidence-pack` and MCP `memory_context_pack`, so CLI, dashboard and harness integrations can all answer: “why was this memory used?”
+The returned evidence pack is the first-five-minutes proof surface: it contains the compact context block plus per-memory source citation, consent boundary, scope, validity window, stale/decision state, retrieval signals, graph paths and reason phrases. Evidence packs are stored by `ctx_*` id, reloadable through `memory evidence <context-pack-id>`, and available through `POST /evidence-pack`, `GET /evidence-pack/:id`, and MCP `memory_context_pack`, so CLI, dashboard and harness integrations can all answer: “why was this memory used?”
 
 Extract add-only memories from an event or conversation:
 
@@ -267,7 +281,7 @@ curl -X POST http://localhost:8787/connectors/writeback \
 The `dream` cycle is the self-maintenance loop for the memory store:
 
 - Rethink repeated or contradictory memories.
-- Reevaluate source confidence, usage, and remaining issues.
+- Reevaluate source confidence, usage, and open verification work.
 - Summarize repeated themes into auditable reflection memories.
 - Fade stale low-utility memories.
 - Reflect on contradictions and demote weaker claims.
@@ -304,7 +318,7 @@ Available MCP tools:
 - `memory_health`
 - `memory_maintenance_status`
 
-Connector templates are included for Claude Code, Codex, GitHub Copilot, and Cursor under `templates/`.
+Connector templates are included for Claude Code, Codex, GitHub Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI under `templates/`.
 
 ## Proof
 
@@ -341,7 +355,7 @@ Latest checked evidence:
 | LongMemEval-S | `40/40`, `100.00%` | Saturates with keyword-only `100.00%` |
 <!-- benchmark-claims:end -->
 
-The public market gate is a public-claim comparison, not a vendor-signed rerun. Stronger commercial proof should import vendor artifacts with the same dataset, metric, top-K, and budget.
+The public market gate is a public-claim comparison, not a vendor-signed rerun. Stronger commercial proof imports vendor artifacts with the same dataset, metric, top-K, and budget.
 
 ## Architecture
 

@@ -80,6 +80,10 @@ async function setup(setupArgs) {
     if (flags.has("--copilot")) writeHarnessConfig("copilot");
     if (flags.has("--cursor")) writeHarnessConfig("cursor");
     if (flags.has("--vscode")) writeHarnessConfig("vscode");
+    if (flags.has("--opencode")) writeHarnessConfig("opencode");
+    if (flags.has("--openclaw")) writeHarnessConfig("openclaw");
+    if (flags.has("--langgraph")) writeHarnessConfig("langgraph");
+    if (flags.has("--crewai")) writeHarnessConfig("crewai");
   }
 
   if (!flags.has("--no-start")) runNodeChecked("scripts/start-local.mjs", ["--daemon"]);
@@ -172,6 +176,10 @@ function writeHarnessConfig(target) {
       writeCopilotConfig();
       writeCursorConfig();
       writeVsCodeConfig();
+      writeOpenCodeConfig();
+      writeOpenClawConfig();
+      writeLangGraphConfig();
+      writeCrewAIConfig();
       writeHarnessPackageManifest();
       break;
     case "codex":
@@ -189,8 +197,20 @@ function writeHarnessConfig(target) {
     case "vscode":
       writeVsCodeConfig();
       break;
+    case "opencode":
+      writeOpenCodeConfig();
+      break;
+    case "openclaw":
+      writeOpenClawConfig();
+      break;
+    case "langgraph":
+      writeLangGraphConfig();
+      break;
+    case "crewai":
+      writeCrewAIConfig();
+      break;
     default:
-      console.error("Usage: cognibrain config <all|codex|claude|copilot|cursor|vscode>");
+      console.error("Usage: cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>");
       process.exit(1);
   }
 }
@@ -251,6 +271,41 @@ function writeVsCodeConfig() {
   json.servers.cognibrain = { type: "stdio", ...stdioServerConfig() };
   writeJson(path, json);
   console.log(`Wrote VS Code MCP config: ${path}`);
+  writeHarnessPackageManifest();
+}
+
+function writeOpenCodeConfig() {
+  const path = join(launchCwd, ".opencode", "mcp.json");
+  const json = readJson(path, { mcpServers: {} });
+  json.mcpServers ??= {};
+  json.mcpServers.cognibrain = stdioServerConfig();
+  writeJson(path, json);
+  console.log(`Wrote OpenCode MCP config: ${path}`);
+  writeTemplateFile(join(launchCwd, ".opencode", "cognibrain.md"), "templates/opencode/cognibrain.md");
+  writeHarnessPackageManifest();
+}
+
+function writeOpenClawConfig() {
+  const path = join(launchCwd, ".openclaw", "mcp.json");
+  const json = readJson(path, { mcpServers: {} });
+  json.mcpServers ??= {};
+  json.mcpServers.cognibrain = stdioServerConfig();
+  writeJson(path, json);
+  console.log(`Wrote OpenClaw MCP config: ${path}`);
+  writeTemplateFile(join(launchCwd, ".openclaw", "cognibrain.md"), "templates/openclaw/cognibrain.md");
+  writeHarnessPackageManifest();
+}
+
+function writeLangGraphConfig() {
+  writeTemplateFile(join(launchCwd, "langgraph.cognibrain.json"), "templates/langgraph/langgraph.cognibrain.json");
+  writeTemplateFile(join(launchCwd, "langgraph-cognibrain.ts"), "templates/langgraph/langgraph-cognibrain.ts");
+  writeHarnessPackageManifest();
+}
+
+function writeCrewAIConfig() {
+  writeTemplateFile(join(launchCwd, "crewai.cognibrain.json"), "templates/crewai/crewai.cognibrain.json");
+  writeTemplateFile(join(launchCwd, "crewai_cognibrain.py"), "templates/crewai/crewai_cognibrain.py");
+  writeHarnessPackageManifest();
 }
 
 function writeTemplateFile(targetPath, templatePath) {
@@ -325,6 +380,30 @@ function writeHarnessPackageManifest() {
         mcpConfig: join(launchCwd, ".cursor", "mcp.json"),
         rule: join(launchCwd, ".cursor", "rules", "open-memory.mdc"),
         feedback: ["memory_add", "memory_context_pack", "memory_dream"]
+      },
+      vscode: {
+        mcpConfig: join(launchCwd, ".vscode", "mcp.json"),
+        feedback: ["memory_context_pack", "memory_add", "connector-telemetry"]
+      },
+      opencode: {
+        mcpConfig: join(launchCwd, ".opencode", "mcp.json"),
+        instructions: join(launchCwd, ".opencode", "cognibrain.md"),
+        feedback: ["memory_context_pack", "connector-telemetry", "memory_dream"]
+      },
+      openclaw: {
+        mcpConfig: join(launchCwd, ".openclaw", "mcp.json"),
+        instructions: join(launchCwd, ".openclaw", "cognibrain.md"),
+        feedback: ["memory_context_pack", "connector-telemetry", "memory_dream"]
+      },
+      langgraph: {
+        config: join(launchCwd, "langgraph.cognibrain.json"),
+        helper: join(launchCwd, "langgraph-cognibrain.ts"),
+        feedback: ["context pack middleware", "tool outcome telemetry"]
+      },
+      crewai: {
+        config: join(launchCwd, "crewai.cognibrain.json"),
+        helper: join(launchCwd, "crewai_cognibrain.py"),
+        feedback: ["task memory prefetch", "tool outcome telemetry"]
       }
     }
   });
@@ -337,7 +416,13 @@ function harnessTemplateHealth() {
     "templates/codex/cognibrain-skill/SKILL.md",
     "templates/claude/settings.json",
     "templates/copilot/copilot-instructions.md",
-    "templates/cursor/open-memory.mdc"
+    "templates/cursor/open-memory.mdc",
+    "templates/opencode/cognibrain.md",
+    "templates/openclaw/cognibrain.md",
+    "templates/langgraph/langgraph.cognibrain.json",
+    "templates/langgraph/langgraph-cognibrain.ts",
+    "templates/crewai/crewai.cognibrain.json",
+    "templates/crewai/crewai_cognibrain.py"
   ];
   const missing = templates.filter((template) => !existsSync(join(root, template)));
   return { ok: missing.length === 0, detail: missing.length ? `missing ${missing.join(", ")}` : `${templates.length} templates available` };
@@ -352,10 +437,19 @@ function harnessGeneratedHealth() {
     join(launchCwd, ".github", "instructions", "cognibrain.instructions.md"),
     join(launchCwd, ".cursor", "mcp.json"),
     join(launchCwd, ".cursor", "rules", "open-memory.mdc"),
+    join(launchCwd, ".vscode", "mcp.json"),
+    join(launchCwd, ".opencode", "mcp.json"),
+    join(launchCwd, ".opencode", "cognibrain.md"),
+    join(launchCwd, ".openclaw", "mcp.json"),
+    join(launchCwd, ".openclaw", "cognibrain.md"),
+    join(launchCwd, "langgraph.cognibrain.json"),
+    join(launchCwd, "langgraph-cognibrain.ts"),
+    join(launchCwd, "crewai.cognibrain.json"),
+    join(launchCwd, "crewai_cognibrain.py"),
     join(launchCwd, ".cognibrain-harness-package.json")
   ];
   const missing = expected.filter((path) => !existsSync(path));
-  return { ok: missing.length === 0, detail: missing.length ? `run cognibrain setup --all-harnesses; missing ${missing.map((path) => path.replace(`${launchCwd}/`, "")).join(", ")}` : "Codex, Claude, Copilot and Cursor configs present" };
+  return { ok: missing.length === 0, detail: missing.length ? `run cognibrain setup --all-harnesses; missing ${missing.map((path) => path.replace(`${launchCwd}/`, "")).join(", ")}` : "Codex, Claude, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI configs present" };
 }
 
 function stdioServerConfig() {
@@ -500,13 +594,13 @@ function usage(exitCode) {
 
 Usage:
   cognibrain [--runtime-root <path>] <command>
-  cognibrain setup [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--all-harnesses]
+  cognibrain setup [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--all-harnesses]
       Install the Codex skill, optionally write harness configs, start API + dashboard, run doctor
   cognibrain doctor [--publish]
       Check local runtime, skill install, package readiness, and optional npm pack hygiene
   cognibrain start | dev | status | stop
       Manage the local API + dashboard runtime
-  cognibrain config <all|codex|claude|copilot|cursor|vscode>
+  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>
       Write MCP config for supported harnesses
   cognibrain skill install
       Install the Codex skill

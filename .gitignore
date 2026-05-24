@@ -36,5 +36,11 @@ AGENTS.md
 .claude/
 .cursor/
 .vscode/
+.opencode/
+.openclaw/
 .github/copilot-instructions.md
 .github/instructions/cognibrain.instructions.md
+/langgraph.cognibrain.json
+/langgraph-cognibrain.ts
+/crewai.cognibrain.json
+/crewai_cognibrain.py

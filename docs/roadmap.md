@@ -24,26 +24,26 @@
 - SQLite transactional persistence with append-only SQL event table and JSON-to-SQL migration coverage
 - Postgres-compatible and Cockroach-compatible SQL persistence contracts with append-only event rows, logical replication metadata, and JSON/SQL migration coverage
 - Cassandra-compatible wide-column storage is implemented for CI/package validation with partition keys, clustering keys, quorum metadata and range-sharding capability reporting
+- psql-backed Postgres/Cockroach remote driver and cqlsh-backed Cassandra remote driver capability paths
 - Next-generation epics and sub-issues mirrored from `nextplan.md`
 - Graph path search, spreading activation, safe graph query, GraphML/JSON export, and configurable inferred relation substrate
 - Temporal interval queries, behavioural retrieval scoring, recurring behavioural pattern mining, and persisted timeline summaries
 - Staged extraction reports, provider extractor fallback, media/language envelopes, enrichment candidates, and entity merge/split operations
 - Brain/source/agent/persona primitives with audit events, webhook queues, marketplace modules, and compliance reports
+- Packaged connector setup for Claude Code, OpenAI Codex, Cursor, GitHub Copilot, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI
+- Connector telemetry for accepted/rejected suggestions, context-pack feedback, and tool outcomes
+- Domain modules for coding, research, legal, sales, support, finance, healthcare, security, and strict privacy
+- Dashboard artifact inspector with per-question benchmark row summaries
 - `verify:nextgen` self-test loop for graph, inference, temporal/pattern, extraction/enrichment, multi-tenant audit, webhook, compliance, and marketplace behavior
 - Deterministic answer-generation artifact runner over benchmark reports, used to keep answer artifacts separate from retrieval metrics
 
-## Next
+## Production Gates
 
-1. External answerer/judge benchmark layer for LoCoMo, LongMemEval, and BEAM with comparable per-question artifacts.
-2. Improve remaining BEAM information extraction, temporal reasoning, and multi-session misses.
-3. Improve LoCoMo category 3 multi-hop evidence recall.
-4. Import more directly comparable vendor artifacts and normalize per-question outputs.
-5. Production remote drivers for Postgres/Cockroach/Cassandra clusters behind the existing persistence boundary.
-6. Dashboard result browser for historical benchmark artifacts.
-7. Native connector telemetry packages for Claude Code, Codex, Copilot, Cursor, VS Code and OpenCode/OpenClaw.
-8. Source-specific two-way connectors for GitHub, Jira, Linear, Slack, Notion, Drive, Gmail and Calendar.
-9. Optional external enrichment pipeline for high-attention entities.
-10. Managed/SaaS deployment implementation beyond the current local control-plane readiness reports.
+1. `npm run verify:nextgen` must pass.
+2. `npm run doctor:publish` must pass without warnings after `setup --all-harnesses`.
+3. Dashboard proof, recall, graph, timeline, dream, marketplace, and artifact-inspector flows must render in a live browser.
+4. Public claims must link to generated artifacts with comparable methodology and per-question rows.
+5. One-command setup must generate connector packages for every harness named in `nextplan.md`.
 
 ## Completion Bar
 
@@ -55,4 +55,4 @@ The repo should not claim broad market leadership until it can reproduce or impo
 - same top-K or token budget,
 - published artifact with per-question results.
 
-The public BEAM landscape gate clears this bar for the normalized 2026-05-22 public BEAM headline claims in `docs/public-market-claims.json`, but a stronger commercial audit still needs vendor-signed artifacts or local reruns with per-question outputs.
+The public BEAM landscape gate clears this bar for the normalized 2026-05-22 public BEAM headline claims in `docs/public-market-claims.json`. Direct vendor comparisons require either imported vendor-signed artifacts or local reruns with the same public question rows, answerer, judge, top-K, and token budget.

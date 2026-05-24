@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import type {
   DomainEvaluationReport,
   EpisodeRecord,
+  EvidencePack,
   EntityRecord,
   FeedbackEvent,
   AgentRegistration,
@@ -58,6 +59,7 @@ export interface PersistedMemoryFile {
   connectorManifests?: ConnectorManifest[];
   connectorAuthSessions?: ConnectorAuthSession[];
   connectorSyncRecords?: ConnectorSyncRecord[];
+  evidencePacks?: EvidencePack[];
   policyRules?: MemoryPolicyRule[];
   retentionRules?: RetentionRule[];
 }

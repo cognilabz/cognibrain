@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CODING_DOMAIN_MODULE, MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities } from "../src/core";
+import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities } from "../src/core";
 import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { MemoryService } from "../src/api/service";
@@ -466,6 +466,21 @@ describe("TypeScript memory core", () => {
     expect(pack.results[0].retrieval.citation).toContain("AGENTS.md:7");
     expect(pack.results[0].validity.validFrom).toBe("2026-05-01T00:00:00.000Z");
     expect(pack.results.some((result) => result.content.includes("private draft"))).toBe(false);
+    expect(service.getEvidencePack(pack.id).id).toBe(pack.id);
+  });
+
+  it("persists evidence packs by context pack id", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-evidence-"));
+    try {
+      const path = join(dir, "memory.json");
+      const first = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      first.add({ userId: "u1", content: "Atlas release context pack is exportable.", source: { kind: "human", confidence: 0.94 } });
+      const pack = first.evidencePack({ userId: "u1", query: "release context pack", limit: 3 });
+      const second = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      expect(second.getEvidencePack(pack.id).context).toContain("Atlas release context pack");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("stores MemoryRecordV2 fields and enforces belief-state retrieval decisions", () => {
@@ -525,6 +540,28 @@ describe("TypeScript memory core", () => {
     expect(action.metadata.action).toMatchObject({ command: "npm run test", errorFixed: "TypeScript build failure" });
     const recalled = service.search({ userId: "u1", query: "what fixed TypeScript build failure last time?", limit: 3 });
     expect(recalled.some((result) => result.memory.id === action.id)).toBe(true);
+  });
+
+  it("stores procedural memories with triggers, scope, confidence, and outcome history", () => {
+    const service = new MemoryService();
+    const procedure = service.add({
+      userId: "u1",
+      projectId: "memory",
+      content: "Before release always run npm test and npm run build.",
+      source: { kind: "human", confidence: 0.93 },
+      tags: ["workflow", "release"]
+    });
+    expect(procedure.type).toBe("procedural");
+    expect(procedure.layer).toBe("procedural");
+    expect(procedure.metadata.procedure).toMatchObject({
+      applicabilityScope: { userId: "u1", projectId: "memory" },
+      confidence: 0.93,
+      lastOutcome: "unknown",
+      successCount: 0,
+      failureCount: 0
+    });
+    expect((procedure.metadata.procedure as { triggerConditions: string[] }).triggerConditions).toEqual(expect.arrayContaining(["before release or deploy work", "before validation or CI-sensitive changes"]));
+    expect(service.search({ userId: "u1", projectId: "memory", query: "what should run before release?", limit: 1 })[0].memory.id).toBe(procedure.id);
   });
 
   it("redacts sensitive writes, extracts add-only facts, records feedback, and reports metrics", () => {
@@ -975,6 +1012,18 @@ describe("TypeScript memory core", () => {
     expect(report.passed).toBe(true);
     expect(report.domainId).toBe("coding");
     expect(service.metricsReport().benchmarkRuns).toBe(1);
+  });
+
+  it("ships domain modules required by the market plan", () => {
+    expect(DOMAIN_MODULES.map((module) => module.id)).toEqual(expect.arrayContaining(["coding", "research", "legal", "sales", "support", "finance", "healthcare"]));
+    for (const id of ["sales", "support"]) {
+      const module = DOMAIN_MODULES.find((item) => item.id === id);
+      expect(module?.evaluationCases?.length).toBeGreaterThan(0);
+      const report = new MemoryService({ domainModule: module }).runDomainEvaluation();
+      expect(report.passed).toBe(true);
+      const enriched = module?.enrich?.({ userId: "domain", content: `${id} customer ticket opportunity`, source: { kind: "human", confidence: 0.9 } });
+      expect(enriched?.tags).toContain(id);
+    }
   });
 
   it("deduplicates extracted facts and links state changes additively", () => {
@@ -1492,6 +1541,20 @@ describe("TypeScript memory core", () => {
     const service = new MemoryService();
     const official = service.listConnectorManifests();
     expect(official.map((manifest) => manifest.kind)).toEqual(expect.arrayContaining(["email", "chat", "project_management", "docs", "code", "calendar", "cloud_storage"]));
+    expect(official.map((manifest) => manifest.id)).toEqual(expect.arrayContaining([
+      "official-github",
+      "official-jira",
+      "official-linear",
+      "official-slack",
+      "official-notion",
+      "official-google-drive",
+      "official-gmail",
+      "official-google-calendar"
+    ]));
+    const github = official.find((manifest) => manifest.id === "official-github");
+    expect(github?.metadataMapping.issueNumber).toBe("externalId");
+    expect(github?.writeback?.operations).toEqual(expect.arrayContaining(["comment", "memory_link"]));
+    expect(github?.oauth?.scopes).toEqual(expect.arrayContaining(["repo:read", "pull_requests:read"]));
     expect(() =>
       service.registerConnectorManifest({
         id: "bad-writeback",

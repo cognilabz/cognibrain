@@ -272,6 +272,7 @@ curl -X POST http://localhost:8787/marketplace/plan \
 curl http://localhost:8787/marketplace
 curl http://localhost:8787/sdk/openapi
 curl http://localhost:8787/benchmarks/trend
+curl http://localhost:8787/benchmarks/leaderboard
 curl -X POST http://localhost:8787/migration/export \
   -H "content-type: application/json" \
   -d '{"target":"managed","backupRef":"local-backup://2026-05","ssoProvider":"oidc","secretManager":"vault"}'
@@ -355,4 +356,4 @@ When the service is configured with a domain module, this endpoint runs the modu
 npm run verify:nextgen
 ```
 
-This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, deterministic nextgen benchmark suites, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json`; `benchmark:nextgen` writes `artifacts/nextgen-benchmarks.json` plus `artifacts/benchmark-trend.json`. Together they prove graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, connector ingestion, injection-feedback learning, adaptive dream policy, generated observations, prediction reports, security/compliance retention, key rotation, privacy insights, multi-tenant audit, webhook event feeds, and marketplace persona installation.
+This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, deterministic nextgen benchmark suites, public leaderboard artifact generation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json`; `benchmark:nextgen` writes `artifacts/nextgen-benchmarks.json` plus `artifacts/benchmark-trend.json`; `leaderboard` writes `artifacts/leaderboard.json` with anonymized score metadata and no raw prompts. Together they prove graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, connector ingestion, injection-feedback learning, adaptive dream policy, generated observations, prediction reports, security/compliance retention, key rotation, privacy insights, multi-tenant audit, webhook event feeds, marketplace persona installation, and public benchmark publication safety.

@@ -624,6 +624,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && url.pathname === "/benchmarks/leaderboard") {
+    const path = url.searchParams.get("path") ?? "artifacts/leaderboard.json";
+    send(response, 200, existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : { schemaVersion: "1.0", generatedAt: new Date().toISOString(), project: "cognibrain", privacy: { anonymized: true, noRawPrompts: true, noRawEvidence: true }, entries: [], publication: { anonymized: true, claimScope: "No leaderboard artifact has been generated yet." } });
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/migration/export") {
     send(response, 202, defaultService.managedMigrationBundle(migrationExportSchema.parse(await json(request))));
     return;

@@ -9,6 +9,7 @@ import { MemoryService } from "../src/api/service";
 import { CognibrainClient } from "../src/sdk/client";
 import { AppendOnlyLogPersistenceAdapter } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
+import { buildLeaderboardArtifact, validateLeaderboardArtifact } from "../src/eval/leaderboard";
 import { runNextgenBenchmarkSuites } from "../src/eval/nextgenBenchmarks";
 
 describe("TypeScript memory core", () => {
@@ -949,6 +950,24 @@ describe("TypeScript memory core", () => {
       expect(report.passed).toBe(true);
       expect(report.suites.map((suite) => suite.id)).toEqual(["answer-generation", "multi-hop-temporal", "behavioral-patterns"]);
       expect(report.trend.points.at(-1)?.meanScore).toBeGreaterThan(0.9);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("builds a public-safe leaderboard artifact from benchmark proof", () => {
+    const dir = mkdtempSync(join(tmpdir(), "memory-leaderboard-"));
+    try {
+      const nextgenPath = join(dir, "nextgen-benchmarks.json");
+      const outputPath = join(dir, "leaderboard.json");
+      runNextgenBenchmarkSuites(nextgenPath, join(dir, "benchmark-trend.json"));
+      const artifact = buildLeaderboardArtifact({ nextgenPath, outputPath, evaluationPath: join(dir, "missing-eval.json") });
+      expect(validateLeaderboardArtifact(artifact)).toBe(true);
+      expect(artifact.privacy).toMatchObject({ anonymized: true, noRawPrompts: true, noRawEvidence: true });
+      expect(artifact.publication.anonymized).toBe(true);
+      expect(artifact.entries.map((entry) => entry.suite)).toEqual(["answer-generation", "multi-hop-temporal", "behavioral-patterns"]);
+      expect(JSON.stringify(artifact)).not.toContain("rawPrompt");
+      expect(JSON.stringify(artifact)).not.toContain("rawEvidence");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

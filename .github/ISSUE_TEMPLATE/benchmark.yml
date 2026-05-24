@@ -1,0 +1,25 @@
+name: Benchmark contribution
+description: Submit an anonymized benchmark fixture or leaderboard artifact.
+title: "[Benchmark] "
+labels: ["benchmark", "leaderboard", "community"]
+body:
+  - type: textarea
+    id: metric
+    attributes:
+      label: Dataset and metric
+    validations:
+      required: true
+  - type: textarea
+    id: artifact
+    attributes:
+      label: Artifact
+      description: Link or paste schema-compatible anonymized artifact metadata.
+    validations:
+      required: true
+  - type: textarea
+    id: claim_scope
+    attributes:
+      label: Claim scope
+      description: What the benchmark proves and what it does not prove.
+    validations:
+      required: true

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import { MemoryService } from "../api/service";
+import { buildLeaderboardArtifact } from "../eval/leaderboard";
 import { runNextgenBenchmarkSuites } from "../eval/nextgenBenchmarks";
 import type { FeedbackKind } from "../core";
 
@@ -433,6 +434,10 @@ switch (command) {
     console.log(JSON.stringify(runNextgenBenchmarkSuites(args[0] ?? "artifacts/nextgen-benchmarks.json", process.env.MEMORY_BENCHMARK_TREND_PATH ?? "artifacts/benchmark-trend.json"), null, 2));
     break;
   }
+  case "leaderboard": {
+    console.log(JSON.stringify(buildLeaderboardArtifact({ outputPath: args[0] ?? "artifacts/leaderboard.json", nextgenPath: process.env.MEMORY_NEXTGEN_BENCHMARK_PATH, evaluationPath: process.env.MEMORY_EVALUATION_REPORT_PATH }), null, 2));
+    break;
+  }
   case "provider-status": {
     console.log(JSON.stringify(service.providerStatus(), null, 2));
     break;
@@ -604,7 +609,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|api-spec|migration-export|benchmark-nextgen|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|api-spec|migration-export|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {

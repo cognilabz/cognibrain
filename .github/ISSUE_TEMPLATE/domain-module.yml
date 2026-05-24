@@ -1,0 +1,23 @@
+name: Domain module contribution
+description: Propose a domain module with ontology and evaluation fixtures.
+title: "[Domain] "
+labels: ["domain-module", "community"]
+body:
+  - type: textarea
+    id: ontology
+    attributes:
+      label: Ontology and aliases
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: Enrichment and retrieval behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evaluation
+    attributes:
+      label: Evaluation fixtures
+    validations:
+      required: true

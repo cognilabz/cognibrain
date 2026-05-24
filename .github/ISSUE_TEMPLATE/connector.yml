@@ -1,0 +1,26 @@
+name: Connector contribution
+description: Propose or improve a connector manifest.
+title: "[Connector] "
+labels: ["connector", "community"]
+body:
+  - type: textarea
+    id: manifest
+    attributes:
+      label: Manifest
+      description: Direction, auth, capabilities, source kind, and metadata mapping.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and retention
+      description: Consent defaults, redaction behavior, and retention needs.
+    validations:
+      required: true
+  - type: textarea
+    id: smoke
+    attributes:
+      label: Local smoke
+      description: Commands and artifacts proving ingest/sync.
+    validations:
+      required: true

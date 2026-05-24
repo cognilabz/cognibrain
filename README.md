@@ -307,7 +307,7 @@ src/api/           Node HTTP API and service facade
 src/cli/           memctl command line interface
 src/connectors/    Harness hook, MCP handlers, MCP server
 src/dashboard/     React dashboard
-src/eval/          Benchmark runners, fixtures, baselines, market gate
+src/eval/          Benchmark runners, fixtures, baselines, market gate, leaderboard artifacts
 tests/             Vitest tests for core behavior and evaluation proof
 templates/         Connector starter templates
 docs/              Setup, API, lifecycle, connector, and benchmark docs
@@ -322,6 +322,14 @@ docker/            Container and compose files
 - [Memory Lifecycle](docs/lifecycle.md)
 - [Connectors](docs/connectors.md)
 - [Benchmarking](docs/benchmarking.md)
+- [Open Benchmark Leaderboard](docs/leaderboard.md)
+- [Community And Adoption](docs/community.md)
+- [Partner Integration Playbook](docs/partners.md)
+- [One-Click Local Tutorial](docs/tutorials/one-click-local.md)
+- [Connector Authoring Tutorial](docs/tutorials/connector-authoring.md)
+- [Graph, Time, And Pattern Tutorial](docs/tutorials/graph-temporal-patterns.md)
+- [Privacy And Retention Tutorial](docs/tutorials/privacy-retention.md)
+- [Domain Module Tutorial](docs/tutorials/domain-module.md)
 - [Market Comparison](docs/market-comparison.md)
 - [Advanced Features](docs/advanced-features.md)
 - [Roadmap](docs/roadmap.md)
@@ -357,7 +365,7 @@ npm run build
 
 For benchmark-related changes, run the relevant benchmark command and update documentation only from generated artifacts.
 
-CI runs the synthetic evaluation artifact on every push and pull request. Weekly or manually triggered CI runs execute the certified benchmark gate and upload the generated proof artifacts.
+CI runs the synthetic evaluation artifact and public-safe leaderboard artifact on every push and pull request. Weekly or manually triggered CI runs execute the certified benchmark gate and upload the generated proof artifacts.
 
 ## Safety
 

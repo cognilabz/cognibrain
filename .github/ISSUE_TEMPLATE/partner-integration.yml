@@ -1,0 +1,33 @@
+name: Partner integration
+description: Propose an official harness, orchestrator, or vendor integration.
+title: "[Partner] "
+labels: ["partner", "integration", "community"]
+body:
+  - type: textarea
+    id: surface
+    attributes:
+      label: Integration surface
+      description: CLI, HTTP API, TypeScript SDK, MCP, connector, dashboard, or managed migration.
+    validations:
+      required: true
+  - type: textarea
+    id: scopes
+    attributes:
+      label: Scope and identity model
+      description: User, session, app, project, org, brain, source, and consent requirements.
+    validations:
+      required: true
+  - type: textarea
+    id: proof
+    attributes:
+      label: Proof artifacts
+      description: Local setup commands, benchmark/leaderboard artifact, screenshots, or migration bundle.
+    validations:
+      required: true
+  - type: textarea
+    id: limitations
+    attributes:
+      label: Known limitations
+      description: Unsupported workflows, privacy constraints, or benchmark caveats.
+    validations:
+      required: true

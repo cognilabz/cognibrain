@@ -258,6 +258,9 @@ curl http://localhost:8787/webhooks/deliveries
 curl -X POST http://localhost:8787/webhooks/deliver \
   -H "content-type: application/json" \
   -d '{}'
+curl -X POST http://localhost:8787/webhooks/deliver \
+  -H "content-type: application/json" \
+  -d '{"real":true}'
 curl http://localhost:8787/events
 curl "http://localhost:8787/audit?type=sync.run"
 curl -X POST http://localhost:8787/marketplace/install \
@@ -290,6 +293,8 @@ curl -X POST http://localhost:8787/security/key-rotation \
   -d '{"keyId":"local","keyVersion":"2","backupRef":"local-backup://2026-05"}'
 curl "http://localhost:8787/privacy/insights?epsilon=0.8&k=3"
 ```
+
+`/webhooks/deliver` defaults to the deterministic local delivery simulator used by tests and offline harnesses. Passing `{"real":true}` sends queued deliveries as HTTP `POST` requests to the registered webhook URL; CLI users can set `MEMORY_WEBHOOK_REAL_HTTP=true` before `webhook-deliver` for the same behavior. Each real delivery body is `{"deliveryId": "...", "event": {...}}` and includes `x-cognibrain-delivery`, `x-cognibrain-event`, and `user-agent: cognibrain-webhook/0.1`. Registrations with `secretRef` receive `x-cognibrain-signature: sha256=<hex>`, computed over the exact JSON body. Delivery records expose attempts, `lastStatusCode`, `lastError`, `lastAttemptAt`, and retry backoff timestamps through `/webhooks/deliveries`. Real HTTP delivery times out after `MEMORY_WEBHOOK_TIMEOUT_MS` or 10 seconds by default so unhealthy endpoints cannot block the queue indefinitely.
 
 Every write/update/delete/search/extract/reflect/share/share-request/share-revoke/agent/persona/connector/provider/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries, simulate delivery, and verify retry metadata before enabling real network delivery. Marketplace installs persist module metadata, validate security scan metadata, materialize personas, register connectors, and save retrieval profiles. `/sdk/openapi` exposes the generated client/API description, and `/migration/export` produces a local-to-managed or backup bundle with SSO and secret-manager placeholders. Retention rules can target memory user, brain, source, source kind, visibility, entity, relation type, or tag and are enforced before search and dream. Compliance reports summarize storage scope, consent, retention rules, delete-on-request, encryption key metadata, data flows, and audit counts. Privacy insights return noised aggregates and suppress groups below the configured k-anonymity threshold.
 

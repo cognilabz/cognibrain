@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { applyRedactionPolicy, type RedactionPolicy } from "../core/privacy";
 import { createJsonCommandIntelligenceFromEnv } from "../core/providers";
 import { loadRuntimeConfig } from "../core/runtimeConfig";
@@ -628,6 +629,52 @@ export class MemoryService {
       } else {
         delivery.status = "failed";
         delivery.lastError = result.error ?? "delivery failed";
+        delivery.nextAttemptAt = new Date(Date.now() + Math.min(60_000, 1000 * 2 ** delivery.attempts)).toISOString();
+        failed += 1;
+      }
+    }
+    this.persist();
+    return { delivered, failed, queued: this.webhookDeliveries.filter((delivery) => delivery.status === "queued").length };
+  }
+
+  async deliverWebhookQueueHttp(fetchImpl: typeof fetch = fetch, timeoutMs = Number(process.env.MEMORY_WEBHOOK_TIMEOUT_MS ?? 10_000)): Promise<{ delivered: number; failed: number; queued: number }> {
+    let delivered = 0;
+    let failed = 0;
+    for (const delivery of this.webhookDeliveries) {
+      if (delivery.status !== "queued" && delivery.status !== "failed") continue;
+      if (delivery.nextAttemptAt && new Date(delivery.nextAttemptAt).getTime() > Date.now()) continue;
+      const webhook = this.webhooks.get(delivery.webhookId);
+      const event = this.auditEvents.find((item) => item.id === delivery.eventId);
+      if (!webhook || !event || webhook.disabledAt) continue;
+      const body = JSON.stringify({ deliveryId: delivery.id, event });
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "user-agent": "cognibrain-webhook/0.1",
+        "x-cognibrain-delivery": delivery.id,
+        "x-cognibrain-event": event.type
+      };
+      if (webhook.secretRef) {
+        headers["x-cognibrain-signature"] = `sha256=${createHmac("sha256", webhook.secretRef).update(body).digest("hex")}`;
+      }
+      delivery.attempts += 1;
+      delivery.lastAttemptAt = new Date().toISOString();
+      try {
+        const response = await fetchImpl(webhook.url, { method: "POST", headers, body, signal: AbortSignal.timeout(Math.max(1, timeoutMs)) });
+        delivery.lastStatusCode = response.status;
+        if (response.ok) {
+          delivery.status = "delivered";
+          delivery.lastError = undefined;
+          delivery.nextAttemptAt = undefined;
+          delivered += 1;
+        } else {
+          delivery.status = "failed";
+          delivery.lastError = `HTTP ${response.status}`;
+          delivery.nextAttemptAt = new Date(Date.now() + Math.min(60_000, 1000 * 2 ** delivery.attempts)).toISOString();
+          failed += 1;
+        }
+      } catch (error) {
+        delivery.status = "failed";
+        delivery.lastError = error instanceof Error ? error.message : "delivery failed";
         delivery.nextAttemptAt = new Date(Date.now() + Math.min(60_000, 1000 * 2 ** delivery.attempts)).toISOString();
         failed += 1;
       }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CODING_DOMAIN_MODULE, MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities } from "../src/core";
@@ -1069,6 +1071,40 @@ describe("TypeScript memory core", () => {
     expect(media.memories[0].metadata.translatedFrom).toBe("de");
     expect(service.auditTrail({ type: "provider.call" }).length).toBeGreaterThan(0);
     expect(service.providerStatus().tasks).toContain("translate");
+  });
+
+  it("delivers webhooks with real HTTP POSTs and HMAC signatures", async () => {
+    const received: Array<{ headers: Record<string, string | string[] | undefined>; body: string }> = [];
+    const server = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk) => {
+        body += String(chunk);
+      });
+      request.on("end", () => {
+        received.push({ headers: request.headers, body });
+        response.writeHead(204);
+        response.end();
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected TCP test server address.");
+      const service = new MemoryService();
+      service.registerWebhook({ url: `http://127.0.0.1:${address.port}/memory`, events: ["memory.write"], secretRef: "local-test-secret" });
+      service.add({ userId: "u1", content: "Real webhook delivery posts memory events.", source: { kind: "human", confidence: 0.95 } });
+
+      const delivery = await service.deliverWebhookQueueHttp();
+      expect(delivery.delivered).toBe(1);
+      expect(received).toHaveLength(1);
+      const body = received[0].body;
+      expect(JSON.parse(body).event.type).toBe("memory.write");
+      expect(received[0].headers["x-cognibrain-event"]).toBe("memory.write");
+      expect(received[0].headers["x-cognibrain-signature"]).toBe(`sha256=${createHmac("sha256", "local-test-secret").update(body).digest("hex")}`);
+      expect(service.eventFeed().deliveries[0].lastStatusCode).toBe(204);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it("learns from injection feedback, adapts dream policy, generates cited observations, and predicts prefetch context", () => {

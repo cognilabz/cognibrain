@@ -230,5 +230,7 @@ Highest leverage next work:
 1. Streamable HTTP MCP transport for remote/shared deployments.
 2. Instruction-file generators for Copilot, Codex, Claude, and Cursor.
 3. Feedback adapters that record accepted changes, rejected suggestions, failing tests, and user corrections.
-4. Real delivery adapters for webhook registrations once a deployment has outbound-network policy.
+4. Source-specific writeback adapters for GitHub, Slack/Discord, docs, issue trackers, and calendar systems.
 5. Privacy policies per connector: personal, project, team, never-store.
+
+Webhook delivery is no longer only a placeholder queue. The HTTP API and CLI can drain queued deliveries through real outbound `POST` calls with delivery ids, event-type headers, optional HMAC signatures, status-code capture, and retry backoff. Keep connector-specific writeback separate from this generic webhook transport so source APIs can enforce their own auth, rate limits, and conflict handling.

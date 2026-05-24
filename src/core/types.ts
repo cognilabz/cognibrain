@@ -604,6 +604,7 @@ export interface WebhookDelivery {
   nextAttemptAt?: Date | string;
   lastAttemptAt?: Date | string;
   lastError?: string;
+  lastStatusCode?: number;
 }
 
 export interface ProviderAdapterStatus {

@@ -587,8 +587,8 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (method === "POST" && url.pathname === "/webhooks/deliver") {
-    const body = z.object({ fail: z.boolean().optional(), error: z.string().optional() }).parse(await json(request));
-    send(response, 202, defaultService.deliverWebhookQueue(() => ({ ok: body.fail !== true, error: body.error ?? "simulated delivery failure" })));
+    const body = z.object({ fail: z.boolean().optional(), error: z.string().optional(), real: z.boolean().optional() }).parse(await json(request));
+    send(response, 202, body.real ? await defaultService.deliverWebhookQueueHttp() : defaultService.deliverWebhookQueue(() => ({ ok: body.fail !== true, error: body.error ?? "simulated delivery failure" })));
     return;
   }
 

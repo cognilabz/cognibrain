@@ -532,7 +532,7 @@ switch (command) {
   }
   case "webhook-deliver": {
     const failDelivery = args[0] === "fail";
-    console.log(JSON.stringify(service.deliverWebhookQueue(() => ({ ok: !failDelivery, error: failDelivery ? "cli simulated failure" : undefined })), null, 2));
+    console.log(JSON.stringify(process.env.MEMORY_WEBHOOK_REAL_HTTP === "true" ? await service.deliverWebhookQueueHttp() : service.deliverWebhookQueue(() => ({ ok: !failDelivery, error: failDelivery ? "cli simulated failure" : undefined })), null, 2));
     break;
   }
   case "consent": {

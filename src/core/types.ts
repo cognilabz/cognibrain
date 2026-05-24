@@ -473,6 +473,12 @@ export interface ConnectorManifest {
   auth: "none" | "api_key" | "oauth" | "token";
   defaultSourceKind: SourceKind;
   metadataMapping: Record<string, string>;
+  writeback?: {
+    endpoint?: string;
+    method?: "POST" | "PUT" | "PATCH";
+    authRef?: string;
+    operations?: Array<"tag" | "comment" | "status" | "summary" | "memory_link">;
+  };
   createdAt: Date | string;
   updatedAt: Date | string;
 }
@@ -486,6 +492,17 @@ export interface ConnectorSyncRecord {
   externalIds: string[];
   timestamp: Date | string;
   error?: string;
+  operation?: "tag" | "comment" | "status" | "summary" | "memory_link";
+  target?: Record<string, unknown>;
+  payload?: Record<string, unknown>;
+  adapter?: string;
+  request?: {
+    method: "POST" | "PUT" | "PATCH";
+    url: string;
+    headers: Record<string, string>;
+    body: string;
+  };
+  responseStatusCode?: number;
 }
 
 export interface PersonaProfile {

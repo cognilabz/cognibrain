@@ -121,6 +121,18 @@ export interface MemoryServiceOptions {
   };
 }
 
+type ConnectorWritebackOperation = NonNullable<ConnectorSyncRecord["operation"]>;
+
+interface ConnectorWritebackInput {
+  operation?: ConnectorWritebackOperation;
+  memoryIds?: string[];
+  externalId?: string;
+  content?: string;
+  target?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  dryRun?: boolean;
+}
+
 export interface MemoryMaintenanceStatus {
   enabled: boolean;
   intervalHours: number;
@@ -568,6 +580,52 @@ export class MemoryService {
       this.persist();
       return record;
     }
+  }
+
+  async writebackConnector(
+    connectorId: string,
+    input: ConnectorWritebackInput,
+    fetchImpl: typeof fetch = fetch,
+    timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000)
+  ): Promise<ConnectorSyncRecord> {
+    const manifest = this.connectorManifests.get(connectorId);
+    if (!manifest) throw new Error(`Connector manifest not found: ${connectorId}`);
+    if (!manifest.capabilities.includes("writeback") && !manifest.capabilities.includes("export")) throw new Error(`Connector ${connectorId} does not support writeback`);
+    const operation = input.operation ?? "comment";
+    if (manifest.writeback?.operations?.length && !manifest.writeback.operations.includes(operation)) throw new Error(`Connector ${connectorId} does not support ${operation} writeback`);
+    const memories = (input.memoryIds ?? []).map((id) => safeGet(this.store, id)).filter((memory): memory is Memory => Boolean(memory));
+    const target = { ...(input.target ?? {}), externalId: input.externalId ?? input.target?.externalId };
+    const payload = connectorWritebackPayload(manifest, operation, target, input.content, memories, input.metadata);
+    const record: ConnectorSyncRecord = {
+      id: `sync_${contentHash(`${connectorId}:writeback:${Date.now()}:${this.connectorSyncRecords.length}`).slice(2)}`,
+      connectorId,
+      direction: "export",
+      status: "queued",
+      memoryIds: memories.map((memory) => memory.id),
+      externalIds: [input.externalId, target.externalId].filter((id): id is string => typeof id === "string" && id.length > 0),
+      timestamp: new Date().toISOString(),
+      operation,
+      target,
+      payload,
+      adapter: `${manifest.kind}:${operation}`
+    };
+    const request = connectorWritebackRequest(manifest, record);
+    if (request) record.request = request;
+    if (request && input.dryRun === false) {
+      try {
+        const response = await fetchImpl(request.url, { method: request.method, headers: request.headers, body: request.body, signal: AbortSignal.timeout(Math.max(1, timeoutMs)) });
+        record.responseStatusCode = response.status;
+        record.status = response.ok ? "applied" : "failed";
+        if (!response.ok) record.error = `HTTP ${response.status}`;
+      } catch (error) {
+        record.status = "failed";
+        record.error = error instanceof Error ? error.message : "connector writeback failed";
+      }
+    }
+    this.connectorSyncRecords.push(record);
+    this.recordAudit("connector.sync", { metadata: { connectorId, status: record.status, direction: "export", operation, adapter: record.adapter, memories: record.memoryIds.length } });
+    this.persist();
+    return record;
   }
 
   listConnectorSyncRecords(connectorId?: string): ConnectorSyncRecord[] {
@@ -2108,6 +2166,67 @@ function safeGet(store: MemoryStore, id: string): Memory | undefined {
   }
 }
 
+function connectorWritebackPayload(
+  manifest: ConnectorManifest,
+  operation: ConnectorWritebackOperation,
+  target: Record<string, unknown>,
+  content: string | undefined,
+  memories: Memory[],
+  metadata: Record<string, unknown> | undefined
+): Record<string, unknown> {
+  const text = content?.trim() || memories.map((memory) => memory.content).join("\n\n").slice(0, 2000) || "Cognibrain memory update.";
+  const citations = memories.map((memory) => citationFor(memory));
+  const base = { operation, text, citations, memoryIds: memories.map((memory) => memory.id), metadata: metadata ?? {} };
+  if (manifest.kind === "email") return { ...base, adapter: "email.draft_reply", messageId: target.externalId, threadId: target.threadId, subject: target.subject ?? "Memory update", body: text };
+  if (manifest.kind === "chat") return { ...base, adapter: "chat.post_message", channel: target.channel, threadId: target.threadId, text };
+  if (manifest.kind === "project_management") return { ...base, adapter: operation === "status" ? "issue.update_status" : "issue.add_comment", issueKey: target.externalId ?? target.issueKey, status: target.status, comment: text };
+  if (manifest.kind === "docs") return { ...base, adapter: "docs.append_comment", uri: target.uri, title: target.title, comment: text };
+  if (manifest.kind === "code") return { ...base, adapter: "code.review_comment", repo: target.repo, path: target.path, pullRequest: target.pullRequest, comment: text };
+  if (manifest.kind === "calendar") return { ...base, adapter: "calendar.update_event_note", eventId: target.externalId ?? target.eventId, note: text };
+  if (manifest.kind === "cloud_storage") return { ...base, adapter: "cloud_storage.file_metadata", fileId: target.externalId ?? target.fileId, tags: target.tags, summary: text };
+  return { ...base, adapter: "custom.writeback", target };
+}
+
+function connectorWritebackRequest(manifest: ConnectorManifest, record: ConnectorSyncRecord): ConnectorSyncRecord["request"] | undefined {
+  const endpoint = manifest.writeback?.endpoint;
+  if (!endpoint) return undefined;
+  const body = JSON.stringify({
+    connectorId: manifest.id,
+    kind: manifest.kind,
+    operation: record.operation,
+    target: record.target,
+    payload: record.payload
+  });
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "user-agent": "cognibrain-connector/0.1",
+    "x-cognibrain-connector": manifest.id,
+    "x-cognibrain-operation": record.operation ?? "comment"
+  };
+  if (manifest.writeback?.authRef) headers["x-cognibrain-signature"] = `sha256=${createHmac("sha256", manifest.writeback.authRef).update(body).digest("hex")}`;
+  return {
+    method: manifest.writeback?.method ?? "POST",
+    url: interpolateConnectorEndpoint(endpoint, record.target ?? {}),
+    headers,
+    body
+  };
+}
+
+function connectorWritebackOperations(kind: ConnectorManifest["kind"]): ConnectorWritebackOperation[] {
+  if (kind === "project_management") return ["comment", "status", "tag", "memory_link"];
+  if (kind === "chat") return ["comment", "summary", "memory_link"];
+  if (kind === "email") return ["comment", "tag", "summary"];
+  if (kind === "docs") return ["comment", "summary", "memory_link"];
+  if (kind === "code") return ["comment", "status", "memory_link"];
+  if (kind === "calendar") return ["summary", "memory_link"];
+  if (kind === "cloud_storage") return ["tag", "summary", "memory_link"];
+  return ["comment", "tag", "status", "summary", "memory_link"];
+}
+
+function interpolateConnectorEndpoint(endpoint: string, target: Record<string, unknown>): string {
+  return endpoint.replace(/\{([a-zA-Z0-9_.-]+)\}/g, (_, key: string) => encodeURIComponent(String(target[key] ?? "")));
+}
+
 function linkStateChange(input: MemoryInput, existing: Memory[]): MemoryInput {
   const subject = input.entities?.[0];
   if (!subject) return input;
@@ -2149,6 +2268,7 @@ function officialConnectorManifests(): ConnectorManifest[] {
     auth: kind === "custom" ? "none" : "oauth",
     defaultSourceKind,
     metadataMapping,
+    writeback: capabilities.includes("writeback") ? { operations: connectorWritebackOperations(kind) } : undefined,
     createdAt: now,
     updatedAt: now
   });
@@ -2157,7 +2277,7 @@ function officialConnectorManifests(): ConnectorManifest[] {
     base("chat", "Chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageId: "externalId", text: "content" }, "transcript"),
     base("project_management", "Project Management", ["ingest", "export", "poll", "writeback"], { issueKey: "externalId", status: "metadata.status", assignee: "entities.assignee", title: "content.title" }, "import"),
     base("docs", "Docs", ["ingest", "webhook", "poll", "writeback"], { url: "source.uri", title: "content.title", workspace: "metadata.workspace" }, "import"),
-    base("code", "Code", ["ingest", "webhook", "poll"], { repo: "metadata.repo", path: "source.uri", commit: "source.commit", symbol: "entities.symbol" }, "reviewed_code"),
+    base("code", "Code", ["ingest", "webhook", "poll", "writeback"], { repo: "metadata.repo", path: "source.uri", commit: "source.commit", symbol: "entities.symbol" }, "reviewed_code"),
     base("calendar", "Calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", attendees: "entities.attendees", start: "temporal.eventAt" }, "human"),
     base("cloud_storage", "Cloud Storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title" }, "import")
   ];

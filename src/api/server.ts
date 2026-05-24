@@ -316,7 +316,15 @@ const connectorManifestSchema = z.object({
   capabilities: z.array(z.enum(["ingest", "export", "webhook", "poll", "writeback", "media", "translation"])).min(1),
   auth: z.enum(["none", "api_key", "oauth", "token"]),
   defaultSourceKind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]),
-  metadataMapping: z.record(z.string())
+  metadataMapping: z.record(z.string()),
+  writeback: z
+    .object({
+      endpoint: z.string().url().optional(),
+      method: z.enum(["POST", "PUT", "PATCH"]).optional(),
+      authRef: z.string().optional(),
+      operations: z.array(z.enum(["tag", "comment", "status", "summary", "memory_link"])).optional()
+    })
+    .optional()
 });
 
 const connectorSyncSchema = z.object({
@@ -342,6 +350,17 @@ const connectorSyncSchema = z.object({
       metadata: z.record(z.unknown()).optional()
     })
   )
+});
+
+const connectorWritebackSchema = z.object({
+  connectorId: z.string().min(1),
+  operation: z.enum(["tag", "comment", "status", "summary", "memory_link"]).optional(),
+  memoryIds: z.array(z.string()).optional(),
+  externalId: z.string().optional(),
+  content: z.string().optional(),
+  target: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional(),
+  dryRun: z.boolean().optional()
 });
 
 const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split", "retention.enforce", "security.key.rotate", "privacy.insights"]);
@@ -717,6 +736,13 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     const body = connectorSyncSchema.parse(await json(request));
     const { connectorId, events, ...scope } = body;
     send(response, 202, defaultService.syncConnectorEvents(connectorId, events, scope));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/connectors/writeback") {
+    const body = connectorWritebackSchema.parse(await json(request));
+    const { connectorId, ...input } = body;
+    send(response, 202, await defaultService.writebackConnector(connectorId, input));
     return;
   }
 

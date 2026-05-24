@@ -40,6 +40,8 @@ Environment variables:
 | `MEMORY_ENCRYPTION_KEY_VERSION` | `1` | Non-secret key version stored in encrypted-memory metadata |
 | `MEMORY_DEFAULT_TOKEN_BUDGET` | `900` | Suggested context budget for harness connectors |
 | `MEMORY_NEVER_STORE_SECRETS` | `true` | Policy flag host connectors should honor before writing memories |
+| `MEMORY_WEBHOOK_TIMEOUT_MS` | `10000` | Timeout for real HTTP webhook delivery |
+| `MEMORY_CONNECTOR_TIMEOUT_MS` | `10000` | Timeout for connector writeback HTTP delivery |
 
 ## Memory Input Fields
 

@@ -216,6 +216,9 @@ curl http://localhost:8787/providers
 curl -X POST http://localhost:8787/connectors/sync \
   -H "content-type: application/json" \
   -d '{"connectorId":"official-chat","userId":"dev","events":[{"role":"user","content":"Support confirmed the release note owner.","externalId":"msg-1"}]}'
+curl -X POST http://localhost:8787/connectors/writeback \
+  -H "content-type: application/json" \
+  -d '{"connectorId":"official-code","operation":"comment","target":{"repo":"cognilabz/cognibrain","path":"README.md","pullRequest":99},"content":"Memory-backed release decision summary.","dryRun":true}'
 ```
 
 ## Memory Lifecycle

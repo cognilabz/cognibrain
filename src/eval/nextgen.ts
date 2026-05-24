@@ -8,7 +8,7 @@ interface Check {
   detail: string;
 }
 
-export function runNextgenEvaluation() {
+export async function runNextgenEvaluation() {
   const service = new MemoryService();
   const checks: Check[] = [];
 
@@ -166,6 +166,14 @@ export function runNextgenEvaluation() {
     [{ role: "assistant", content: "Eval connector captured the operator escalation decision.", externalId: "eval-msg-1", metadata: { channel: "ops" } }],
     { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }
   );
+  const connectorWriteback = await service.writebackConnector(connectorManifest.id, {
+    operation: "summary",
+    memoryIds: connectorSync.memoryIds,
+    externalId: "eval-thread-1",
+    target: { channel: "ops", threadId: "eval-thread-1" },
+    content: "Eval connector writeback summary.",
+    dryRun: true
+  });
   const translation = service.translateText("Speicher soll nicht fehler", "de");
   const mediaIngest = service.ingestMedia(
     { role: "operator", content: "Speicher soll release notes erfassen.", mediaType: "audio", language: "de", uri: "file:///eval/audio-de.m4a" },
@@ -269,12 +277,14 @@ export function runNextgenEvaluation() {
       service.listConnectorManifests().some((manifest) => manifest.id === "official-email") &&
       connectorSync.status === "applied" &&
       connectorSync.memoryIds.length === 1 &&
-      service.listConnectorSyncRecords("eval-chat").length === 1 &&
+      connectorWriteback.status === "queued" &&
+      connectorWriteback.payload?.adapter === "chat.post_message" &&
+      service.listConnectorSyncRecords("eval-chat").length >= 2 &&
       translation.translated.includes("memory") &&
       mediaIngest.memories.some((memory) => memory.metadata.translatedFrom === "de") &&
       service.providerStatus().tasks.includes("translate") &&
       service.auditTrail({ type: "connector.sync" }).length >= 1,
-    detail: `${service.listConnectorManifests().length} connector manifests, ${connectorSync.memoryIds.length} synced memories, translation provider=${translation.provider}`
+    detail: `${service.listConnectorManifests().length} connector manifests, ${connectorSync.memoryIds.length} synced memories, writeback=${connectorWriteback.adapter}, translation provider=${translation.provider}`
   });
   checks.push({
     id: "learning-adaptation",
@@ -362,7 +372,7 @@ export function runNextgenEvaluation() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const outIndex = process.argv.indexOf("--out");
   const out = outIndex >= 0 ? process.argv[outIndex + 1] : "artifacts/nextgen-eval.json";
-  const report = runNextgenEvaluation();
+  const report = await runNextgenEvaluation();
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));

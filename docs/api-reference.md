@@ -70,6 +70,9 @@ curl -X POST http://localhost:8787/connectors \
 curl -X POST http://localhost:8787/connectors/sync \
   -H "content-type: application/json" \
   -d '{"connectorId":"support-chat","userId":"dev","events":[{"role":"user","content":"Support confirmed the release note owner.","externalId":"msg-1","metadata":{"channel":"support"}}]}'
+curl -X POST http://localhost:8787/connectors/writeback \
+  -H "content-type: application/json" \
+  -d '{"connectorId":"support-chat","operation":"summary","externalId":"thread-1","target":{"channel":"support","threadId":"thread-1"},"content":"Release note owner confirmed.","dryRun":true}'
 curl "http://localhost:8787/connectors/sync-records?connectorId=support-chat"
 curl http://localhost:8787/providers
 curl -X POST http://localhost:8787/translate \
@@ -80,7 +83,7 @@ curl -X POST http://localhost:8787/ingest/media \
   -d '{"userId":"dev","event":{"role":"operator","content":"Speicher soll release notes erfassen.","mediaType":"audio","language":"de","uri":"file:///review.m4a"}}'
 ```
 
-The service seeds official manifests for email, chat, project management, docs, code, calendar, and cloud storage. Custom manifests declare direction, auth, capabilities, default source kind, and metadata mapping. `/connectors/sync` maps external events into add-only extraction, records connector sync status, and emits audit events. `/providers` reports whether JSON-command intelligence is active and which tasks fall back deterministically. `/translate` and `/ingest/media` support multilingual and media-transcript ingestion without requiring hosted services.
+The service seeds official manifests for email, chat, project management, docs, code, calendar, and cloud storage. Custom manifests declare direction, auth, capabilities, default source kind, metadata mapping, and optional writeback endpoint metadata. `/connectors/sync` maps external events into add-only extraction, records connector sync status, and emits audit events. `/connectors/writeback` renders source-specific export payloads for email replies, chat posts, issue updates, doc comments, code review comments, calendar notes, or generic custom connectors. With `dryRun:true`, the response is an auditable queued writeback plan. With a manifest `writeback.endpoint` and `dryRun:false`, Cognibrain sends the plan as an HTTP request with connector headers, optional HMAC signature, status-code capture, and timeout governed by `MEMORY_CONNECTOR_TIMEOUT_MS` or 10 seconds by default. `/providers` reports whether JSON-command intelligence is active and which tasks fall back deterministically. `/translate` and `/ingest/media` support multilingual and media-transcript ingestion without requiring hosted services.
 
 ## Entity Catalog And Disambiguation
 

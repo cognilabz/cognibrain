@@ -1073,6 +1073,68 @@ describe("TypeScript memory core", () => {
     expect(service.providerStatus().tasks).toContain("translate");
   });
 
+  it("plans source-specific connector writebacks and can deliver them over HTTP", async () => {
+    const service = new MemoryService();
+    const memory = service.add({ userId: "u1", content: "Connector writeback should preserve reviewed release decisions.", source: { kind: "human", confidence: 0.9 } });
+    const codePlan = await service.writebackConnector("official-code", {
+      memoryIds: [memory.id],
+      content: "Use this release decision in the pull request summary.",
+      target: { repo: "cognilabz/cognibrain", path: "README.md", pullRequest: 99 },
+      dryRun: true
+    });
+    expect(codePlan.status).toBe("queued");
+    expect(codePlan.direction).toBe("export");
+    expect(codePlan.adapter).toBe("code:comment");
+    expect(codePlan.payload?.adapter).toBe("code.review_comment");
+    expect(codePlan.payload?.memoryIds).toContain(memory.id);
+
+    const received: Array<{ headers: Record<string, string | string[] | undefined>; body: string }> = [];
+    const server = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk) => {
+        body += String(chunk);
+      });
+      request.on("end", () => {
+        received.push({ headers: request.headers, body });
+        response.writeHead(202);
+        response.end();
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected TCP test server address.");
+      service.registerConnectorManifest({
+        id: "unit-chat-writeback",
+        name: "Unit Chat Writeback",
+        kind: "chat",
+        version: "1.0.0",
+        direction: "two_way",
+        capabilities: ["ingest", "writeback"],
+        auth: "token",
+        defaultSourceKind: "transcript",
+        metadataMapping: { channel: "metadata.channel" },
+        writeback: { endpoint: `http://127.0.0.1:${address.port}/channels/{channel}`, authRef: "connector-secret", operations: ["summary"] }
+      });
+      const delivered = await service.writebackConnector("unit-chat-writeback", {
+        operation: "summary",
+        memoryIds: [memory.id],
+        target: { channel: "support", threadId: "t-1" },
+        content: "Release decision summary",
+        dryRun: false
+      });
+      expect(delivered.status).toBe("applied");
+      expect(delivered.responseStatusCode).toBe(202);
+      expect(delivered.request?.url).toContain("/channels/support");
+      expect(received).toHaveLength(1);
+      const body = received[0].body;
+      expect(JSON.parse(body).payload.adapter).toBe("chat.post_message");
+      expect(received[0].headers["x-cognibrain-signature"]).toBe(`sha256=${createHmac("sha256", "connector-secret").update(body).digest("hex")}`);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it("delivers webhooks with real HTTP POSTs and HMAC signatures", async () => {
     const received: Array<{ headers: Record<string, string | string[] | undefined>; body: string }> = [];
     const server = createServer((request, response) => {

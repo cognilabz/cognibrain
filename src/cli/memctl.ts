@@ -498,6 +498,27 @@ switch (command) {
     console.log(JSON.stringify(service.listConnectorSyncRecords(args[0]), null, 2));
     break;
   }
+  case "connector-writeback": {
+    const [connectorId, ...contentParts] = args;
+    if (!connectorId) fail("Usage: memctl connector-writeback <connector-id> [content]");
+    const target = process.env.MEMORY_CONNECTOR_TARGET_JSON ? JSON.parse(process.env.MEMORY_CONNECTOR_TARGET_JSON) : {};
+    console.log(
+      JSON.stringify(
+        await service.writebackConnector(connectorId, {
+          operation: connectorOperationFromEnv(),
+          memoryIds: process.env.MEMORY_MEMORY_IDS?.split(",").map((item) => item.trim()).filter(Boolean),
+          externalId: process.env.MEMORY_EXTERNAL_ID,
+          content: contentParts.join(" ") || undefined,
+          target,
+          metadata: metadataFromEnv(),
+          dryRun: process.env.MEMORY_CONNECTOR_DRY_RUN !== "false"
+        }),
+        null,
+        2
+      )
+    );
+    break;
+  }
   case "media-ingest": {
     const content = args.join(" ");
     if (!content) fail("Usage: memctl media-ingest <content-or-transcript>");
@@ -610,7 +631,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|api-spec|migration-export|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|api-spec|migration-export|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-writeback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -658,6 +679,11 @@ function privacyDefaultFromEnv() {
 function connectorKindFromEnv() {
   const value = process.env.MEMORY_CONNECTOR_KIND;
   return value === "email" || value === "chat" || value === "project_management" || value === "docs" || value === "code" || value === "calendar" || value === "cloud_storage" || value === "custom" ? value : undefined;
+}
+
+function connectorOperationFromEnv() {
+  const value = process.env.MEMORY_CONNECTOR_OPERATION;
+  return value === "tag" || value === "comment" || value === "status" || value === "summary" || value === "memory_link" ? value : undefined;
 }
 
 function mediaTypeFromEnv() {

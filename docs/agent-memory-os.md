@@ -66,3 +66,4 @@ The `usp-evidence-pack` suite verifies why-used explanations, source citation co
 - Dashboard: Recall QA shows context pack preview and per-result retrieval signals
 - Graph: `/graph/explain` and `memory explain A B` show time-aware connection paths with evidence ids and validity windows
 - Episodes: `/episodes` and `memory episodes` preserve raw extraction context and link derived facts back to ground truth
+- Verification: `/verification/:userId`, `memory verify`, `memory confirm`, and `memory retract` make dream-time belief revision actionable

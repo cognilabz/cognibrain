@@ -97,6 +97,7 @@ import type {
   TranslationProvider,
   ProviderAdapterStatus,
   TranslationReport,
+  VerificationQueueReport,
   InjectionFeedbackEvent,
   InjectionFeedbackReport,
   AdaptiveDreamPolicyReport,
@@ -379,7 +380,7 @@ export class MemoryService {
     return this.store.get(id);
   }
 
-  update(id: string, patch: Partial<MemoryInput>) {
+  update(id: string, patch: Partial<MemoryInput> & { trust?: number; importance?: number }) {
     const before = this.store.get(id);
     const memory = this.store.update(id, patch);
     this.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { before, after: memory } });
@@ -636,11 +637,54 @@ export class MemoryService {
   dream(userId: string) {
     this.enforceRetention(new Date(), userId);
     const report = this.reflection.run(userId);
+    this.scheduleVerificationFromDream(userId);
     this.recordDream(report.lifecycle.qualityScore, report.contradictions.length, report.lifecycle.actions);
     this.recordAudit("reflect.run", { userId, metadata: { created: report.created.length, demoted: report.demoted.length, contradictions: report.contradictions.length } });
     this.markDreamed(userId);
     this.persist();
     return report;
+  }
+
+  verificationQueue(userId: string): VerificationQueueReport {
+    const now = new Date();
+    const items = this.store.list(userId)
+      .filter((memory) => !memory.archivedAt)
+      .filter((memory) => memory.beliefState === "needs_verification" || memory.beliefState === "contradicted" || Boolean(memory.temporal.verificationDueAt && new Date(memory.temporal.verificationDueAt) <= now))
+      .map((memory) => ({
+        memoryId: memory.id,
+        content: memory.content,
+        beliefState: memory.beliefState,
+        trust: memory.trust,
+        importance: memory.importance,
+        verificationDueAt: memory.temporal.verificationDueAt,
+        reason: memory.beliefState === "contradicted" ? "contradiction needs operator review" : memory.beliefState === "needs_verification" ? "belief state requires verification" : "verification due date elapsed"
+      }))
+      .sort((a, b) => (b.importance * b.trust) - (a.importance * a.trust));
+    return { userId, generatedAt: now.toISOString(), items };
+  }
+
+  confirmMemory(memoryId: string, userId?: string): Memory {
+    const memory = this.store.get(memoryId);
+    if (userId && memory.userId !== userId) throw new Error(`User ${userId} cannot confirm memory ${memoryId}`);
+    const confirmed = this.update(memoryId, {
+      beliefState: "active",
+      temporal: { ...memory.temporal, lastConfirmedAt: new Date().toISOString(), verificationDueAt: undefined, stalenessRisk: 0 },
+      metadata: { verification: { status: "confirmed", at: new Date().toISOString() } }
+    });
+    this.recordAudit("memory.update", { userId: confirmed.userId, memoryId, metadata: { action: "confirm" } });
+    return confirmed;
+  }
+
+  retractMemory(memoryId: string, userId?: string, reason?: string): Memory {
+    const memory = this.store.get(memoryId);
+    if (userId && memory.userId !== userId) throw new Error(`User ${userId} cannot retract memory ${memoryId}`);
+    const retracted = this.update(memoryId, {
+      beliefState: "retracted",
+      trust: 0,
+      metadata: { verification: { status: "retracted", at: new Date().toISOString(), reason } }
+    });
+    this.recordAudit("memory.update", { userId: retracted.userId, memoryId, metadata: { action: "retract", reason } });
+    return retracted;
   }
 
   feedback(event: FeedbackEvent): Memory {
@@ -1687,6 +1731,9 @@ export class MemoryService {
         "/evidence-pack": ["POST"],
         "/feedback": ["POST"],
         "/feedback/injection": ["POST"],
+        "/verification/{userId}": ["GET"],
+        "/memories/{id}/confirm": ["POST"],
+        "/memories/{id}/retract": ["POST"],
         "/graph": ["GET"],
         "/graph/paths": ["GET"],
         "/graph/explain": ["GET"],
@@ -2814,6 +2861,21 @@ export class MemoryService {
     const deterministic = deterministicQueryExpansions(options.query);
     const expansions = [...new Set([...explicit, ...provider, ...deterministic].map((item) => item.trim()).filter(Boolean))].filter((item) => item.toLowerCase() !== options.query.toLowerCase());
     return expansions.slice(0, 10);
+  }
+
+  private scheduleVerificationFromDream(userId: string): void {
+    const dueAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    for (const memory of this.store.list(userId)) {
+      if (memory.archivedAt || memory.pinned || memory.temporal.verificationDueAt) continue;
+      const risk = memory.temporal.stalenessRisk ?? 0;
+      if (memory.beliefState === "contradicted" || memory.beliefState === "needs_verification" || (risk >= 0.65 && memory.importance >= 0.5)) {
+        this.store.update(memory.id, {
+          beliefState: memory.beliefState === "active" ? "needs_verification" : memory.beliefState,
+          temporal: { ...memory.temporal, verificationDueAt: dueAt },
+          metadata: { verification: { status: "queued", at: new Date().toISOString(), reason: "dream belief revision" } }
+        });
+      }
+    }
   }
 
   private restoreMemorySnapshot(snapshot: Memory): Memory {

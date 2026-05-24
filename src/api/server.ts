@@ -1306,6 +1306,23 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && parts[0] === "verification" && parts[1]) {
+    send(response, 200, defaultService.verificationQueue(parts[1]));
+    return;
+  }
+
+  if (method === "POST" && parts[0] === "memories" && parts[1] && parts[2] === "confirm") {
+    const body = z.object({ userId: z.string().optional() }).parse(await json(request));
+    send(response, 200, serialize(defaultService.confirmMemory(parts[1], body.userId)));
+    return;
+  }
+
+  if (method === "POST" && parts[0] === "memories" && parts[1] && parts[2] === "retract") {
+    const body = z.object({ userId: z.string().optional(), reason: z.string().optional() }).parse(await json(request));
+    send(response, 200, serialize(defaultService.retractMemory(parts[1], body.userId, body.reason)));
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/maintenance/dream-due") {
     send(response, 202, { dreamedUsers: defaultService.runDueDreams() });
     return;

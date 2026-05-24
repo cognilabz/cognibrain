@@ -172,6 +172,9 @@ Run the maintenance cycle:
 
 ```bash
 ./bin/cognibrain.mjs memory dream
+./bin/cognibrain.mjs memory verify
+./bin/cognibrain.mjs memory confirm <memory-id>
+./bin/cognibrain.mjs memory retract <memory-id> "Superseded by confirmed source"
 ./bin/cognibrain.mjs memory dream-policy
 MEMORY_PERSIST_OBSERVATIONS=true ./bin/cognibrain.mjs memory observations
 ./bin/cognibrain.mjs memory predictions "Friday release review"

@@ -261,6 +261,20 @@ export interface QueryIntentReport {
   reasons: string[];
 }
 
+export interface VerificationQueueReport {
+  userId: string;
+  generatedAt: Date | string;
+  items: Array<{
+    memoryId: string;
+    content: string;
+    beliefState: BeliefState;
+    trust: number;
+    importance: number;
+    verificationDueAt?: Date | string;
+    reason: string;
+  }>;
+}
+
 export interface SearchResult {
   memory: Memory;
   score: number;

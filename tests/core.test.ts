@@ -501,6 +501,11 @@ describe("TypeScript memory core", () => {
     expect(results.some((result) => result.memory.id === active.id && result.decision !== "exclude")).toBe(true);
     expect(results.find((result) => result.memory.id === review.id)?.decision).toBe("review");
     expect(results.some((result) => result.memory.beliefState === "retracted")).toBe(false);
+    expect(service.verificationQueue("u1").items.some((item) => item.memoryId === review.id)).toBe(true);
+    expect(service.confirmMemory(review.id, "u1").beliefState).toBe("active");
+    expect(service.verificationQueue("u1").items.some((item) => item.memoryId === review.id)).toBe(false);
+    expect(service.retractMemory(active.id, "u1", "wrong").beliefState).toBe("retracted");
+    expect(service.search({ userId: "u1", query: "Vitest release" }).some((result) => result.memory.id === active.id)).toBe(false);
   });
 
   it("redacts sensitive writes, extracts add-only facts, records feedback, and reports metrics", () => {

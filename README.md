@@ -17,7 +17,7 @@
 
 cognibrain is a local-first TypeScript memory platform for AI agents that need durable context without opaque recall. It stores memories with source quality, trust, citations, lifecycle state, retrieval evidence, graph paths, brain/source scope, audit events, and pluggable persistence so teams can see why an agent remembers something before that memory influences real work.
 
-The project includes the memory engine, HTTP API, CLI, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
+The project includes the memory engine, HTTP API, CLI, official connector manifests, provider adapters, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
 
 ![cognibrain desktop dashboard](docs/assets/dashboard-desktop.png)
 
@@ -45,8 +45,10 @@ It is designed for teams that care about:
 - ranked evidence with citations and trust signals,
 - graph-native path explanation and rule-based inferred relations,
 - brain/source/agent/persona primitives for multi-agent team memory,
+- official connector manifests for email, chat, project management, docs, code, calendars, and cloud storage,
+- provider adapters for extraction, translation, query expansion, reranking, verification, contradiction, and summaries with deterministic fallbacks,
 - pluggable storage with atomic JSON snapshots, append-only JSONL logs, storage introspection, and offline sync replay,
-- audit, webhook, marketplace, and compliance surfaces,
+- audit, webhook delivery/retry, marketplace, and compliance surfaces,
 - lifecycle maintenance for stale or contradictory facts,
 - clear integration surfaces for coding agents and AI workflows,
 - reproducible benchmark gates instead of unsupported memory claims.
@@ -138,6 +140,20 @@ Run the maintenance cycle:
 ./bin/cognibrain.mjs memory dream
 ```
 
+Inspect connectors and ingest a connector event:
+
+```bash
+./bin/cognibrain.mjs memory connectors
+./bin/cognibrain.mjs memory connector-sync official-chat "Support confirmed the release note owner."
+```
+
+Translate or ingest a media transcript with language metadata:
+
+```bash
+MEMORY_LANGUAGE=de ./bin/cognibrain.mjs memory translate "Speicher soll nicht fehler"
+MEMORY_MEDIA_TYPE=audio MEMORY_LANGUAGE=de ./bin/cognibrain.mjs memory media-ingest "Speicher soll release notes erfassen."
+```
+
 Check health:
 
 ```bash
@@ -181,6 +197,16 @@ curl -X POST http://localhost:8787/dream \
   -d '{"userId": "dev"}'
 ```
 
+Inspect connector/provider status and sync connector events:
+
+```bash
+curl http://localhost:8787/connectors
+curl http://localhost:8787/providers
+curl -X POST http://localhost:8787/connectors/sync \
+  -H "content-type: application/json" \
+  -d '{"connectorId":"official-chat","userId":"dev","events":[{"role":"user","content":"Support confirmed the release note owner.","externalId":"msg-1"}]}'
+```
+
 ## Memory Lifecycle
 
 The `dream` cycle is the self-maintenance loop for the memory store:
@@ -194,7 +220,7 @@ The `dream` cycle is the self-maintenance loop for the memory store:
 
 Pinned memories are never faded or archived.
 
-The current runtime also supports configurable and scoped learned retrieval profiles, `hybrid`/`rrf`/`graph`/`path` retrieval modes, deterministic or provider-backed query expansion, behavioural retrieval scoring, contradiction-aware context selection, graph path/activation/export reasoning, JSON-command intelligence adapters, deterministic fallback reranking, verifier/summarizer/classifier/extractor providers, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), multi-tenant brains/sources with explicit shared-brain federation, agent subscriptions, shared-memory review/revoke workflows, persona defaults, consent mutation, audit history and revert, offline operation queues, explicit identity links, privacy consent flags, secret redaction/encryption, canonical entity records with merge/split suggestions, typed relations, staged add-only extraction with media/language envelopes, enrichment candidates, hour/day/week/month temporal timelines, persisted timeline summaries, multilingual contradiction checks, behavioral-pattern review, feedback-based trust/importance updates, domain evaluations, local metrics, lifecycle preview, and export/delete APIs.
+The current runtime also supports configurable and scoped learned retrieval profiles, `hybrid`/`rrf`/`graph`/`path` retrieval modes, deterministic or provider-backed query expansion, behavioural retrieval scoring, contradiction-aware context selection, graph path/activation/export reasoning, JSON-command intelligence adapters, deterministic fallback reranking, verifier/summarizer/classifier/extractor/translator providers, official connector manifests, connector sync records, webhook delivery/retry inspection, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), multi-tenant brains/sources with explicit shared-brain federation, agent subscriptions, shared-memory review/revoke workflows, persona defaults, consent mutation, audit history and revert, offline operation queues, explicit identity links, privacy consent flags, secret redaction/encryption, canonical entity records with merge/split suggestions, typed relations, staged add-only extraction with media/language envelopes, translated media ingestion, enrichment candidates, hour/day/week/month temporal timelines, persisted timeline summaries, multilingual contradiction checks, behavioral-pattern review, feedback-based trust/importance updates, domain evaluations, local metrics, lifecycle preview, and export/delete APIs.
 
 ## Connectors
 

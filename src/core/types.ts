@@ -290,6 +290,14 @@ export interface QueryExpander {
   expand(input: { query: string; userId: string; now: Date; memories?: Memory[] }): string[];
 }
 
+export interface TranslationProvider {
+  translate(input: { text: string; sourceLanguage?: string; targetLanguage: string }): {
+    translated: string;
+    confidence?: number;
+    provider?: string;
+  };
+}
+
 export interface HealthReport {
   total: number;
   active: number;
@@ -428,6 +436,31 @@ export interface AgentRegistration {
   updatedAt: Date | string;
 }
 
+export interface ConnectorManifest {
+  id: string;
+  name: string;
+  kind: "email" | "chat" | "project_management" | "docs" | "code" | "calendar" | "cloud_storage" | "custom";
+  version: string;
+  direction: "ingest" | "export" | "two_way";
+  capabilities: Array<"ingest" | "export" | "webhook" | "poll" | "writeback" | "media" | "translation">;
+  auth: "none" | "api_key" | "oauth" | "token";
+  defaultSourceKind: SourceKind;
+  metadataMapping: Record<string, string>;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface ConnectorSyncRecord {
+  id: string;
+  connectorId: string;
+  direction: "ingest" | "export";
+  status: "queued" | "applied" | "failed";
+  memoryIds: string[];
+  externalIds: string[];
+  timestamp: Date | string;
+  error?: string;
+}
+
 export interface PersonaProfile {
   id: string;
   label: string;
@@ -452,6 +485,9 @@ export interface AuditEvent {
     | "memory.consent"
     | "agent.register"
     | "persona.set"
+    | "connector.register"
+    | "connector.sync"
+    | "provider.call"
     | "extract.run"
     | "reflect.run"
     | "search.run"
@@ -532,7 +568,16 @@ export interface WebhookDelivery {
   status: "queued" | "delivered" | "failed";
   attempts: number;
   nextAttemptAt?: Date | string;
+  lastAttemptAt?: Date | string;
   lastError?: string;
+}
+
+export interface ProviderAdapterStatus {
+  active: boolean;
+  command?: string;
+  timeoutMs: number;
+  tasks: Array<"contradiction" | "rerank" | "verify" | "summarize" | "extract" | "expand" | "translate">;
+  fallback: "deterministic";
 }
 
 export interface MarketplaceModule {
@@ -646,6 +691,15 @@ export interface MemoryExtractionEvent {
   uri?: string;
   mimeType?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface TranslationReport {
+  original: string;
+  sourceLanguage?: string;
+  targetLanguage: string;
+  translated: string;
+  provider: "deterministic" | "json-command";
+  confidence: number;
 }
 
 export interface ExtractionStage {

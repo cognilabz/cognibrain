@@ -8,6 +8,7 @@ The CLI is the human and automation surface: install, start, stop, status, healt
 ./bin/cognibrain.mjs setup --all-harnesses
 ./bin/cognibrain.mjs status
 ./bin/cognibrain.mjs memory search "project conventions"
+./bin/cognibrain.mjs memory connectors
 ./bin/cognibrain.mjs mcp
 ```
 
@@ -23,6 +24,40 @@ Harness config commands:
 ```
 
 Generated MCP configs call the packaged CLI with `--runtime-root <project>`, so an npm-installed package stores memory in the target project instead of inside `node_modules`.
+
+## Official Connector Manifests
+
+The runtime seeds official manifests for common work systems:
+
+- `official-email`
+- `official-chat`
+- `official-project_management`
+- `official-docs`
+- `official-code`
+- `official-calendar`
+- `official-cloud_storage`
+
+Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, and metadata mapping. Custom manifests can be registered through the CLI or HTTP API:
+
+```bash
+./bin/cognibrain.mjs memory connector-register '{"id":"support-chat","name":"Support Chat","kind":"chat","version":"1.0.0","direction":"two_way","capabilities":["ingest","webhook","writeback"],"auth":"token","defaultSourceKind":"transcript","metadataMapping":{"channel":"metadata.channel","messageId":"externalId"}}'
+./bin/cognibrain.mjs memory connector-sync support-chat "Support confirmed the release note owner."
+./bin/cognibrain.mjs memory connector-sync-records support-chat
+```
+
+Connector sync records preserve external ids, applied memory ids, timestamps, and failure text. Invalid manifests are rejected before they can write memory, for example writeback on an ingest-only connector.
+
+## Provider And Media Hooks
+
+The JSON-command provider adapter supports `extract`, `translate`, `expand`, `rerank`, `verify`, `contradiction`, and `summarize` tasks with deterministic fallbacks. This keeps the one-click install local-first, while letting teams plug in OCR, ASR, vision, NLI, translation, or cross-encoder tools.
+
+```bash
+./bin/cognibrain.mjs memory provider-status
+MEMORY_LANGUAGE=de ./bin/cognibrain.mjs memory translate "Speicher soll nicht fehler"
+MEMORY_MEDIA_TYPE=audio MEMORY_LANGUAGE=de ./bin/cognibrain.mjs memory media-ingest "Speicher soll release notes erfassen."
+```
+
+Media events retain `mediaType`, `language`, `uri`, `mimeType`, translated content, and original content metadata so operators can audit how a non-text source became memory.
 
 ## Generic Hook Contract
 
@@ -70,6 +105,7 @@ Recommended client policy:
 Connector quality bar:
 
 - every stored memory must include provenance,
+- every connector sync must preserve external ids and source metadata,
 - every generated instruction file should be reproducible from stored memories,
 - every dynamic retrieval path should have an off switch,
 - every connector should support project-only scope before team or global scope.
@@ -194,4 +230,5 @@ Highest leverage next work:
 1. Streamable HTTP MCP transport for remote/shared deployments.
 2. Instruction-file generators for Copilot, Codex, Claude, and Cursor.
 3. Feedback adapters that record accepted changes, rejected suggestions, failing tests, and user corrections.
-4. Privacy policies per connector: personal, project, team, never-store.
+4. Real delivery adapters for webhook registrations once a deployment has outbound-network policy.
+5. Privacy policies per connector: personal, project, team, never-store.

@@ -150,6 +150,28 @@ export function runNextgenEvaluation() {
   const learnedRetrieval = service.learnRetrievalProfile("bench-retrieval", "Bench retrieval", { scope: { userId: "bench" } });
   const expandedRetrieval = service.search({ userId: "bench", query: "cli launcher", expandQuery: true, mode: "rrf" });
   const contradictionRetrieval = service.search({ userId: "bench", query: "Atlas CacheClient cache reads", mode: "path" });
+  const connectorManifest = service.registerConnectorManifest({
+    id: "eval-chat",
+    name: "Eval Chat",
+    kind: "chat",
+    version: "1.0.0",
+    direction: "two_way",
+    capabilities: ["ingest", "webhook", "writeback"],
+    auth: "token",
+    defaultSourceKind: "transcript",
+    metadataMapping: { channel: "metadata.channel", messageId: "externalId", text: "content" }
+  });
+  const connectorSync = service.syncConnectorEvents(
+    connectorManifest.id,
+    [{ role: "assistant", content: "Eval connector captured the operator escalation decision.", externalId: "eval-msg-1", metadata: { channel: "ops" } }],
+    { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }
+  );
+  const translation = service.translateText("Speicher soll nicht fehler", "de");
+  const mediaIngest = service.ingestMedia(
+    { role: "operator", content: "Speicher soll release notes erfassen.", mediaType: "audio", language: "de", uri: "file:///eval/audio-de.m4a" },
+    { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }
+  );
+  const webhookDelivery = service.deliverWebhookQueue();
   const compliance = service.complianceReport(new Date("2026-01-01T00:00:00.000Z"));
   const agentFeed = service.eventFeed({ agentId: "agent-bench", brainId: brain.id });
   const events = service.eventFeed();
@@ -204,8 +226,21 @@ export function runNextgenEvaluation() {
   });
   checks.push({
     id: "webhook-event-feed",
-    passed: events.deliveries.some((delivery) => delivery.status === "queued"),
-    detail: `${events.deliveries.length} queued deliveries`
+    passed: events.deliveries.some((delivery) => delivery.status === "delivered" || delivery.status === "queued"),
+    detail: `${events.deliveries.length} deliveries, ${webhookDelivery.delivered} delivered`
+  });
+  checks.push({
+    id: "connectors-ingestion",
+    passed:
+      service.listConnectorManifests().some((manifest) => manifest.id === "official-email") &&
+      connectorSync.status === "applied" &&
+      connectorSync.memoryIds.length === 1 &&
+      service.listConnectorSyncRecords("eval-chat").length === 1 &&
+      translation.translated.includes("memory") &&
+      mediaIngest.memories.some((memory) => memory.metadata.translatedFrom === "de") &&
+      service.providerStatus().tasks.includes("translate") &&
+      service.auditTrail({ type: "connector.sync" }).length >= 1,
+    detail: `${service.listConnectorManifests().length} connector manifests, ${connectorSync.memoryIds.length} synced memories, translation provider=${translation.provider}`
   });
   checks.push({
     id: "multi-agent-collaboration",

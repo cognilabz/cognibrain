@@ -7,6 +7,8 @@ import type {
   AgentRegistration,
   AuditEvent,
   Brain,
+  ConnectorManifest,
+  ConnectorSyncRecord,
   IdentityLink,
   MarketplaceModule,
   Memory,
@@ -42,6 +44,8 @@ export interface PersistedMemoryFile {
   webhookDeliveries?: WebhookDelivery[];
   marketplaceModules?: MarketplaceModule[];
   offlineOperations?: OfflineOperation[];
+  connectorManifests?: ConnectorManifest[];
+  connectorSyncRecords?: ConnectorSyncRecord[];
 }
 
 export interface MemoryPersistenceAdapter {

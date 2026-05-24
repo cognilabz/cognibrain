@@ -59,6 +59,29 @@ curl -X POST http://localhost:8787/extract \
 
 `/extract` performs staged single-pass, add-only fact extraction. Deterministic rules run first; if a JSON-command extractor is configured, low-confidence or media-heavy events can fall back to provider extraction. Events may include `mediaType` (`text`, `code`, `document`, `audio`, `image`, `video`), `language`, `uri`, and `mimeType`. The response returns written memories, `entityLinks`, extraction `stages`, auditable `failures`, `enrichmentCandidates`, and `learnedRules` suggestions for regex, provider, or translation improvements.
 
+## Connectors, Providers, Translation, And Media
+
+```bash
+curl http://localhost:8787/connectors
+curl "http://localhost:8787/connectors?kind=chat"
+curl -X POST http://localhost:8787/connectors \
+  -H "content-type: application/json" \
+  -d '{"id":"support-chat","name":"Support Chat","kind":"chat","version":"1.0.0","direction":"two_way","capabilities":["ingest","webhook","writeback"],"auth":"token","defaultSourceKind":"transcript","metadataMapping":{"channel":"metadata.channel","messageId":"externalId","text":"content"}}'
+curl -X POST http://localhost:8787/connectors/sync \
+  -H "content-type: application/json" \
+  -d '{"connectorId":"support-chat","userId":"dev","events":[{"role":"user","content":"Support confirmed the release note owner.","externalId":"msg-1","metadata":{"channel":"support"}}]}'
+curl "http://localhost:8787/connectors/sync-records?connectorId=support-chat"
+curl http://localhost:8787/providers
+curl -X POST http://localhost:8787/translate \
+  -H "content-type: application/json" \
+  -d '{"text":"Speicher soll nicht fehler","sourceLanguage":"de","targetLanguage":"en"}'
+curl -X POST http://localhost:8787/ingest/media \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","event":{"role":"operator","content":"Speicher soll release notes erfassen.","mediaType":"audio","language":"de","uri":"file:///review.m4a"}}'
+```
+
+The service seeds official manifests for email, chat, project management, docs, code, calendar, and cloud storage. Custom manifests declare direction, auth, capabilities, default source kind, and metadata mapping. `/connectors/sync` maps external events into add-only extraction, records connector sync status, and emits audit events. `/providers` reports whether JSON-command intelligence is active and which tasks fall back deterministically. `/translate` and `/ingest/media` support multilingual and media-transcript ingestion without requiring hosted services.
+
 ## Entity Catalog And Disambiguation
 
 ```bash
@@ -220,7 +243,11 @@ Identity links require an explicit consent token and store only a hash of that t
 ```bash
 curl -X POST http://localhost:8787/webhooks \
   -H "content-type: application/json" \
-  -d '{"url":"https://example.invalid/memory","events":["memory.write","inference.run"]}'
+  -d '{"url":"https://example.invalid/memory","events":["memory.write","inference.run","connector.sync","provider.call"]}'
+curl http://localhost:8787/webhooks/deliveries
+curl -X POST http://localhost:8787/webhooks/deliver \
+  -H "content-type: application/json" \
+  -d '{}'
 curl http://localhost:8787/events
 curl "http://localhost:8787/audit?type=sync.run"
 curl -X POST http://localhost:8787/marketplace/install \
@@ -230,7 +257,7 @@ curl http://localhost:8787/marketplace
 curl http://localhost:8787/compliance
 ```
 
-Every write/update/delete/search/extract/reflect/share/share-request/share-revoke/agent/persona/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Compliance reports summarize storage scope, consent, retention, delete-on-request, encryption metadata, and audit counts.
+Every write/update/delete/search/extract/reflect/share/share-request/share-revoke/agent/persona/connector/provider/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries, simulate delivery, and verify retry metadata before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Compliance reports summarize storage scope, consent, retention, delete-on-request, encryption metadata, and audit counts.
 
 ## Reflection
 

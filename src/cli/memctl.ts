@@ -343,6 +343,102 @@ switch (command) {
     console.log(JSON.stringify(service.storageStatus(), null, 2));
     break;
   }
+  case "provider-status": {
+    console.log(JSON.stringify(service.providerStatus(), null, 2));
+    break;
+  }
+  case "translate": {
+    const text = args.join(" ");
+    if (!text) fail("Usage: memctl translate <text>");
+    console.log(JSON.stringify(service.translateText(text, process.env.MEMORY_LANGUAGE, process.env.MEMORY_TARGET_LANGUAGE ?? "en"), null, 2));
+    break;
+  }
+  case "connectors": {
+    const kind = connectorKindFromEnv();
+    console.log(JSON.stringify(service.listConnectorManifests(kind), null, 2));
+    break;
+  }
+  case "connector-register": {
+    const manifestJson = args.join(" ");
+    if (!manifestJson) fail("Usage: memctl connector-register '<manifest-json>'");
+    console.log(JSON.stringify(service.registerConnectorManifest(JSON.parse(manifestJson)), null, 2));
+    break;
+  }
+  case "connector-sync": {
+    const [connectorId, ...contentParts] = args;
+    if (!connectorId || contentParts.length === 0) fail("Usage: memctl connector-sync <connector-id> <content>");
+    console.log(
+      JSON.stringify(
+        service.syncConnectorEvents(
+          connectorId,
+          [{
+            role: "user",
+            content: contentParts.join(" "),
+            externalId: process.env.MEMORY_EXTERNAL_ID,
+            mediaType: mediaTypeFromEnv(),
+            language: process.env.MEMORY_LANGUAGE,
+            uri: process.env.MEMORY_SOURCE_URI,
+            mimeType: process.env.MEMORY_MIME_TYPE,
+            metadata: metadataFromEnv()
+          }],
+          {
+            userId,
+            agentId: process.env.MEMORY_AGENT_ID,
+            sessionId: process.env.MEMORY_SESSION_ID,
+            appId: process.env.MEMORY_APP_ID,
+            orgId: process.env.MEMORY_ORG_ID,
+            projectId: process.env.MEMORY_PROJECT_ID,
+            brainId: process.env.MEMORY_BRAIN_ID,
+            sourceId: process.env.MEMORY_SOURCE_ID
+          }
+        ),
+        null,
+        2
+      )
+    );
+    break;
+  }
+  case "connector-sync-records": {
+    console.log(JSON.stringify(service.listConnectorSyncRecords(args[0]), null, 2));
+    break;
+  }
+  case "media-ingest": {
+    const content = args.join(" ");
+    if (!content) fail("Usage: memctl media-ingest <content-or-transcript>");
+    console.log(
+      JSON.stringify(
+        service.ingestMedia(
+          {
+            role: "user",
+            content,
+            mediaType: mediaTypeFromEnv() ?? "document",
+            language: process.env.MEMORY_LANGUAGE,
+            uri: process.env.MEMORY_SOURCE_URI,
+            mimeType: process.env.MEMORY_MIME_TYPE,
+            metadata: metadataFromEnv()
+          },
+          {
+            userId,
+            agentId: process.env.MEMORY_AGENT_ID,
+            sessionId: process.env.MEMORY_SESSION_ID,
+            appId: process.env.MEMORY_APP_ID,
+            orgId: process.env.MEMORY_ORG_ID,
+            projectId: process.env.MEMORY_PROJECT_ID,
+            brainId: process.env.MEMORY_BRAIN_ID,
+            sourceId: process.env.MEMORY_SOURCE_ID
+          }
+        ),
+        null,
+        2
+      )
+    );
+    break;
+  }
+  case "webhook-deliver": {
+    const failDelivery = args[0] === "fail";
+    console.log(JSON.stringify(service.deliverWebhookQueue(() => ({ ok: !failDelivery, error: failDelivery ? "cli simulated failure" : undefined })), null, 2));
+    break;
+  }
   case "consent": {
     const [memoryId, visibility] = args;
     if (!memoryId || !["private", "user", "org", "public"].includes(visibility)) fail("Usage: memctl consent <memory-id> <private|user|org|public>");
@@ -406,7 +502,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|storage|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|storage|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -440,4 +536,18 @@ function summaryStyleFromEnv() {
 function privacyDefaultFromEnv() {
   const value = process.env.MEMORY_PERSONA_PRIVACY;
   return value === "private" || value === "org" || value === "public" ? value : value === "user" ? value : undefined;
+}
+
+function connectorKindFromEnv() {
+  const value = process.env.MEMORY_CONNECTOR_KIND;
+  return value === "email" || value === "chat" || value === "project_management" || value === "docs" || value === "code" || value === "calendar" || value === "cloud_storage" || value === "custom" ? value : undefined;
+}
+
+function mediaTypeFromEnv() {
+  const value = process.env.MEMORY_MEDIA_TYPE;
+  return value === "text" || value === "code" || value === "document" || value === "audio" || value === "image" || value === "video" ? value : undefined;
+}
+
+function metadataFromEnv() {
+  return process.env.MEMORY_METADATA_JSON ? JSON.parse(process.env.MEMORY_METADATA_JSON) : undefined;
 }

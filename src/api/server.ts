@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { z } from "zod";
 import { defaultService } from "./service";
-import type { Memory } from "../core";
+import type { ExtractionReport, Memory } from "../core";
 
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -123,6 +123,27 @@ const inferenceRuleSchema = z.object({
   confidence: z.number().min(0).max(1).optional()
 });
 
+const extractionEventSchema = z.object({
+  role: z.enum(["user", "assistant", "tool", "system", "operator"]),
+  content: z.string().min(1),
+  timestamp: z.string().optional(),
+  source: z
+    .object({
+      kind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]),
+      uri: z.string().optional(),
+      commit: z.string().optional(),
+      lineStart: z.number().optional(),
+      lineEnd: z.number().optional(),
+      confidence: z.number().min(0).max(1)
+    })
+    .optional(),
+  mediaType: z.enum(["text", "code", "document", "audio", "image", "video"]).optional(),
+  language: z.string().optional(),
+  uri: z.string().optional(),
+  mimeType: z.string().optional(),
+  metadata: z.record(z.unknown()).optional()
+});
+
 const extractSchema = z.object({
   brainId: z.string().optional(),
   sourceId: z.string().optional(),
@@ -134,28 +155,7 @@ const extractSchema = z.object({
   projectId: z.string().optional(),
   deviceId: z.string().optional(),
   runId: z.string().optional(),
-  events: z.array(
-    z.object({
-      role: z.enum(["user", "assistant", "tool", "system", "operator"]),
-      content: z.string().min(1),
-      timestamp: z.string().optional(),
-      source: z
-        .object({
-          kind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]),
-          uri: z.string().optional(),
-          commit: z.string().optional(),
-          lineStart: z.number().optional(),
-          lineEnd: z.number().optional(),
-          confidence: z.number().min(0).max(1)
-        })
-        .optional(),
-      mediaType: z.enum(["text", "code", "document", "audio", "image", "video"]).optional(),
-      language: z.string().optional(),
-      uri: z.string().optional(),
-      mimeType: z.string().optional(),
-      metadata: z.record(z.unknown()).optional()
-    })
-  )
+  events: z.array(extractionEventSchema)
 });
 
 const entityMergeSchema = z.object({
@@ -263,7 +263,7 @@ const personaSchema = z.object({
 const webhookSchema = z.object({
   id: z.string().optional(),
   url: z.string().url(),
-  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
+  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
   secretRef: z.string().optional()
 });
 
@@ -277,7 +277,44 @@ const marketplaceModuleSchema = z.object({
   manifest: z.record(z.unknown())
 });
 
-const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"]);
+const connectorManifestSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.enum(["email", "chat", "project_management", "docs", "code", "calendar", "cloud_storage", "custom"]),
+  version: z.string().min(1),
+  direction: z.enum(["ingest", "export", "two_way"]),
+  capabilities: z.array(z.enum(["ingest", "export", "webhook", "poll", "writeback", "media", "translation"])).min(1),
+  auth: z.enum(["none", "api_key", "oauth", "token"]),
+  defaultSourceKind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]),
+  metadataMapping: z.record(z.string())
+});
+
+const connectorSyncSchema = z.object({
+  connectorId: z.string().min(1),
+  userId: z.string().min(1),
+  brainId: z.string().optional(),
+  sourceId: z.string().optional(),
+  agentId: z.string().optional(),
+  sessionId: z.string().optional(),
+  appId: z.string().optional(),
+  orgId: z.string().optional(),
+  projectId: z.string().optional(),
+  events: z.array(
+    z.object({
+      role: z.enum(["user", "assistant", "tool", "system", "operator"]),
+      content: z.string().min(1),
+      externalId: z.string().optional(),
+      timestamp: z.string().optional(),
+      mediaType: z.enum(["text", "code", "document", "audio", "image", "video"]).optional(),
+      language: z.string().optional(),
+      uri: z.string().optional(),
+      mimeType: z.string().optional(),
+      metadata: z.record(z.unknown()).optional()
+    })
+  )
+});
+
+const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"]);
 
 const offlineOperationSchema = z.object({
   id: z.string().optional(),
@@ -488,6 +525,17 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && url.pathname === "/webhooks/deliveries") {
+    send(response, 200, defaultService.eventFeed().deliveries);
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/webhooks/deliver") {
+    const body = z.object({ fail: z.boolean().optional(), error: z.string().optional() }).parse(await json(request));
+    send(response, 202, defaultService.deliverWebhookQueue(() => ({ ok: body.fail !== true, error: body.error ?? "simulated delivery failure" })));
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/marketplace") {
     send(response, 200, defaultService.listMarketplaceModules());
     return;
@@ -505,6 +553,41 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/storage") {
     send(response, 200, defaultService.storageStatus());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/providers") {
+    send(response, 200, defaultService.providerStatus());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/translate") {
+    const body = z.object({ text: z.string().min(1), sourceLanguage: z.string().optional(), targetLanguage: z.string().optional() }).parse(await json(request));
+    send(response, 200, defaultService.translateText(body.text, body.sourceLanguage, body.targetLanguage));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/connectors") {
+    const kind = url.searchParams.get("kind");
+    const parsedKind = kind ? connectorManifestSchema.shape.kind.parse(kind) : undefined;
+    send(response, 200, defaultService.listConnectorManifests(parsedKind));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/connectors") {
+    send(response, 201, defaultService.registerConnectorManifest(connectorManifestSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/connectors/sync-records") {
+    send(response, 200, defaultService.listConnectorSyncRecords(url.searchParams.get("connectorId") ?? undefined));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/connectors/sync") {
+    const body = connectorSyncSchema.parse(await json(request));
+    const { connectorId, events, ...scope } = body;
+    send(response, 202, defaultService.syncConnectorEvents(connectorId, events, scope));
     return;
   }
 
@@ -553,14 +636,26 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     const body = extractSchema.parse(await json(request));
     const { events, ...scope } = body;
     const report = defaultService.extract(events, scope);
-    send(response, 201, {
-      memories: report.memories.map(serialize),
-      entityLinks: report.entityLinks,
-      stages: report.stages,
-      failures: report.failures,
-      enrichmentCandidates: report.enrichmentCandidates,
-      learnedRules: report.learnedRules
-    });
+    send(response, 201, serializeExtractionReport(report));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/ingest/media") {
+    const body = z
+      .object({
+        brainId: z.string().optional(),
+        sourceId: z.string().optional(),
+        userId: z.string().min(1),
+        agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
+        event: extractionEventSchema
+      })
+      .parse(await json(request));
+    const { event, ...scope } = body;
+    send(response, 201, serializeExtractionReport(defaultService.ingestMedia(event, scope)));
     return;
   }
 
@@ -795,6 +890,17 @@ function serialize(value: Memory) {
     updatedAt: value.updatedAt.toISOString(),
     lastAccessedAt: value.lastAccessedAt?.toISOString(),
     archivedAt: value.archivedAt?.toISOString()
+  };
+}
+
+function serializeExtractionReport(report: ExtractionReport) {
+  return {
+    memories: report.memories.map(serialize),
+    entityLinks: report.entityLinks,
+    stages: report.stages,
+    failures: report.failures,
+    enrichmentCandidates: report.enrichmentCandidates,
+    learnedRules: report.learnedRules
   };
 }
 

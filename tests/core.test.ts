@@ -235,10 +235,11 @@ describe("TypeScript memory core", () => {
       if (input.task === "verify") console.log(JSON.stringify({ decisions: [{ id: input.results[0].id, decision: "warn", reason: "provider warning" }] }));
       if (input.task === "contradiction") console.log(JSON.stringify({ label: "contradiction", confidence: 0.88, reason: "provider contradiction" }));
       if (input.task === "summarize") console.log(JSON.stringify({ content: "Atlas provider summary from external intelligence.", confidence: 0.81 }));
+      if (input.task === "translate") console.log(JSON.stringify({ translated: "Atlas memory provider translation.", confidence: 0.82 }));
     `;
     const provider = new JsonCommandMemoryIntelligence({ command: process.execPath, args: ["-e", script] });
     const service = new MemoryService({
-      intelligence: { reranker: provider, verifier: provider, contradictionDetector: provider, summarizer: provider }
+      intelligence: { reranker: provider, verifier: provider, contradictionDetector: provider, summarizer: provider, translator: provider }
     });
     service.add({ userId: "u1", content: "Atlas first cache note.", tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
     service.add({ userId: "u1", content: "Atlas second cache note.", tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
@@ -251,6 +252,7 @@ describe("TypeScript memory core", () => {
     const report = service.dream("u1");
     expect(report.contradictions[0]?.reason).toBe("provider contradiction");
     expect(report.created.some((memory) => memory.content.includes("provider summary"))).toBe(true);
+    expect(service.translateText("Atlas Speicher", "de").translated).toBe("Atlas memory provider translation.");
   });
 
   it("schedules verification for time-sensitive stale memories", () => {
@@ -855,6 +857,61 @@ describe("TypeScript memory core", () => {
     expect(compliance.totals.sources).toBe(1);
     expect(compliance.retentionExpired).toBe(1);
     expect(compliance.auditByType["memory.write"]).toBeGreaterThan(0);
+  });
+
+  it("validates connector manifests, syncs connector events, retries webhooks, and ingests translated media", () => {
+    const service = new MemoryService();
+    const official = service.listConnectorManifests();
+    expect(official.map((manifest) => manifest.kind)).toEqual(expect.arrayContaining(["email", "chat", "project_management", "docs", "code", "calendar", "cloud_storage"]));
+    expect(() =>
+      service.registerConnectorManifest({
+        id: "bad-writeback",
+        name: "Bad Writeback",
+        kind: "custom",
+        version: "1.0.0",
+        direction: "ingest",
+        capabilities: ["writeback"],
+        auth: "none",
+        defaultSourceKind: "import",
+        metadataMapping: {}
+      })
+    ).toThrow(/Writeback/);
+
+    const manifest = service.registerConnectorManifest({
+      id: "unit-chat",
+      name: "Unit Chat",
+      kind: "chat",
+      version: "1.0.0",
+      direction: "two_way",
+      capabilities: ["ingest", "webhook", "writeback"],
+      auth: "token",
+      defaultSourceKind: "transcript",
+      metadataMapping: { channel: "metadata.channel", messageId: "externalId" }
+    });
+    service.registerWebhook({ url: "https://example.invalid/connectors", events: ["connector.sync", "provider.call", "memory.write"] });
+
+    const sync = service.syncConnectorEvents(
+      manifest.id,
+      [{ role: "user", content: "Connector sync should capture customer escalation decisions.", externalId: "msg-1", metadata: { channel: "support" } }],
+      { userId: "u1" }
+    );
+    expect(sync.status).toBe("applied");
+    expect(sync.memoryIds.length).toBe(1);
+    expect(sync.externalIds).toContain("msg-1");
+    expect(service.listConnectorSyncRecords("unit-chat")[0].id).toBe(sync.id);
+
+    const failed = service.deliverWebhookQueue(() => ({ ok: false, error: "offline" }));
+    expect(failed.failed).toBeGreaterThan(0);
+    expect(service.eventFeed().deliveries.some((delivery) => delivery.status === "failed" && delivery.lastAttemptAt && delivery.nextAttemptAt)).toBe(true);
+    const retry = service.deliverWebhookQueue();
+    expect(retry.delivered).toBeGreaterThanOrEqual(0);
+
+    const translated = service.translateText("Speicher soll nicht fehler", "de");
+    expect(translated.translated).toContain("memory");
+    const media = service.ingestMedia({ role: "operator", content: "Speicher soll release notes erfassen.", mediaType: "audio", language: "de" }, { userId: "u1" });
+    expect(media.memories[0].metadata.translatedFrom).toBe("de");
+    expect(service.auditTrail({ type: "provider.call" }).length).toBeGreaterThan(0);
+    expect(service.providerStatus().tasks).toContain("translate");
   });
 
   it("enforces brain membership, explicit shared-brain federation, consent updates, audit revert, storage status, and offline sync", () => {

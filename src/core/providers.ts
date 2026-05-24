@@ -11,7 +11,8 @@ import type {
   QueryExpander,
   ReflectionSummarizer,
   SearchResult,
-  SourceKind
+  SourceKind,
+  TranslationProvider
 } from "./types";
 
 export interface JsonCommandProviderOptions {
@@ -20,9 +21,9 @@ export interface JsonCommandProviderOptions {
   timeoutMs?: number;
 }
 
-type ProviderTask = "contradiction" | "rerank" | "verify" | "summarize" | "extract" | "expand";
+type ProviderTask = "contradiction" | "rerank" | "verify" | "summarize" | "extract" | "expand" | "translate";
 
-export class JsonCommandMemoryIntelligence implements ContradictionDetector, ContextReranker, ContextVerifier, ReflectionSummarizer, MemoryExtractor, QueryExpander {
+export class JsonCommandMemoryIntelligence implements ContradictionDetector, ContextReranker, ContextVerifier, ReflectionSummarizer, MemoryExtractor, QueryExpander, TranslationProvider {
   constructor(private readonly options: JsonCommandProviderOptions) {}
 
   classify(input: { a: Memory; b: Memory; key?: string }) {
@@ -110,6 +111,15 @@ export class JsonCommandMemoryIntelligence implements ContradictionDetector, Con
       memories: (input.memories ?? []).slice(0, 25).map(memoryForProvider)
     });
     return Array.isArray(output.expansions) ? output.expansions.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 8) : [];
+  }
+
+  translate(input: { text: string; sourceLanguage?: string; targetLanguage: string }) {
+    const output = this.call("translate", input);
+    return {
+      translated: typeof output.translated === "string" && output.translated.trim() ? output.translated.slice(0, 8000) : input.text,
+      confidence: boundedNumber(output.confidence, 0.45),
+      provider: "json-command"
+    };
   }
 
   private call(task: ProviderTask, payload: Record<string, unknown>): Record<string, any> {

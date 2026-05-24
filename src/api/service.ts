@@ -33,6 +33,8 @@ import type {
   Brain,
   ComplianceReport,
   ContradictionDetector,
+  ConnectorManifest,
+  ConnectorSyncRecord,
   EnrichmentCandidate,
   EntityMergeSuggestion,
   EntityRecord,
@@ -64,6 +66,9 @@ import type {
   SyncReport,
   ConsentPolicy,
   QueryExpander,
+  TranslationProvider,
+  ProviderAdapterStatus,
+  TranslationReport,
   BehavioralPatternReport,
   TemporalQueryReport,
   TimelineSummaryReport,
@@ -93,6 +98,7 @@ export interface MemoryServiceOptions {
     summarizer?: ReflectionSummarizer;
     extractor?: MemoryExtractor;
     queryExpander?: QueryExpander;
+    translator?: TranslationProvider;
   };
 }
 
@@ -128,6 +134,8 @@ export class MemoryService {
   private webhookDeliveries: WebhookDelivery[] = [];
   private marketplaceModules = new Map<string, MarketplaceModule>();
   private offlineOperations: OfflineOperation[] = [];
+  private connectorManifests = new Map<string, ConnectorManifest>();
+  private connectorSyncRecords: ConnectorSyncRecord[] = [];
   private searchEvents: Array<{
     timestamp: string;
     userId: string;
@@ -183,6 +191,8 @@ export class MemoryService {
     this.defaultExtractor = provider.extractor;
     this.defaultSummarizer = provider.summarizer;
     this.defaultQueryExpander = provider.queryExpander;
+    this.defaultTranslator = provider.translator;
+    for (const manifest of officialConnectorManifests()) this.connectorManifests.set(manifest.id, manifest);
     this.load();
   }
 
@@ -191,6 +201,7 @@ export class MemoryService {
   private readonly defaultExtractor?: MemoryExtractor;
   private readonly defaultSummarizer?: ReflectionSummarizer;
   private readonly defaultQueryExpander?: QueryExpander;
+  private readonly defaultTranslator?: TranslationProvider;
 
   add(input: MemoryInput) {
     const sourceDefaultConsent = input.sourceId ? this.sources.get(input.sourceId)?.defaultConsent : undefined;
@@ -436,6 +447,139 @@ export class MemoryService {
 
   listSources(brainId?: string): MemorySource[] {
     return [...this.sources.values()].filter((source) => !brainId || source.brainId === brainId).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  registerConnectorManifest(input: Omit<ConnectorManifest, "createdAt" | "updatedAt"> & { createdAt?: Date | string; updatedAt?: Date | string }): ConnectorManifest {
+    validateConnectorManifest(input);
+    const now = new Date().toISOString();
+    const manifest: ConnectorManifest = {
+      ...input,
+      createdAt: input.createdAt ?? now,
+      updatedAt: input.updatedAt ?? now
+    };
+    this.connectorManifests.set(manifest.id, manifest);
+    this.recordAudit("connector.register", { metadata: { connectorId: manifest.id, kind: manifest.kind, capabilities: manifest.capabilities } });
+    this.persist();
+    return manifest;
+  }
+
+  listConnectorManifests(kind?: ConnectorManifest["kind"]): ConnectorManifest[] {
+    return [...this.connectorManifests.values()]
+      .filter((manifest) => !kind || manifest.kind === kind)
+      .sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
+  }
+
+  syncConnectorEvents(
+    connectorId: string,
+    events: Array<MemoryExtractionEvent & { externalId?: string }>,
+    scope: Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId">
+  ): ConnectorSyncRecord {
+    const manifest = this.connectorManifests.get(connectorId);
+    if (!manifest) throw new Error(`Connector manifest not found: ${connectorId}`);
+    if (!manifest.capabilities.includes("ingest")) throw new Error(`Connector ${connectorId} does not support ingest`);
+    try {
+      const mapped = events.map((event) => ({
+        ...event,
+        source: event.source ?? { kind: manifest.defaultSourceKind, uri: event.uri, confidence: 0.82 },
+        metadata: { ...(event.metadata ?? {}), connectorId, externalId: event.externalId, mapping: manifest.metadataMapping }
+      }));
+      const report = this.extract(mapped, scope);
+      const record: ConnectorSyncRecord = {
+        id: `sync_${contentHash(`${connectorId}:${Date.now()}:${this.connectorSyncRecords.length}`).slice(2)}`,
+        connectorId,
+        direction: "ingest",
+        status: "applied",
+        memoryIds: report.memories.map((memory) => memory.id),
+        externalIds: events.map((event) => event.externalId).filter((id): id is string => Boolean(id)),
+        timestamp: new Date().toISOString()
+      };
+      this.connectorSyncRecords.push(record);
+      this.recordAudit("connector.sync", { userId: scope.userId, brainId: scope.brainId, sourceId: scope.sourceId, metadata: { connectorId, status: record.status, memories: record.memoryIds.length } });
+      this.persist();
+      return record;
+    } catch (error) {
+      const record: ConnectorSyncRecord = {
+        id: `sync_${contentHash(`${connectorId}:failed:${Date.now()}:${this.connectorSyncRecords.length}`).slice(2)}`,
+        connectorId,
+        direction: "ingest",
+        status: "failed",
+        memoryIds: [],
+        externalIds: events.map((event) => event.externalId).filter((id): id is string => Boolean(id)),
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "unknown connector sync failure"
+      };
+      this.connectorSyncRecords.push(record);
+      this.recordAudit("connector.sync", { userId: scope.userId, brainId: scope.brainId, sourceId: scope.sourceId, metadata: { connectorId, status: record.status, error: record.error } });
+      this.persist();
+      return record;
+    }
+  }
+
+  listConnectorSyncRecords(connectorId?: string): ConnectorSyncRecord[] {
+    return this.connectorSyncRecords.filter((record) => !connectorId || record.connectorId === connectorId);
+  }
+
+  providerStatus(): ProviderAdapterStatus {
+    return {
+      active: Boolean(this.defaultExtractor || this.defaultSummarizer || this.defaultVerifier || this.defaultReranker || this.defaultQueryExpander || this.defaultTranslator),
+      command: process.env.MEMORY_INTELLIGENCE_COMMAND,
+      timeoutMs: Number(process.env.MEMORY_INTELLIGENCE_TIMEOUT_MS ?? 3500),
+      tasks: ["contradiction", "rerank", "verify", "summarize", "extract", "expand", "translate"],
+      fallback: "deterministic"
+    };
+  }
+
+  translateText(text: string, sourceLanguage?: string, targetLanguage = "en"): TranslationReport {
+    const provider = this.defaultTranslator?.translate({ text, sourceLanguage, targetLanguage });
+    const translated = provider?.translated && provider.translated !== text ? provider.translated : deterministicTranslate(text, sourceLanguage, targetLanguage);
+    const report: TranslationReport = {
+      original: text,
+      sourceLanguage,
+      targetLanguage,
+      translated,
+      provider: provider?.translated && provider.translated !== text ? "json-command" : "deterministic",
+      confidence: provider?.confidence ?? (translated === text ? 0.35 : 0.68)
+    };
+    this.recordAudit("provider.call", { metadata: { task: "translate", sourceLanguage, targetLanguage, provider: report.provider, confidence: report.confidence } });
+    this.persist();
+    return report;
+  }
+
+  ingestMedia(
+    event: MemoryExtractionEvent,
+    scope: Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId">
+  ): ExtractionReport {
+    const normalized = event.language && !/^en/i.test(event.language)
+      ? { ...event, content: this.translateText(event.content, event.language, "en").translated, metadata: { ...(event.metadata ?? {}), translatedFrom: event.language, originalContent: event.content } }
+      : event;
+    return this.extract([normalized], scope);
+  }
+
+  deliverWebhookQueue(handler?: (webhook: WebhookRegistration, event: AuditEvent) => { ok: boolean; error?: string }): { delivered: number; failed: number; queued: number } {
+    let delivered = 0;
+    let failed = 0;
+    for (const delivery of this.webhookDeliveries) {
+      if (delivery.status !== "queued" && delivery.status !== "failed") continue;
+      if (delivery.nextAttemptAt && new Date(delivery.nextAttemptAt).getTime() > Date.now()) continue;
+      const webhook = this.webhooks.get(delivery.webhookId);
+      const event = this.auditEvents.find((item) => item.id === delivery.eventId);
+      if (!webhook || !event || webhook.disabledAt) continue;
+      const result = handler ? handler(webhook, event) : { ok: true };
+      delivery.attempts += 1;
+      delivery.lastAttemptAt = new Date().toISOString();
+      if (result.ok) {
+        delivery.status = "delivered";
+        delivery.lastError = undefined;
+        delivered += 1;
+      } else {
+        delivery.status = "failed";
+        delivery.lastError = result.error ?? "delivery failed";
+        delivery.nextAttemptAt = new Date(Date.now() + Math.min(60_000, 1000 * 2 ** delivery.attempts)).toISOString();
+        failed += 1;
+      }
+    }
+    this.persist();
+    return { delivered, failed, queued: this.webhookDeliveries.filter((delivery) => delivery.status === "queued").length };
   }
 
   storageStatus(): StorageBackendStatus {
@@ -1282,6 +1426,8 @@ export class MemoryService {
     this.webhookDeliveries = raw.webhookDeliveries ?? [];
     this.marketplaceModules = new Map((raw.marketplaceModules ?? []).map((module) => [module.id, module]));
     this.offlineOperations = raw.offlineOperations ?? [];
+    for (const manifest of raw.connectorManifests ?? []) this.connectorManifests.set(manifest.id, manifest);
+    this.connectorSyncRecords = raw.connectorSyncRecords ?? [];
     this.store.import(raw.memories ?? []);
     for (const memory of this.store.list()) this.entities.ingest(memory);
   }
@@ -1307,7 +1453,9 @@ export class MemoryService {
       webhooks: [...this.webhooks.values()],
       webhookDeliveries: this.webhookDeliveries,
       marketplaceModules: [...this.marketplaceModules.values()],
-      offlineOperations: this.offlineOperations
+      offlineOperations: this.offlineOperations,
+      connectorManifests: [...this.connectorManifests.values()],
+      connectorSyncRecords: this.connectorSyncRecords
     };
     this.persistence.save(payload);
   }
@@ -1525,8 +1673,61 @@ function providerFromEnv(): NonNullable<MemoryServiceOptions["intelligence"]> {
     contradictionDetector: provider,
     summarizer: provider,
     extractor: provider,
-    queryExpander: provider
+    queryExpander: provider,
+    translator: provider
   };
+}
+
+function officialConnectorManifests(): ConnectorManifest[] {
+  const now = "2026-01-01T00:00:00.000Z";
+  const base = (kind: ConnectorManifest["kind"], name: string, capabilities: ConnectorManifest["capabilities"], metadataMapping: Record<string, string>, defaultSourceKind: ConnectorManifest["defaultSourceKind"] = "import"): ConnectorManifest => ({
+    id: `official-${kind}`,
+    name,
+    kind,
+    version: "1.0.0",
+    direction: capabilities.includes("writeback") ? "two_way" : "ingest",
+    capabilities,
+    auth: kind === "custom" ? "none" : "oauth",
+    defaultSourceKind,
+    metadataMapping,
+    createdAt: now,
+    updatedAt: now
+  });
+  return [
+    base("email", "Email", ["ingest", "export", "webhook", "poll", "writeback"], { subject: "content.title", from: "source.author", messageId: "externalId", threadId: "metadata.threadId" }, "human"),
+    base("chat", "Chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageId: "externalId", text: "content" }, "transcript"),
+    base("project_management", "Project Management", ["ingest", "export", "poll", "writeback"], { issueKey: "externalId", status: "metadata.status", assignee: "entities.assignee", title: "content.title" }, "import"),
+    base("docs", "Docs", ["ingest", "webhook", "poll", "writeback"], { url: "source.uri", title: "content.title", workspace: "metadata.workspace" }, "import"),
+    base("code", "Code", ["ingest", "webhook", "poll"], { repo: "metadata.repo", path: "source.uri", commit: "source.commit", symbol: "entities.symbol" }, "reviewed_code"),
+    base("calendar", "Calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", attendees: "entities.attendees", start: "temporal.eventAt" }, "human"),
+    base("cloud_storage", "Cloud Storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title" }, "import")
+  ];
+}
+
+function validateConnectorManifest(input: Omit<ConnectorManifest, "createdAt" | "updatedAt">): void {
+  if (!input.id.trim() || !input.name.trim()) throw new Error("Connector manifest requires id and name");
+  if (!input.capabilities.length) throw new Error(`Connector ${input.id} must declare at least one capability`);
+  if (input.direction === "two_way" && !input.capabilities.includes("ingest")) throw new Error(`Two-way connector ${input.id} must support ingest`);
+  if (input.capabilities.includes("writeback") && input.direction === "ingest") throw new Error(`Writeback connector ${input.id} must be export or two_way`);
+}
+
+function deterministicTranslate(text: string, sourceLanguage?: string, targetLanguage = "en"): string {
+  if (targetLanguage !== "en" || !sourceLanguage || /^en/i.test(sourceLanguage)) return text;
+  const dictionary: Record<string, string> = {
+    speicher: "memory",
+    erinnerung: "memory",
+    fehler: "bug",
+    veröffentlichung: "release",
+    freigabe: "release",
+    benutzer: "user",
+    werkzeug: "tool",
+    soll: "should",
+    nicht: "not"
+  };
+  return text
+    .split(/(\W+)/)
+    .map((part) => dictionary[part.toLowerCase()] ?? part)
+    .join("");
 }
 
 function baseSignalTemplate(): RetrievalWeights {

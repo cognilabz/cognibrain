@@ -9,7 +9,7 @@ import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { MemoryService } from "../src/api/service";
 import { CognibrainClient } from "../src/sdk/client";
-import { AppendOnlyLogPersistenceAdapter, JsonFilePersistenceAdapter, SQLitePersistenceAdapter, sqliteAvailable } from "../src/api/persistence";
+import { AppendOnlyLogPersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, SQLitePersistenceAdapter, sqliteAvailable } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
 import { buildLeaderboardArtifact, validateLeaderboardArtifact } from "../src/eval/leaderboard";
 import { runNextgenBenchmarkSuites } from "../src/eval/nextgenBenchmarks";
@@ -896,6 +896,53 @@ describe("TypeScript memory core", () => {
       expect(reloaded.storageStatus().active).toBe("sqlite");
       expect(reloaded.search({ userId: "u1", query: "transactional sqlite snapshots", limit: 1 })[0].memory.content).toContain("SQLite");
       expect(reloaded.learnRetrievalProfile().samples).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("supports Postgres-compatible persistence, migration, and storage capability reports", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-postgres-"));
+    try {
+      const jsonPath = join(dir, "memory.json");
+      const postgresPath = join(dir, "memory.postgres.json");
+      const jsonAdapter = new JsonFilePersistenceAdapter(jsonPath);
+      const source = new MemoryService({ persistence: jsonAdapter });
+      const memory = source.add({
+        userId: "u1",
+        content: "Postgres-compatible storage keeps team memories transactionally replicated.",
+        entities: ["postgres", "replicated storage"],
+        source: { kind: "human", confidence: 0.98 }
+      });
+      source.queueOfflineOperation({
+        type: "add",
+        userId: "u1",
+        input: {
+          userId: "u1",
+          content: "Offline team sync should replay into a Postgres-compatible backend.",
+          source: { kind: "tool", confidence: 0.8 }
+        },
+        clientMutationId: "pg-sync-1",
+        occurredAt: "2026-05-01T00:00:00.000Z"
+      });
+
+      const payload = jsonAdapter.load();
+      expect(payload).toBeDefined();
+      const postgresAdapter = new PostgresCompatiblePersistenceAdapter(postgresPath);
+      if (payload && !Array.isArray(payload)) postgresAdapter.save(payload);
+
+      const reloaded = new MemoryService({ persistence: postgresAdapter });
+      expect(reloaded.storageStatus().active).toBe("postgres-compatible");
+      const status = reloaded.storageStatus();
+      expect(status.adapters.find((adapter) => adapter.kind === "postgres-compatible")).toMatchObject({ sql: true, transactional: true, appendOnly: true, distributedReady: true, replication: "logical" });
+      expect(status.adapters.find((adapter) => adapter.kind === "cockroach-compatible")?.distributedReady).toBe(true);
+      expect(status.adapters.find((adapter) => adapter.kind === "cassandra-strategy")?.migrationSafe).toBe(false);
+      expect(reloaded.search({ userId: "u1", query: "team memories replicated", limit: 1 })[0].memory.content).toContain("Postgres-compatible");
+      reloaded.update(memory.id, { content: "Postgres-compatible storage keeps team memories transactionally replicated with audit snapshots." });
+      const sync = reloaded.syncOfflineOperations();
+      expect(sync.applied).toHaveLength(1);
+      expect(reloaded.auditTrail().some((event) => event.type === "memory.update")).toBe(true);
+      expect(reloaded.revertMemory(memory.id).content).toContain("transactionally replicated");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

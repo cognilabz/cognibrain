@@ -21,6 +21,8 @@
 - Streamable HTTP MCP server mode for remote/shared clients
 - Pluggable persistence with atomic JSON snapshots and append-only JSONL durable audit mode
 - SQLite transactional persistence with append-only SQL event table and JSON-to-SQL migration coverage
+- Postgres-compatible and Cockroach-compatible SQL persistence contracts with append-only event rows, logical replication metadata, and JSON/SQL migration coverage
+- Cassandra-class storage is documented as a strategy-only target until a dedicated wide-column adapter is implemented
 - Next-generation epics and sub-issues mirrored from `nextplan.md`
 - Graph path search, spreading activation, safe graph query, GraphML/JSON export, and configurable inferred relation substrate
 - Temporal interval queries, behavioural retrieval scoring, recurring behavioural pattern mining, and persisted timeline summaries

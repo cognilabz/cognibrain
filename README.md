@@ -51,7 +51,7 @@ It is designed for teams that care about:
 - brain/source/agent/persona primitives for multi-agent team memory,
 - official connector manifests for email, chat, project management, docs, code, calendars, and cloud storage,
 - provider adapters for extraction, translation, query expansion, reranking, verification, contradiction, and summaries with deterministic fallbacks,
-- pluggable storage with atomic JSON snapshots, append-only JSONL logs, storage introspection, and offline sync replay,
+- pluggable storage with atomic JSON snapshots, append-only JSONL logs, SQLite, Postgres-compatible/Cockroach-compatible SQL semantics, storage introspection, and offline sync replay,
 - audit, webhook delivery/retry, marketplace, and compliance surfaces,
 - lifecycle maintenance for stale or contradictory facts,
 - clear integration surfaces for coding agents and AI workflows,

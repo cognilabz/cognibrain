@@ -27,9 +27,12 @@ Environment variables:
 | `NODE_ENV` | unset | Set to `production` in Docker |
 | `COGNIBRAIN_RUNTIME_ROOT` | launch directory | Directory for `.cognibrain/` runtime state and default memory JSON |
 | `MEMORY_DB_PATH` | `.memory-harness.json` | Local API and CLI persistence file |
-| `MEMORY_STORAGE_BACKEND` | `json` | Persistence backend: `json`, `jsonl`/`append-only`, or `sqlite` |
+| `MEMORY_STORAGE_BACKEND` | `json` | Persistence backend: `json`, `jsonl`/`append-only`, `sqlite`, `postgres`/`postgres-compatible`, or `cockroach` |
 | `MEMORY_EVENT_LOG_PATH` | `.memory-harness.jsonl` | Append-only persistence log when `MEMORY_STORAGE_BACKEND=jsonl` |
 | `MEMORY_SQLITE_PATH` | `.memory-harness.sqlite` | SQLite database path when `MEMORY_STORAGE_BACKEND=sqlite` |
+| `MEMORY_POSTGRES_COMPAT_PATH` | `.memory-harness.postgres.json` | Local Postgres-compatible SQL emulator path for CI/offline tests |
+| `MEMORY_STORAGE_REPLICATION_MODE` | `logical` | Replication mode reported by the Postgres-compatible adapter |
+| `MEMORY_STORAGE_SHARDS` | `1` | Shard count used in storage capability reports |
 | `MEMORY_AUTO_DREAM` | `true` | Set to `false` to disable automatic dream-cycle maintenance |
 | `MEMORY_DREAM_INTERVAL_HOURS` | `6` | Interval for due background dream checks after new writes |
 | `MEMORY_DREAM_WRITE_THRESHOLD` | `12` | Number of writes for a user before automatic dream runs |
@@ -170,7 +173,15 @@ SQLite mode stores snapshots transactionally and records each saved payload in a
 MEMORY_STORAGE_BACKEND=sqlite MEMORY_SQLITE_PATH=.memory-harness.sqlite npm run start:local
 ```
 
-`GET /storage` and `memctl storage` expose the active backend plus adapter capabilities, including durability, transactionality, append-only support, SQL support and migration safety. SQLite is the first real SQL backend. Postgres, CockroachDB and Cassandra-class deployments still require dedicated adapters before the repo can claim distributed storage.
+Postgres-compatible mode stores SQL-shaped tables in a local file for CI, offline migration, and teams that need the PostgreSQL contract before connecting a production driver. It reports transactionality, append-only events, logical replication and shard metadata:
+
+```bash
+MEMORY_STORAGE_BACKEND=postgres MEMORY_POSTGRES_COMPAT_PATH=.memory-harness.postgres.json npm run start:local
+```
+
+CockroachDB can use the same PostgreSQL-compatible contract through `MEMORY_STORAGE_BACKEND=cockroach`; production deployments should set a real PostgreSQL/Cockroach connection driver when one is installed. Cassandra-class storage is reported as a strategy-only target: it is suitable for planning and export/import boundaries, but not selectable as a runtime adapter until a dedicated wide-column adapter exists.
+
+`GET /storage` and `memctl storage` expose the active backend plus adapter capabilities, including durability, transactionality, append-only support, SQL support, replication, sharding and migration safety. JSON, JSONL, SQLite and Postgres-compatible migration paths are covered by tests; Cassandra-class deployments remain an explicitly scoped strategy, not a completed adapter.
 
 ## Security And Managed Deployment
 

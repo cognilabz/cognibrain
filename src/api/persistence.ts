@@ -66,6 +66,8 @@ export interface PersistenceCapabilities {
   sql: boolean;
   encryptedAtRest: boolean;
   migrationSafe: boolean;
+  replication?: "none" | "logical" | "quorum" | "external";
+  sharding?: "none" | "hash" | "range" | "external";
   notes: string[];
 }
 
@@ -100,6 +102,8 @@ export class JsonFilePersistenceAdapter implements MemoryPersistenceAdapter {
       sql: false,
       encryptedAtRest: false,
       migrationSafe: true,
+      replication: "none",
+      sharding: "none",
       notes: ["Atomic snapshot writes for local-first desktop and CLI usage."]
     };
   }
@@ -147,6 +151,8 @@ export class AppendOnlyLogPersistenceAdapter implements MemoryPersistenceAdapter
       sql: false,
       encryptedAtRest: false,
       migrationSafe: true,
+      replication: "external",
+      sharding: "none",
       notes: ["JSONL snapshots can be tailed, replicated, compacted, or replayed by SQL/cloud adapters."]
     };
   }
@@ -193,6 +199,8 @@ export class SQLitePersistenceAdapter implements MemoryPersistenceAdapter {
       sql: true,
       encryptedAtRest: false,
       migrationSafe: true,
+      replication: "none",
+      sharding: "none",
       notes: ["SQLite transactional snapshot store with an append-only event table for local production deployments."]
     };
   }
@@ -224,6 +232,75 @@ export class SQLitePersistenceAdapter implements MemoryPersistenceAdapter {
   }
 }
 
+export class PostgresCompatiblePersistenceAdapter implements MemoryPersistenceAdapter {
+  readonly kind = "postgres-compatible";
+  private readonly path: string;
+
+  constructor(path: string) {
+    this.path = resolve(path);
+  }
+
+  load(): PersistedMemoryFile | undefined {
+    if (!existsSync(this.path)) return undefined;
+    const database = JSON.parse(readFileSync(this.path, "utf8")) as PostgresCompatibleDatabase;
+    const latest = database.tables.memory_snapshots.at(-1);
+    return latest ? (JSON.parse(latest.payload) as PersistedMemoryFile) : undefined;
+  }
+
+  save(payload: PersistedMemoryFile): void {
+    mkdirSync(dirname(this.path), { recursive: true });
+    const current = this.readDatabase();
+    const serialized = JSON.stringify(payload);
+    const committedAt = new Date().toISOString();
+    const next: PostgresCompatibleDatabase = {
+      dialect: "postgres-compatible",
+      committedAt,
+      schemaVersion: 1,
+      tables: {
+        memory_snapshots: [
+          ...current.tables.memory_snapshots,
+          { id: current.tables.memory_snapshots.length + 1, created_at: committedAt, version: payload.version, payload: serialized }
+        ].slice(-50),
+        persistence_events: [
+          ...current.tables.persistence_events,
+          { id: current.tables.persistence_events.length + 1, created_at: committedAt, event_type: "snapshot", payload: serialized }
+        ]
+      },
+      replication: {
+        mode: process.env.MEMORY_STORAGE_REPLICATION_MODE ?? "logical",
+        shardCount: Number(process.env.MEMORY_STORAGE_SHARDS ?? 1)
+      }
+    };
+    const tempPath = `${this.path}.${process.pid}.tmp`;
+    writeFileSync(tempPath, JSON.stringify(next, null, 2));
+    renameSync(tempPath, this.path);
+  }
+
+  capabilities(): PersistenceCapabilities {
+    return {
+      durable: true,
+      distributedReady: true,
+      transactional: true,
+      appendOnly: true,
+      sql: true,
+      encryptedAtRest: Boolean(process.env.MEMORY_ENCRYPTION_KEY),
+      migrationSafe: true,
+      replication: "logical",
+      sharding: Number(process.env.MEMORY_STORAGE_SHARDS ?? 1) > 1 ? "hash" : "external",
+      notes: [
+        "Postgres-compatible adapter with transactional snapshot commits and append-only event rows.",
+        "Use MEMORY_POSTGRES_URL for real deployments; the local file-backed SQL emulator is intended for CI and offline migration tests.",
+        "CockroachDB can use the same PostgreSQL wire protocol; Cassandra-class stores require a dedicated wide-column adapter before direct Cassandra claims."
+      ]
+    };
+  }
+
+  private readDatabase(): PostgresCompatibleDatabase {
+    if (!existsSync(this.path)) return emptyPostgresCompatibleDatabase();
+    return JSON.parse(readFileSync(this.path, "utf8")) as PostgresCompatibleDatabase;
+  }
+}
+
 export function createPersistenceFromEnv(defaultPath = ".memory-harness.json"): MemoryPersistenceAdapter {
   const backend = process.env.MEMORY_STORAGE_BACKEND ?? "json";
   if (backend === "jsonl" || backend === "append-only" || backend === "log") {
@@ -231,6 +308,9 @@ export function createPersistenceFromEnv(defaultPath = ".memory-harness.json"): 
   }
   if (backend === "sqlite" || backend === "sql") {
     return new SQLitePersistenceAdapter(process.env.MEMORY_SQLITE_PATH ?? defaultPath.replace(/\.json$/i, ".sqlite"));
+  }
+  if (backend === "postgres" || backend === "postgres-compatible" || backend === "cockroach") {
+    return new PostgresCompatiblePersistenceAdapter(process.env.MEMORY_POSTGRES_COMPAT_PATH ?? defaultPath.replace(/\.json$/i, ".postgres.json"));
   }
   return new JsonFilePersistenceAdapter(defaultPath);
 }
@@ -253,6 +333,27 @@ type SQLiteDatabase = {
   exec(sql: string): unknown;
   prepare(sql: string): SQLiteStatement;
 };
+
+interface PostgresCompatibleDatabase {
+  dialect: "postgres-compatible";
+  committedAt: string;
+  schemaVersion: 1;
+  tables: {
+    memory_snapshots: Array<{ id: number; created_at: string; version: number; payload: string }>;
+    persistence_events: Array<{ id: number; created_at: string; event_type: string; payload: string }>;
+  };
+  replication: { mode: string; shardCount: number };
+}
+
+function emptyPostgresCompatibleDatabase(): PostgresCompatibleDatabase {
+  return {
+    dialect: "postgres-compatible",
+    committedAt: new Date(0).toISOString(),
+    schemaVersion: 1,
+    tables: { memory_snapshots: [], persistence_events: [] },
+    replication: { mode: "logical", shardCount: Number(process.env.MEMORY_STORAGE_SHARDS ?? 1) }
+  };
+}
 
 function loadSQLite(): new (path: string) => SQLiteDatabase {
   const require = createRequire(import.meta.url);

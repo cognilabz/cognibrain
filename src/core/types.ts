@@ -577,6 +577,8 @@ export interface StorageBackendStatus {
     encryptedAtRest?: boolean;
     migrationSafe?: boolean;
     encryptedAppendLog?: boolean;
+    replication?: "none" | "logical" | "quorum" | "external";
+    sharding?: "none" | "hash" | "range" | "external";
     notes: string[];
   }>;
 }

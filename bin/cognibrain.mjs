@@ -77,6 +77,7 @@ async function setup(setupArgs) {
   } else {
     if (flags.has("--codex")) writeHarnessConfig("codex");
     if (flags.has("--claude")) writeHarnessConfig("claude");
+    if (flags.has("--copilot")) writeHarnessConfig("copilot");
     if (flags.has("--cursor")) writeHarnessConfig("cursor");
     if (flags.has("--vscode")) writeHarnessConfig("vscode");
   }
@@ -124,6 +125,10 @@ async function doctor(doctorArgs) {
     add("package excludes generated files", leaked.length === 0, leaked.length ? leaked.join(", ") : "clean");
     const transport = transportSecurityCheck(state?.api?.url);
     add("transport security", transport.ok, transport.detail, transport.level);
+    const harnessTemplates = harnessTemplateHealth();
+    add("harness package templates", harnessTemplates.ok, harnessTemplates.detail);
+    const harnessGenerated = harnessGeneratedHealth();
+    add("harness generated configs", harnessGenerated.ok, harnessGenerated.detail, harnessGenerated.ok ? "ok" : "warn");
   }
 
   for (const check of checks) {
@@ -164,14 +169,19 @@ function writeHarnessConfig(target) {
     case "all":
       writeCodexConfig();
       writeClaudeConfig();
+      writeCopilotConfig();
       writeCursorConfig();
       writeVsCodeConfig();
+      writeHarnessPackageManifest();
       break;
     case "codex":
       writeCodexConfig();
       break;
     case "claude":
       writeClaudeConfig();
+      break;
+    case "copilot":
+      writeCopilotConfig();
       break;
     case "cursor":
       writeCursorConfig();
@@ -180,7 +190,7 @@ function writeHarnessConfig(target) {
       writeVsCodeConfig();
       break;
     default:
-      console.error("Usage: cognibrain config <all|codex|claude|cursor|vscode>");
+      console.error("Usage: cognibrain config <all|codex|claude|copilot|cursor|vscode>");
       process.exit(1);
   }
 }
@@ -191,17 +201,19 @@ function writeCodexConfig() {
   const current = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
   if (current.includes("[mcp_servers.cognibrain]")) {
     console.log(`Codex MCP config already present: ${configPath}`);
-    return;
+  } else {
+    const block = [
+      "",
+      "[mcp_servers.cognibrain]",
+      `command = ${tomlString(process.execPath)}`,
+      `args = [${tomlString(join(root, "bin", "cognibrain.mjs"))}, "--runtime-root", ${tomlString(launchCwd)}, "mcp"]`,
+      ""
+    ].join("\n");
+    writeFileSync(configPath, `${current.trimEnd()}${block}`);
+    console.log(`Wrote Codex MCP config: ${configPath}`);
   }
-  const block = [
-    "",
-    "[mcp_servers.cognibrain]",
-    `command = ${tomlString(process.execPath)}`,
-    `args = [${tomlString(join(root, "bin", "cognibrain.mjs"))}, "--runtime-root", ${tomlString(launchCwd)}, "mcp"]`,
-    ""
-  ].join("\n");
-  writeFileSync(configPath, `${current.trimEnd()}${block}`);
-  console.log(`Wrote Codex MCP config: ${configPath}`);
+  writeTemplateFile(join(launchCwd, "AGENTS.md"), "templates/codex/AGENTS.md");
+  writeHarnessPackageManifest();
 }
 
 function writeClaudeConfig() {
@@ -211,6 +223,14 @@ function writeClaudeConfig() {
   json.mcpServers.cognibrain = stdioServerConfig();
   writeJson(path, json);
   console.log(`Wrote Claude MCP config: ${path}`);
+  writeTemplateFile(join(launchCwd, ".claude", "settings.json"), "templates/claude/settings.json");
+  writeHarnessPackageManifest();
+}
+
+function writeCopilotConfig() {
+  writeTemplateFile(join(launchCwd, ".github", "copilot-instructions.md"), "templates/copilot/copilot-instructions.md");
+  writeTextFile(join(launchCwd, ".github", "instructions", "cognibrain.instructions.md"), generatedCopilotScopedInstructions());
+  writeHarnessPackageManifest();
 }
 
 function writeCursorConfig() {
@@ -220,6 +240,8 @@ function writeCursorConfig() {
   json.mcpServers.cognibrain = stdioServerConfig();
   writeJson(path, json);
   console.log(`Wrote Cursor MCP config: ${path}`);
+  writeTemplateFile(join(launchCwd, ".cursor", "rules", "open-memory.mdc"), "templates/cursor/open-memory.mdc");
+  writeHarnessPackageManifest();
 }
 
 function writeVsCodeConfig() {
@@ -229,6 +251,111 @@ function writeVsCodeConfig() {
   json.servers.cognibrain = { type: "stdio", ...stdioServerConfig() };
   writeJson(path, json);
   console.log(`Wrote VS Code MCP config: ${path}`);
+}
+
+function writeTemplateFile(targetPath, templatePath) {
+  const content = readFileSync(join(root, templatePath), "utf8")
+    .replaceAll("/ABSOLUTE/PATH/TO/cognibrain", root)
+    .replaceAll("__COGNIBRAIN_ROOT__", root);
+  writeTextFile(targetPath, content);
+}
+
+function writeTextFile(targetPath, content) {
+  const normalized = content.endsWith("\n") ? content : `${content}\n`;
+  if (existsSync(targetPath)) {
+    const current = readFileSync(targetPath, "utf8");
+    if (current === normalized || current.includes("cognibrain")) {
+      console.log(`cognibrain harness file already present: ${targetPath}`);
+      return;
+    }
+    const sidecar = `${targetPath}.cognibrain`;
+    mkdirSync(dirname(sidecar), { recursive: true });
+    writeFileSync(sidecar, normalized);
+    console.log(`Wrote reviewable cognibrain sidecar: ${sidecar}`);
+    return;
+  }
+  mkdirSync(dirname(targetPath), { recursive: true });
+  writeFileSync(targetPath, normalized);
+  console.log(`Wrote harness file: ${targetPath}`);
+}
+
+function generatedCopilotScopedInstructions() {
+  return `---
+applyTo: "**/*"
+---
+
+# cognibrain scoped memory policy
+
+Use the local cognibrain runtime for durable project memory. Start it with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} start\`.
+
+Before multi-step coding or debugging, query memory through MCP when available. After durable discoveries, record source-backed facts with \`memory_add\` or \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory add "<fact>"\`.
+
+Use feedback adapters through the CLI:
+
+- accepted suggestion: \`MEMORY_CONNECTOR_FEEDBACK_KIND=accepted_change node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory feedback-injection "<query>" accepted\`
+- rejected suggestion: \`MEMORY_CONNECTOR_FEEDBACK_KIND=rejected_suggestion node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory feedback-injection "<query>" rejected\`
+- failing test: \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory add "A harness suggestion caused a failing test: <summary>"\`
+`;
+}
+
+function writeHarnessPackageManifest() {
+  const path = join(launchCwd, ".cognibrain-harness-package.json");
+  writeJson(path, {
+    schemaVersion: "1.0",
+    runtimeRoot: launchCwd,
+    packageRoot: root,
+    harnesses: {
+      codex: {
+        mcpConfig: join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "config.toml"),
+        policyFile: join(launchCwd, "AGENTS.md"),
+        skill: join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills", "cognibrain", "SKILL.md"),
+        feedback: ["memory_add", "memory_maintenance_status", "memory_dream"]
+      },
+      claude: {
+        mcpConfig: join(launchCwd, ".mcp.json"),
+        hooks: join(launchCwd, ".claude", "settings.json"),
+        feedback: ["PostToolUse maintenance hook", "memory feedback-injection"]
+      },
+      copilot: {
+        repositoryInstructions: join(launchCwd, ".github", "copilot-instructions.md"),
+        scopedInstructions: join(launchCwd, ".github", "instructions", "cognibrain.instructions.md"),
+        feedback: ["accepted_change", "rejected_suggestion", "failing_test"]
+      },
+      cursor: {
+        mcpConfig: join(launchCwd, ".cursor", "mcp.json"),
+        rule: join(launchCwd, ".cursor", "rules", "open-memory.mdc"),
+        feedback: ["memory_add", "memory_context_pack", "memory_dream"]
+      }
+    }
+  });
+  console.log(`Wrote harness package manifest: ${path}`);
+}
+
+function harnessTemplateHealth() {
+  const templates = [
+    "templates/codex/AGENTS.md",
+    "templates/codex/cognibrain-skill/SKILL.md",
+    "templates/claude/settings.json",
+    "templates/copilot/copilot-instructions.md",
+    "templates/cursor/open-memory.mdc"
+  ];
+  const missing = templates.filter((template) => !existsSync(join(root, template)));
+  return { ok: missing.length === 0, detail: missing.length ? `missing ${missing.join(", ")}` : `${templates.length} templates available` };
+}
+
+function harnessGeneratedHealth() {
+  const expected = [
+    join(launchCwd, "AGENTS.md"),
+    join(launchCwd, ".mcp.json"),
+    join(launchCwd, ".claude", "settings.json"),
+    join(launchCwd, ".github", "copilot-instructions.md"),
+    join(launchCwd, ".github", "instructions", "cognibrain.instructions.md"),
+    join(launchCwd, ".cursor", "mcp.json"),
+    join(launchCwd, ".cursor", "rules", "open-memory.mdc"),
+    join(launchCwd, ".cognibrain-harness-package.json")
+  ];
+  const missing = expected.filter((path) => !existsSync(path));
+  return { ok: missing.length === 0, detail: missing.length ? `run cognibrain setup --all-harnesses; missing ${missing.map((path) => path.replace(`${launchCwd}/`, "")).join(", ")}` : "Codex, Claude, Copilot and Cursor configs present" };
 }
 
 function stdioServerConfig() {
@@ -373,13 +500,13 @@ function usage(exitCode) {
 
 Usage:
   cognibrain [--runtime-root <path>] <command>
-  cognibrain setup [--codex] [--claude] [--cursor] [--vscode] [--all-harnesses]
+  cognibrain setup [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--all-harnesses]
       Install the Codex skill, optionally write harness configs, start API + dashboard, run doctor
   cognibrain doctor [--publish]
       Check local runtime, skill install, package readiness, and optional npm pack hygiene
   cognibrain start | dev | status | stop
       Manage the local API + dashboard runtime
-  cognibrain config <all|codex|claude|cursor|vscode>
+  cognibrain config <all|codex|claude|copilot|cursor|vscode>
       Write MCP config for supported harnesses
   cognibrain skill install
       Install the Codex skill

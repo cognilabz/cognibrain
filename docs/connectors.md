@@ -19,11 +19,29 @@ Harness config commands:
 ```bash
 ./bin/cognibrain.mjs config codex
 ./bin/cognibrain.mjs config claude
+./bin/cognibrain.mjs config copilot
 ./bin/cognibrain.mjs config cursor
 ./bin/cognibrain.mjs config vscode
 ```
 
-Generated MCP configs call the packaged CLI with `--runtime-root <project>`, so an npm-installed package stores memory in the target project instead of inside `node_modules`.
+Generated harness packages call the packaged CLI with `--runtime-root <project>`, so an npm-installed package stores memory in the target project instead of inside `node_modules`. `setup --all-harnesses` writes:
+
+- Codex: `~/.codex/config.toml`, `~/.codex/skills/cognibrain/SKILL.md`, and project `AGENTS.md`.
+- Claude Code: project `.mcp.json` and `.claude/settings.json` hooks.
+- GitHub Copilot: `.github/copilot-instructions.md` and `.github/instructions/cognibrain.instructions.md`.
+- Cursor: `.cursor/mcp.json` and `.cursor/rules/open-memory.mdc`.
+- Review manifest: `.cognibrain-harness-package.json` with feedback adapters and generated paths.
+
+Existing non-cognibrain instruction files are not overwritten; a `.cognibrain` sidecar is written for review.
+
+Install, update, uninstall:
+
+```bash
+./bin/cognibrain.mjs setup --all-harnesses
+./bin/cognibrain.mjs setup --all-harnesses --no-start
+./bin/cognibrain.mjs doctor --publish
+rm -f AGENTS.md.cognibrain .github/copilot-instructions.md.cognibrain .github/instructions/cognibrain.instructions.md .claude/settings.json.cognibrain .cursor/rules/open-memory.mdc.cognibrain .cognibrain-harness-package.json
+```
 
 ## Official Connector Manifests
 
@@ -223,10 +241,10 @@ Source: https://docs.cursor.com/context/model-context-protocol
 
 | Harness | Current repo surface | Best next enhancement | Verification |
 | --- | --- | --- | --- |
-| Claude Code | stdio MCP plus hook template | Package a Claude plugin with `UserPromptSubmit` retrieval, runtime auto-start, and `PostToolUse` feedback capture | Run a prompt-hook smoke test that proves retrieved memory appears in model context |
-| GitHub Copilot | instruction templates plus MCP-compatible server | Generate `.github/copilot-instructions.md` and scoped `.github/instructions/*.instructions.md` from high-trust memories | Open the generated files and run an MCP tool-list check in a supported IDE |
-| OpenAI Codex | stdio MCP plus `AGENTS.md` and Skill template | Install Skill, start backend/dashboard with one command, and generate compact project memory policy | `memory_maintenance_status` works and `memory_search` returns project memories |
-| Cursor | stdio MCP plus project rule template | Generate `.cursor/rules/open-memory.mdc` from `templates/cursor/open-memory.mdc` and project/global MCP config examples | Cursor MCP tools list includes memory tools and a retrieval query returns bounded context |
+| Claude Code | stdio MCP plus hook template | `setup --all-harnesses` writes `.mcp.json`, `.claude/settings.json`, runtime auto-start, and `PostToolUse` maintenance feedback | Generated settings contain the package path and MCP config |
+| GitHub Copilot | instruction templates plus MCP-compatible server | `setup --all-harnesses` writes repository and scoped instruction files with feedback commands | Generated files match templates plus scoped feedback adapter |
+| OpenAI Codex | stdio MCP plus `AGENTS.md` and Skill template | Installs Skill, starts backend/dashboard with one command, and generates compact project memory policy | `memory_maintenance_status` works and `memory_search` returns project memories |
+| Cursor | stdio MCP plus project rule template | `setup --all-harnesses` writes `.cursor/mcp.json` and `.cursor/rules/open-memory.mdc` | Cursor MCP config and rule file are generated deterministically |
 
 The first implementation target should be instruction-file generation because it is low risk, reviewable in git, and works even when an IDE's dynamic MCP support is disabled.
 
@@ -235,8 +253,8 @@ The first implementation target should be instruction-file generation because it
 Highest leverage next work:
 
 1. Streamable HTTP MCP transport for remote/shared deployments.
-2. Instruction-file generators for Copilot, Codex, Claude, and Cursor.
-3. Feedback adapters that record accepted changes, rejected suggestions, failing tests, and user corrections.
+2. Streamable HTTP client examples for Copilot/Cursor environments that support remote MCP.
+3. Deeper feedback adapters from native IDE telemetry where providers expose accepted/rejected suggestion events.
 4. Source-specific writeback adapters for GitHub, Slack/Discord, docs, issue trackers, and calendar systems.
 5. Privacy policies per connector: personal, project, team, never-store.
 

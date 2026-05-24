@@ -149,7 +149,7 @@ For an MCP client that accepts command-based servers, use:
 }
 ```
 
-Templates live under `templates/` for Codex, Claude, Copilot, and Cursor.
+Templates live under `templates/` for Codex, Claude, Copilot, and Cursor. `./bin/cognibrain.mjs setup --all-harnesses` installs the Codex Skill, writes MCP and instruction files for all four harnesses, starts the local runtime unless `--no-start` is passed, then runs `doctor`. Re-run the same command to update generated cognibrain files; existing non-cognibrain files receive `.cognibrain` sidecars for review instead of being overwritten.
 
 ## Data Storage
 

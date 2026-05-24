@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,6 +36,44 @@ describe("cognibrain CLI", () => {
         encoding: "utf8"
       });
       expect(output).toContain("primary user-facing surface");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("generates reviewable harness packages for Codex, Claude, Copilot, and Cursor", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-"));
+    const codexHome = join(dir, ".codex");
+    try {
+      execFileSync(process.execPath, [cli, "setup", "--all-harnesses", "--no-start", "--no-doctor"], {
+        cwd: dir,
+        env: { ...process.env, CODEX_HOME: codexHome, MEMORY_AUTO_DREAM: "false" },
+        encoding: "utf8"
+      });
+
+      const expected = [
+        join(codexHome, "skills", "cognibrain", "SKILL.md"),
+        join(codexHome, "config.toml"),
+        join(dir, "AGENTS.md"),
+        join(dir, ".mcp.json"),
+        join(dir, ".claude", "settings.json"),
+        join(dir, ".github", "copilot-instructions.md"),
+        join(dir, ".github", "instructions", "cognibrain.instructions.md"),
+        join(dir, ".cursor", "mcp.json"),
+        join(dir, ".cursor", "rules", "open-memory.mdc"),
+        join(dir, ".cognibrain-harness-package.json")
+      ];
+      for (const path of expected) expect(existsSync(path), path).toBe(true);
+
+      expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toBe(readFileSync(join(root, "templates", "codex", "AGENTS.md"), "utf8"));
+      expect(readFileSync(join(dir, ".cursor", "rules", "open-memory.mdc"), "utf8")).toBe(readFileSync(join(root, "templates", "cursor", "open-memory.mdc"), "utf8"));
+      expect(readFileSync(join(dir, ".github", "copilot-instructions.md"), "utf8")).toBe(readFileSync(join(root, "templates", "copilot", "copilot-instructions.md"), "utf8"));
+      const claude = readFileSync(join(dir, ".claude", "settings.json"), "utf8");
+      expect(claude).toContain(root);
+      expect(claude).not.toContain("/ABSOLUTE/PATH/TO/cognibrain");
+      const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8"));
+      expect(Object.keys(manifest.harnesses)).toEqual(["codex", "claude", "copilot", "cursor"]);
+      expect(manifest.harnesses.copilot.feedback).toContain("accepted_change");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

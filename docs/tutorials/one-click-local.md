@@ -16,4 +16,12 @@ Add and inspect memory:
 ./bin/cognibrain.mjs memory dream-policy
 ```
 
-The setup command installs the Codex skill, writes harness configs when requested, starts the API and dashboard, then runs doctor.
+The setup command installs the Codex skill, writes Codex/Claude/Copilot/Cursor harness packages, starts the API and dashboard, then runs doctor. Use `--no-start` for config-only installation and `doctor --publish` before publishing an npm package or release.
+
+Update and uninstall paths:
+
+```bash
+./bin/cognibrain.mjs setup --all-harnesses --no-start
+./bin/cognibrain.mjs doctor --publish
+rm -f .cognibrain-harness-package.json .github/instructions/cognibrain.instructions.md
+```

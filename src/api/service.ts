@@ -67,8 +67,10 @@ import type {
   MarketplaceSubmission,
   MarketplaceReview,
   MetricsReport,
+  ManagedControlPlaneReport,
   ManagedMigrationBundle,
   ManagedDeploymentPlan,
+  ManagedTenant,
   OfflineOperation,
   PersonaProfile,
   RelationType,
@@ -182,6 +184,7 @@ export class MemoryService {
   private webhookDeliveries: WebhookDelivery[] = [];
   private marketplaceModules = new Map<string, MarketplaceModule>();
   private marketplaceSubmissions = new Map<string, MarketplaceSubmission>();
+  private managedTenants = new Map<string, ManagedTenant>();
   private offlineOperations: OfflineOperation[] = [];
   private connectorManifests = new Map<string, ConnectorManifest>();
   private connectorAuthSessions = new Map<string, ConnectorAuthSession>();
@@ -1469,6 +1472,8 @@ export class MemoryService {
         "/marketplace/rate": ["POST"],
         "/marketplace/install": ["POST"],
         "/marketplace/plan": ["POST"],
+        "/managed/tenants": ["GET", "POST"],
+        "/managed/control-plane": ["GET"],
         "/connectors/auth": ["GET"],
         "/connectors/auth/begin": ["POST"],
         "/connectors/auth/callback": ["POST"],
@@ -1713,6 +1718,123 @@ export class MemoryService {
         "Run /backup/verify and /compliance/export before serving production traffic."
       ],
       transport: this.transportSecurityReport({ mode: mode === "managed" ? "managed" : mode === "self_hosted" ? "self_hosted" : "local" })
+    };
+  }
+
+  createManagedTenant(input: {
+    id?: string;
+    name: string;
+    orgId: string;
+    plan?: ManagedTenant["plan"];
+    region?: string;
+    status?: ManagedTenant["status"];
+    ssoProvider?: string;
+    secretManager?: string;
+    dataResidency?: string;
+    autoscaling?: ManagedTenant["autoscaling"];
+    backup?: ManagedTenant["backup"];
+  }): ManagedTenant {
+    if (!input.name.trim()) throw new Error("Managed tenant name is required.");
+    if (!input.orgId.trim()) throw new Error("Managed tenant orgId is required.");
+    const now = new Date().toISOString();
+    const existing = input.id ? this.managedTenants.get(input.id) : undefined;
+    const tenant: ManagedTenant = {
+      id: input.id ?? `tenant_${contentHash(`${input.orgId}:${input.name}:${now}`).slice(2, 12)}`,
+      name: input.name,
+      orgId: input.orgId,
+      plan: input.plan ?? "team",
+      region: input.region ?? process.env.MEMORY_REGION ?? "local-dev",
+      status: input.status ?? "active",
+      ssoProvider: input.ssoProvider ?? process.env.MEMORY_SSO_PROVIDER,
+      secretManager: input.secretManager ?? process.env.MEMORY_SECRET_MANAGER,
+      dataResidency: input.dataResidency ?? process.env.MEMORY_DATA_RESIDENCY,
+      autoscaling: input.autoscaling ?? {
+        minReplicas: Number(process.env.MEMORY_AUTOSCALE_MIN_REPLICAS ?? 1),
+        maxReplicas: Number(process.env.MEMORY_AUTOSCALE_MAX_REPLICAS ?? 3),
+        targetCpuUtilization: Number(process.env.MEMORY_AUTOSCALE_TARGET_CPU ?? 70)
+      },
+      backup: input.backup ?? {
+        enabled: Boolean(process.env.MEMORY_BACKUP_REF),
+        backupRef: process.env.MEMORY_BACKUP_REF
+      },
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    this.managedTenants.set(tenant.id, tenant);
+    this.recordAudit("managed.tenant", { userId: tenant.orgId, metadata: { action: existing ? "update" : "create", tenant } });
+    this.persist();
+    return tenant;
+  }
+
+  listManagedTenants(): ManagedTenant[] {
+    return [...this.managedTenants.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  managedControlPlaneReport(): ManagedControlPlaneReport {
+    const tenants = this.listManagedTenants();
+    const storage = this.storageStatus();
+    const keyProvider = this.keyProviderReport();
+    const transport = this.transportSecurityReport();
+    const migration = this.managedMigrationBundle({
+      target: "managed",
+      backupRef: process.env.MEMORY_BACKUP_REF,
+      ssoProvider: process.env.MEMORY_SSO_PROVIDER,
+      secretManager: process.env.MEMORY_SECRET_MANAGER
+    });
+    const autoscalingValues = tenants.map((tenant) => tenant.autoscaling).filter(Boolean) as NonNullable<ManagedTenant["autoscaling"]>[];
+    const maxReplicas = Math.max(0, ...autoscalingValues.map((policy) => policy.maxReplicas));
+    const minReplicas = Math.max(0, ...autoscalingValues.map((policy) => policy.minReplicas));
+    const targetCpuUtilization = autoscalingValues.length
+      ? Math.round(autoscalingValues.reduce((sum, policy) => sum + policy.targetCpuUtilization, 0) / autoscalingValues.length)
+      : Number(process.env.MEMORY_AUTOSCALE_TARGET_CPU ?? 70);
+    const readiness = {
+      storage: storage.adapters.some((adapter) => adapter.kind === storage.active && adapter.durable && (adapter.distributedReady || storage.active !== "memory")),
+      backup: tenants.length === 0 ? Boolean(process.env.MEMORY_BACKUP_REF) : tenants.every((tenant) => tenant.backup?.enabled),
+      sso: tenants.length === 0 ? Boolean(process.env.MEMORY_SSO_PROVIDER) : tenants.every((tenant) => tenant.ssoProvider),
+      secretManager: keyProvider.provider === "external" || tenants.some((tenant) => tenant.secretManager),
+      transport: transport.inTransitEncrypted || transport.mode === "local",
+      migrationBundle: migration.target === "managed" && Boolean(migration.deployment)
+    };
+    const notes = [
+      readiness.storage ? "Storage has a durable adapter for hosted mode." : "Configure a durable hosted adapter before production traffic.",
+      readiness.backup ? "Backup references are present for managed recovery." : "Set MEMORY_BACKUP_REF or tenant backup settings before claiming managed recovery.",
+      readiness.sso ? "SSO provider metadata is configured." : "Set MEMORY_SSO_PROVIDER or tenant-level SSO before enterprise rollout.",
+      readiness.secretManager ? "External secret-manager metadata is configured." : "Set MEMORY_SECRET_MANAGER or MEMORY_KEY_PROVIDER for production key custody.",
+      readiness.transport ? "Transport security is ready for the current deployment mode." : "Expose HTTPS or set MEMORY_TLS_TERMINATED_BY before public managed service use."
+    ];
+    return {
+      generatedAt: new Date().toISOString(),
+      deploymentMode: deploymentModeFromEnv(process.env.MEMORY_PUBLIC_URL),
+      tenants: {
+        total: tenants.length,
+        active: tenants.filter((tenant) => tenant.status === "active").length,
+        provisioning: tenants.filter((tenant) => tenant.status === "provisioning").length,
+        paused: tenants.filter((tenant) => tenant.status === "paused").length,
+        regions: [...new Set(tenants.map((tenant) => tenant.region))].sort(),
+        plans: {
+          developer: tenants.filter((tenant) => tenant.plan === "developer").length,
+          team: tenants.filter((tenant) => tenant.plan === "team").length,
+          enterprise: tenants.filter((tenant) => tenant.plan === "enterprise").length
+        }
+      },
+      readiness,
+      autoscaling: {
+        enabled: autoscalingValues.length > 0 && maxReplicas > minReplicas,
+        minReplicas,
+        maxReplicas,
+        targetCpuUtilization
+      },
+      storage,
+      transport,
+      keyProvider,
+      migration: {
+        generatedAt: migration.generatedAt,
+        target: migration.target,
+        counts: migration.counts,
+        backup: migration.backup,
+        placeholders: migration.placeholders
+      },
+      notes
     };
   }
 
@@ -2485,6 +2607,7 @@ export class MemoryService {
     this.webhookDeliveries = raw.webhookDeliveries ?? [];
     this.marketplaceModules = new Map([...officialMarketplaceModules(), ...(raw.marketplaceModules ?? [])].map((module) => [module.id, module]));
     this.marketplaceSubmissions = new Map((raw.marketplaceSubmissions ?? []).map((submission) => [submission.id, submission]));
+    this.managedTenants = new Map((raw.managedTenants ?? []).map((tenant) => [tenant.id, tenant]));
     this.offlineOperations = raw.offlineOperations ?? [];
     for (const manifest of raw.connectorManifests ?? []) this.connectorManifests.set(manifest.id, manifest);
     this.connectorAuthSessions = new Map((raw.connectorAuthSessions ?? []).map((session) => [session.id, session]));
@@ -2516,6 +2639,7 @@ export class MemoryService {
       webhookDeliveries: this.webhookDeliveries,
       marketplaceModules: [...this.marketplaceModules.values()],
       marketplaceSubmissions: [...this.marketplaceSubmissions.values()],
+      managedTenants: [...this.managedTenants.values()],
       offlineOperations: this.offlineOperations,
       connectorManifests: [...this.connectorManifests.values()],
       connectorAuthSessions: [...this.connectorAuthSessions.values()],

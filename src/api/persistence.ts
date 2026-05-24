@@ -14,6 +14,7 @@ import type {
   IdentityLink,
   MarketplaceSubmission,
   MarketplaceModule,
+  ManagedTenant,
   Memory,
   MemorySource,
   MetricsReport,
@@ -48,6 +49,7 @@ export interface PersistedMemoryFile {
   webhookDeliveries?: WebhookDelivery[];
   marketplaceModules?: MarketplaceModule[];
   marketplaceSubmissions?: MarketplaceSubmission[];
+  managedTenants?: ManagedTenant[];
   offlineOperations?: OfflineOperation[];
   connectorManifests?: ConnectorManifest[];
   connectorAuthSessions?: ConnectorAuthSession[];

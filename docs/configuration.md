@@ -210,6 +210,20 @@ npm run cli -- backup-verify managed-bundle.json
 npm run cli -- migration-import managed-bundle.json
 ```
 
+Hosted-mode operators can register tenants and inspect a live control-plane report before publishing a managed service:
+
+```bash
+MEMORY_BACKUP_REF=local-backup://2026-05 \
+MEMORY_SSO_PROVIDER=oidc \
+MEMORY_SECRET_MANAGER=vault \
+MEMORY_REGION=eu-central-1 \
+MEMORY_MANAGED_PLAN=enterprise \
+npm run cli -- managed-tenant-create "Acme Memory" org_acme
+npm run cli -- managed-control-plane
+```
+
+The report is backed by persisted tenant state plus live storage, key-provider, backup, migration-bundle, autoscaling and transport-security checks. Use it as the managed-service publish gate, not as a static checklist.
+
 `doctor --publish` emits a warning when `MEMORY_DEPLOYMENT_MODE=managed`, `self_hosted`, or `production` uses a non-HTTPS `MEMORY_PUBLIC_URL` without `MEMORY_TLS_TERMINATED_BY`. Set `MEMORY_TLS_TERMINATED_BY=ingress` or expose an `https://` public URL before claiming production transport security. Concrete deployment artifacts live in `docker/` and `deploy/kubernetes/cognibrain.yaml`.
 
 Offline clients can queue operations while disconnected and replay them later:

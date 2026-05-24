@@ -578,6 +578,7 @@ export interface AuditEvent {
     | "marketplace.review"
     | "marketplace.publish"
     | "marketplace.install"
+    | "managed.tenant"
     | "inference.run"
     | "entity.merge"
     | "entity.split"
@@ -766,6 +767,62 @@ export interface ManagedDeploymentPlan {
   ssoProvider?: string;
   importWorkflow: string[];
   transport: TransportSecurityReport;
+}
+
+export interface ManagedTenant {
+  id: string;
+  name: string;
+  orgId: string;
+  plan: "developer" | "team" | "enterprise";
+  region: string;
+  status: "provisioning" | "active" | "paused";
+  ssoProvider?: string;
+  secretManager?: string;
+  dataResidency?: string;
+  autoscaling?: {
+    minReplicas: number;
+    maxReplicas: number;
+    targetCpuUtilization: number;
+  };
+  backup?: {
+    enabled: boolean;
+    backupRef?: string;
+    lastVerifiedAt?: Date | string;
+  };
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface ManagedControlPlaneReport {
+  generatedAt: Date | string;
+  deploymentMode: "local" | "self_hosted" | "managed" | "production";
+  tenants: {
+    total: number;
+    active: number;
+    provisioning: number;
+    paused: number;
+    regions: string[];
+    plans: Record<ManagedTenant["plan"], number>;
+  };
+  readiness: {
+    storage: boolean;
+    backup: boolean;
+    sso: boolean;
+    secretManager: boolean;
+    transport: boolean;
+    migrationBundle: boolean;
+  };
+  autoscaling: {
+    enabled: boolean;
+    minReplicas: number;
+    maxReplicas: number;
+    targetCpuUtilization: number;
+  };
+  storage: StorageBackendStatus;
+  transport: TransportSecurityReport;
+  keyProvider: KeyProviderReport;
+  migration: Pick<ManagedMigrationBundle, "generatedAt" | "target" | "counts" | "backup" | "placeholders">;
+  notes: string[];
 }
 
 export interface GraphPath {

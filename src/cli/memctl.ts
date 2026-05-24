@@ -476,6 +476,33 @@ switch (command) {
     console.log(JSON.stringify(service.managedMigrationBundle({ target, backupRef: process.env.MEMORY_BACKUP_REF, ssoProvider: process.env.MEMORY_SSO_PROVIDER, secretManager: process.env.MEMORY_SECRET_MANAGER }), null, 2));
     break;
   }
+  case "managed-tenant-create": {
+    const [name, orgId] = args;
+    if (!name || !orgId) fail("Usage: memctl managed-tenant-create <name> <org-id>");
+    console.log(JSON.stringify(service.createManagedTenant({
+      name,
+      orgId,
+      plan: managedPlanFromEnv(),
+      region: process.env.MEMORY_REGION,
+      status: managedTenantStatusFromEnv(),
+      ssoProvider: process.env.MEMORY_SSO_PROVIDER,
+      secretManager: process.env.MEMORY_SECRET_MANAGER,
+      dataResidency: process.env.MEMORY_DATA_RESIDENCY,
+      backup: {
+        enabled: process.env.MEMORY_BACKUP_ENABLED !== "false" && Boolean(process.env.MEMORY_BACKUP_REF),
+        backupRef: process.env.MEMORY_BACKUP_REF
+      }
+    }), null, 2));
+    break;
+  }
+  case "managed-tenants": {
+    console.log(JSON.stringify(service.listManagedTenants(), null, 2));
+    break;
+  }
+  case "managed-control-plane": {
+    console.log(JSON.stringify(service.managedControlPlaneReport(), null, 2));
+    break;
+  }
   case "migration-import": {
     const path = args[0];
     if (!path) fail("Usage: memctl migration-import <bundle-json-path>");
@@ -772,7 +799,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -834,6 +861,16 @@ function isConnectorFeedbackKind(value: string): value is "accepted_change" | "r
 function mediaTypeFromEnv() {
   const value = process.env.MEMORY_MEDIA_TYPE;
   return value === "text" || value === "code" || value === "document" || value === "audio" || value === "image" || value === "video" ? value : undefined;
+}
+
+function managedPlanFromEnv() {
+  const value = process.env.MEMORY_MANAGED_PLAN;
+  return value === "developer" || value === "team" || value === "enterprise" ? value : undefined;
+}
+
+function managedTenantStatusFromEnv() {
+  const value = process.env.MEMORY_MANAGED_TENANT_STATUS;
+  return value === "provisioning" || value === "active" || value === "paused" ? value : undefined;
 }
 
 function metadataFromEnv() {

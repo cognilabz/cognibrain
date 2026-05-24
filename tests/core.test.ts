@@ -1106,6 +1106,38 @@ describe("TypeScript memory core", () => {
     expect(calls.map((call) => call.url)).toEqual(["http://memory.local/memories", "http://memory.local/feedback", "http://memory.local/graph/query"]);
   });
 
+  it("persists managed tenants and reports hosted control-plane readiness", () => {
+    const dir = mkdtempSync(join(tmpdir(), "memory-managed-"));
+    try {
+      const path = join(dir, "memory.json");
+      const service = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path) });
+      const tenant = service.createManagedTenant({
+        name: "Acme Memory",
+        orgId: "org_acme",
+        plan: "enterprise",
+        region: "eu-central-1",
+        ssoProvider: "oidc",
+        secretManager: "vault",
+        backup: { enabled: true, backupRef: "local-backup://managed" },
+        autoscaling: { minReplicas: 2, maxReplicas: 8, targetCpuUtilization: 65 }
+      });
+
+      const report = service.managedControlPlaneReport();
+      expect(report.tenants).toMatchObject({ total: 1, active: 1, regions: ["eu-central-1"] });
+      expect(report.tenants.plans.enterprise).toBe(1);
+      expect(report.readiness.sso).toBe(true);
+      expect(report.readiness.backup).toBe(true);
+      expect(report.autoscaling).toMatchObject({ enabled: true, minReplicas: 2, maxReplicas: 8, targetCpuUtilization: 65 });
+      expect(service.apiDescription().paths["/managed/control-plane"]).toContain("GET");
+
+      const reloaded = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path) });
+      expect(reloaded.listManagedTenants()[0].id).toBe(tenant.id);
+      expect(reloaded.managedControlPlaneReport().tenants.total).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("runs the marketplace submission, scan, review, publish, rating, and install lifecycle", () => {
     const service = new MemoryService();
     const module = {

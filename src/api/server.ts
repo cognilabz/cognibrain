@@ -278,7 +278,7 @@ const personaSchema = z.object({
 const webhookSchema = z.object({
   id: z.string().optional(),
   url: z.string().url(),
-  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
+  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "managed.tenant", "inference.run", "entity.merge", "entity.split"])),
   secretRef: z.string().optional()
 });
 
@@ -332,6 +332,28 @@ const migrationImportSchema = z.object({
   deployment: z.record(z.unknown()).optional(),
   manifest: z.record(z.unknown())
 }).passthrough();
+
+const managedTenantSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1),
+  orgId: z.string().min(1),
+  plan: z.enum(["developer", "team", "enterprise"]).optional(),
+  region: z.string().optional(),
+  status: z.enum(["provisioning", "active", "paused"]).optional(),
+  ssoProvider: z.string().optional(),
+  secretManager: z.string().optional(),
+  dataResidency: z.string().optional(),
+  autoscaling: z.object({
+    minReplicas: z.number().int().min(0),
+    maxReplicas: z.number().int().min(1),
+    targetCpuUtilization: z.number().min(1).max(100)
+  }).optional(),
+  backup: z.object({
+    enabled: z.boolean(),
+    backupRef: z.string().optional(),
+    lastVerifiedAt: z.union([z.string(), z.date()]).optional()
+  }).optional()
+});
 
 const connectorManifestSchema = z.object({
   id: z.string().min(1),
@@ -844,6 +866,21 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/storage") {
     send(response, 200, defaultService.storageStatus());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/managed/tenants") {
+    send(response, 200, defaultService.listManagedTenants());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/managed/tenants") {
+    send(response, 201, defaultService.createManagedTenant(managedTenantSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/managed/control-plane") {
+    send(response, 200, defaultService.managedControlPlaneReport());
     return;
   }
 

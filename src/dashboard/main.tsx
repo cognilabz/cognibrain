@@ -5,8 +5,11 @@ import {
   Archive,
   BarChart3,
   CheckCircle2,
+  Clock3,
   Cpu,
   Database,
+  Download,
+  Eye,
   FileJson,
   GitBranch,
   ListFilter,
@@ -14,7 +17,9 @@ import {
   Pin,
   Plus,
   Search,
+  ShoppingBag,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Terminal,
   Trash2
@@ -36,20 +41,32 @@ import {
 } from "../core";
 import "./styles/app.css";
 
-type ViewId = "memories" | "recall" | "graph" | "dream" | "proof";
+type ViewId = "memories" | "recall" | "graph" | "timeline" | "dream" | "marketplace" | "proof";
 type MemoryFilter = "active" | "all" | "archived" | "needs-review";
+type TimeZoom = "day" | "week" | "month" | "all";
 type RuntimeStatus = {
   state: "checking" | "online" | "offline";
   label: string;
   maintenance?: { enabled: boolean; writeThreshold: number; intervalHours: number };
   metrics?: MetricsReport;
 };
+type MarketplaceModuleCard = {
+  id: string;
+  kind: "connector" | "domain" | "persona" | "retrieval_profile";
+  name: string;
+  version: string;
+  status: "available" | "installed";
+  summary: string;
+  manifest: Record<string, unknown>;
+};
 
 const viewItems: Array<{ id: ViewId; label: string; icon: React.ElementType; note: string }> = [
   { id: "memories", label: "Store", icon: Database, note: "Inspect facts" },
-  { id: "recall", label: "Recall", icon: Search, note: "Preview context" },
+  { id: "recall", label: "Recall", icon: SlidersHorizontal, note: "Tune context" },
   { id: "graph", label: "Graph", icon: GitBranch, note: "Explain paths" },
+  { id: "timeline", label: "Time", icon: Clock3, note: "Patterns" },
   { id: "dream", label: "Dream", icon: Sparkles, note: "Repair memory" },
+  { id: "marketplace", label: "Market", icon: ShoppingBag, note: "Modules" },
   { id: "proof", label: "Proof", icon: BarChart3, note: "Verify claims" }
 ];
 
@@ -117,6 +134,65 @@ const seedMemories: MemoryInput[] = [
     source: { kind: "import", confidence: 0.61 },
     tags: ["benchmark", "retrieval"],
     timestamp: daysAgo(65)
+  },
+  {
+    userId: "demo",
+    content: "Operator reviews memory graph and benchmark proof every Friday before release work.",
+    source: { kind: "human", confidence: 0.92 },
+    tags: ["pattern", "release", "review"],
+    entities: ["operator", "memory graph", "benchmark proof"],
+    timestamp: daysAgo(10),
+    temporal: { eventAt: daysAgo(10).toISOString() }
+  },
+  {
+    userId: "demo",
+    content: "Inferred pattern: release reviews often combine graph paths, dream output, and benchmark proof.",
+    source: { kind: "agent", confidence: 0.7 },
+    tags: ["pattern", "needs-review"],
+    entities: ["release review", "graph paths", "benchmark proof"],
+    timestamp: daysAgo(3),
+    metadata: {
+      patternReview: { status: "pending", support: 3, confidence: 0.72, cadence: "weekly:friday" }
+    }
+  }
+];
+
+const marketplaceModules: MarketplaceModuleCard[] = [
+  {
+    id: "connector-chat",
+    kind: "connector",
+    name: "Chat Connector",
+    version: "1.0.0",
+    status: "installed",
+    summary: "Ingests chat transcripts with external ids, source mapping, and webhook sync.",
+    manifest: { connectorId: "official-chat", capabilities: ["ingest", "webhook", "writeback"] }
+  },
+  {
+    id: "persona-operator",
+    kind: "persona",
+    name: "Operator Persona",
+    version: "1.0.0",
+    status: "available",
+    summary: "Concise summaries, stricter privacy defaults, and high trust weighting.",
+    manifest: { id: "operator", summaryStyle: "concise", privacyDefault: "private", weights: { trust: 0.34, graph: 0.2 } }
+  },
+  {
+    id: "domain-coding",
+    kind: "domain",
+    name: "Coding Domain",
+    version: "1.0.0",
+    status: "installed",
+    summary: "Recognizes APIs, packages, tests, repo paths, and code relations.",
+    manifest: { aliases: ["repo", "api", "cli"], tags: ["code", "test", "package"] }
+  },
+  {
+    id: "profile-recall-safe",
+    kind: "retrieval_profile",
+    name: "High-Precision Recall",
+    version: "1.0.0",
+    status: "available",
+    summary: "Raises trust and graph path evidence while lowering recency-only pressure.",
+    manifest: { weights: { trust: 0.36, graph: 0.22, semantic: 0.2, temporal: 0.06 } }
   }
 ];
 
@@ -209,7 +285,11 @@ function App() {
   const [lastCycle, setLastCycle] = useState<ReflectionReport | null>(null);
   const [lastClean, setLastClean] = useState<string[]>([]);
   const [retrievalWeights, setRetrievalWeights] = useState({ semantic: 0.26, keyword: 0.24, entity: 0.16, temporal: 0.08, behavioral: 0.05, trust: 0.18, graph: 0.06, access: 0.02 });
+  const [graphDepth, setGraphDepth] = useState(3);
+  const [timeZoom, setTimeZoom] = useState<TimeZoom>("month");
   const [lifecyclePolicy, setLifecyclePolicy] = useState({ fadeAfterDays: 45, archiveAfterDays: 90 });
+  const [exportPayload, setExportPayload] = useState("");
+  const [modules, setModules] = useState<MarketplaceModuleCard[]>(marketplaceModules);
   const [version, setVersion] = useState(0);
   const apiUrl = useMemo(getApiUrl, []);
   const [runtime, setRuntime] = useState<RuntimeStatus>({ state: "checking", label: "checking" });
@@ -224,7 +304,7 @@ function App() {
   const health = healthReport(store, "demo");
   const filteredMemories = filterMemories(memories, filter);
   const selectedMemory = selectedId ? findMemory(memories, selectedId) : filteredMemories[0] ?? memories[0] ?? null;
-  const results = retrieval.search({ userId: "demo", query, limit: 5, weights: retrievalWeights });
+  const results = retrieval.search({ userId: "demo", query, limit: 5, weights: retrievalWeights, graphDepth });
   const artifactSummary = useMemo(() => summarizeArtifact(artifactText), [artifactText]);
   const reviewCount = memories.filter(needsReview).length;
 
@@ -325,6 +405,44 @@ function App() {
     if (kind === "reject_pattern" || kind === "never_include") store.archive(updated.id);
     setLastClean([`Recorded ${kind.replace("_", " ")} feedback for ${shortId(updated)}.`]);
     refresh(updated.id);
+  }
+
+  function updateConsent(memory: Memory, visibility: Memory["consent"]["visibility"]) {
+    const updated = store.update(memory.id, {
+      consent: { ...memory.consent, visibility },
+      metadata: { ...memory.metadata, consentUpdatedAt: new Date().toISOString() }
+    });
+    setLastClean([`Updated consent for ${shortId(updated)} to ${visibility}.`]);
+    refresh(updated.id);
+  }
+
+  function markSensitive(memory: Memory) {
+    const updated = store.update(memory.id, {
+      trust: Math.min(memory.trust, 0.5),
+      tags: Array.from(new Set([...memory.tags, "needs-review", "sensitive"])),
+      metadata: { ...memory.metadata, privacy: { action: "encrypt", reviewedAt: new Date().toISOString() } }
+    });
+    setLastClean([`Marked ${shortId(updated)} as sensitive and moved it into review.`]);
+    refresh(updated.id);
+  }
+
+  function exportUserMemories() {
+    const payload = JSON.stringify(store.list("demo").map((memory) => ({
+      id: memory.id,
+      content: memory.content,
+      trust: memory.trust,
+      source: memory.source.kind,
+      consent: memory.consent.visibility,
+      tags: memory.tags,
+      archived: Boolean(memory.archivedAt)
+    })), null, 2);
+    setExportPayload(payload);
+    setLastClean([`Prepared export with ${store.list("demo").length} memories.`]);
+  }
+
+  function installModule(moduleId: string) {
+    setModules((items) => items.map((item) => item.id === moduleId ? { ...item, status: "installed" } : item));
+    setLastClean([`Installed ${moduleId}. The module is ready for setup preview.`]);
   }
 
   function cleanRiskyMemories() {
@@ -463,15 +581,39 @@ function App() {
             verifyMemory={verifyMemory}
             togglePin={togglePin}
             applyFeedback={applyFeedback}
+            updateConsent={updateConsent}
+            markSensitive={markSensitive}
+            exportUserMemories={exportUserMemories}
+            exportPayload={exportPayload}
             lastClean={lastClean}
           />
         ) : null}
 
         {view === "recall" ? (
-          <RecallView query={query} setQuery={setQuery} results={results} selectedMemory={selectedMemory} selectMemory={(memory) => setSelectedId(memory.id)} />
+          <RecallView
+            query={query}
+            setQuery={setQuery}
+            results={results}
+            selectedMemory={selectedMemory}
+            selectMemory={(memory) => setSelectedId(memory.id)}
+            retrievalWeights={retrievalWeights}
+            setRetrievalWeights={setRetrievalWeights}
+            graphDepth={graphDepth}
+            setGraphDepth={setGraphDepth}
+          />
         ) : null}
 
         {view === "graph" ? <GraphView memories={memories} /> : null}
+
+        {view === "timeline" ? (
+          <TimelineView
+            memories={memories}
+            timeZoom={timeZoom}
+            setTimeZoom={setTimeZoom}
+            applyFeedback={applyFeedback}
+            selectMemory={(memory) => setSelectedId(memory.id)}
+          />
+        ) : null}
 
         {view === "dream" ? (
           <DreamView
@@ -484,6 +626,10 @@ function App() {
             lifecyclePolicy={lifecyclePolicy}
             setLifecyclePolicy={setLifecyclePolicy}
           />
+        ) : null}
+
+        {view === "marketplace" ? (
+          <MarketplaceView modules={modules} installModule={installModule} />
         ) : null}
 
         {view === "proof" ? (
@@ -513,6 +659,10 @@ function MemoryView({
   verifyMemory,
   togglePin,
   applyFeedback,
+  updateConsent,
+  markSensitive,
+  exportUserMemories,
+  exportPayload,
   lastClean
 }: {
   filter: MemoryFilter;
@@ -528,6 +678,10 @@ function MemoryView({
   verifyMemory: (memory: Memory) => void;
   togglePin: (memory: Memory) => void;
   applyFeedback: (memory: Memory, kind: FeedbackKind) => void;
+  updateConsent: (memory: Memory, visibility: Memory["consent"]["visibility"]) => void;
+  markSensitive: (memory: Memory) => void;
+  exportUserMemories: () => void;
+  exportPayload: string;
   lastClean: string[];
 }) {
   return (
@@ -590,8 +744,21 @@ function MemoryView({
             <div className="detail-actions">
               <button className="secondary-action" onClick={() => verifyMemory(selectedMemory)}><CheckCircle2 size={16} /> Verify</button>
               <button className="secondary-action" onClick={() => togglePin(selectedMemory)}><Pin size={16} /> {selectedMemory.pinned ? "Unpin" : "Pin"}</button>
+              <button className="secondary-action" onClick={() => markSensitive(selectedMemory)}><Eye size={16} /> Sensitive</button>
               <button className="secondary-action" onClick={() => archiveMemory(selectedMemory)} disabled={Boolean(selectedMemory.archivedAt)}><Archive size={16} /> Archive</button>
               <button className="danger-action" onClick={() => deleteMemory(selectedMemory)}><Trash2 size={16} /> Delete</button>
+            </div>
+            <div className="consent-tools" aria-label="Consent controls">
+              <label>
+                <span>Consent visibility</span>
+                <select value={selectedMemory.consent.visibility} onChange={(event) => updateConsent(selectedMemory, event.target.value as Memory["consent"]["visibility"])}>
+                  <option value="private">private</option>
+                  <option value="user">user</option>
+                  <option value="org">org</option>
+                  <option value="public">public</option>
+                </select>
+              </label>
+              <button className="secondary-action" onClick={exportUserMemories}><Download size={16} /> Export user</button>
             </div>
             <div className="feedback-grid" aria-label="Memory feedback">
               <button className="secondary-action" onClick={() => applyFeedback(selectedMemory, "helpful")}><CheckCircle2 size={15} /> Helpful</button>
@@ -613,6 +780,12 @@ function MemoryView({
           <button onClick={addMemory}><Plus size={16} /> Add memory</button>
         </div>
         <ActionLog actions={lastClean} />
+        {exportPayload ? (
+          <div className="export-preview">
+            <strong>Export preview</strong>
+            <pre>{exportPayload}</pre>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -623,14 +796,23 @@ function RecallView({
   setQuery,
   results,
   selectedMemory,
-  selectMemory
+  selectMemory,
+  retrievalWeights,
+  setRetrievalWeights,
+  graphDepth,
+  setGraphDepth
 }: {
   query: string;
   setQuery: (value: string) => void;
   results: SearchResult[];
   selectedMemory: Memory | null;
   selectMemory: (memory: Memory) => void;
+  retrievalWeights: Record<string, number>;
+  setRetrievalWeights: React.Dispatch<React.SetStateAction<{ semantic: number; keyword: number; entity: number; temporal: number; behavioral: number; trust: number; graph: number; access: number }>>;
+  graphDepth: number;
+  setGraphDepth: React.Dispatch<React.SetStateAction<number>>;
 }) {
+  const defaultWeights = { semantic: 0.26, keyword: 0.24, entity: 0.16, temporal: 0.08, behavioral: 0.05, trust: 0.18, graph: 0.06, access: 0.02 };
   return (
     <section className="recall-layout">
       <div className="panel">
@@ -678,6 +860,41 @@ function RecallView({
         </div>
         {selectedMemory ? <MemoryMini memory={selectedMemory} /> : null}
       </div>
+      <div className="panel tuning-panel wide-panel">
+        <div className="panel-title">
+          <div>
+            <h2>Retrieval Tuning Preview</h2>
+            <p>Adjust ranking pressure and watch the context pack change before saving a profile.</p>
+          </div>
+          <button className="secondary-action" onClick={() => setRetrievalWeights(defaultWeights)}><SlidersHorizontal size={16} /> Rollback</button>
+        </div>
+        <div className="slider-grid">
+          {(["semantic", "keyword", "entity", "temporal", "behavioral", "trust", "graph", "access"] as const).map((key) => (
+            <label key={key}>
+              <span>{key}</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={retrievalWeights[key]}
+                onChange={(event) => setRetrievalWeights((weights) => ({ ...weights, [key]: Number(event.target.value) }))}
+              />
+              <b>{retrievalWeights[key].toFixed(2)}</b>
+            </label>
+          ))}
+          <label>
+            <span>graph depth</span>
+            <input type="range" min="1" max="6" step="1" value={graphDepth} onChange={(event) => setGraphDepth(Number(event.target.value))} />
+            <b>{graphDepth}</b>
+          </label>
+        </div>
+        <div className="context-preview">
+          {results.slice(0, 5).map((result) => (
+            <span key={result.memory.id}>{shortId(result.memory)} · {result.score.toFixed(2)} · {(result.decision ?? "include")}</span>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
@@ -686,10 +903,13 @@ function GraphView({ memories }: { memories: Memory[] }) {
   const [from, setFrom] = useState("Mira");
   const [to, setTo] = useState("transcript");
   const [query, setQuery] = useState("Mira transcript correction");
+  const [sourceFilter, setSourceFilter] = useState<"all" | Memory["source"]["kind"]>("all");
   const active = memories.filter((memory) => !memory.archivedAt);
-  const paths = findGraphPaths(active, from, to, { maxDepth: 4, limit: 4 });
-  const activation = activateGraph(active, query, { maxDepth: 3, limit: 8 });
-  const exported = exportMemoryGraph(active, { format: "json" }) as { nodes: Array<{ id: string; label: string; kind: string }>; edges: Array<{ from: string; to: string; type: string; confidence: number }> };
+  const visible = sourceFilter === "all" ? active : active.filter((memory) => memory.source.kind === sourceFilter);
+  const paths = findGraphPaths(visible, from, to, { maxDepth: 4, limit: 4 });
+  const activation = activateGraph(visible, query, { maxDepth: 3, limit: 8 });
+  const exported = exportMemoryGraph(visible, { format: "json" }) as { nodes: Array<{ id: string; label: string; kind: string }>; edges: Array<{ from: string; to: string; type: string; confidence: number }> };
+  const clusters = clusterEntities(visible);
   return (
     <section className="recall-layout">
       <div className="panel">
@@ -699,6 +919,11 @@ function GraphView({ memories }: { memories: Memory[] }) {
             <p>Inspect entity-memory paths, relation confidence, and activation chains.</p>
           </div>
           <GitBranch size={18} />
+        </div>
+        <div className="segmented compact" role="tablist" aria-label="Graph source filters">
+          {(["all", "human", "reviewed_code", "tool", "agent", "transcript", "import"] as const).map((kind) => (
+            <button key={kind} className={sourceFilter === kind ? "active" : undefined} onClick={() => setSourceFilter(kind)}>{kind === "reviewed_code" ? "code" : kind}</button>
+          ))}
         </div>
         <div className="query-row">
           <input aria-label="From node" value={from} onChange={(event) => setFrom(event.target.value)} />
@@ -739,6 +964,94 @@ function GraphView({ memories }: { memories: Memory[] }) {
           <span>{exported.nodes.length} nodes</span>
           <span>{exported.edges.length} edges</span>
           <span>GraphML export available from API/CLI</span>
+        </div>
+        <div className="cluster-list">
+          {clusters.slice(0, 5).map((cluster) => (
+            <span key={cluster.entity}>{cluster.entity}: {cluster.count} memories</span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TimelineView({
+  memories,
+  timeZoom,
+  setTimeZoom,
+  applyFeedback,
+  selectMemory
+}: {
+  memories: Memory[];
+  timeZoom: TimeZoom;
+  setTimeZoom: (zoom: TimeZoom) => void;
+  applyFeedback: (memory: Memory, kind: FeedbackKind) => void;
+  selectMemory: (memory: Memory) => void;
+}) {
+  const [tagFilter, setTagFilter] = useState("all");
+  const [annotation, setAnnotation] = useState("");
+  const events = timelineEvents(memories, timeZoom, tagFilter);
+  const patterns = memories.filter((memory) => memory.tags.includes("pattern") || Boolean(memory.metadata.patternReview));
+  const tags = ["all", ...Array.from(new Set(memories.flatMap((memory) => memory.tags))).slice(0, 8)];
+  return (
+    <section className="timeline-layout">
+      <div className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Temporal Explorer</h2>
+            <p>Zoom into recent memory changes and filter the event stream before it becomes context.</p>
+          </div>
+          <Clock3 size={18} />
+        </div>
+        <div className="segmented compact" role="tablist" aria-label="Timeline zoom">
+          {(["day", "week", "month", "all"] as TimeZoom[]).map((zoom) => (
+            <button key={zoom} className={timeZoom === zoom ? "active" : undefined} onClick={() => setTimeZoom(zoom)}>{zoom}</button>
+          ))}
+        </div>
+        <label>
+          <span>Event filter</span>
+          <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
+            {tags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+          </select>
+        </label>
+        <div className="timeline-list">
+          {events.map((event) => (
+            <button key={event.memory.id} className="timeline-row" onClick={() => selectMemory(event.memory)}>
+              <span>{event.day}</span>
+              <strong>{event.memory.content}</strong>
+              <small>{event.memory.source.kind} · {event.memory.tags.join(", ") || "untagged"}</small>
+            </button>
+          ))}
+          {!events.length ? <p className="empty-state">No events match this zoom and filter.</p> : null}
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Pattern Overlay</h2>
+            <p>Review inferred habits and recurring memory workflows before promoting them.</p>
+          </div>
+          <Activity size={18} />
+        </div>
+        <div className="pattern-list">
+          {patterns.map((memory) => {
+            const review = memory.metadata.patternReview as { status?: string; confidence?: number; cadence?: string; support?: number } | undefined;
+            return (
+              <article key={memory.id} className="pattern-card">
+                <strong>{memory.content}</strong>
+                <span>{review?.cadence ?? "observed pattern"} · confidence {(review?.confidence ?? memory.trust).toFixed(2)} · support {review?.support ?? 1}</span>
+                <div className="detail-actions">
+                  <button className="secondary-action" onClick={() => applyFeedback(memory, "approve_pattern")}><CheckCircle2 size={15} /> Approve</button>
+                  <button className="danger-action" onClick={() => applyFeedback(memory, "reject_pattern")}><Trash2 size={15} /> Reject</button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        <div className="annotation-box">
+          <label htmlFor="timeline-annotation">Annotation</label>
+          <textarea id="timeline-annotation" value={annotation} onChange={(event) => setAnnotation(event.target.value)} placeholder="Add an operator note for this timeline review..." />
+          <span>{annotation ? "Annotation staged for the next memory write." : "No annotation staged."}</span>
         </div>
       </div>
     </section>
@@ -853,6 +1166,58 @@ function DreamView({
           <OutputGroup title="Demoted or archived" items={(report?.demoted ?? []).map((memory) => `${shortId(memory)} · trust ${memory.trust.toFixed(2)} · ${memory.content}`)} />
           <OutputGroup title="Quality issues" items={lifecycle?.issues ?? []} />
         </div>
+      </div>
+    </section>
+  );
+}
+
+function MarketplaceView({ modules, installModule }: { modules: MarketplaceModuleCard[]; installModule: (moduleId: string) => void }) {
+  const [kind, setKind] = useState<"all" | MarketplaceModuleCard["kind"]>("all");
+  const [selectedId, setSelectedId] = useState(modules[0]?.id ?? "");
+  const filtered = kind === "all" ? modules : modules.filter((module) => module.kind === kind);
+  const selected = modules.find((module) => module.id === selectedId) ?? filtered[0] ?? modules[0];
+  return (
+    <section className="market-layout">
+      <div className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Marketplace Browser</h2>
+            <p>Preview connectors, personas, domain modules, and retrieval profiles before install.</p>
+          </div>
+          <ShoppingBag size={18} />
+        </div>
+        <div className="segmented compact" role="tablist" aria-label="Marketplace filters">
+          {(["all", "connector", "domain", "persona", "retrieval_profile"] as const).map((item) => (
+            <button key={item} className={kind === item ? "active" : undefined} onClick={() => setKind(item)}>{item === "retrieval_profile" ? "profiles" : item}</button>
+          ))}
+        </div>
+        <div className="module-list">
+          {filtered.map((module) => (
+            <button key={module.id} className={`module-row ${selected?.id === module.id ? "selected" : ""}`} onClick={() => setSelectedId(module.id)}>
+              <span>{module.kind}</span>
+              <strong>{module.name}</strong>
+              <small>{module.summary}</small>
+              <em>{module.status}</em>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Install Preview</h2>
+            <p>Review manifest shape and runtime effect before enabling a module.</p>
+          </div>
+          {selected ? <button disabled={selected.status === "installed"} onClick={() => installModule(selected.id)}><Plus size={16} /> Install</button> : null}
+        </div>
+        {selected ? (
+          <article className="module-detail">
+            <strong>{selected.name}</strong>
+            <span>{selected.kind} · v{selected.version} · {selected.status}</span>
+            <p>{selected.summary}</p>
+            <pre>{JSON.stringify(selected.manifest, null, 2)}</pre>
+          </article>
+        ) : <p className="empty-state">No module selected.</p>}
       </div>
     </section>
   );
@@ -1076,17 +1441,42 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+function clusterEntities(memories: Memory[]): Array<{ entity: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const memory of memories) {
+    for (const entity of memory.entities) counts.set(entity, (counts.get(entity) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([entity, count]) => ({ entity, count })).sort((a, b) => b.count - a.count || a.entity.localeCompare(b.entity));
+}
+
+function timelineEvents(memories: Memory[], zoom: TimeZoom, tagFilter: string): Array<{ day: string; memory: Memory }> {
+  const cutoffDays = zoom === "day" ? 1 : zoom === "week" ? 7 : zoom === "month" ? 31 : 10_000;
+  const cutoff = Date.now() - cutoffDays * 86_400_000;
+  return memories
+    .filter((memory) => !memory.archivedAt)
+    .filter((memory) => memory.createdAt.getTime() >= cutoff)
+    .filter((memory) => tagFilter === "all" || memory.tags.includes(tagFilter))
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .map((memory) => ({ day: memory.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" }), memory }));
+}
+
 function viewTitle(view: ViewId): string {
   if (view === "memories") return "Memory workbench";
-  if (view === "recall") return "Recall QA";
+  if (view === "recall") return "Recall tuning";
+  if (view === "graph") return "Knowledge graph";
+  if (view === "timeline") return "Temporal patterns";
   if (view === "dream") return "Dream and cleanup";
+  if (view === "marketplace") return "Marketplace setup";
   return "Benchmark proof";
 }
 
 function viewSubtitle(view: ViewId): string {
   if (view === "memories") return "Inspect every memory, understand trust, and remove anything that should not shape agent behavior.";
-  if (view === "recall") return "Preview the ranked context pack before an agent uses it.";
+  if (view === "recall") return "Preview ranked context, tune signal weights, and roll back unsafe recall changes.";
+  if (view === "graph") return "Trace entity paths, source filters, clusters, and activation before injecting multi-hop evidence.";
+  if (view === "timeline") return "Inspect memory chronology, recurring patterns, and review annotations.";
   if (view === "dream") return "Run memory hygiene and inspect each summary, demotion, archive, and reorganization.";
+  if (view === "marketplace") return "Browse modules, personas, connectors, and retrieval profiles before installation.";
   return "Validate benchmark claims and inspect public proof artifacts.";
 }
 

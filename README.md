@@ -29,6 +29,10 @@ The project includes the memory engine, HTTP API, CLI, official connector manife
 | --- | --- |
 | ![cognibrain memory workbench](docs/assets/dashboard-workbench.png) | ![cognibrain recall QA](docs/assets/dashboard-recall.png) |
 
+| Temporal patterns | Marketplace setup |
+| --- | --- |
+| ![cognibrain temporal pattern explorer](docs/assets/dashboard-timeline.png) | ![cognibrain marketplace setup](docs/assets/dashboard-marketplace.png) |
+
 | Dream cycle | Benchmark proof |
 | --- | --- |
 | ![cognibrain dream cycle](docs/assets/dashboard-lifecycle.png) | ![cognibrain benchmark proof](docs/assets/dashboard-benchmarks.png) |
@@ -64,8 +68,11 @@ The dashboard is a working inspection surface, not a decorative demo. It present
 | Memory advantage | Explains the current USP: entity-linked hybrid recall plus dream maintenance. |
 | Health metrics | Shows whether the memory store is fresh, trusted, and active. |
 | Recall QA | Lets a user test the exact context an agent would receive. |
+| Knowledge graph | Shows entity paths, source filters, activation, and graph clusters. |
+| Temporal patterns | Lets operators zoom timelines, filter events, approve inferred patterns, and stage annotations. |
 | Dream cycle | Proves memory hygiene by summarizing, fading, reflecting, and reorganizing facts. |
 | Ranked evidence | Exposes score, citation, and trust for each retrieved memory. |
+| Marketplace setup | Previews connectors, personas, domain modules, and retrieval profiles before install. |
 | Benchmark evidence | Keeps local and public market proof visible. |
 | Artifact inspector | Lets benchmark JSON be checked without leaving the UI. |
 

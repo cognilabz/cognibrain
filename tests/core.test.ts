@@ -760,6 +760,11 @@ describe("TypeScript memory core", () => {
     expect(expanded[0].retrievalMode).toBe("rrf");
     expect(expanded[0].fusion?.rank).toBe(1);
     expect(expanded[0].expandedQueries?.some((query) => query.includes("command line"))).toBe(true);
+    const intent = service.classifyQueryIntent("How are Atlas and Redis connected?");
+    expect(intent.intent).toBe("connection_explanation");
+    expect(intent.recommendedMode).toBe("path");
+    const intentDriven = service.search({ userId: "u1", query: "How are Atlas and Redis connected?" });
+    expect(intentDriven.some((result) => result.retrievalMode === "path")).toBe(true);
 
     const contradictions = service.search({ userId: "u1", query: "Atlas Redis shared cache", mode: "path" });
     expect(contradictions.some((result) => result.contradiction && result.decision === "exclude")).toBe(true);

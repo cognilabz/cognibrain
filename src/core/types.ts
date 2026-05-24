@@ -30,6 +30,16 @@ export type FeedbackKind =
   | "approve_pattern"
   | "reject_pattern";
 export type RetrievalMode = "hybrid" | "rrf" | "graph" | "path";
+export type QueryIntent =
+  | "fact_lookup"
+  | "temporal_question"
+  | "multi_hop_question"
+  | "preference_procedural"
+  | "contradiction_check"
+  | "project_context"
+  | "personal_context"
+  | "team_context"
+  | "connection_explanation";
 
 export interface Provenance {
   kind: SourceKind;
@@ -242,6 +252,15 @@ export interface MemoryRouteReport {
   retrievalOptions: Partial<SearchOptions>;
 }
 
+export interface QueryIntentReport {
+  query: string;
+  intent: QueryIntent;
+  confidence: number;
+  recommendedMode: RetrievalMode;
+  recommendedWeights?: Partial<RetrievalWeights>;
+  reasons: string[];
+}
+
 export interface SearchResult {
   memory: Memory;
   score: number;
@@ -283,6 +302,7 @@ export interface EvidencePack {
   query: string;
   userId: string;
   profileId?: string;
+  queryIntent?: QueryIntentReport;
   tokenBudget: number;
   context: string;
   results: Array<{

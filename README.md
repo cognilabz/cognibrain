@@ -141,6 +141,7 @@ Search memory:
 ./bin/cognibrain.mjs memory search "What language does Atlas use?"
 ./bin/cognibrain.mjs memory inspect <memory-id>
 ./bin/cognibrain.mjs memory route "Which release memory should Codex use?"
+./bin/cognibrain.mjs memory intent "How are Atlas and Redis connected?"
 ```
 
 Explain why memories were used and export the same evidence an agent would receive:

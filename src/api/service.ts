@@ -90,6 +90,7 @@ import type {
   ConsentPolicy,
   CrossBrainPrivacyComputeReport,
   QueryExpander,
+  QueryIntentReport,
   TranslationProvider,
   ProviderAdapterStatus,
   TranslationReport,
@@ -357,48 +358,95 @@ export class MemoryService {
   }
 
   search(options: SearchOptions) {
-    this.enforceRetention(new Date(), options.userId);
-    const persona = options.agentId ? this.personaForAgent(options.agentId) : undefined;
+    const intent = this.classifyQueryIntent(options.query);
+    const effectiveOptions = { ...options, mode: options.mode ?? intent.recommendedMode };
+    this.enforceRetention(new Date(), effectiveOptions.userId);
+    const persona = effectiveOptions.agentId ? this.personaForAgent(effectiveOptions.agentId) : undefined;
     const personaProfile = persona?.retrievalWeights
       ? {
           id: `persona:${persona.id}`,
           label: persona.label,
           weights: normalizeRetrievalWeights(persona.retrievalWeights),
-          scope: { agentId: options.agentId },
+          scope: { agentId: effectiveOptions.agentId },
           updatedAt: persona.updatedAt,
           provenance: "persona"
         }
       : undefined;
-    const profile = options.profileId ? this.retrievalProfiles.get(options.profileId) : personaProfile ?? this.profileFor(options);
-    const linkedUserIds = options.includeLinkedIdentities ? this.identities.resolve(options.userId).filter((id) => id !== options.userId) : [];
-    const federatedBrainIds = options.includeSharedBrains ? options.brainIds ?? this.accessibleBrainIds(options) : options.brainIds;
-    const queryExpansions = this.expandSearchQuery(options);
+    const profile = effectiveOptions.profileId ? this.retrievalProfiles.get(effectiveOptions.profileId) : personaProfile ?? this.profileFor(effectiveOptions);
+    const linkedUserIds = effectiveOptions.includeLinkedIdentities ? this.identities.resolve(effectiveOptions.userId).filter((id) => id !== effectiveOptions.userId) : [];
+    const federatedBrainIds = effectiveOptions.includeSharedBrains ? effectiveOptions.brainIds ?? this.accessibleBrainIds(effectiveOptions) : effectiveOptions.brainIds;
+    const queryExpansions = this.expandSearchQuery(effectiveOptions);
     const results = this.retrieval.search({
-      ...options,
+      ...effectiveOptions,
       brainIds: federatedBrainIds,
       linkedUserIds,
       queryExpansions,
-      weights: options.weights ?? profile?.weights,
-      reranker: options.reranker ?? this.defaultReranker,
-      verifier: options.verifier ?? this.defaultVerifier
+      weights: options.weights ?? profile?.weights ?? intent.recommendedWeights,
+      reranker: effectiveOptions.reranker ?? this.defaultReranker,
+      verifier: effectiveOptions.verifier ?? this.defaultVerifier
     });
     this.metrics.searches += 1;
     this.metrics.noHitSearches += results.length === 0 ? 1 : 0;
     this.metrics.lowConfidenceSearches = (this.metrics.lowConfidenceSearches ?? 0) + (results.some((result) => result.decision === "warn" || result.decision === "review") ? 1 : 0);
     this.metrics.averageSearchResults = rollingAverage(this.metrics.averageSearchResults, results.length, this.metrics.searches);
-    this.recordSessionMetrics(options, results.length);
+    this.recordSessionMetrics(effectiveOptions, results.length);
     this.searchEvents.push({
       timestamp: new Date().toISOString(),
-      userId: options.userId,
-      sessionId: options.sessionId,
-      projectId: options.projectId,
+      userId: effectiveOptions.userId,
+      sessionId: effectiveOptions.sessionId,
+      projectId: effectiveOptions.projectId,
       resultCount: results.length,
       lowConfidence: results.some((result) => result.decision === "warn" || result.decision === "review"),
-      queryHash: contentHash(options.query)
+      queryHash: contentHash(effectiveOptions.query)
     });
-    this.recordAudit("search.run", { userId: options.userId, brainId: options.brainId, sourceId: options.sourceId, metadata: { resultCount: results.length, profileId: profile?.id } });
+    this.recordAudit("search.run", { userId: effectiveOptions.userId, brainId: effectiveOptions.brainId, sourceId: effectiveOptions.sourceId, metadata: { resultCount: results.length, profileId: profile?.id, intent: intent.intent } });
     this.persist();
     return results;
+  }
+
+  classifyQueryIntent(query: string): QueryIntentReport {
+    const text = query.toLowerCase();
+    const reasons: string[] = [];
+    let intent: QueryIntentReport["intent"] = "fact_lookup";
+    let confidence = 0.62;
+    let recommendedMode: QueryIntentReport["recommendedMode"] = "hybrid";
+    let recommendedWeights: QueryIntentReport["recommendedWeights"] | undefined;
+    const match = (pattern: RegExp, reason: string) => {
+      if (!pattern.test(text)) return false;
+      reasons.push(reason);
+      return true;
+    };
+    if (match(/\b(when|last week|yesterday|today|since|changed|history|timeline|before|after)\b/, "temporal language detected")) {
+      intent = "temporal_question";
+      confidence = 0.78;
+      recommendedWeights = { temporal: 0.28, trust: 0.22, semantic: 0.18 };
+    }
+    if (match(/\b(connected|related|relationship|path|why.*depend|how.*connect|between)\b/, "connection language detected")) {
+      intent = "connection_explanation";
+      confidence = 0.82;
+      recommendedMode = "path";
+      recommendedWeights = { graph: 0.42, entity: 0.22, trust: 0.18 };
+    } else if (match(/\b(multi[- ]?hop|depends on|imports|calls|linked through)\b/, "multi-hop graph language detected")) {
+      intent = "multi_hop_question";
+      confidence = 0.8;
+      recommendedMode = "path";
+      recommendedWeights = { graph: 0.38, entity: 0.22, semantic: 0.16 };
+    }
+    if (match(/\b(contradict|conflict|wrong|outdated|superseded|disagree)\b/, "contradiction language detected")) {
+      intent = "contradiction_check";
+      confidence = 0.84;
+      recommendedWeights = { trust: 0.3, temporal: 0.22, entity: 0.18 };
+    }
+    if (match(/\b(should|how do i|workflow|procedure|checklist|before release|deploy|run tests|always)\b/, "procedural language detected")) {
+      intent = "preference_procedural";
+      confidence = Math.max(confidence, 0.76);
+      recommendedWeights = { trust: 0.26, keyword: 0.22, entity: 0.18, semantic: 0.18 };
+    }
+    if (match(/\b(repo|repository|project|workspace|codebase|branch)\b/, "project context language detected") && intent === "fact_lookup") intent = "project_context";
+    if (match(/\b(team|org|shared|everyone|company)\b/, "team context language detected") && (intent === "fact_lookup" || intent === "project_context")) intent = "team_context";
+    if (match(/\b(my|me|i prefer|personal)\b/, "personal context language detected") && intent === "fact_lookup") intent = "personal_context";
+    if (!reasons.length) reasons.push("default fact lookup");
+    return { query, intent, confidence, recommendedMode, recommendedWeights, reasons };
   }
 
   routeMemory(options: SearchOptions): MemoryRouteReport {
@@ -464,6 +512,7 @@ export class MemoryService {
       query: options.query,
       userId: options.userId,
       profileId: options.profileId,
+      queryIntent: this.classifyQueryIntent(options.query),
       tokenBudget,
       context,
       results: includedResults.map((result) => ({
@@ -1594,6 +1643,7 @@ export class MemoryService {
         "/memories": ["GET", "POST"],
         "/search": ["POST"],
         "/route": ["POST"],
+        "/intent": ["POST"],
         "/evidence-pack": ["POST"],
         "/feedback": ["POST"],
         "/feedback/injection": ["POST"],

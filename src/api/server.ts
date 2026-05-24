@@ -1148,6 +1148,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && url.pathname === "/intent") {
+    const body = z.object({ query: z.string().min(1) }).parse(await json(request));
+    send(response, 200, defaultService.classifyQueryIntent(body.query));
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/evidence-pack") {
     send(response, 200, defaultService.evidencePack(evidencePackSchema.parse(await json(request))));
     return;

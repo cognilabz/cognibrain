@@ -59,8 +59,8 @@ The `usp-evidence-pack` suite verifies why-used explanations, source citation co
 
 ## Implementation Surfaces
 
-- CLI: `memory route`, `memory why-used`, `memory evidence-pack`
-- HTTP: `POST /route`, `POST /evidence-pack`
+- CLI: `memory route`, `memory intent`, `memory why-used`, `memory evidence-pack`
+- HTTP: `POST /route`, `POST /intent`, `POST /evidence-pack`
 - MCP: `memory_context_pack` returns `evidencePack`
 - Benchmarks: `usp-evidence-pack` in `benchmark:nextgen`
 - Dashboard: Recall QA shows context pack preview and per-result retrieval signals

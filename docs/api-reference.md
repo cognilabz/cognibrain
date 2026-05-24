@@ -135,11 +135,16 @@ curl -X POST http://localhost:8787/search \
 curl -X POST http://localhost:8787/route \
   -H "content-type: application/json" \
   -d '{"userId":"dev","agentId":"codex","orgId":"org-1","projectId":"cognibrain","query":"Atlas release checklist","includeSharedBrains":true}'
+curl -X POST http://localhost:8787/intent \
+  -H "content-type: application/json" \
+  -d '{"query":"How are Atlas and Redis connected?"}'
 ```
 
 Search results include ranked memories, signal breakdowns, citations, and stale flags.
 
 Route reports explain which user/session/app/project/org/brain/agent/persona scopes are selected or excluded before retrieval runs. CLI users can preview the same decision with `cognibrain memory route "<query>"`.
+
+Intent reports classify queries as fact, temporal, multi-hop, procedural/preference, contradiction, project, personal, team, or connection-explanation requests. Retrieval uses the intent to choose `hybrid` vs. `path` mode and adjust weights when the caller has not explicitly selected a profile or mode.
 
 ## MemoryRecordV2
 

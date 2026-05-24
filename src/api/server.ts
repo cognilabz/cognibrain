@@ -278,7 +278,7 @@ const personaSchema = z.object({
 const webhookSchema = z.object({
   id: z.string().optional(),
   url: z.string().url(),
-  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
+  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
   secretRef: z.string().optional()
 });
 
@@ -365,7 +365,31 @@ const connectorManifestSchema = z.object({
       authRef: z.string().optional(),
       operations: z.array(z.enum(["tag", "comment", "status", "summary", "memory_link"])).optional()
     })
+    .optional(),
+  oauth: z
+    .object({
+      authorizeUrl: z.string().url(),
+      tokenUrl: z.string().url().optional(),
+      clientIdRef: z.string().optional(),
+      scopes: z.array(z.string()).optional(),
+      redirectUri: z.string().url().optional()
+    })
     .optional()
+});
+
+const connectorOAuthBeginSchema = z.object({
+  connectorId: z.string().min(1),
+  redirectUri: z.string().url().optional(),
+  scopes: z.array(z.string()).optional(),
+  stateSalt: z.string().optional()
+});
+
+const connectorOAuthCallbackSchema = z.object({
+  connectorId: z.string().min(1),
+  state: z.string().min(1),
+  code: z.string().optional(),
+  tokenRef: z.string().optional(),
+  error: z.string().optional()
 });
 
 const connectorSyncSchema = z.object({
@@ -426,7 +450,7 @@ const connectorPollSchema = z.object({
   projectId: z.string().optional()
 });
 
-const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "inference.run", "entity.merge", "entity.split", "retention.enforce", "security.key.rotate", "privacy.insights"]);
+const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "inference.run", "entity.merge", "entity.split", "retention.enforce", "security.key.rotate", "privacy.insights"]);
 
 const retentionRuleSchema = z.object({
   id: z.string().optional(),
@@ -853,6 +877,23 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/connectors/health") {
     send(response, 200, defaultService.connectorHealth(url.searchParams.get("connectorId") ?? undefined));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/connectors/auth") {
+    send(response, 200, defaultService.connectorAuthStatus(url.searchParams.get("connectorId") ?? undefined));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/connectors/auth/begin") {
+    const body = connectorOAuthBeginSchema.parse(await json(request));
+    const { connectorId, ...input } = body;
+    send(response, 202, defaultService.beginConnectorOAuth(connectorId, input));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/connectors/auth/callback") {
+    send(response, 202, defaultService.completeConnectorOAuth(connectorOAuthCallbackSchema.parse(await json(request))));
     return;
   }
 

@@ -9,6 +9,7 @@ import type {
   AuditEvent,
   Brain,
   ConnectorManifest,
+  ConnectorAuthSession,
   ConnectorSyncRecord,
   IdentityLink,
   MarketplaceSubmission,
@@ -49,6 +50,7 @@ export interface PersistedMemoryFile {
   marketplaceSubmissions?: MarketplaceSubmission[];
   offlineOperations?: OfflineOperation[];
   connectorManifests?: ConnectorManifest[];
+  connectorAuthSessions?: ConnectorAuthSession[];
   connectorSyncRecords?: ConnectorSyncRecord[];
   retentionRules?: RetentionRule[];
 }

@@ -1218,6 +1218,35 @@ describe("TypeScript memory core", () => {
       })
     ).toThrow(/Writeback/);
 
+    service.registerConnectorManifest({
+      id: "oauth-docs",
+      name: "OAuth Docs",
+      kind: "docs",
+      version: "1.0.0",
+      direction: "two_way",
+      capabilities: ["ingest", "poll", "writeback"],
+      auth: "oauth",
+      defaultSourceKind: "human",
+      metadataMapping: { documentId: "externalId" },
+      oauth: {
+        authorizeUrl: "https://auth.example.com/authorize",
+        tokenUrl: "https://auth.example.com/token",
+        clientIdRef: "secret://oauth-docs/client-id",
+        scopes: ["docs.read", "docs.write"],
+        redirectUri: "http://localhost:8787/connectors/auth/callback"
+      },
+      poll: { endpoint: "https://api.example.com/docs/poll" },
+      writeback: { endpoint: "https://api.example.com/docs/writeback", operations: ["comment"] }
+    });
+    const oauth = service.beginConnectorOAuth("oauth-docs", { stateSalt: "unit" });
+    expect(oauth.authorizeUrl).toContain("state=");
+    expect(oauth.authorizeUrl).toContain("docs.read");
+    const authorized = service.completeConnectorOAuth({ connectorId: "oauth-docs", state: oauth.state, code: "code-123" });
+    expect(authorized.status).toBe("authorized");
+    expect(authorized.tokenRef).toContain("oauth://oauth-docs/");
+    expect(service.connectorAuthStatus("oauth-docs")[0].tokenHash).toBeTruthy();
+    expect(service.listConnectorManifests("docs").find((item) => item.id === "oauth-docs")?.poll?.authRef).toBe(authorized.tokenRef);
+
     const manifest = service.registerConnectorManifest({
       id: "unit-chat",
       name: "Unit Chat",

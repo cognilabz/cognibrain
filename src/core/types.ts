@@ -490,8 +490,31 @@ export interface ConnectorManifest {
     authRef?: string;
     operations?: Array<"tag" | "comment" | "status" | "summary" | "memory_link">;
   };
+  oauth?: {
+    authorizeUrl: string;
+    tokenUrl?: string;
+    clientIdRef?: string;
+    scopes?: string[];
+    redirectUri?: string;
+  };
   createdAt: Date | string;
   updatedAt: Date | string;
+}
+
+export interface ConnectorAuthSession {
+  id: string;
+  connectorId: string;
+  state: string;
+  status: "pending" | "authorized" | "failed" | "revoked";
+  authorizeUrl: string;
+  redirectUri?: string;
+  scopes: string[];
+  tokenRef?: string;
+  tokenHash?: string;
+  error?: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  expiresAt?: Date | string;
 }
 
 export interface ConnectorSyncRecord {
@@ -541,6 +564,7 @@ export interface AuditEvent {
     | "agent.register"
     | "persona.set"
     | "connector.register"
+    | "connector.auth"
     | "connector.sync"
     | "provider.call"
     | "extract.run"

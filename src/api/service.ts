@@ -42,6 +42,7 @@ import type {
   ComplianceReport,
   ContradictionDetector,
   ConnectorManifest,
+  ConnectorAuthSession,
   ConnectorSyncRecord,
   EnrichmentCandidate,
   EntityMergeSuggestion,
@@ -183,6 +184,7 @@ export class MemoryService {
   private marketplaceSubmissions = new Map<string, MarketplaceSubmission>();
   private offlineOperations: OfflineOperation[] = [];
   private connectorManifests = new Map<string, ConnectorManifest>();
+  private connectorAuthSessions = new Map<string, ConnectorAuthSession>();
   private connectorSyncRecords: ConnectorSyncRecord[] = [];
   private retentionRules = new Map<string, RetentionRule>();
   private searchEvents: Array<{
@@ -586,6 +588,75 @@ export class MemoryService {
     this.recordAudit("connector.register", { metadata: { connectorId: manifest.id, kind: manifest.kind, capabilities: manifest.capabilities } });
     this.persist();
     return manifest;
+  }
+
+  beginConnectorOAuth(connectorId: string, input: { redirectUri?: string; scopes?: string[]; stateSalt?: string } = {}): ConnectorAuthSession {
+    const manifest = this.connectorManifests.get(connectorId);
+    if (!manifest) throw new Error(`Connector manifest not found: ${connectorId}`);
+    if (manifest.auth !== "oauth") throw new Error(`Connector ${connectorId} does not use OAuth`);
+    if (!manifest.oauth?.authorizeUrl) throw new Error(`Connector ${connectorId} is missing oauth.authorizeUrl`);
+    const now = new Date().toISOString();
+    const redirectUri = input.redirectUri ?? manifest.oauth.redirectUri;
+    const scopes = input.scopes ?? manifest.oauth.scopes ?? [];
+    const state = contentHash(`${connectorId}:${now}:${input.stateSalt ?? ""}`).slice(2, 26);
+    const authorizeUrl = new URL(manifest.oauth.authorizeUrl);
+    authorizeUrl.searchParams.set("response_type", "code");
+    authorizeUrl.searchParams.set("client_id", manifest.oauth.clientIdRef ?? `${connectorId}-client`);
+    authorizeUrl.searchParams.set("state", state);
+    if (redirectUri) authorizeUrl.searchParams.set("redirect_uri", redirectUri);
+    if (scopes.length) authorizeUrl.searchParams.set("scope", scopes.join(" "));
+    const session: ConnectorAuthSession = {
+      id: `auth_${contentHash(`${connectorId}:${state}`).slice(2, 14)}`,
+      connectorId,
+      state,
+      status: "pending",
+      authorizeUrl: authorizeUrl.toString(),
+      redirectUri,
+      scopes,
+      createdAt: now,
+      updatedAt: now,
+      expiresAt: new Date(Date.now() + 10 * 60_000).toISOString()
+    };
+    this.connectorAuthSessions.set(session.id, session);
+    this.recordAudit("connector.auth", { metadata: { connectorId, sessionId: session.id, status: session.status, scopes } });
+    this.persist();
+    return session;
+  }
+
+  completeConnectorOAuth(input: { connectorId: string; state: string; code?: string; tokenRef?: string; error?: string }): ConnectorAuthSession {
+    const session = [...this.connectorAuthSessions.values()].find((item) => item.connectorId === input.connectorId && item.state === input.state);
+    if (!session) throw new Error(`OAuth session not found for connector ${input.connectorId}`);
+    const now = new Date().toISOString();
+    const tokenRef = input.tokenRef ?? (input.code ? `oauth://${input.connectorId}/${contentHash(input.code).slice(2, 12)}` : undefined);
+    const updated: ConnectorAuthSession = {
+      ...session,
+      status: input.error ? "failed" : "authorized",
+      tokenRef,
+      tokenHash: input.code || tokenRef ? contentHash(`${input.code ?? ""}:${tokenRef ?? ""}`).slice(2) : undefined,
+      error: input.error,
+      updatedAt: now
+    };
+    this.connectorAuthSessions.set(session.id, updated);
+    const manifest = this.connectorManifests.get(input.connectorId);
+    if (manifest && updated.status === "authorized" && tokenRef) {
+      const next: ConnectorManifest = {
+        ...manifest,
+        updatedAt: now,
+        list: manifest.list ? { ...manifest.list, authRef: manifest.list.authRef ?? tokenRef } : manifest.list,
+        poll: manifest.poll ? { ...manifest.poll, authRef: manifest.poll.authRef ?? tokenRef } : manifest.poll,
+        writeback: manifest.writeback ? { ...manifest.writeback, authRef: manifest.writeback.authRef ?? tokenRef } : manifest.writeback
+      };
+      this.connectorManifests.set(next.id, next);
+    }
+    this.recordAudit("connector.auth", { metadata: { connectorId: input.connectorId, sessionId: session.id, status: updated.status, tokenRef: updated.tokenRef } });
+    this.persist();
+    return updated;
+  }
+
+  connectorAuthStatus(connectorId?: string): ConnectorAuthSession[] {
+    return [...this.connectorAuthSessions.values()]
+      .filter((session) => !connectorId || session.connectorId === connectorId)
+      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   }
 
   listConnectorManifests(kind?: ConnectorManifest["kind"]): ConnectorManifest[] {
@@ -1398,6 +1469,9 @@ export class MemoryService {
         "/marketplace/rate": ["POST"],
         "/marketplace/install": ["POST"],
         "/marketplace/plan": ["POST"],
+        "/connectors/auth": ["GET"],
+        "/connectors/auth/begin": ["POST"],
+        "/connectors/auth/callback": ["POST"],
         "/migration/export": ["POST"],
         "/migration/import": ["POST"],
         "/backup/verify": ["POST"],
@@ -2413,6 +2487,7 @@ export class MemoryService {
     this.marketplaceSubmissions = new Map((raw.marketplaceSubmissions ?? []).map((submission) => [submission.id, submission]));
     this.offlineOperations = raw.offlineOperations ?? [];
     for (const manifest of raw.connectorManifests ?? []) this.connectorManifests.set(manifest.id, manifest);
+    this.connectorAuthSessions = new Map((raw.connectorAuthSessions ?? []).map((session) => [session.id, session]));
     this.connectorSyncRecords = raw.connectorSyncRecords ?? [];
     this.retentionRules = new Map((raw.retentionRules ?? []).map((rule) => [rule.id, rule]));
     this.store.import(raw.memories ?? []);
@@ -2443,6 +2518,7 @@ export class MemoryService {
       marketplaceSubmissions: [...this.marketplaceSubmissions.values()],
       offlineOperations: this.offlineOperations,
       connectorManifests: [...this.connectorManifests.values()],
+      connectorAuthSessions: [...this.connectorAuthSessions.values()],
       connectorSyncRecords: this.connectorSyncRecords,
       retentionRules: [...this.retentionRules.values()]
     };
@@ -2949,6 +3025,7 @@ function validateConnectorManifest(input: Omit<ConnectorManifest, "createdAt" | 
   if (!input.capabilities.length) throw new Error(`Connector ${input.id} must declare at least one capability`);
   if (input.direction === "two_way" && !input.capabilities.includes("ingest")) throw new Error(`Two-way connector ${input.id} must support ingest`);
   if (input.capabilities.includes("writeback") && input.direction === "ingest") throw new Error(`Writeback connector ${input.id} must be export or two_way`);
+  if (input.auth === "oauth" && !input.oauth?.authorizeUrl) throw new Error(`OAuth connector ${input.id} requires oauth.authorizeUrl`);
 }
 
 function deterministicTranslate(text: string, sourceLanguage?: string, targetLanguage = "en"): string {

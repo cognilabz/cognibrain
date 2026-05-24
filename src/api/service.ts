@@ -272,15 +272,16 @@ export class MemoryService {
     events: MemoryExtractionEvent[],
     scope: Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId" | "deviceId" | "runId">
   ): ExtractionReport {
+    const normalizedEvents = events.map(normalizeMediaExtractionEvent);
     const existing = this.store.list(scope.userId);
-    const failures = ruleExtractionFailures(events);
-    const ruleInputs = extractAddOnlyMemories(events, scope).map((input) => markExtractionStage(input, "rules"));
-    const needsProvider = Boolean(this.defaultExtractor && (ruleInputs.length === 0 || failures.length > 0 || events.some((event) => event.mediaType && !["text", "code", "document"].includes(event.mediaType))));
-    const providerInputs = needsProvider ? this.defaultExtractor?.extract({ events, scope, existing, now: new Date() }).map((input) => markExtractionStage({ ...scope, ...input }, "provider")) ?? [] : [];
+    const failures = ruleExtractionFailures(normalizedEvents);
+    const ruleInputs = extractAddOnlyMemories(normalizedEvents, scope).map((input) => markExtractionStage(input, "rules"));
+    const needsProvider = Boolean(this.defaultExtractor && (ruleInputs.length === 0 || failures.length > 0 || normalizedEvents.some((event) => event.mediaType && !["text", "code", "document"].includes(event.mediaType) && !hasLocalMediaExtraction(event))));
+    const providerInputs = needsProvider ? this.defaultExtractor?.extract({ events: normalizedEvents, scope, existing, now: new Date() }).map((input) => markExtractionStage({ ...scope, ...input }, "provider")) ?? [] : [];
     const stages: ExtractionReport["stages"] = [
-      { stage: "rules", inputEvents: events.length, extracted: ruleInputs.length, confidence: extractionConfidence(events, ruleInputs.length), reason: "single-pass add-only rules" },
+      { stage: "rules", inputEvents: normalizedEvents.length, extracted: ruleInputs.length, confidence: extractionConfidence(normalizedEvents, ruleInputs.length), reason: "single-pass add-only rules" },
       ...(needsProvider
-        ? [{ stage: "provider" as const, inputEvents: events.length, extracted: providerInputs.length, confidence: providerInputs.length ? 0.78 : 0.2, reason: providerInputs.length ? "fallback extractor produced candidate memories" : "fallback extractor returned no candidates" }]
+        ? [{ stage: "provider" as const, inputEvents: normalizedEvents.length, extracted: providerInputs.length, confidence: providerInputs.length ? 0.78 : 0.2, reason: providerInputs.length ? "fallback extractor produced candidate memories" : "fallback extractor returned no candidates" }]
         : [])
     ];
     const existingHashes = new Set(existing.map((memory) => memory.metadata.contentHash).filter(Boolean));
@@ -294,15 +295,15 @@ export class MemoryService {
     });
     const memories = inputs.map((input) => this.add(linkStateChange(input, this.store.list(scope.userId))));
     const enrichmentCandidates = enrichmentCandidatesFor(this.store.list(scope.userId));
-    const learnedRules = learnedRuleSuggestions(events, failures);
+    const learnedRules = learnedRuleSuggestions(normalizedEvents, failures);
     stages.push({
       stage: "enrichment",
-      inputEvents: events.length,
+      inputEvents: normalizedEvents.length,
       extracted: enrichmentCandidates.length,
       confidence: enrichmentCandidates.length ? 0.72 : 1,
       reason: enrichmentCandidates.length ? "entity attention threshold produced candidates" : "no entity crossed enrichment threshold"
     });
-    this.recordAudit("extract.run", { userId: scope.userId, brainId: scope.brainId, sourceId: scope.sourceId, metadata: { events: events.length, memories: memories.length, stages, failures: failures.length, learnedRules: learnedRules.length } });
+    this.recordAudit("extract.run", { userId: scope.userId, brainId: scope.brainId, sourceId: scope.sourceId, metadata: { events: normalizedEvents.length, memories: memories.length, stages, failures: failures.length, learnedRules: learnedRules.length } });
     const entityLinks: Record<string, string[]> = {};
     for (const memory of memories) {
       for (const entity of memory.entities) {
@@ -821,9 +822,10 @@ export class MemoryService {
     event: MemoryExtractionEvent,
     scope: Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId">
   ): ExtractionReport {
-    const normalized = event.language && !/^en/i.test(event.language)
-      ? { ...event, content: this.translateText(event.content, event.language, "en").translated, metadata: { ...(event.metadata ?? {}), translatedFrom: event.language, originalContent: event.content } }
-      : event;
+    const media = normalizeMediaExtractionEvent(event);
+    const normalized = media.language && !/^en/i.test(media.language)
+      ? { ...media, content: this.translateText(media.content, media.language, "en").translated, metadata: { ...(media.metadata ?? {}), translatedFrom: media.language, originalContent: media.content } }
+      : media;
     return this.extract([normalized], scope);
   }
 
@@ -2171,7 +2173,7 @@ function ruleExtractionFailures(events: MemoryExtractionEvent[]): ExtractionRepo
         contentPreview: preview(event.content)
       });
     }
-    if (mediaType === "audio" || mediaType === "image" || mediaType === "video") {
+    if ((mediaType === "audio" || mediaType === "image" || mediaType === "video") && !hasLocalMediaExtraction(event)) {
       failures.push({
         eventIndex: index,
         stage: "rules",
@@ -2183,6 +2185,57 @@ function ruleExtractionFailures(events: MemoryExtractionEvent[]): ExtractionRepo
     }
     return failures;
   });
+}
+
+function normalizeMediaExtractionEvent(event: MemoryExtractionEvent): MemoryExtractionEvent {
+  const mediaType = event.mediaType ?? "text";
+  if (mediaType !== "audio" && mediaType !== "image" && mediaType !== "video" && mediaType !== "document") return event;
+  const metadata = event.metadata ?? {};
+  if (typeof metadata.mediaExtraction === "object" && metadata.mediaExtraction !== null) return event;
+  const transformations = Array.isArray(metadata.transformations) ? metadata.transformations.map(String) : [];
+  if (mediaType === "audio" && typeof metadata.asrText === "string" && metadata.asrText.trim()) {
+    return {
+      ...event,
+      content: metadata.asrText.trim(),
+      metadata: { ...metadata, originalMediaContent: event.content, transformations: [...transformations, "local-asr"], mediaExtraction: { mode: "local", task: "asr" } }
+    };
+  }
+  if ((mediaType === "image" || mediaType === "document") && typeof metadata.ocrText === "string" && metadata.ocrText.trim()) {
+    const labels = Array.isArray(metadata.imageLabels) ? ` Labels: ${metadata.imageLabels.map(String).join(", ")}.` : "";
+    const transform = mediaType === "document" ? "local-document-ocr" : "local-ocr";
+    return {
+      ...event,
+      content: `${metadata.ocrText.trim()}${labels}`,
+      metadata: { ...metadata, originalMediaContent: event.content, transformations: [...transformations, transform], mediaExtraction: { mode: "local", task: "ocr" } }
+    };
+  }
+  if (mediaType === "video" && Array.isArray(metadata.frames) && metadata.frames.length) {
+    const frames = metadata.frames
+      .filter((frame): frame is Record<string, unknown> => typeof frame === "object" && frame !== null)
+      .map((frame) => {
+        const at = typeof frame.at === "string" ? `Frame ${frame.at}: ` : "Frame: ";
+        const text = typeof frame.text === "string" ? frame.text : "";
+        const description = typeof frame.description === "string" ? frame.description : "";
+        return `${at}${[description, text].filter(Boolean).join(" ")}`.trim();
+      })
+      .filter(Boolean);
+    if (frames.length) {
+      return {
+        ...event,
+        content: frames.join("\n"),
+        metadata: { ...metadata, originalMediaContent: event.content, transformations: [...transformations, "local-video-frames"], mediaExtraction: { mode: "local", task: "video_frames", frames: frames.length } }
+      };
+    }
+  }
+  return event;
+}
+
+function hasLocalMediaExtraction(event: MemoryExtractionEvent): boolean {
+  const metadata = event.metadata ?? {};
+  if (event.mediaType === "audio") return typeof metadata.asrText === "string" && metadata.asrText.trim().length > 0;
+  if (event.mediaType === "image" || event.mediaType === "document") return typeof metadata.ocrText === "string" && metadata.ocrText.trim().length > 0;
+  if (event.mediaType === "video") return Array.isArray(metadata.frames) && metadata.frames.length > 0;
+  return false;
 }
 
 function markExtractionStage(input: MemoryInput, stage: "rules" | "provider"): MemoryInput {

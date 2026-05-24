@@ -1,0 +1,2 @@
+Release review audio confirms the memory writeback adapter passed.
+The operator asks to keep connector feedback as durable evidence.

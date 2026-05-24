@@ -163,6 +163,11 @@ Translate or ingest a media transcript with language metadata:
 ```bash
 MEMORY_LANGUAGE=de ./bin/cognibrain.mjs memory translate "Speicher soll nicht fehler"
 MEMORY_MEDIA_TYPE=audio MEMORY_LANGUAGE=de ./bin/cognibrain.mjs memory media-ingest "Speicher soll release notes erfassen."
+OCR_TEXT=$(tr '\n' ' ' < fixtures/media/operator-dashboard.ocr.txt)
+MEMORY_MEDIA_TYPE=image MEMORY_SOURCE_URI=file://$PWD/fixtures/media/operator-dashboard.png MEMORY_MIME_TYPE=image/png MEMORY_METADATA_JSON="{\"ocrText\":\"$OCR_TEXT\",\"imageLabels\":[\"dashboard\",\"connector health\"]}" ./bin/cognibrain.mjs memory media-ingest "fixtures/media/operator-dashboard.png"
+
+PDF_OCR_TEXT=$(tr '\n' ' ' < fixtures/media/operator-brief.ocr.txt)
+MEMORY_MEDIA_TYPE=document MEMORY_SOURCE_URI=file://$PWD/fixtures/media/operator-brief.pdf MEMORY_MIME_TYPE=application/pdf MEMORY_METADATA_JSON="{\"ocrText\":\"$PDF_OCR_TEXT\"}" ./bin/cognibrain.mjs memory media-ingest "fixtures/media/operator-brief.pdf"
 ```
 
 Check health:

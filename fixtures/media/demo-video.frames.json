@@ -1,0 +1,11 @@
+[
+  {
+    "at": "00:00:01",
+    "description": "Operator opens connector health panel.",
+    "text": "Connectors applied"
+  },
+  {
+    "at": "00:00:04",
+    "description": "Writeback status changes to applied."
+  }
+]

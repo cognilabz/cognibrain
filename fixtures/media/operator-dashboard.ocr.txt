@@ -1,0 +1,2 @@
+Operator dashboard shows connector health applied.
+Writeback queue is empty and runtime status is online.

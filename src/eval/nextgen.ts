@@ -197,6 +197,22 @@ export async function runNextgenEvaluation() {
     { role: "operator", content: "Speicher soll release notes erfassen.", mediaType: "audio", language: "de", uri: "file:///eval/audio-de.m4a" },
     { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }
   );
+  const localImageOcr = service.ingestMedia(
+    { role: "operator", content: "file:///eval/operator.png", mediaType: "image", uri: "file:///eval/operator.png", mimeType: "image/png", metadata: { ocrText: "Operator image shows connector health applied.", imageLabels: ["connector health"] } },
+    { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }
+  );
+  const localAudioAsr = service.ingestMedia(
+    { role: "operator", content: "file:///eval/review.wav", mediaType: "audio", uri: "file:///eval/review.wav", mimeType: "audio/wav", metadata: { asrText: "Audio review confirms the writeback adapter passed." } },
+    { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }
+  );
+  const localPdfOcr = service.ingestMedia(
+    { role: "operator", content: "file:///eval/operator-brief.pdf", mediaType: "document", uri: "file:///eval/operator-brief.pdf", mimeType: "application/pdf", metadata: { ocrText: "Operator PDF snapshot confirms connector writeback and audit trail coverage." } },
+    { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }
+  );
+  const localVideoFrames = service.ingestMedia(
+    { role: "operator", content: "file:///eval/demo.mp4", mediaType: "video", uri: "file:///eval/demo.mp4", mimeType: "video/mp4", metadata: { frames: [{ at: "00:00:01", description: "Dashboard displays connector health.", text: "applied" }, { at: "00:00:05", description: "Operator reviews writeback status." }] } },
+    { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }
+  );
   const injectionFeedback = service.recordInjectionFeedback({
     userId: "bench",
     query: "Atlas CacheClient proof",
@@ -305,9 +321,13 @@ export async function runNextgenEvaluation() {
       service.listConnectorSyncRecords("eval-chat").length >= 2 &&
       translation.translated.includes("memory") &&
       mediaIngest.memories.some((memory) => memory.metadata.translatedFrom === "de") &&
+      localImageOcr.memories.some((memory) => memory.content.includes("connector health") && memory.metadata.mediaExtraction) &&
+      localAudioAsr.memories.some((memory) => memory.content.includes("writeback adapter passed") && memory.metadata.mediaExtraction) &&
+      localPdfOcr.memories.some((memory) => memory.content.includes("audit trail coverage") && memory.metadata.mediaExtraction) &&
+      localVideoFrames.memories.some((memory) => memory.metadata.mediaExtraction && memory.content.includes("Dashboard displays connector health")) &&
       service.providerStatus().tasks.includes("translate") &&
       service.auditTrail({ type: "connector.sync" }).length >= 1,
-    detail: `${service.listConnectorManifests().length} connector manifests, ${connectorList.items.length} listed, ${connectorPoll.memoryIds.length} polled, ${connectorSync.memoryIds.length} synced, writeback=${connectorWriteback.adapter}, feedback=${connectorFeedback.record.payload?.feedbackAdapter}, translation provider=${translation.provider}`
+    detail: `${service.listConnectorManifests().length} connector manifests, ${connectorList.items.length} listed, ${connectorPoll.memoryIds.length} polled, ${connectorSync.memoryIds.length} synced, writeback=${connectorWriteback.adapter}, feedback=${connectorFeedback.record.payload?.feedbackAdapter}, media=${localImageOcr.memories.length + localAudioAsr.memories.length + localPdfOcr.memories.length + localVideoFrames.memories.length}, translation provider=${translation.provider}`
   });
   checks.push({
     id: "learning-adaptation",

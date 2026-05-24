@@ -1073,6 +1073,72 @@ describe("TypeScript memory core", () => {
     expect(service.providerStatus().tasks).toContain("translate");
   });
 
+  it("extracts local OCR, PDF OCR, ASR, and video frame metadata into auditable memories", () => {
+    const service = new MemoryService();
+    const image = service.ingestMedia(
+      {
+        role: "operator",
+        content: "fixtures/media/operator-dashboard.png",
+        mediaType: "image",
+        uri: "file:///fixtures/media/operator-dashboard.png",
+        mimeType: "image/png",
+        metadata: { ocrText: "Operator dashboard shows connector health applied.", imageLabels: ["dashboard", "connector health"] }
+      },
+      { userId: "u1" }
+    );
+    const audio = service.ingestMedia(
+      {
+        role: "operator",
+        content: "fixtures/media/release-review.wav",
+        mediaType: "audio",
+        language: "en",
+        uri: "file:///fixtures/media/release-review.wav",
+        mimeType: "audio/wav",
+        metadata: { asrText: "Release review audio confirms the memory writeback adapter passed." }
+      },
+      { userId: "u1" }
+    );
+    const pdf = service.ingestMedia(
+      {
+        role: "operator",
+        content: "fixtures/media/operator-brief.pdf",
+        mediaType: "document",
+        uri: "file:///fixtures/media/operator-brief.pdf",
+        mimeType: "application/pdf",
+        metadata: { ocrText: "Operator PDF snapshot confirms connector writeback and audit trail coverage." }
+      },
+      { userId: "u1" }
+    );
+    const video = service.ingestMedia(
+      {
+        role: "operator",
+        content: "fixtures/media/demo-video.mp4",
+        mediaType: "video",
+        uri: "file:///fixtures/media/demo-video.mp4",
+        mimeType: "video/mp4",
+        metadata: {
+          frames: [
+            { at: "00:00:01", description: "Operator opens connector health panel.", text: "Connectors applied" },
+            { at: "00:00:04", description: "Writeback status changes to applied." }
+          ]
+        }
+      },
+      { userId: "u1" }
+    );
+
+    expect(image.failures.some((failure) => failure.mediaType === "image")).toBe(false);
+    expect(audio.failures.some((failure) => failure.mediaType === "audio")).toBe(false);
+    expect(video.failures.some((failure) => failure.mediaType === "video")).toBe(false);
+    expect(image.memories[0].content).toContain("connector health");
+    expect(audio.memories[0].content).toContain("writeback adapter passed");
+    expect(pdf.memories[0].content).toContain("audit trail coverage");
+    expect(video.memories.map((memory) => memory.content).join(" ")).toContain("Writeback status changes to applied");
+    expect(image.memories[0].metadata.extraction).toMatchObject({ mediaType: "image", uri: "file:///fixtures/media/operator-dashboard.png", mimeType: "image/png" });
+    expect(audio.memories[0].metadata.originalMediaContent).toBe("fixtures/media/release-review.wav");
+    expect(pdf.memories[0].metadata).toMatchObject({ originalMediaContent: "fixtures/media/operator-brief.pdf", mediaExtraction: { mode: "local", task: "ocr" } });
+    expect(video.memories[0].metadata.mediaExtraction).toMatchObject({ mode: "local", task: "video_frames", frames: 2 });
+  });
+
   it("plans source-specific connector writebacks and can deliver them over HTTP", async () => {
     const service = new MemoryService();
     const memory = service.add({ userId: "u1", content: "Connector writeback should preserve reviewed release decisions.", source: { kind: "human", confidence: 0.9 } });

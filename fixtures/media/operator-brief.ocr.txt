@@ -1,0 +1,1 @@
+Operator PDF snapshot confirms connector writeback and audit trail coverage.

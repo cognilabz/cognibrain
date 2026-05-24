@@ -12,6 +12,7 @@
     "scripts/",
     "sdk/",
     "src/",
+    "fixtures/",
     "templates/",
     "docs/",
     "docker/",

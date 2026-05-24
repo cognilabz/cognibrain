@@ -444,6 +444,63 @@ describe("TypeScript memory core", () => {
     expect(service.exportUser("u1").length).toBeGreaterThan(0);
   });
 
+  it("audits staged extraction, provider fallback, enrichment, and entity disambiguation", () => {
+    const service = new MemoryService({
+      intelligence: {
+        extractor: {
+          extract: ({ scope }) => [
+            {
+              ...scope,
+              content: "Design review recording confirmed Atlas uses Vector Cache.",
+              entities: ["Atlas", "Vector Cache"],
+              tags: ["review", "audio"],
+              source: { kind: "agent", confidence: 0.74 },
+              metadata: { providerTrace: "unit-test" }
+            }
+          ]
+        }
+      }
+    });
+
+    const report = service.extract(
+      [
+        {
+          role: "operator",
+          content: "Audio",
+          mediaType: "audio",
+          language: "de",
+          uri: "file:///reviews/atlas.m4a",
+          mimeType: "audio/mp4"
+        }
+      ],
+      { userId: "u1", sessionId: "s1" }
+    );
+
+    expect(report.stages.some((stage) => stage.stage === "provider" && stage.extracted === 1)).toBe(true);
+    expect(report.failures.some((failure) => failure.mediaType === "audio")).toBe(true);
+    expect(report.learnedRules.some((rule) => rule.kind === "provider")).toBe(true);
+    expect(report.learnedRules.some((rule) => rule.kind === "translation")).toBe(true);
+    expect(report.memories[0].metadata.extraction).toMatchObject({ stage: "provider" });
+    expect(report.enrichmentCandidates.some((candidate) => candidate.entity === "atlas")).toBe(true);
+
+    service.add({
+      userId: "u1",
+      content: "Atlas dashboard mentions VectorCache in tuning notes.",
+      entities: ["VectorCache"],
+      source: { kind: "human", confidence: 0.94 }
+    });
+
+    const catalog = service.entityCatalog("u1");
+    expect(catalog.mergeSuggestions.some((suggestion) => suggestion.canonical.includes("vector"))).toBe(true);
+
+    const merged = service.mergeEntity("vector cache", ["VectorCache"], "u1");
+    expect(merged.aliases).toContain("vectorcache");
+    expect(service.entityCatalog("u1").entities.some((entity) => entity.canonical === "vector cache")).toBe(true);
+
+    const split = service.splitEntity("vector cache", ["VectorCache"], "u1");
+    expect(split?.aliases).not.toContain("vectorcache");
+  });
+
   it("encrypts sensitive writes when encryption mode is configured", () => {
     const service = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "test-key-with-enough-length" } });
     const memory = service.add({

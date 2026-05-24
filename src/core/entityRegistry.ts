@@ -1,4 +1,4 @@
-import type { EntityRecord, GraphReport, Memory } from "./types";
+import type { EntityMergeSuggestion, EntityRecord, GraphReport, Memory } from "./types";
 
 export class EntityRegistry {
   private readonly aliases = new Map<string, string>();
@@ -47,7 +47,13 @@ export class EntityRegistry {
 
   import(records: EntityRecord[] = []): void {
     this.records.clear();
-    for (const record of records) this.records.set(record.canonical, record);
+    for (const record of records) {
+      const canonical = normalizeEntity(record.canonical);
+      const normalizedRecord = { ...record, canonical, aliases: record.aliases.map(normalizeEntity) };
+      this.records.set(canonical, normalizedRecord);
+      this.aliases.set(canonical, canonical);
+      for (const alias of normalizedRecord.aliases) this.aliases.set(alias, canonical);
+    }
   }
 
   export(): EntityRecord[] {
@@ -85,6 +91,66 @@ export class EntityRegistry {
     }
     return { entities: [...byEntity.values()].sort((a, b) => a.canonical.localeCompare(b.canonical)), edges };
   }
+
+  merge(canonical: string, aliases: string[], memories: Memory[] = []): EntityRecord {
+    const target = normalizeEntity(canonical);
+    this.aliases.set(target, target);
+    for (const alias of aliases) this.aliases.set(normalizeEntity(alias), target);
+    const relatedMemoryIds = memories
+      .filter((memory) => memory.entities.some((entity) => this.canonicalize(entity) === target))
+      .map((memory) => memory.id);
+    const current = this.records.get(target);
+    const now = new Date().toISOString();
+    const record: EntityRecord = {
+      id: current?.id ?? `ent_${hash(target).slice(0, 14)}`,
+      canonical: target,
+      aliases: aliasesFor(target, this.aliases),
+      memoryIds: [...new Set([...(current?.memoryIds ?? []), ...relatedMemoryIds])],
+      firstSeenAt: current?.firstSeenAt ?? now,
+      lastSeenAt: now
+    };
+    this.records.set(target, record);
+    return record;
+  }
+
+  split(canonical: string, aliases: string[]): EntityRecord | undefined {
+    const target = normalizeEntity(canonical);
+    for (const alias of aliases) {
+      const normalized = normalizeEntity(alias);
+      if (this.aliases.get(normalized) === target) this.aliases.delete(normalized);
+    }
+    const current = this.records.get(target);
+    if (!current) return undefined;
+    const updated = { ...current, aliases: aliasesFor(target, this.aliases), lastSeenAt: new Date().toISOString() };
+    this.records.set(target, updated);
+    return updated;
+  }
+
+  suggestMerges(memories: Memory[] = []): EntityMergeSuggestion[] {
+    const records = this.export();
+    const suggestions: EntityMergeSuggestion[] = [];
+    for (let i = 0; i < records.length; i += 1) {
+      for (let j = i + 1; j < records.length; j += 1) {
+        const left = records[i];
+        const right = records[j];
+        const confidence = similarity(left.canonical, right.canonical);
+        if (confidence < 0.72) continue;
+        const canonical = left.memoryIds.length >= right.memoryIds.length ? left.canonical : right.canonical;
+        const alias = canonical === left.canonical ? right.canonical : left.canonical;
+        const memoryIds = memories
+          .filter((memory) => memory.entities.includes(left.canonical) || memory.entities.includes(right.canonical))
+          .map((memory) => memory.id);
+        suggestions.push({
+          canonical,
+          alias,
+          confidence,
+          reason: "similar entity spelling or shared token shape",
+          memoryIds: [...new Set(memoryIds)]
+        });
+      }
+    }
+    return suggestions.sort((a, b) => b.confidence - a.confidence).slice(0, 25);
+  }
 }
 
 function normalizeEntity(entity: string): string {
@@ -102,4 +168,30 @@ function hash(value: string): string {
     hashValue = Math.imul(hashValue, 16777619);
   }
   return (hashValue >>> 0).toString(36);
+}
+
+function similarity(left: string, right: string): number {
+  if (left === right) return 1;
+  if (left.includes(right) || right.includes(left)) return 0.86;
+  const leftTokens = new Set(left.split(/[\s._-]+/).filter(Boolean));
+  const rightTokens = new Set(right.split(/[\s._-]+/).filter(Boolean));
+  const overlap = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  const union = new Set([...leftTokens, ...rightTokens]).size || 1;
+  const tokenScore = overlap / union;
+  const distanceScore = 1 - levenshtein(left, right) / Math.max(left.length, right.length, 1);
+  return Math.max(tokenScore, distanceScore);
+}
+
+function levenshtein(left: string, right: string): number {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i += 1) {
+    let before = previous[0];
+    previous[0] = i;
+    for (let j = 1; j <= right.length; j += 1) {
+      const old = previous[j];
+      previous[j] = left[i - 1] === right[j - 1] ? before : Math.min(before, previous[j - 1], previous[j]) + 1;
+      before = old;
+    }
+  }
+  return previous[right.length];
 }

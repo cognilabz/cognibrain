@@ -28,13 +28,24 @@ switch (command) {
   case "extract": {
     const content = args.join(" ");
     if (!content) fail("Usage: memctl extract <conversation-or-event-text>");
-    const report = service.extract([{ role: "user", content }], {
+    const mediaType = process.env.MEMORY_MEDIA_TYPE;
+    const report = service.extract([{
+      role: "user",
+      content,
+      mediaType: mediaType === "code" || mediaType === "document" || mediaType === "audio" || mediaType === "image" || mediaType === "video" ? mediaType : "text",
+      language: process.env.MEMORY_LANGUAGE,
+      uri: process.env.MEMORY_SOURCE_URI,
+      mimeType: process.env.MEMORY_MIME_TYPE
+    }], {
       userId,
       agentId: process.env.MEMORY_AGENT_ID,
       sessionId: process.env.MEMORY_SESSION_ID,
       appId: process.env.MEMORY_APP_ID,
       orgId: process.env.MEMORY_ORG_ID,
-      projectId: process.env.MEMORY_PROJECT_ID
+      projectId: process.env.MEMORY_PROJECT_ID,
+      brainId: process.env.MEMORY_BRAIN_ID,
+      sourceId: process.env.MEMORY_SOURCE_ID,
+      deviceId: process.env.MEMORY_DEVICE_ID
     });
     console.log(JSON.stringify(report, null, 2));
     break;
@@ -141,6 +152,22 @@ switch (command) {
     console.log(JSON.stringify(service.graph(userId), null, 2));
     break;
   }
+  case "entities": {
+    console.log(JSON.stringify(service.entityCatalog(userId), null, 2));
+    break;
+  }
+  case "entity-merge": {
+    const [canonical, ...aliases] = args;
+    if (!canonical || aliases.length === 0) fail("Usage: memctl entity-merge <canonical> <alias...>");
+    console.log(JSON.stringify(service.mergeEntity(canonical, aliases, userId), null, 2));
+    break;
+  }
+  case "entity-split": {
+    const [canonical, ...aliases] = args;
+    if (!canonical || aliases.length === 0) fail("Usage: memctl entity-split <canonical> <alias...>");
+    console.log(JSON.stringify(service.splitEntity(canonical, aliases, userId), null, 2));
+    break;
+  }
   case "graph-path": {
     const [from, to] = args;
     if (!from || !to) fail("Usage: memctl graph-path <from-entity-or-node> <to-entity-or-node>");
@@ -194,7 +221,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|temporal|patterns|graph|graph-path|graph-query|infer|brain-create|brains|source-create|events|compliance|lifecycle-preview|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-query|infer|brain-create|brains|source-create|events|compliance|lifecycle-preview|export|delete-user> ...");
 }
 
 function fail(message: string): never {

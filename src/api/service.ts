@@ -31,6 +31,8 @@ import type {
   Brain,
   ComplianceReport,
   ContradictionDetector,
+  EnrichmentCandidate,
+  EntityMergeSuggestion,
   EntityRecord,
   ExtractionReport,
   FeedbackEvent,
@@ -39,6 +41,7 @@ import type {
   LearnedProfileReport,
   Memory,
   MemoryExtractionEvent,
+  MemoryExtractor,
   MemoryInput,
   MemorySource,
   MarketplaceModule,
@@ -76,6 +79,7 @@ export interface MemoryServiceOptions {
     verifier?: SearchOptions["verifier"];
     contradictionDetector?: ContradictionDetector;
     summarizer?: ReflectionSummarizer;
+    extractor?: MemoryExtractor;
   };
 }
 
@@ -162,11 +166,13 @@ export class MemoryService {
     });
     this.defaultReranker = provider.reranker;
     this.defaultVerifier = provider.verifier;
+    this.defaultExtractor = provider.extractor;
     this.load();
   }
 
   private readonly defaultReranker?: SearchOptions["reranker"];
   private readonly defaultVerifier?: SearchOptions["verifier"];
+  private readonly defaultExtractor?: MemoryExtractor;
 
   add(input: MemoryInput) {
     const enriched = this.domainModule?.enrich ? this.domainModule.enrich(input) : input;
@@ -185,16 +191,39 @@ export class MemoryService {
 
   extract(
     events: MemoryExtractionEvent[],
-    scope: Pick<MemoryInput, "userId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId" | "runId">
+    scope: Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId" | "deviceId" | "runId">
   ): ExtractionReport {
-    const existingHashes = new Set(this.store.list(scope.userId).map((memory) => memory.metadata.contentHash).filter(Boolean));
-    const inputs = extractAddOnlyMemories(events, scope).filter((input) => {
+    const existing = this.store.list(scope.userId);
+    const failures = ruleExtractionFailures(events);
+    const ruleInputs = extractAddOnlyMemories(events, scope).map((input) => markExtractionStage(input, "rules"));
+    const needsProvider = Boolean(this.defaultExtractor && (ruleInputs.length === 0 || failures.length > 0 || events.some((event) => event.mediaType && !["text", "code", "document"].includes(event.mediaType))));
+    const providerInputs = needsProvider ? this.defaultExtractor?.extract({ events, scope, existing, now: new Date() }).map((input) => markExtractionStage({ ...scope, ...input }, "provider")) ?? [] : [];
+    const stages: ExtractionReport["stages"] = [
+      { stage: "rules", inputEvents: events.length, extracted: ruleInputs.length, confidence: extractionConfidence(events, ruleInputs.length), reason: "single-pass add-only rules" },
+      ...(needsProvider
+        ? [{ stage: "provider" as const, inputEvents: events.length, extracted: providerInputs.length, confidence: providerInputs.length ? 0.78 : 0.2, reason: providerInputs.length ? "fallback extractor produced candidate memories" : "fallback extractor returned no candidates" }]
+        : [])
+    ];
+    const existingHashes = new Set(existing.map((memory) => memory.metadata.contentHash).filter(Boolean));
+    const seenHashes = new Set<string>();
+    const inputs = [...ruleInputs, ...providerInputs].filter((input) => {
       const hash = contentHash(`${input.content}:${input.source?.kind ?? ""}:${input.timestamp ?? ""}`);
       input.metadata = { ...(input.metadata ?? {}), contentHash: hash };
-      return !existingHashes.has(hash);
+      if (existingHashes.has(hash) || seenHashes.has(hash)) return false;
+      seenHashes.add(hash);
+      return true;
     });
     const memories = inputs.map((input) => this.add(linkStateChange(input, this.store.list(scope.userId))));
-    this.recordAudit("extract.run", { userId: scope.userId, metadata: { events: events.length, memories: memories.length } });
+    const enrichmentCandidates = enrichmentCandidatesFor(this.store.list(scope.userId));
+    const learnedRules = learnedRuleSuggestions(events, failures);
+    stages.push({
+      stage: "enrichment",
+      inputEvents: events.length,
+      extracted: enrichmentCandidates.length,
+      confidence: enrichmentCandidates.length ? 0.72 : 1,
+      reason: enrichmentCandidates.length ? "entity attention threshold produced candidates" : "no entity crossed enrichment threshold"
+    });
+    this.recordAudit("extract.run", { userId: scope.userId, brainId: scope.brainId, sourceId: scope.sourceId, metadata: { events: events.length, memories: memories.length, stages, failures: failures.length, learnedRules: learnedRules.length } });
     const entityLinks: Record<string, string[]> = {};
     for (const memory of memories) {
       for (const entity of memory.entities) {
@@ -202,7 +231,7 @@ export class MemoryService {
         entityLinks[entity].push(memory.id);
       }
     }
-    return { memories, entityLinks };
+    return { memories, entityLinks, stages, failures, enrichmentCandidates, learnedRules };
   }
 
   list(userId?: string) {
@@ -636,6 +665,33 @@ export class MemoryService {
     return this.entities.graph(memories);
   }
 
+  entityCatalog(userId?: string): { entities: EntityRecord[]; mergeSuggestions: EntityMergeSuggestion[]; enrichmentCandidates: EnrichmentCandidate[] } {
+    const memories = this.store.list(userId).filter((memory) => !memory.archivedAt);
+    return {
+      entities: this.entities.graph(memories).entities,
+      mergeSuggestions: this.entities.suggestMerges(memories),
+      enrichmentCandidates: enrichmentCandidatesFor(memories)
+    };
+  }
+
+  mergeEntity(canonical: string, aliases: string[], userId?: string): EntityRecord {
+    const memories = this.store.list(userId);
+    const record = this.entities.merge(canonical, aliases, memories);
+    for (const memory of memories) this.recanonicalizeMemory(memory);
+    this.recordAudit("entity.merge", { userId, metadata: { canonical: record.canonical, aliases: record.aliases } });
+    this.persist();
+    return record;
+  }
+
+  splitEntity(canonical: string, aliases: string[], userId?: string): EntityRecord | undefined {
+    const record = this.entities.split(canonical, aliases);
+    if (!record) return undefined;
+    for (const memory of this.store.list(userId)) this.recanonicalizeMemory(memory);
+    this.recordAudit("entity.split", { userId, metadata: { canonical: record.canonical, aliases } });
+    this.persist();
+    return record;
+  }
+
   lifecyclePreview(userId: string, policy?: Partial<LifecyclePolicy>) {
     const normalized = normalizeLifecyclePolicy(policy);
     const now = new Date();
@@ -800,6 +856,16 @@ export class MemoryService {
     return saved;
   }
 
+  private recanonicalizeMemory(memory: Memory): void {
+    const entities = [...new Set(memory.entities.map((entity) => this.entities.canonicalize(entity)).filter(Boolean))];
+    const relations = memory.relations.map((relation) => ({
+      ...relation,
+      sourceEntity: relation.sourceEntity ? this.entities.canonicalize(relation.sourceEntity) : relation.sourceEntity,
+      targetEntity: relation.targetEntity ? this.entities.canonicalize(relation.targetEntity) : relation.targetEntity
+    }));
+    this.store.update(memory.id, { entities, relations });
+  }
+
   private load(): void {
     const raw = this.persistence?.load();
     if (!raw) return;
@@ -882,6 +948,132 @@ function redactionModeFromEnv(value: string | undefined): RedactionPolicy["mode"
   return "redact";
 }
 
+function ruleExtractionFailures(events: MemoryExtractionEvent[]): ExtractionReport["failures"] {
+  return events.flatMap((event, index) => {
+    const failures: ExtractionReport["failures"] = [];
+    const mediaType = event.mediaType ?? "text";
+    if (event.content.trim().length <= 8) {
+      failures.push({
+        eventIndex: index,
+        stage: "rules",
+        reason: "content too short for deterministic fact extraction",
+        mediaType,
+        language: event.language,
+        contentPreview: preview(event.content)
+      });
+    }
+    if (mediaType === "audio" || mediaType === "image" || mediaType === "video") {
+      failures.push({
+        eventIndex: index,
+        stage: "rules",
+        reason: `deterministic ${mediaType} extraction requires provider OCR/ASR/vision adapter`,
+        mediaType,
+        language: event.language,
+        contentPreview: preview(event.content)
+      });
+    }
+    return failures;
+  });
+}
+
+function markExtractionStage(input: MemoryInput, stage: "rules" | "provider"): MemoryInput {
+  return {
+    ...input,
+    tags: [...new Set([...(input.tags ?? []), stage === "provider" ? "provider-extracted" : "rule-extracted"])],
+    metadata: {
+      ...(input.metadata ?? {}),
+      extraction: {
+        ...((input.metadata?.extraction as Record<string, unknown> | undefined) ?? {}),
+        stage
+      }
+    }
+  };
+}
+
+function extractionConfidence(events: MemoryExtractionEvent[], extracted: number): number {
+  if (!events.length) return 0;
+  const mediaPenalty = events.some((event) => event.mediaType === "audio" || event.mediaType === "image" || event.mediaType === "video") ? 0.25 : 0;
+  const languagePenalty = events.some((event) => event.language && !/^en/i.test(event.language)) ? 0.08 : 0;
+  return clamp01((extracted ? 0.82 : 0.24) - mediaPenalty - languagePenalty);
+}
+
+function enrichmentCandidatesFor(memories: Memory[]): EnrichmentCandidate[] {
+  const byEntity = new Map<string, Memory[]>();
+  for (const memory of memories) {
+    for (const entity of memory.entities) {
+      const current = byEntity.get(entity) ?? [];
+      current.push(memory);
+      byEntity.set(entity, current);
+    }
+  }
+  return [...byEntity.entries()]
+    .map(([entity, support]) => {
+      const mentionCount = support.length;
+      const trusted = support.reduce((sum, memory) => sum + memory.trust * memory.importance, 0);
+      const attention = clamp01(mentionCount / 4 + trusted / Math.max(1, mentionCount * 2));
+      const suggestedAction: EnrichmentCandidate["suggestedAction"] = attention >= 0.9 ? "full_pipeline" : mentionCount >= 2 ? "enrich" : "stub";
+      return {
+        entity,
+        mentionCount,
+        attention,
+        suggestedAction,
+        reason:
+          suggestedAction === "full_pipeline"
+            ? "high mention count and trust merit external enrichment"
+            : suggestedAction === "enrich"
+              ? "repeated mentions merit metadata enrichment"
+              : "first mention creates a lightweight entity stub",
+        memoryIds: support.map((memory) => memory.id)
+      };
+    })
+    .filter((candidate) => candidate.suggestedAction !== "stub" || candidate.mentionCount >= 1)
+    .sort((a, b) => b.attention - a.attention || b.mentionCount - a.mentionCount)
+    .slice(0, 25);
+}
+
+function learnedRuleSuggestions(events: MemoryExtractionEvent[], failures: ExtractionReport["failures"]): ExtractionReport["learnedRules"] {
+  const suggestions: ExtractionReport["learnedRules"] = [];
+  const mediaFailures = new Map<string, string[]>();
+  for (const failure of failures) {
+    if (failure.mediaType === "audio" || failure.mediaType === "image" || failure.mediaType === "video") {
+      const current = mediaFailures.get(failure.mediaType) ?? [];
+      current.push(failure.contentPreview);
+      mediaFailures.set(failure.mediaType, current);
+    }
+    if (failure.reason.includes("too short")) {
+      suggestions.push({
+        kind: "regex",
+        pattern: "\\b(confirm(ed)?|verified|decided|prefers|uses)\\b",
+        reason: "short events may still contain durable confirmations when domain verbs are present",
+        examples: [failure.contentPreview].filter(Boolean),
+        confidence: 0.48
+      });
+    }
+  }
+  for (const [mediaType, examples] of mediaFailures) {
+    suggestions.push({
+      kind: "provider",
+      reason: `configure a ${mediaType} extractor adapter for OCR/ASR/vision before rule extraction`,
+      examples: examples.filter(Boolean).slice(0, 3),
+      confidence: 0.78
+    });
+  }
+  const languages = [...new Set(events.map((event) => event.language).filter((language): language is string => Boolean(language && !/^en/i.test(language))))];
+  for (const language of languages) {
+    suggestions.push({
+      kind: "translation",
+      reason: `add ${language} normalization or translation before contradiction/extraction rules`,
+      examples: events.filter((event) => event.language === language).map((event) => preview(event.content)).slice(0, 3),
+      confidence: 0.62
+    });
+  }
+  return suggestions;
+}
+
+function preview(value: string): string {
+  return value.replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
 function feedbackDelta(kind: FeedbackEvent["kind"]): { trust: number; importance: number } {
   switch (kind) {
     case "helpful":
@@ -946,7 +1138,8 @@ function providerFromEnv(): NonNullable<MemoryServiceOptions["intelligence"]> {
     reranker: provider,
     verifier: provider,
     contradictionDetector: provider,
-    summarizer: provider
+    summarizer: provider,
+    extractor: provider
   };
 }
 

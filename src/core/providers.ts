@@ -1,5 +1,17 @@
 import { execFileSync } from "node:child_process";
-import type { ContextReranker, ContextVerifier, ContradictionDetector, Memory, ReflectionSummarizer, SearchResult } from "./types";
+import type {
+  ContextReranker,
+  ContextVerifier,
+  ContradictionDetector,
+  Memory,
+  MemoryExtractionEvent,
+  MemoryExtractor,
+  MemoryInput,
+  MemoryScope,
+  ReflectionSummarizer,
+  SearchResult,
+  SourceKind
+} from "./types";
 
 export interface JsonCommandProviderOptions {
   command: string;
@@ -7,9 +19,9 @@ export interface JsonCommandProviderOptions {
   timeoutMs?: number;
 }
 
-type ProviderTask = "contradiction" | "rerank" | "verify" | "summarize";
+type ProviderTask = "contradiction" | "rerank" | "verify" | "summarize" | "extract";
 
-export class JsonCommandMemoryIntelligence implements ContradictionDetector, ContextReranker, ContextVerifier, ReflectionSummarizer {
+export class JsonCommandMemoryIntelligence implements ContradictionDetector, ContextReranker, ContextVerifier, ReflectionSummarizer, MemoryExtractor {
   constructor(private readonly options: JsonCommandProviderOptions) {}
 
   classify(input: { a: Memory; b: Memory; key?: string }) {
@@ -78,6 +90,17 @@ export class JsonCommandMemoryIntelligence implements ContradictionDetector, Con
     };
   }
 
+  extract(input: { events: MemoryExtractionEvent[]; scope: Partial<MemoryScope> & Pick<MemoryScope, "userId">; existing: Memory[]; now: Date }): MemoryInput[] {
+    const output = this.call("extract", {
+      now: input.now.toISOString(),
+      scope: input.scope,
+      events: input.events,
+      existing: input.existing.slice(0, 50).map(memoryForProvider)
+    });
+    if (!Array.isArray(output.memories)) return [];
+    return output.memories.flatMap((item) => normalizeProviderMemory(item, input.scope));
+  }
+
   private call(task: ProviderTask, payload: Record<string, unknown>): Record<string, any> {
     try {
       const stdout = execFileSync(this.options.command, [...(this.options.args ?? []), task], {
@@ -92,6 +115,40 @@ export class JsonCommandMemoryIntelligence implements ContradictionDetector, Con
       return {};
     }
   }
+}
+
+function normalizeProviderMemory(item: unknown, scope: Partial<MemoryScope> & Pick<MemoryScope, "userId">): MemoryInput[] {
+  if (!isRecord(item) || typeof item.content !== "string" || !item.content.trim()) return [];
+  return [
+    {
+      ...scope,
+      content: item.content.trim().slice(0, 4000),
+      type: validMemoryType(item.type),
+      layer: validLayer(item.layer),
+      source: isRecord(item.source) && typeof item.source.confidence === "number"
+        ? { kind: validSourceKind(item.source.kind), confidence: boundedNumber(item.source.confidence, 0.62), uri: typeof item.source.uri === "string" ? item.source.uri : undefined }
+        : { kind: "agent", confidence: boundedNumber(item.confidence, 0.62) },
+      tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === "string") : ["extracted", "provider"],
+      entities: Array.isArray(item.entities) ? item.entities.filter((entity): entity is string => typeof entity === "string") : undefined,
+      relations: Array.isArray(item.relations) ? item.relations.filter(isRecord).map((relation) => ({
+        type: validRelationType(relation.type),
+        sourceEntity: typeof relation.sourceEntity === "string" ? relation.sourceEntity : undefined,
+        targetId: typeof relation.targetId === "string" ? relation.targetId : undefined,
+        targetEntity: typeof relation.targetEntity === "string" ? relation.targetEntity : undefined,
+        direction: relation.direction === "in" || relation.direction === "undirected" ? relation.direction : "out",
+        confidence: boundedNumber(relation.confidence, 0.62),
+        evidence: typeof relation.evidence === "string" ? relation.evidence : undefined
+      })) : undefined,
+      temporal: isRecord(item.temporal) ? item.temporal : undefined,
+      timestamp: typeof item.timestamp === "string" ? item.timestamp : undefined,
+      consent: isRecord(item.consent) ? item.consent : undefined,
+      metadata: {
+        ...(isRecord(item.metadata) ? item.metadata : {}),
+        provider: "json-command",
+        extraction: { mode: "provider", provider: "json-command" }
+      }
+    }
+  ];
 }
 
 export function createJsonCommandIntelligenceFromEnv(): JsonCommandMemoryIntelligence | undefined {
@@ -144,4 +201,38 @@ function boundedNumber(value: unknown, fallback: number): number {
 
 function isRecord(value: unknown): value is Record<string, any> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function validMemoryType(value: unknown): MemoryInput["type"] {
+  return value === "user" || value === "feedback" || value === "project" || value === "reference" || value === "episodic" || value === "procedural" ? value : "project";
+}
+
+function validLayer(value: unknown): MemoryInput["layer"] {
+  return value === "working" || value === "episodic" || value === "long_term" || value === "procedural" || value === "reflection" ? value : "episodic";
+}
+
+function validSourceKind(value: unknown): SourceKind {
+  return value === "human" || value === "reviewed_code" || value === "tool" || value === "agent" || value === "transcript" || value === "import" ? value : "agent";
+}
+
+function validRelationType(value: unknown): NonNullable<MemoryInput["relations"]>[number]["type"] {
+  if (
+    value === "mentions" ||
+    value === "calls" ||
+    value === "imports" ||
+    value === "defines" ||
+    value === "extends" ||
+    value === "depends_on" ||
+    value === "transitive_depends_on" ||
+    value === "works_for" ||
+    value === "advisor_of" ||
+    value === "supersedes" ||
+    value === "contradicts" ||
+    value === "confirmed_by" ||
+    value === "suggested_by" ||
+    value === "executed_by"
+  ) {
+    return value;
+  }
+  return "mentions";
 }

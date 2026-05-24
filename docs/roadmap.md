@@ -22,8 +22,10 @@
 - Pluggable persistence with atomic JSON snapshots and append-only JSONL durable audit mode
 - Next-generation epics and sub-issues mirrored from `nextplan.md`
 - Graph path search, safe graph query, and rule-based inferred relation substrate
+- Temporal interval queries and recurring behavioural pattern mining with review state
+- Staged extraction reports, provider extractor fallback, media/language envelopes, enrichment candidates, and entity merge/split operations
 - Brain/source/agent/persona primitives with audit events, webhook queues, marketplace modules, and compliance reports
-- `verify:nextgen` self-test loop for graph, inference, multi-tenant audit, webhook, compliance, and marketplace behavior
+- `verify:nextgen` self-test loop for graph, inference, temporal/pattern, extraction/enrichment, multi-tenant audit, webhook, compliance, and marketplace behavior
 
 ## Next
 

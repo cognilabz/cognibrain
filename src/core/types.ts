@@ -256,6 +256,15 @@ export interface ReflectionSummarizer {
   };
 }
 
+export interface MemoryExtractor {
+  extract(input: {
+    events: MemoryExtractionEvent[];
+    scope: Partial<MemoryScope> & Pick<MemoryScope, "userId">;
+    existing: Memory[];
+    now: Date;
+  }): MemoryInput[];
+}
+
 export interface HealthReport {
   total: number;
   active: number;
@@ -383,7 +392,19 @@ export interface PersonaProfile {
 
 export interface AuditEvent {
   id: string;
-  type: "memory.write" | "memory.update" | "memory.delete" | "memory.share" | "extract.run" | "reflect.run" | "search.run" | "webhook.register" | "marketplace.install" | "inference.run";
+  type:
+    | "memory.write"
+    | "memory.update"
+    | "memory.delete"
+    | "memory.share"
+    | "extract.run"
+    | "reflect.run"
+    | "search.run"
+    | "webhook.register"
+    | "marketplace.install"
+    | "inference.run"
+    | "entity.merge"
+    | "entity.split";
   actorId?: string;
   userId?: string;
   brainId?: string;
@@ -497,12 +518,62 @@ export interface MemoryExtractionEvent {
   content: string;
   timestamp?: Date | string;
   source?: Provenance;
+  mediaType?: "text" | "code" | "document" | "audio" | "image" | "video";
+  language?: string;
+  uri?: string;
+  mimeType?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface ExtractionStage {
+  stage: "rules" | "provider" | "enrichment";
+  inputEvents: number;
+  extracted: number;
+  confidence: number;
+  reason?: string;
+}
+
+export interface ExtractionFailure {
+  eventIndex: number;
+  stage: "rules" | "provider" | "enrichment";
+  reason: string;
+  mediaType?: MemoryExtractionEvent["mediaType"];
+  language?: string;
+  contentPreview: string;
+}
+
+export interface EnrichmentCandidate {
+  entity: string;
+  mentionCount: number;
+  attention: number;
+  suggestedAction: "stub" | "enrich" | "full_pipeline";
+  reason: string;
+  memoryIds: string[];
+}
+
+export interface ExtractionRuleSuggestion {
+  kind: "regex" | "provider" | "translation";
+  pattern?: string;
+  reason: string;
+  examples: string[];
+  confidence: number;
+}
+
+export interface EntityMergeSuggestion {
+  canonical: string;
+  alias: string;
+  confidence: number;
+  reason: string;
+  memoryIds: string[];
 }
 
 export interface ExtractionReport {
   memories: Memory[];
   entityLinks: Record<string, string[]>;
+  stages: ExtractionStage[];
+  failures: ExtractionFailure[];
+  enrichmentCandidates: EnrichmentCandidate[];
+  learnedRules: ExtractionRuleSuggestion[];
 }
 
 export interface FeedbackEvent {

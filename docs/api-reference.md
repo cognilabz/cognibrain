@@ -57,7 +57,21 @@ curl -X POST http://localhost:8787/extract \
   }'
 ```
 
-`/extract` performs deterministic single-pass, add-only fact extraction. It appends facts, stores agent/tool actions as first-class memories, links entities, and returns `entityLinks`.
+`/extract` performs staged single-pass, add-only fact extraction. Deterministic rules run first; if a JSON-command extractor is configured, low-confidence or media-heavy events can fall back to provider extraction. Events may include `mediaType` (`text`, `code`, `document`, `audio`, `image`, `video`), `language`, `uri`, and `mimeType`. The response returns written memories, `entityLinks`, extraction `stages`, auditable `failures`, `enrichmentCandidates`, and `learnedRules` suggestions for regex, provider, or translation improvements.
+
+## Entity Catalog And Disambiguation
+
+```bash
+curl "http://localhost:8787/entities?userId=dev"
+curl -X POST http://localhost:8787/entities/merge \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","canonical":"cache client","aliases":["CacheClient"]}'
+curl -X POST http://localhost:8787/entities/split \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","canonical":"cache client","aliases":["CacheClient"]}'
+```
+
+The entity catalog returns canonical records, merge suggestions, and enrichment candidates. Merge/split operations update the alias registry, recanonicalize stored memories and relations, and record audit events.
 
 ## List Memories
 
@@ -174,7 +188,7 @@ curl http://localhost:8787/marketplace
 curl http://localhost:8787/compliance
 ```
 
-Every write/update/delete/search/extract/reflect/share/inference operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Compliance reports summarize storage scope, consent, retention, delete-on-request, encryption metadata, and audit counts.
+Every write/update/delete/search/extract/reflect/share/inference/entity-merge/entity-split operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Compliance reports summarize storage scope, consent, retention, delete-on-request, encryption metadata, and audit counts.
 
 ## Reflection
 
@@ -239,4 +253,4 @@ When the service is configured with a domain module, this endpoint runs the modu
 npm run verify:nextgen
 ```
 
-This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph query, temporal interval and pattern reporting, multi-tenant audit, webhook event feeds, compliance retention, and marketplace persona installation.
+This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph query, temporal interval and pattern reporting, staged extraction/enrichment, entity merge suggestions, multi-tenant audit, webhook event feeds, compliance retention, and marketplace persona installation.

@@ -10,9 +10,15 @@ Benchmark runners use the same principle: lexical anchors keep factual recall st
 
 A result must have actual relevance evidence; trust and recency alone cannot inject unrelated memories.
 
-## Add-Only Extraction And Scopes
+## Add-Only Extraction And Enrichment
 
-The `/extract` surface implements a deterministic single-pass, add-only write path. It accepts user, assistant, tool, system, and operator events; splits durable facts; stores agent/tool actions as first-class memories; deduplicates repeated extracted facts by hash; and links entities during write. Changed facts are appended rather than overwritten so temporal evolution remains inspectable, with supersession relations added when a newer fact appears to replace an older one.
+The `/extract` surface implements a staged single-pass, add-only write path. It accepts user, assistant, tool, system, and operator events; splits durable facts; stores agent/tool actions as first-class memories; deduplicates repeated extracted facts by hash; and links entities during write. Changed facts are appended rather than overwritten so temporal evolution remains inspectable, with supersession relations added when a newer fact appears to replace an older one.
+
+Extraction reports now include rule/provider/enrichment stages, confidence scores, failure records, enrichment candidates, and learned-rule suggestions. The deterministic rules handle text, code, and document-like content locally. Audio, image, and video envelopes carry `mediaType`, `language`, `uri`, and `mimeType` metadata and can trigger a configured JSON-command extractor for OCR, ASR, vision, or translation-backed extraction. Failures become suggested regex/provider/translation improvements so teams can refine extraction rules from real misses. This keeps the default install local-first while giving teams a clean provider hook for richer media and multilingual workflows.
+
+The entity catalog exposes canonical records, suggested merges, and attention-ranked enrichment candidates. Repeated entity mentions graduate from stub records to enrichment/full-pipeline candidates, which gives operators a compounding loop without forcing network lookups into the default runtime.
+
+## Scopes
 
 Each memory can carry `userId`, `agentId`, `sessionId`, `appId`, `orgId`, `projectId`, `deviceId`, and `runId`. Search composes these scopes so a harness can isolate a session, aggregate across an app, or include organization-shared memory only when policy allows it. Identity links are explicit consent records that store only a hashed subject token and allow cross-device recall only when callers opt into linked identities.
 
@@ -24,7 +30,7 @@ Domain modules can enrich writes, choose default retrieval weights, tune lifecyc
 
 ## Typed Relations And Time
 
-Memories can store typed relations such as `calls`, `imports`, `depends_on`, `supersedes`, `contradicts`, `confirmed_by`, `suggested_by`, and `executed_by`. The service maintains a canonical entity registry with aliases and memory ids, and `/graph` exposes typed relation edges with direction, confidence, and validity metadata. Retrieval blends entity overlap and typed relation hints into graph scoring and exposes the graph path in result explanations.
+Memories can store typed relations such as `calls`, `imports`, `depends_on`, `supersedes`, `contradicts`, `confirmed_by`, `suggested_by`, and `executed_by`. The service maintains a canonical entity registry with aliases and memory ids, and `/graph` exposes typed relation edges with direction, confidence, and validity metadata. `/entities` exposes merge suggestions from spelling/token similarity, while `/entities/merge` and `/entities/split` let operators correct aliases and recanonicalize stored memories. Retrieval blends entity overlap and typed relation hints into graph scoring and exposes the graph path in result explanations.
 
 Temporal metadata tracks event time, valid windows, last confirmation, supersession, and verification due dates. Search parses simple before/after/last-week temporal constraints, and the timeline API exposes event order plus daily, weekly, and monthly period groupings. Dream maintenance schedules verification for time-sensitive stale facts instead of relying only on age-based archival.
 
@@ -44,7 +50,7 @@ The local marketplace registry stores connectors, domain modules, personas, and 
 
 ## Audit, Webhooks, And Compliance
 
-Every core action records an append-only audit event: memory write/update/delete/share, extraction, search, reflection, webhook registration, marketplace installation, and inference. Webhook registrations produce queued delivery records for matching audit events, creating an inspectable event-feed boundary before real network delivery is enabled.
+Every core action records an append-only audit event: memory write/update/delete/share, extraction, search, reflection, webhook registration, marketplace installation, inference, and entity merge/split operations. Webhook registrations produce queued delivery records for matching audit events, creating an inspectable event-feed boundary before real network delivery is enabled.
 
 Compliance reports summarize memory counts, brain/source counts, consent visibility, encrypted entries, expired retention entries, delete-on-request flags, and audit counts by type. This gives operators a concrete exportable control surface instead of a policy note buried in documentation.
 
@@ -76,7 +82,7 @@ Pinned memories and lifecycle-protected layers/source kinds are never faded or a
 
 `npm run eval` runs a synthetic benchmark with single-hop, multi-hop, temporal correction, contradiction, and abstention cases. It compares cognibrain against vector-only, keyword-only, and recency-only baselines and writes `artifacts/evaluation-report.json`. CI uploads this artifact on every push and pull request. Scheduled and manually triggered CI runs execute `npm run benchmark:certified` and upload the certified market-proof JSON artifacts.
 
-`npm run verify:nextgen` extends the loop with `src/eval/nextgen.ts`, which proves the new graph, inference, brain/source, webhook, compliance, and marketplace surfaces using deterministic fixtures before building the production dashboard.
+`npm run verify:nextgen` extends the loop with `src/eval/nextgen.ts`, which proves the new graph, inference, brain/source, staged extraction/enrichment, entity disambiguation, webhook, compliance, and marketplace surfaces using deterministic fixtures before building the production dashboard.
 
 ## Dashboard
 

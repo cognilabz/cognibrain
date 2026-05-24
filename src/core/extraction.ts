@@ -2,12 +2,15 @@ import { extractEntities, unique } from "./text";
 import type { MemoryExtractionEvent, MemoryInput, MemoryRelation, Provenance } from "./types";
 
 export interface ExtractionOptions {
+  brainId?: string;
+  sourceId?: string;
   userId: string;
   agentId?: string;
   sessionId?: string;
   appId?: string;
   orgId?: string;
   projectId?: string;
+  deviceId?: string;
   runId?: string;
 }
 
@@ -26,8 +29,8 @@ export function extractAddOnlyMemories(events: MemoryExtractionEvent[], options:
         content: fact,
         type: event.role === "tool" ? "procedural" : event.role === "assistant" ? "episodic" : "project",
         layer: event.role === "tool" ? "procedural" : "episodic",
-        source: event.source ?? sourceForRole(event.role),
-        tags: unique(["extracted", event.role]),
+        source: event.source ?? { ...sourceForRole(event.role), uri: event.uri },
+        tags: unique(["extracted", event.role, event.mediaType ? `media:${event.mediaType}` : "media:text", event.language ? `lang:${event.language}` : undefined].filter(Boolean) as string[]),
         entities,
         relations: relationHints(fact, entities, event.role),
         timestamp: event.timestamp,
@@ -36,6 +39,10 @@ export function extractAddOnlyMemories(events: MemoryExtractionEvent[], options:
           extraction: {
             mode: "single-pass-add-only",
             role: event.role,
+            mediaType: event.mediaType ?? "text",
+            language: event.language,
+            uri: event.uri,
+            mimeType: event.mimeType,
             extractedAt: new Date().toISOString()
           }
         }

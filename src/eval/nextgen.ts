@@ -62,12 +62,28 @@ export function runNextgenEvaluation() {
       source: { kind: "human", confidence: 0.94 }
     });
   }
+  const extraction = service.extract(
+    [
+      { role: "operator", content: "Audio", mediaType: "audio", language: "de", uri: "file:///eval/review.m4a" },
+      { role: "user", content: "Atlas evaluation says CacheClient also appears as Cache Client in docs.", mediaType: "document", language: "en" }
+    ],
+    { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }
+  );
+  service.add({
+    brainId: brain.id,
+    sourceId: source.id,
+    userId: "bench",
+    content: "Cache Client is the documentation spelling for CacheClient.",
+    entities: ["cache client"],
+    source: { kind: "human", confidence: 0.93 }
+  });
 
   const inference = service.runInference();
   const paths = service.graphPaths("atlas", "redisadapter", { userId: "bench", maxDepth: 3 });
   const query = service.graphQuery("MATCH (a)-[:transitive_depends_on]->(b) WHERE trust>0.8", "bench");
   const temporal = service.temporalQuery("bench", { after: "2026-05-01T00:00:00.000Z", before: "2026-05-09T00:00:00.000Z" });
   const patterns = service.behavioralPatterns("bench");
+  const entities = service.entityCatalog("bench");
   service.promoteSharedMemory(atlas.id, "org-bench");
   const compliance = service.complianceReport(new Date("2026-01-01T00:00:00.000Z"));
   const events = service.eventFeed();
@@ -106,6 +122,16 @@ export function runNextgenEvaluation() {
     id: "temporal-patterns",
     passed: temporal.events.length >= 2 && patterns.patterns.some((pattern) => pattern.cadence === "weekly:friday"),
     detail: `${temporal.events.length} interval events, ${patterns.patterns.length} patterns`
+  });
+  checks.push({
+    id: "extraction-enrichment",
+    passed:
+      extraction.stages.some((stage) => stage.stage === "rules" && stage.extracted >= 1) &&
+      extraction.failures.some((failure) => failure.mediaType === "audio") &&
+      extraction.learnedRules.some((rule) => rule.kind === "provider" || rule.kind === "translation") &&
+      entities.enrichmentCandidates.length >= 1 &&
+      entities.mergeSuggestions.some((suggestion) => suggestion.canonical.includes("cache")),
+    detail: `${extraction.memories.length} extracted, ${extraction.failures.length} failures, ${extraction.learnedRules.length} learned rule suggestions, ${entities.mergeSuggestions.length} merge suggestions`
   });
   checks.push({
     id: "marketplace-persona",

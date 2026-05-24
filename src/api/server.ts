@@ -101,21 +101,44 @@ const searchSchema = z.object({
 });
 
 const extractSchema = z.object({
+  brainId: z.string().optional(),
+  sourceId: z.string().optional(),
   userId: z.string().min(1),
   agentId: z.string().optional(),
   sessionId: z.string().optional(),
   appId: z.string().optional(),
   orgId: z.string().optional(),
   projectId: z.string().optional(),
+  deviceId: z.string().optional(),
   runId: z.string().optional(),
   events: z.array(
     z.object({
       role: z.enum(["user", "assistant", "tool", "system", "operator"]),
       content: z.string().min(1),
       timestamp: z.string().optional(),
+      source: z
+        .object({
+          kind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]),
+          uri: z.string().optional(),
+          commit: z.string().optional(),
+          lineStart: z.number().optional(),
+          lineEnd: z.number().optional(),
+          confidence: z.number().min(0).max(1)
+        })
+        .optional(),
+      mediaType: z.enum(["text", "code", "document", "audio", "image", "video"]).optional(),
+      language: z.string().optional(),
+      uri: z.string().optional(),
+      mimeType: z.string().optional(),
       metadata: z.record(z.unknown()).optional()
     })
   )
+});
+
+const entityMergeSchema = z.object({
+  canonical: z.string().min(1),
+  aliases: z.array(z.string().min(1)).min(1),
+  userId: z.string().optional()
 });
 
 const feedbackSchema = z.object({
@@ -202,7 +225,7 @@ const personaSchema = z.object({
 const webhookSchema = z.object({
   id: z.string().optional(),
   url: z.string().url(),
-  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "extract.run", "reflect.run", "search.run", "webhook.register", "marketplace.install", "inference.run"])),
+  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "extract.run", "reflect.run", "search.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
   secretRef: z.string().optional()
 });
 
@@ -253,6 +276,24 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/graph") {
     send(response, 200, defaultService.graph(url.searchParams.get("userId") ?? undefined));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/entities") {
+    send(response, 200, defaultService.entityCatalog(url.searchParams.get("userId") ?? undefined));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/entities/merge") {
+    const body = entityMergeSchema.parse(await json(request));
+    send(response, 202, defaultService.mergeEntity(body.canonical, body.aliases, body.userId));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/entities/split") {
+    const body = entityMergeSchema.parse(await json(request));
+    const record = defaultService.splitEntity(body.canonical, body.aliases, body.userId);
+    send(response, record ? 202 : 404, record ?? { error: "Entity not found" });
     return;
   }
 
@@ -379,7 +420,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     const report = defaultService.extract(events, scope);
     send(response, 201, {
       memories: report.memories.map(serialize),
-      entityLinks: report.entityLinks
+      entityLinks: report.entityLinks,
+      stages: report.stages,
+      failures: report.failures,
+      enrichmentCandidates: report.enrichmentCandidates,
+      learnedRules: report.learnedRules
     });
     return;
   }
@@ -522,7 +567,7 @@ function send(response: ServerResponse, status: number, payload: unknown): void 
   response.statusCode = status;
   response.setHeader("Access-Control-Allow-Origin", "*");
   response.setHeader("Access-Control-Allow-Headers", "content-type, authorization");
-  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   if (status === 204 || payload === null) {
     response.end();
     return;

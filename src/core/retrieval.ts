@@ -1,4 +1,5 @@
 import { normalizeRetrievalWeights } from "./config";
+import { activateGraph } from "./graphReasoning";
 import { clamp, MemoryStore } from "./store";
 import { cosineLike, estimateTokens, keywordCoverage, tokenize } from "./text";
 import type { Memory, RetrievalWeights, SearchOptions, SearchResult } from "./types";
@@ -32,7 +33,7 @@ export class RetrievalEngine {
 
     const queryText = queryTokens.join(" ");
     const weights = normalizeRetrievalWeights({ ...this.defaultWeights, ...(options.weights ?? {}) });
-    const graphBoosts = this.graphBoosts(candidates, queryTokens, queryText);
+    const graphBoosts = this.graphBoosts(candidates, queryTokens, queryText, options);
     const results = candidates
       .map((memory) => {
         const graph = graphBoosts.get(memory.id);
@@ -111,7 +112,7 @@ export class RetrievalEngine {
     };
   }
 
-  private graphBoosts(candidates: Memory[], queryTokens: string[], queryText: string): Map<string, { score: number; paths: string[] }> {
+  private graphBoosts(candidates: Memory[], queryTokens: string[], queryText: string, options: SearchOptions): Map<string, { score: number; paths: string[] }> {
     const boosts = new Map<string, { score: number; paths: string[] }>();
     const entityFrequency = new Map<string, number>();
     const entityToMemoryIds = new Map<string, string[]>();
@@ -125,6 +126,7 @@ export class RetrievalEngine {
         entityToMemoryIds.set(entity, ids);
       }
       for (const relation of memory.relations) {
+        if (options.relationTypes?.length && !options.relationTypes.includes(relation.type)) continue;
         const key = relation.targetEntity ? `${relation.type}:${relation.targetEntity}` : undefined;
         if (!key) continue;
         const ids = relationToMemoryIds.get(key) ?? [];
@@ -150,6 +152,7 @@ export class RetrievalEngine {
         }
       }
       for (const relation of direct.relations) {
+        if (options.relationTypes?.length && !options.relationTypes.includes(relation.type)) continue;
         if (!relation.targetEntity || !entityMatchesQuery(relation.targetEntity, queryEntities, queryText)) continue;
         for (const id of relationToMemoryIds.get(`${relation.type}:${relation.targetEntity}`) ?? []) {
           if (id === direct.id) continue;
@@ -162,6 +165,17 @@ export class RetrievalEngine {
         boosts.set(id, {
           score: Math.max(existing?.score ?? 0, clamp(count / 3)),
           paths: [...(existing?.paths ?? []), ...(linkedPaths.get(id) ?? [])].slice(0, 4)
+        });
+      }
+    }
+    const activation = activateGraph(candidates, queryText, { maxDepth: options.graphDepth ?? 2, relationTypes: options.relationTypes, limit: Math.max(10, candidates.length) });
+    for (const node of activation.ranked) {
+      const memoryIds = node.memoryId ? [node.memoryId] : candidates.filter((memory) => memory.entities.includes(node.label.toLowerCase())).map((memory) => memory.id);
+      for (const id of memoryIds) {
+        const existing = boosts.get(id);
+        boosts.set(id, {
+          score: Math.max(existing?.score ?? 0, clamp(node.score)),
+          paths: [...(existing?.paths ?? []), ...node.explanation].slice(0, 4)
         });
       }
     }

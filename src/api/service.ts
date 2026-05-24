@@ -9,7 +9,9 @@ import {
 } from "./persistence";
 import {
   EntityRegistry,
+  activateGraph,
   extractAddOnlyMemories,
+  exportMemoryGraph,
   findGraphPaths,
   healthReport,
   IdentityResolver,
@@ -37,6 +39,9 @@ import type {
   ExtractionReport,
   FeedbackEvent,
   GraphReport,
+  GraphActivationResult,
+  GraphExportOptions,
+  GraphExportResult,
   IdentityLink,
   LearnedProfileReport,
   Memory,
@@ -422,7 +427,7 @@ export class MemoryService {
     return updated;
   }
 
-  graphPaths(from: string, to: string, options?: { userId?: string; maxDepth?: number; relationTypes?: RelationType[] }) {
+  graphPaths(from: string, to: string, options?: { userId?: string; maxDepth?: number; relationTypes?: RelationType[]; limit?: number }) {
     const memories = this.store.list(options?.userId).filter((memory) => !memory.archivedAt);
     return findGraphPaths(memories, from, to, options);
   }
@@ -431,8 +436,16 @@ export class MemoryService {
     return queryMemoryGraph(this.store.list(userId).filter((memory) => !memory.archivedAt), query);
   }
 
-  runInference(): ReturnType<typeof inferGraphRelations> {
-    const report = inferGraphRelations(this.store.list().filter((memory) => !memory.archivedAt));
+  graphActivation(query: string, options?: { userId?: string; maxDepth?: number; relationTypes?: RelationType[]; limit?: number }): GraphActivationResult {
+    return activateGraph(this.store.list(options?.userId).filter((memory) => !memory.archivedAt), query, options);
+  }
+
+  graphExport(options: GraphExportOptions = {}): GraphExportResult | string {
+    return exportMemoryGraph(this.store.list(options.userId).filter((memory) => !memory.archivedAt), options);
+  }
+
+  runInference(rules?: Parameters<typeof inferGraphRelations>[1]): ReturnType<typeof inferGraphRelations> {
+    const report = inferGraphRelations(this.store.list().filter((memory) => !memory.archivedAt), rules);
     for (const item of report.inferred) {
       const memory = this.store.get(item.memoryId);
       this.store.update(item.memoryId, { relations: [...memory.relations, item.relation] });

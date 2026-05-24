@@ -100,6 +100,24 @@ const searchSchema = z.object({
   relationTypes: z.array(relationTypeSchema).optional()
 });
 
+const graphExportSchema = z.object({
+  userId: z.string().optional(),
+  relationTypes: z.array(relationTypeSchema).optional(),
+  minTrust: z.number().min(0).max(1).optional(),
+  sourceKind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]).optional(),
+  after: z.string().optional(),
+  before: z.string().optional(),
+  format: z.enum(["json", "graphml"]).optional()
+});
+
+const inferenceRuleSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  when: z.object({ left: relationTypeSchema, right: relationTypeSchema }),
+  then: relationTypeSchema,
+  confidence: z.number().min(0).max(1).optional()
+});
+
 const extractSchema = z.object({
   brainId: z.string().optional(),
   sourceId: z.string().optional(),
@@ -312,8 +330,44 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     }
     send(response, 200, defaultService.graphPaths(from, to, {
       userId: url.searchParams.get("userId") ?? undefined,
-      maxDepth: url.searchParams.get("maxDepth") ? Number(url.searchParams.get("maxDepth")) : undefined
+      maxDepth: url.searchParams.get("maxDepth") ? Number(url.searchParams.get("maxDepth")) : undefined,
+      limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined,
+      relationTypes: parseRelationTypes(url.searchParams.get("relationTypes"))
     }));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/graph/activate") {
+    const query = url.searchParams.get("query");
+    if (!query) {
+      send(response, 400, { error: "query is required" });
+      return;
+    }
+    send(response, 200, defaultService.graphActivation(query, {
+      userId: url.searchParams.get("userId") ?? undefined,
+      maxDepth: url.searchParams.get("maxDepth") ? Number(url.searchParams.get("maxDepth")) : undefined,
+      limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : undefined,
+      relationTypes: parseRelationTypes(url.searchParams.get("relationTypes"))
+    }));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/graph/export") {
+    const format = url.searchParams.get("format") === "graphml" ? "graphml" : "json";
+    const exported = defaultService.graphExport({
+      userId: url.searchParams.get("userId") ?? undefined,
+      relationTypes: parseRelationTypes(url.searchParams.get("relationTypes")),
+      minTrust: url.searchParams.get("minTrust") ? Number(url.searchParams.get("minTrust")) : undefined,
+      sourceKind: sourceKind(url.searchParams.get("sourceKind")),
+      after: url.searchParams.get("after") ?? undefined,
+      before: url.searchParams.get("before") ?? undefined,
+      format
+    });
+    if (format === "graphml" && typeof exported === "string") {
+      sendText(response, 200, exported, "application/graphml+xml");
+      return;
+    }
+    send(response, 200, exported);
     return;
   }
 
@@ -324,7 +378,8 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (method === "POST" && url.pathname === "/graph/infer") {
-    send(response, 202, defaultService.runInference());
+    const body = z.object({ rules: z.array(inferenceRuleSchema).optional() }).parse(await json(request));
+    send(response, 202, defaultService.runInference(body.rules));
     return;
   }
 
@@ -585,6 +640,24 @@ function send(response: ServerResponse, status: number, payload: unknown): void 
   }
   response.setHeader("Content-Type", "application/json");
   response.end(JSON.stringify(payload, null, 2));
+}
+
+function sendText(response: ServerResponse, status: number, payload: string, contentType = "text/plain"): void {
+  response.statusCode = status;
+  response.setHeader("Access-Control-Allow-Origin", "*");
+  response.setHeader("Access-Control-Allow-Headers", "content-type, authorization");
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  response.setHeader("Content-Type", contentType);
+  response.end(payload);
+}
+
+function parseRelationTypes(value: string | null): z.infer<typeof relationTypeSchema>[] | undefined {
+  if (!value) return undefined;
+  return value.split(",").map((item) => relationTypeSchema.parse(item.trim())).filter(Boolean);
+}
+
+function sourceKind(value: string | null): "human" | "reviewed_code" | "tool" | "agent" | "transcript" | "import" | undefined {
+  return value === "human" || value === "reviewed_code" || value === "tool" || value === "agent" || value === "transcript" || value === "import" ? value : undefined;
 }
 
 function serialize(value: Memory) {

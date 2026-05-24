@@ -165,17 +165,21 @@ curl -X POST http://localhost:8787/timeline/dev/summarize \
 curl "http://localhost:8787/temporal/dev?after=2026-05-01T00:00:00.000Z&before=2026-06-01T00:00:00.000Z"
 curl http://localhost:8787/patterns/dev
 curl "http://localhost:8787/graph?userId=dev"
-curl "http://localhost:8787/graph/paths?userId=dev&from=atlas&to=redisadapter&maxDepth=3"
+curl "http://localhost:8787/graph/paths?userId=dev&from=atlas&to=redisadapter&maxDepth=3&relationTypes=depends_on,imports"
+curl "http://localhost:8787/graph/activate?userId=dev&query=atlas%20redis&maxDepth=3"
+curl "http://localhost:8787/graph/export?userId=dev&format=graphml&minTrust=0.7"
 curl -X POST http://localhost:8787/graph/query \
   -H "content-type: application/json" \
-  -d '{"userId":"dev","query":"MATCH (a)-[:depends_on]->(b) WHERE trust>0.8"}'
-curl -X POST http://localhost:8787/graph/infer
+  -d '{"userId":"dev","query":"MATCH (a)-[:depends_on]->(b) WHERE trust>0.8 RETURN a,b,trust"}'
+curl -X POST http://localhost:8787/graph/infer \
+  -H "content-type: application/json" \
+  -d '{"rules":[{"id":"custom","label":"depends + imports","when":{"left":"depends_on","right":"imports"},"then":"transitive_depends_on","confidence":0.56}]}'
 curl -X POST http://localhost:8787/lifecycle/preview \
   -H "content-type: application/json" \
   -d '{"userId":"dev","policy":{"archiveAfterDays":30}}'
 ```
 
-Identity links require an explicit consent token and store only a hash of that token. Timelines expose event time, validity windows, supersession metadata, and hour/day/week/month period groupings. Timeline summarization can return deterministic or provider-backed summaries and optionally persist auditable reflection memories with `summaryOf` provenance. Temporal interval queries consider event and validity windows, then return filtered events plus changed entities. Pattern reports include reviewed dream patterns, deterministic recurring weekday/entity/tag patterns, sequence patterns, confidence, and false-positive risk for operator approval. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, safe graph-query matches, and rule-based inferred relations. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
+Identity links require an explicit consent token and store only a hash of that token. Timelines expose event time, validity windows, supersession metadata, and hour/day/week/month period groupings. Timeline summarization can return deterministic or provider-backed summaries and optionally persist auditable reflection memories with `summaryOf` provenance. Temporal interval queries consider event and validity windows, then return filtered events plus changed entities. Pattern reports include reviewed dream patterns, deterministic recurring weekday/entity/tag patterns, sequence patterns, confidence, and false-positive risk for operator approval. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, spreading activation, safe graph-query matches, configurable rule-based inferred relations, and filtered JSON/GraphML exports. Path edges include confidence, trust, timestamp, source and memory provenance. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
 
 ## Events, Webhooks, Marketplace, And Compliance
 
@@ -256,4 +260,4 @@ When the service is configured with a domain module, this endpoint runs the modu
 npm run verify:nextgen
 ```
 
-This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph query, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, multi-tenant audit, webhook event feeds, compliance retention, and marketplace persona installation.
+This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, multi-tenant audit, webhook event feeds, compliance retention, and marketplace persona installation.

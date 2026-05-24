@@ -727,7 +727,7 @@ describe("TypeScript memory core", () => {
     }
   });
 
-  it("supports next-gen graph paths, graph queries, and inference rules", () => {
+  it("supports next-gen graph paths, activation, exports, graph queries, and configurable inference rules", () => {
     const service = new MemoryService();
     service.add({
       userId: "u1",
@@ -743,15 +743,36 @@ describe("TypeScript memory core", () => {
       relations: [{ type: "imports", sourceEntity: "cacheclient", targetEntity: "redisadapter", confidence: 0.88 }],
       source: { kind: "reviewed_code", confidence: 0.94 }
     });
+    service.add({
+      userId: "u1",
+      content: "RedisAdapter calls RedisCluster for storage shards.",
+      entities: ["redisadapter", "rediscluster"],
+      relations: [{ type: "calls", sourceEntity: "redisadapter", targetEntity: "rediscluster", confidence: 0.86 }],
+      source: { kind: "reviewed_code", confidence: 0.94 }
+    });
 
     const report = service.runInference();
     expect(report.inferred.some((item) => item.relation.type === "transitive_depends_on")).toBe(true);
+    const custom = service.runInference([{ id: "imports-calls", label: "imports + calls -> depends_on", when: { left: "imports", right: "calls" }, then: "depends_on", confidence: 0.52 }]);
+    expect(custom.inferred.some((item) => item.relation.targetEntity === "rediscluster")).toBe(true);
 
-    const paths = service.graphPaths("atlas", "redisadapter", { userId: "u1", maxDepth: 3 });
+    const paths = service.graphPaths("atlas", "redisadapter", { userId: "u1", maxDepth: 3, relationTypes: ["transitive_depends_on"] });
     expect(paths.some((path) => path.explanation.join(" ").includes("transitive_depends_on"))).toBe(true);
+    expect(paths[0].edges.some((edge) => edge.source?.kind === "human" && typeof edge.trust === "number")).toBe(true);
 
-    const query = service.graphQuery("MATCH (a)-[:transitive_depends_on]->(b) WHERE trust>0.8", "u1");
+    const query = service.graphQuery("MATCH (a)-[:transitive_depends_on]->(b) WHERE trust>0.8 RETURN a,b,trust", "u1");
     expect(query.matches[0].relation?.targetEntity).toBe("redisadapter");
+
+    const activation = service.graphActivation("Atlas RedisCluster", { userId: "u1", maxDepth: 4 });
+    expect(activation.ranked.some((node) => node.label.includes("CacheClient") || node.label === "cacheclient")).toBe(true);
+
+    const exported = service.graphExport({ userId: "u1", relationTypes: ["imports", "calls", "transitive_depends_on"], minTrust: 0.7 }) as { nodes: unknown[]; edges: Array<{ type: string }> };
+    expect(exported.nodes.length).toBeGreaterThan(0);
+    expect(exported.edges.every((edge) => ["imports", "calls", "transitive_depends_on", "mentions"].includes(edge.type))).toBe(true);
+    expect(String(service.graphExport({ userId: "u1", format: "graphml" }))).toContain("<graphml");
+
+    const fused = service.search({ userId: "u1", query: "Atlas RedisCluster", graphDepth: 4, weights: { graph: 1, semantic: 0, keyword: 0, entity: 0, temporal: 0, behavioral: 0, trust: 0, access: 0 } });
+    expect(fused.some((result) => result.signals.graph > 0 && result.graphPaths?.length)).toBe(true);
   });
 
   it("manages brains, sources, agents, webhooks, marketplace modules, and compliance reports", () => {

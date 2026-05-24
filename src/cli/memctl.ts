@@ -177,7 +177,22 @@ switch (command) {
   case "graph-path": {
     const [from, to] = args;
     if (!from || !to) fail("Usage: memctl graph-path <from-entity-or-node> <to-entity-or-node>");
-    console.log(JSON.stringify(service.graphPaths(from, to, { userId, maxDepth: Number(process.env.MEMORY_GRAPH_DEPTH ?? 3) }), null, 2));
+    console.log(JSON.stringify(service.graphPaths(from, to, { userId, maxDepth: Number(process.env.MEMORY_GRAPH_DEPTH ?? 3), relationTypes: relationTypesFromEnv(), limit: Number(process.env.MEMORY_GRAPH_LIMIT ?? 5) }), null, 2));
+    break;
+  }
+  case "graph-activate": {
+    const query = args.join(" ");
+    if (!query) fail("Usage: memctl graph-activate <query>");
+    console.log(JSON.stringify(service.graphActivation(query, { userId, maxDepth: Number(process.env.MEMORY_GRAPH_DEPTH ?? 3), relationTypes: relationTypesFromEnv(), limit: Number(process.env.MEMORY_GRAPH_LIMIT ?? 10) }), null, 2));
+    break;
+  }
+  case "graph-export": {
+    const format = args[0] === "graphml" ? "graphml" : "json";
+    console.log(
+      typeof service.graphExport({ userId, format, relationTypes: relationTypesFromEnv(), minTrust: process.env.MEMORY_MIN_TRUST ? Number(process.env.MEMORY_MIN_TRUST) : undefined }) === "string"
+        ? service.graphExport({ userId, format, relationTypes: relationTypesFromEnv(), minTrust: process.env.MEMORY_MIN_TRUST ? Number(process.env.MEMORY_MIN_TRUST) : undefined })
+        : JSON.stringify(service.graphExport({ userId, format, relationTypes: relationTypesFromEnv(), minTrust: process.env.MEMORY_MIN_TRUST ? Number(process.env.MEMORY_MIN_TRUST) : undefined }), null, 2)
+    );
     break;
   }
   case "graph-query": {
@@ -187,7 +202,8 @@ switch (command) {
     break;
   }
   case "infer": {
-    console.log(JSON.stringify(service.runInference(), null, 2));
+    const rules = process.env.MEMORY_INFERENCE_RULES_JSON ? JSON.parse(process.env.MEMORY_INFERENCE_RULES_JSON) : undefined;
+    console.log(JSON.stringify(service.runInference(rules), null, 2));
     break;
   }
   case "brain-create": {
@@ -227,7 +243,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-query|infer|brain-create|brains|source-create|events|compliance|lifecycle-preview|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|brain-create|brains|source-create|events|compliance|lifecycle-preview|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -237,4 +253,8 @@ function fail(message: string): never {
 
 function isFeedbackKind(value: string): value is FeedbackKind {
   return ["helpful", "wrong", "stale", "always_include", "never_include", "private", "shareable", "approve_pattern", "reject_pattern"].includes(value);
+}
+
+function relationTypesFromEnv() {
+  return process.env.MEMORY_RELATION_TYPES ? process.env.MEMORY_RELATION_TYPES.split(",").map((item) => item.trim()).filter(Boolean) as any : undefined;
 }

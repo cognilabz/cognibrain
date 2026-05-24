@@ -79,8 +79,11 @@ export function runNextgenEvaluation() {
   });
 
   const inference = service.runInference();
-  const paths = service.graphPaths("atlas", "redisadapter", { userId: "bench", maxDepth: 3 });
-  const query = service.graphQuery("MATCH (a)-[:transitive_depends_on]->(b) WHERE trust>0.8", "bench");
+  const paths = service.graphPaths("atlas", "redisadapter", { userId: "bench", maxDepth: 3, relationTypes: ["transitive_depends_on"] });
+  const activation = service.graphActivation("Atlas RedisAdapter", { userId: "bench", maxDepth: 3 });
+  const graphExport = service.graphExport({ userId: "bench", relationTypes: ["depends_on", "imports", "transitive_depends_on"], minTrust: 0.7 }) as { nodes: unknown[]; edges: Array<{ type: string }> };
+  const graphML = String(service.graphExport({ userId: "bench", format: "graphml" }));
+  const query = service.graphQuery("MATCH (a)-[:transitive_depends_on]->(b) WHERE trust>0.8 RETURN a,b,trust", "bench");
   const temporal = service.temporalQuery("bench", { after: "2026-05-01T00:00:00.000Z", before: "2026-05-09T00:00:00.000Z" });
   const patterns = service.behavioralPatterns("bench");
   const timelineSummary = service.summarizeTimeline("bench", { granularity: "week", persist: true, style: "concise" });
@@ -97,13 +100,18 @@ export function runNextgenEvaluation() {
   });
   checks.push({
     id: "path-explainer",
-    passed: paths.some((path) => path.explanation.join(" ").includes("transitive_depends_on")),
+    passed: paths.some((path) => path.explanation.join(" ").includes("transitive_depends_on") && path.edges.some((edge) => edge.source && typeof edge.trust === "number")),
     detail: `${paths.length} graph paths`
   });
   checks.push({
     id: "graph-query",
-    passed: query.matches.some((match) => match.relation?.targetEntity === "redisadapter"),
-    detail: `${query.matches.length} query matches`
+    passed:
+      query.matches.some((match) => match.relation?.targetEntity === "redisadapter" && match.source) &&
+      activation.ranked.length > 0 &&
+      graphExport.nodes.length > 0 &&
+      graphExport.edges.every((edge) => ["depends_on", "imports", "transitive_depends_on", "mentions"].includes(edge.type)) &&
+      graphML.includes("<graphml"),
+    detail: `${query.matches.length} query matches, ${activation.ranked.length} activation nodes, ${graphExport.edges.length} exported edges`
   });
   checks.push({
     id: "multi-tenant-audit",

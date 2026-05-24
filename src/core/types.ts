@@ -464,15 +464,36 @@ export interface MarketplaceModule {
 
 export interface GraphPath {
   nodes: Array<{ id: string; kind: "memory" | "entity"; label: string; memoryId?: string }>;
-  edges: Array<{ from: string; to: string; type: RelationType | "mentions"; confidence: number; memoryId?: string }>;
+  edges: Array<{ from: string; to: string; type: RelationType | "mentions"; confidence: number; memoryId?: string; trust?: number; timestamp?: Date | string; source?: Provenance }>;
   score: number;
   explanation: string[];
 }
 
 export interface GraphQueryResult {
   query: string;
-  matches: Array<{ memoryId: string; content: string; relation?: MemoryRelation; entities: string[]; trust: number }>;
+  matches: Array<{ memoryId: string; content: string; relation?: MemoryRelation; entities: string[]; trust: number; createdAt?: Date | string; source?: Provenance }>;
   warnings: string[];
+}
+
+export interface GraphActivationResult {
+  query: string;
+  seeds: string[];
+  ranked: Array<{ nodeId: string; label: string; kind: "memory" | "entity"; score: number; memoryId?: string; explanation: string[] }>;
+}
+
+export interface GraphExportOptions {
+  userId?: string;
+  relationTypes?: RelationType[];
+  minTrust?: number;
+  sourceKind?: SourceKind;
+  after?: Date | string;
+  before?: Date | string;
+  format?: "json" | "graphml";
+}
+
+export interface GraphExportResult {
+  nodes: Array<{ id: string; kind: "memory" | "entity"; label: string; memoryId?: string }>;
+  edges: GraphPath["edges"];
 }
 
 export interface InferenceRule {

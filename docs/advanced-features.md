@@ -42,9 +42,9 @@ Retrieval now includes a behavioural signal alongside semantic, keyword, entity,
 
 ## Graph-Native Reasoning
 
-The next-generation graph substrate adds ranked path search, a compact graph query surface, and auditable inference rules. `graphPaths(from, to)` traverses memory and entity nodes across typed edges, returning the shortest and highest-confidence chains with explanations. `graphQuery()` accepts safe `MATCH ... :relation ... WHERE trust>n` style queries for harnesses that need structured graph inspection. `runInference()` applies typed relation rules such as `depends_on + imports -> transitive_depends_on`, records an audit event, and writes inferred edges back to the store with evidence.
+The next-generation graph substrate adds ranked path search, spreading activation, a compact graph query surface, filtered graph export, and auditable inference rules. `graphPaths(from, to)` traverses memory and entity nodes across typed edges, returning the shortest and highest-confidence chains with confidence, trust, timestamp, source and memory provenance. `graphActivation(query)` propagates activation through nearby typed edges so retrieval and operators can surface indirect evidence even when no single memory directly matches the query. `graphQuery()` accepts safe `MATCH ... :relation ... WHERE trust>n RETURN ...` style queries for harnesses that need structured graph inspection. `graphExport()` returns filterable JSON or GraphML subgraphs by relation type, trust, source and time. `runInference()` applies typed relation rules such as `depends_on + imports -> transitive_depends_on`, accepts caller-provided rule sets, records an audit event, and writes inferred edges back to the store with evidence.
 
-This is still local-first and deterministic by default: no graph database or hosted service is required for multi-hop explanation. Provider-backed expansion can be layered on top later without changing the API shape.
+Retrieval fuses graph evidence from direct shared entities, typed relation paths, and bounded spreading activation. This is still local-first and deterministic by default: no graph database or hosted service is required for multi-hop explanation. Provider-backed expansion can be layered on top later without changing the API shape.
 
 ## Brains, Sources, Agents, And Marketplace
 
@@ -86,7 +86,7 @@ Pinned memories and lifecycle-protected layers/source kinds are never faded or a
 
 `npm run eval` runs a synthetic benchmark with single-hop, multi-hop, temporal correction, contradiction, and abstention cases. It compares cognibrain against vector-only, keyword-only, and recency-only baselines and writes `artifacts/evaluation-report.json`. CI uploads this artifact on every push and pull request. Scheduled and manually triggered CI runs execute `npm run benchmark:certified` and upload the certified market-proof JSON artifacts.
 
-`npm run verify:nextgen` extends the loop with `src/eval/nextgen.ts`, which proves the new graph, inference, brain/source, temporal/pattern reasoning, timeline summaries, staged extraction/enrichment, entity disambiguation, webhook, compliance, and marketplace surfaces using deterministic fixtures before building the production dashboard.
+`npm run verify:nextgen` extends the loop with `src/eval/nextgen.ts`, which proves the new graph path, activation, query, export, inference, brain/source, temporal/pattern reasoning, timeline summaries, staged extraction/enrichment, entity disambiguation, webhook, compliance, and marketplace surfaces using deterministic fixtures before building the production dashboard.
 
 ## Dashboard
 

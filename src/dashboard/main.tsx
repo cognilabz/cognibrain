@@ -29,11 +29,14 @@ import {
   type MemoryInput,
   type MetricsReport,
   type ReflectionReport,
-  type SearchResult
+  type SearchResult,
+  findGraphPaths,
+  activateGraph,
+  exportMemoryGraph
 } from "../core";
 import "./styles/app.css";
 
-type ViewId = "memories" | "recall" | "dream" | "proof";
+type ViewId = "memories" | "recall" | "graph" | "dream" | "proof";
 type MemoryFilter = "active" | "all" | "archived" | "needs-review";
 type RuntimeStatus = {
   state: "checking" | "online" | "offline";
@@ -45,6 +48,7 @@ type RuntimeStatus = {
 const viewItems: Array<{ id: ViewId; label: string; icon: React.ElementType; note: string }> = [
   { id: "memories", label: "Store", icon: Database, note: "Inspect facts" },
   { id: "recall", label: "Recall", icon: Search, note: "Preview context" },
+  { id: "graph", label: "Graph", icon: GitBranch, note: "Explain paths" },
   { id: "dream", label: "Dream", icon: Sparkles, note: "Repair memory" },
   { id: "proof", label: "Proof", icon: BarChart3, note: "Verify claims" }
 ];
@@ -467,6 +471,8 @@ function App() {
           <RecallView query={query} setQuery={setQuery} results={results} selectedMemory={selectedMemory} selectMemory={(memory) => setSelectedId(memory.id)} />
         ) : null}
 
+        {view === "graph" ? <GraphView memories={memories} /> : null}
+
         {view === "dream" ? (
           <DreamView
             report={lastCycle}
@@ -676,6 +682,69 @@ function RecallView({
   );
 }
 
+function GraphView({ memories }: { memories: Memory[] }) {
+  const [from, setFrom] = useState("Mira");
+  const [to, setTo] = useState("transcript");
+  const [query, setQuery] = useState("Mira transcript correction");
+  const active = memories.filter((memory) => !memory.archivedAt);
+  const paths = findGraphPaths(active, from, to, { maxDepth: 4, limit: 4 });
+  const activation = activateGraph(active, query, { maxDepth: 3, limit: 8 });
+  const exported = exportMemoryGraph(active, { format: "json" }) as { nodes: Array<{ id: string; label: string; kind: string }>; edges: Array<{ from: string; to: string; type: string; confidence: number }> };
+  return (
+    <section className="recall-layout">
+      <div className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Graph Explorer</h2>
+            <p>Inspect entity-memory paths, relation confidence, and activation chains.</p>
+          </div>
+          <GitBranch size={18} />
+        </div>
+        <div className="query-row">
+          <input aria-label="From node" value={from} onChange={(event) => setFrom(event.target.value)} />
+          <input aria-label="To node" value={to} onChange={(event) => setTo(event.target.value)} />
+        </div>
+        <div className="result-list">
+          {paths.map((path, index) => (
+            <article key={`${path.score}-${index}`} className="result">
+              <span>{path.score.toFixed(2)}</span>
+              <strong>{path.explanation[0] ?? "Direct connection"}</strong>
+              <small>{path.edges.map((edge) => `${edge.type} ${edge.confidence.toFixed(2)}`).join(" · ")}</small>
+              <small>{path.edges.map((edge) => edge.source?.kind ?? "memory").join(" · ")}</small>
+            </article>
+          ))}
+          {!paths.length ? <p className="empty-state">No path for the selected endpoints.</p> : null}
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Spreading Activation</h2>
+            <p>See which graph nodes become relevant after traversing nearby evidence.</p>
+          </div>
+          <Network size={18} />
+        </div>
+        <input aria-label="Activation query" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <div className="signal-list">
+          {activation.ranked.slice(0, 5).map((node) => (
+            <article key={node.nodeId}>
+              <strong>{node.label}</strong>
+              <span>{node.kind}</span>
+              <span>activation {node.score.toFixed(2)}</span>
+              <p>{node.explanation[0] ?? "Seed-adjacent graph evidence"}</p>
+            </article>
+          ))}
+        </div>
+        <div className="artifact-summary">
+          <span>{exported.nodes.length} nodes</span>
+          <span>{exported.edges.length} edges</span>
+          <span>GraphML export available from API/CLI</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function DreamView({
   report,
   memories,
@@ -731,7 +800,7 @@ function DreamView({
           <ShieldCheck size={18} />
         </div>
         <div className="slider-grid">
-          {(["semantic", "keyword", "entity", "temporal", "trust", "graph", "access"] as const).map((key) => (
+          {(["semantic", "keyword", "entity", "temporal", "behavioral", "trust", "graph", "access"] as const).map((key) => (
             <label key={key}>
               <span>{key}</span>
               <input

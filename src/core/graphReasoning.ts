@@ -1,4 +1,4 @@
-import type { GraphPath, GraphQueryResult, InferenceReport, InferenceRule, Memory, MemoryRelation, RelationType } from "./types";
+import type { GraphActivationResult, GraphExportOptions, GraphExportResult, GraphPath, GraphQueryResult, InferenceReport, InferenceRule, Memory, MemoryRelation, RelationType } from "./types";
 
 interface GraphEdge {
   from: string;
@@ -6,6 +6,9 @@ interface GraphEdge {
   type: RelationType | "mentions";
   confidence: number;
   memoryId?: string;
+  trust?: number;
+  timestamp?: Date | string;
+  source?: Memory["source"];
 }
 
 const DEFAULT_RULES: InferenceRule[] = [
@@ -49,23 +52,83 @@ export function findGraphPaths(
   return paths.sort((a, b) => b.score - a.score || a.edges.length - b.edges.length).slice(0, options.limit ?? 5);
 }
 
+export function activateGraph(
+  memories: Memory[],
+  query: string,
+  options: { maxDepth?: number; relationTypes?: RelationType[]; limit?: number; damping?: number } = {}
+): GraphActivationResult {
+  const graph = buildGraph(memories);
+  const queryTokens = new Set(query.toLowerCase().split(/[^a-z0-9_./-]+/).filter(Boolean));
+  const seeds = [...graph.labels.entries()]
+    .filter(([, value]) => [...queryTokens].some((token) => value.label.toLowerCase().includes(token)))
+    .map(([id]) => id);
+  const relationTypes = new Set(options.relationTypes ?? []);
+  const damping = options.damping ?? 0.72;
+  const scores = new Map<string, number>();
+  const explanations = new Map<string, string[]>();
+  const boundedSeeds = seeds.slice(0, 24);
+  const queue: Array<{ node: string; score: number; depth: number; path: string[] }> = boundedSeeds.map((node) => ({ node, score: 1, depth: 0, path: [node] }));
+  const bestAtDepth = new Map<string, number>();
+  for (const seed of boundedSeeds) {
+    scores.set(seed, Math.max(scores.get(seed) ?? 0, 1));
+    bestAtDepth.set(`${seed}:0`, 1);
+  }
+  let iterations = 0;
+  while (queue.length && iterations < 2500) {
+    iterations += 1;
+    const current = queue.shift()!;
+    if (current.depth >= (options.maxDepth ?? 3)) continue;
+    for (const edge of graph.adj.get(current.node) ?? []) {
+      if (relationTypes.size && edge.type !== "mentions" && !relationTypes.has(edge.type)) continue;
+      if (current.path.includes(edge.to)) continue;
+      const score = current.score * damping * edge.confidence;
+      if (score <= 0.02) continue;
+      const depth = current.depth + 1;
+      const bestKey = `${edge.to}:${depth}`;
+      if (score <= (bestAtDepth.get(bestKey) ?? 0) + 0.005) continue;
+      bestAtDepth.set(bestKey, score);
+      scores.set(edge.to, Math.max(scores.get(edge.to) ?? 0, score));
+      const label = graph.labels.get(edge.to)?.label ?? edge.to;
+      const from = graph.labels.get(edge.from)?.label ?? edge.from;
+      explanations.set(edge.to, [...(explanations.get(edge.to) ?? []), `${from} -${edge.type}-> ${label}`].slice(0, 4));
+      queue.push({ node: edge.to, score, depth, path: [...current.path, edge.to] });
+    }
+  }
+  return {
+    query,
+    seeds: boundedSeeds,
+    ranked: [...scores.entries()]
+      .filter(([nodeId]) => !seeds.includes(nodeId))
+      .map(([nodeId, score]) => {
+        const label = graph.labels.get(nodeId) ?? { kind: "entity" as const, label: nodeId };
+        return { nodeId, label: label.label, kind: label.kind, memoryId: label.memoryId, score, explanation: explanations.get(nodeId) ?? [] };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, options.limit ?? 10)
+  };
+}
+
 export function queryMemoryGraph(memories: Memory[], query: string): GraphQueryResult {
   const relation = query.match(/:\s*([a-z_]+)/i)?.[1] as RelationType | undefined;
   const minTrust = Number(query.match(/trust\s*>\s*(0(?:\.\d+)?|1(?:\.0+)?)/i)?.[1] ?? "0");
   const entity = query.match(/entity\s*=\s*['"]([^'"]+)['"]/i)?.[1]?.toLowerCase();
+  const returnFields = query.match(/return\s+(.+)$/i)?.[1]?.split(",").map((field) => field.trim().toLowerCase()) ?? [];
   const matches = memories
     .filter((memory) => memory.trust >= minTrust)
     .flatMap((memory) => {
       const relationMatches = memory.relations.filter((item) => (!relation || item.type === relation) && (!entity || memory.entities.includes(entity) || item.targetEntity === entity || item.sourceEntity === entity));
       if (!relationMatches.length && !relation && (!entity || memory.entities.includes(entity))) {
-        return [{ memoryId: memory.id, content: memory.content, entities: memory.entities, trust: memory.trust }];
+        return [{ memoryId: memory.id, content: memory.content, entities: memory.entities, trust: memory.trust, createdAt: memory.createdAt.toISOString(), source: memory.source }];
       }
-      return relationMatches.map((item) => ({ memoryId: memory.id, content: memory.content, relation: item, entities: memory.entities, trust: memory.trust }));
+      return relationMatches.map((item) => ({ memoryId: memory.id, content: memory.content, relation: item, entities: memory.entities, trust: memory.trust, createdAt: memory.createdAt.toISOString(), source: memory.source }));
     });
   return {
     query,
     matches,
-    warnings: relation || entity || minTrust ? [] : ["No relation/entity/trust filter found; returned broad memory graph matches."]
+    warnings: [
+      ...(relation || entity || minTrust ? [] : ["No relation/entity/trust filter found; returned broad memory graph matches."]),
+      ...(returnFields.length && !returnFields.some((field) => ["a", "b", "memory", "relation", "entities", "trust"].includes(field)) ? [`Unsupported RETURN fields ignored: ${returnFields.join(", ")}`] : [])
+    ]
   };
 }
 
@@ -94,6 +157,15 @@ export function inferGraphRelations(memories: Memory[], rules: InferenceRule[] =
   return { rulesEvaluated: rules.length, inferred };
 }
 
+export function exportMemoryGraph(memories: Memory[], options: GraphExportOptions = {}): GraphExportResult | string {
+  const filtered = filterGraphMemories(memories, options);
+  const graph = buildGraph(filtered);
+  const nodes = [...graph.labels.entries()].map(([id, value]) => ({ id, ...value }));
+  const edges = [...graph.adj.values()].flat().filter((edge, index, all) => all.findIndex((candidate) => candidate.from === edge.from && candidate.to === edge.to && candidate.type === edge.type && candidate.memoryId === edge.memoryId) === index);
+  if (options.format === "graphml") return toGraphML(nodes, edges);
+  return { nodes, edges };
+}
+
 function buildGraph(memories: Memory[]) {
   const adj = new Map<string, GraphEdge[]>();
   const labels = new Map<string, { kind: "memory" | "entity"; label: string; memoryId?: string }>();
@@ -103,8 +175,8 @@ function buildGraph(memories: Memory[]) {
     for (const entity of memory.entities) {
       const entityNode = `entity:${entity}`;
       labels.set(entityNode, { kind: "entity", label: entity });
-      connect(adj, { from: memoryNode, to: entityNode, type: "mentions", confidence: memory.trust, memoryId: memory.id });
-      connect(adj, { from: entityNode, to: memoryNode, type: "mentions", confidence: memory.trust, memoryId: memory.id });
+      connect(adj, edgeWithProvenance(memory, { from: memoryNode, to: entityNode, type: "mentions", confidence: memory.trust, memoryId: memory.id }));
+      connect(adj, edgeWithProvenance(memory, { from: entityNode, to: memoryNode, type: "mentions", confidence: memory.trust, memoryId: memory.id }));
     }
     for (const relation of memory.relations) {
       const source = relation.sourceEntity ? `entity:${relation.sourceEntity}` : memoryNode;
@@ -112,11 +184,20 @@ function buildGraph(memories: Memory[]) {
       if (!target) continue;
       labels.set(source, labels.get(source) ?? { kind: source.startsWith("entity:") ? "entity" : "memory", label: source.replace(/^(entity|memory):/, ""), memoryId: source.startsWith("memory:") ? memory.id : undefined });
       labels.set(target, labels.get(target) ?? { kind: target.startsWith("entity:") ? "entity" : "memory", label: target.replace(/^(entity|memory):/, ""), memoryId: target.startsWith("memory:") ? relation.targetId : undefined });
-      connect(adj, { from: source, to: target, type: relation.type, confidence: relation.confidence ?? 0.5, memoryId: memory.id });
-      if (relation.direction === "undirected") connect(adj, { from: target, to: source, type: relation.type, confidence: relation.confidence ?? 0.5, memoryId: memory.id });
+      connect(adj, edgeWithProvenance(memory, { from: source, to: target, type: relation.type, confidence: relation.confidence ?? 0.5, memoryId: memory.id }));
+      if (relation.direction === "undirected") connect(adj, edgeWithProvenance(memory, { from: target, to: source, type: relation.type, confidence: relation.confidence ?? 0.5, memoryId: memory.id }));
     }
   }
   return { adj, labels };
+}
+
+function edgeWithProvenance(memory: Memory, edge: GraphEdge): GraphEdge {
+  return {
+    ...edge,
+    trust: memory.trust,
+    timestamp: memory.temporal.eventAt ?? memory.createdAt.toISOString(),
+    source: memory.source
+  };
 }
 
 function connect(adj: Map<string, GraphEdge[]>, edge: GraphEdge): void {
@@ -140,4 +221,43 @@ function toPath(edges: GraphEdge[], labels: Map<string, { kind: "memory" | "enti
     score,
     explanation: edges.map((edge) => `${labels.get(edge.from)?.label ?? edge.from} -${edge.type}-> ${labels.get(edge.to)?.label ?? edge.to}`)
   };
+}
+
+function filterGraphMemories(memories: Memory[], options: GraphExportOptions): Memory[] {
+  const after = options.after ? new Date(options.after) : undefined;
+  const before = options.before ? new Date(options.before) : undefined;
+  const relationTypes = new Set(options.relationTypes ?? []);
+  return memories
+    .filter((memory) => !options.minTrust || memory.trust >= options.minTrust)
+    .filter((memory) => !options.sourceKind || memory.source.kind === options.sourceKind)
+    .filter((memory) => {
+      const eventAt = new Date(memory.temporal.eventAt ?? memory.createdAt);
+      if (after && eventAt < after) return false;
+      if (before && eventAt >= before) return false;
+      return true;
+    })
+    .map((memory) => ({
+      ...memory,
+      relations: relationTypes.size ? memory.relations.filter((relation) => relationTypes.has(relation.type)) : memory.relations
+    }));
+}
+
+function toGraphML(nodes: GraphExportResult["nodes"], edges: GraphEdge[]): string {
+  const lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<graphml xmlns="http://graphml.graphdrawing.org/xmlns">',
+    '  <graph edgedefault="directed">'
+  ];
+  for (const node of nodes) {
+    lines.push(`    <node id="${xml(node.id)}"><data key="label">${xml(node.label)}</data><data key="kind">${node.kind}</data></node>`);
+  }
+  for (const [index, edge] of edges.entries()) {
+    lines.push(`    <edge id="e${index}" source="${xml(edge.from)}" target="${xml(edge.to)}"><data key="type">${edge.type}</data><data key="confidence">${edge.confidence.toFixed(3)}</data>${edge.memoryId ? `<data key="memoryId">${xml(edge.memoryId)}</data>` : ""}</edge>`);
+  }
+  lines.push("  </graph>", "</graphml>");
+  return lines.join("\n");
+}
+
+function xml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

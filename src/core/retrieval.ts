@@ -26,6 +26,8 @@ export class RetrievalEngine {
       if (options.brainIds?.length && memory.brainId && !sharedBrainIds.has(memory.brainId)) return false;
       if (options.sourceId && memory.sourceId && memory.sourceId !== options.sourceId) return false;
       if (!options.includeArchived && memory.archivedAt) return false;
+      if (memory.beliefState === "retracted") return false;
+      if (memory.beliefState === "superseded" && !options.includeArchived) return false;
       if (options.agentId && memory.agentId && memory.agentId !== options.agentId) return false;
       if (!scopeMatches(memory, options)) return false;
       if (!consentAllows(memory, options, now)) return false;
@@ -430,6 +432,12 @@ function heuristicVerify(query: string, results: SearchResult[]): SearchResult[]
     }
     if (typeof result.memory.metadata.contradiction === "string") {
       return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "contradiction marker present"] };
+    }
+    if (result.memory.beliefState === "contradicted" || result.memory.beliefState === "needs_verification") {
+      return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), `belief state ${result.memory.beliefState}`] };
+    }
+    if (result.memory.beliefState === "stale") {
+      return { ...result, decision: "warn" as const, explanation: [...(result.explanation ?? []), "belief state stale"] };
     }
     return result;
   });

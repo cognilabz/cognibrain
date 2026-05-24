@@ -136,6 +136,10 @@ curl -X POST http://localhost:8787/search \
 
 Search results include ranked memories, signal breakdowns, citations, and stale flags.
 
+## MemoryRecordV2
+
+Every memory-returning API now exposes the canonical MemoryRecordV2 shape. The record keeps existing memory fields and adds `schemaVersion:"2.0"`, `scope`, `confidence`, `beliefState`, `provenance.citations`, and an append-only `audit` trail. CLI users can inspect a single record with `cognibrain memory inspect <memory-id>`. The published schema is available at [`docs/schemas/memory-record-v2.schema.json`](schemas/memory-record-v2.schema.json).
+
 ## Evidence Pack
 
 ```bash

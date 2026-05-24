@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cognibrain.local/schemas/memory-record-v2.schema.json",
+  "title": "MemoryRecordV2",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "content",
+    "source",
+    "scope",
+    "createdAt",
+    "trust",
+    "confidence",
+    "importance",
+    "beliefState",
+    "consent",
+    "relations",
+    "provenance",
+    "audit"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "id": { "type": "string" },
+    "content": { "type": "string" },
+    "source": { "type": "object" },
+    "scope": { "type": "object", "required": ["userId"], "properties": { "userId": { "type": "string" } }, "additionalProperties": true },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "temporal": {
+      "type": "object",
+      "properties": {
+        "validFrom": { "type": "string", "format": "date-time" },
+        "validUntil": { "type": "string", "format": "date-time" },
+        "lastConfirmedAt": { "type": "string", "format": "date-time" },
+        "verificationDueAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": true
+    },
+    "trust": { "type": "number", "minimum": 0, "maximum": 1 },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "importance": { "type": "number", "minimum": 0, "maximum": 1 },
+    "beliefState": { "enum": ["active", "stale", "superseded", "contradicted", "needs_verification", "retracted"] },
+    "consent": { "type": "object" },
+    "relations": { "type": "array" },
+    "provenance": {
+      "type": "object",
+      "required": ["source", "citations"],
+      "properties": {
+        "source": { "type": "object" },
+        "citations": { "type": "array", "items": { "type": "string" } },
+        "summaryOf": { "type": "array", "items": { "type": "string" } },
+        "extractedFromEpisodeId": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "audit": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "at"],
+        "properties": {
+          "type": { "enum": ["created", "updated", "accessed", "archived", "state_changed"] },
+          "at": { "type": "string", "format": "date-time" },
+          "actor": { "type": "string" },
+          "reason": { "type": "string" },
+          "previousState": { "type": "string" },
+          "nextState": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

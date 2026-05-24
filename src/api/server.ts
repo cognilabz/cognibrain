@@ -76,6 +76,8 @@ const memoryInputSchema = z.object({
     .optional(),
   temporal: z.record(z.unknown()).optional(),
   pinned: z.boolean().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  beliefState: z.enum(["active", "stale", "superseded", "contradicted", "needs_verification", "retracted"]).optional(),
   metadata: z.record(z.unknown()).optional()
 });
 

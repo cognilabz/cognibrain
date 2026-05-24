@@ -1,6 +1,8 @@
 export type MemoryType = "user" | "feedback" | "project" | "reference" | "episodic" | "procedural";
 export type MemoryLayer = "working" | "episodic" | "long_term" | "procedural" | "reflection";
 export type SourceKind = "human" | "reviewed_code" | "tool" | "agent" | "transcript" | "import";
+export type MemorySchemaVersion = "2.0";
+export type BeliefState = "active" | "stale" | "superseded" | "contradicted" | "needs_verification" | "retracted";
 export type RelationType =
   | "mentions"
   | "calls"
@@ -107,6 +109,22 @@ export interface TemporalMetadata {
   stalenessRisk?: number;
 }
 
+export interface MemoryProvenance {
+  source: Provenance;
+  citations: string[];
+  summaryOf?: string[];
+  extractedFromEpisodeId?: string;
+}
+
+export interface MemoryAuditEvent {
+  type: "created" | "updated" | "accessed" | "archived" | "state_changed";
+  at: Date | string;
+  actor?: string;
+  reason?: string;
+  previousState?: BeliefState;
+  nextState?: BeliefState;
+}
+
 export interface MemoryInput {
   brainId?: string;
   sourceId?: string;
@@ -129,10 +147,13 @@ export interface MemoryInput {
   temporal?: TemporalMetadata;
   timestamp?: Date | string;
   pinned?: boolean;
+  confidence?: number;
+  beliefState?: BeliefState;
   metadata?: Record<string, unknown>;
 }
 
 export interface Memory {
+  schemaVersion: MemorySchemaVersion;
   brainId?: string;
   sourceId?: string;
   id: string;
@@ -154,6 +175,11 @@ export interface Memory {
   relations: MemoryRelation[];
   consent: ConsentPolicy;
   temporal: TemporalMetadata;
+  scope: MemoryScope;
+  confidence: number;
+  beliefState: BeliefState;
+  provenance: MemoryProvenance;
+  audit: MemoryAuditEvent[];
   pinned: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -163,6 +189,10 @@ export interface Memory {
   lastAccessedAt?: Date;
   archivedAt?: Date;
   summaryOf?: string[];
+}
+
+export interface MemoryRecordV2 extends Memory {
+  schemaVersion: "2.0";
 }
 
 export interface SearchOptions {
@@ -253,7 +283,10 @@ export interface EvidencePack {
     scope: MemoryScope;
     consent: ConsentPolicy;
     trust: number;
+    confidence: number;
     importance: number;
+    beliefState: BeliefState;
+    provenance: MemoryProvenance;
     validity: {
       eventAt?: string;
       validFrom?: string;

@@ -160,12 +160,14 @@ export class ReflectionEngine {
         if (classified.label !== "contradiction") continue;
         if (classified.confidence < 0.6) {
           this.store.update(memory.id, {
+            beliefState: "needs_verification",
             temporal: { ...memory.temporal, verificationDueAt: new Date().toISOString(), stalenessRisk: 0.7 },
             metadata: { contradictionReview: { reason: classified.reason ?? "low confidence contradiction", confidence: classified.confidence } }
           });
           continue;
         }
         const demoted = this.store.update(memory.id, {
+          beliefState: "contradicted",
           trust: clamp(memory.trust - 0.35),
           metadata: { contradiction: `Superseded by ${kept.memory.id}`, contradictionKey: kept.claim.key }
         });

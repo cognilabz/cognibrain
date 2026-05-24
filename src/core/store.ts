@@ -1,4 +1,4 @@
-import type { Memory, MemoryInput, Provenance } from "./types";
+import type { BeliefState, Memory, MemoryInput, MemoryScope, Provenance } from "./types";
 import { extractEntities, tokenize, unique } from "./text";
 import { DEFAULT_CONSENT } from "./config";
 
@@ -24,7 +24,12 @@ export class MemoryStore {
     const source = input.source ?? DEFAULT_SOURCE;
     const entities = unique([...(input.entities ?? []), ...extractEntities(input.content)]);
     const tags = unique(input.tags ?? []);
+    const scope = memoryScope(input);
+    const temporal = normalizeTemporal({ ...(input.temporal ?? {}), eventAt: input.temporal?.eventAt ?? input.timestamp });
+    const confidence = clamp(input.confidence ?? source.confidence);
+    const beliefState = input.beliefState ?? beliefStateFor({ temporal, metadata: input.metadata ?? {} });
     const memory: Memory = {
+      schemaVersion: "2.0",
       id: makeId(),
       brainId: input.brainId,
       sourceId: input.sourceId,
@@ -44,7 +49,12 @@ export class MemoryStore {
       entities,
       relations: uniqueRelations(input.relations ?? relationHints(input.content, entities)),
       consent: normalizeConsent(input.consent),
-      temporal: normalizeTemporal({ ...(input.temporal ?? {}), eventAt: input.temporal?.eventAt ?? input.timestamp }),
+      temporal,
+      scope,
+      confidence,
+      beliefState,
+      provenance: { source, citations: citationsFor(source) },
+      audit: [{ type: "created", at: now, actor: source.kind, nextState: beliefState }],
       pinned: input.pinned ?? false,
       metadata: input.metadata ?? {},
       createdAt: now,
@@ -60,8 +70,17 @@ export class MemoryStore {
   update(id: string, patch: Partial<MemoryInput> & { trust?: number; importance?: number }): Memory {
     const memory = this.get(id);
     const content = patch.content?.trim() ?? memory.content;
+    const source = patch.source ?? memory.source;
+    const temporal = patch.temporal ? normalizeTemporal({ ...memory.temporal, ...patch.temporal }) : memory.temporal;
+    const scope = memoryScope({ ...memory, ...patch, userId: patch.userId ?? memory.userId });
+    const nextState = patch.beliefState ?? beliefStateFor({ temporal, metadata: patch.metadata ? { ...memory.metadata, ...patch.metadata } : memory.metadata, archivedAt: memory.archivedAt });
+    const audit = [...(memory.audit ?? [])];
+    const now = new Date();
+    if (nextState !== memory.beliefState) audit.push({ type: "state_changed", at: now, actor: source.kind, previousState: memory.beliefState, nextState });
+    audit.push({ type: "updated", at: now, actor: source.kind });
     const updated: Memory = {
       ...memory,
+      schemaVersion: "2.0",
       content,
       brainId: patch.brainId ?? memory.brainId,
       sourceId: patch.sourceId ?? memory.sourceId,
@@ -75,17 +94,27 @@ export class MemoryStore {
       runId: patch.runId ?? memory.runId,
       type: patch.type ?? memory.type,
       layer: patch.layer ?? memory.layer,
-      source: patch.source ?? memory.source,
+      source,
       tags: patch.tags ? unique(patch.tags) : memory.tags,
       entities: patch.entities ? unique([...patch.entities, ...extractEntities(content)]) : memory.entities,
       relations: patch.relations ? uniqueRelations(patch.relations) : memory.relations,
       consent: patch.consent ? normalizeConsent({ ...memory.consent, ...patch.consent }) : memory.consent,
-      temporal: patch.temporal ? normalizeTemporal({ ...memory.temporal, ...patch.temporal }) : memory.temporal,
+      temporal,
+      scope,
+      confidence: patch.confidence !== undefined ? clamp(patch.confidence) : memory.confidence,
+      beliefState: nextState,
+      provenance: {
+        source,
+        citations: citationsFor(source),
+        summaryOf: memory.summaryOf,
+        extractedFromEpisodeId: typeof memory.metadata.episodeId === "string" ? memory.metadata.episodeId : undefined
+      },
+      audit,
       pinned: patch.pinned ?? memory.pinned,
       metadata: patch.metadata ? { ...memory.metadata, ...patch.metadata } : memory.metadata,
       trust: patch.trust ?? memory.trust,
       importance: patch.importance ?? memory.importance,
-      updatedAt: new Date()
+      updatedAt: now
     };
     this.memories.set(id, updated);
     return updated;
@@ -112,7 +141,8 @@ export class MemoryStore {
     const updated = {
       ...memory,
       accessCount: memory.accessCount + 1,
-      lastAccessedAt: new Date()
+      lastAccessedAt: new Date(),
+      audit: [...(memory.audit ?? []), { type: "accessed" as const, at: new Date(), actor: "system" }]
     };
     this.memories.set(id, updated);
     return updated;
@@ -121,7 +151,15 @@ export class MemoryStore {
   archive(id: string): Memory {
     const memory = this.get(id);
     if (memory.pinned) return memory;
-    const updated = { ...memory, archivedAt: new Date(), updatedAt: new Date() };
+    const now = new Date();
+    const nextState = memory.beliefState === "active" ? "stale" : memory.beliefState;
+    const updated = {
+      ...memory,
+      beliefState: nextState,
+      archivedAt: now,
+      updatedAt: now,
+      audit: [...(memory.audit ?? []), { type: "archived" as const, at: now, actor: "system", previousState: memory.beliefState, nextState }]
+    };
     this.memories.set(id, updated);
     return updated;
   }
@@ -139,7 +177,13 @@ export class MemoryStore {
       archivedAt: memory.archivedAt ? new Date(memory.archivedAt) : undefined,
       consent: normalizeConsent(memory.consent),
       temporal: normalizeTemporal(memory.temporal),
-      relations: uniqueRelations(memory.relations ?? [])
+      relations: uniqueRelations(memory.relations ?? []),
+      schemaVersion: "2.0" as const,
+      scope: memory.scope ?? memoryScope(memory),
+      confidence: memory.confidence ?? memory.source.confidence,
+      beliefState: memory.beliefState ?? beliefStateFor(memory),
+      provenance: memory.provenance ?? { source: memory.source, citations: citationsFor(memory.source), summaryOf: memory.summaryOf },
+      audit: memory.audit ?? [{ type: "created" as const, at: memory.createdAt, actor: memory.source.kind, nextState: memory.beliefState ?? "active" }]
     }));
     for (const memory of restored) this.memories.set(memory.id, memory);
     return restored;
@@ -179,6 +223,38 @@ function normalizeTemporal(temporal: Partial<Memory["temporal"]> | undefined): M
     lastConfirmedAt: temporal?.lastConfirmedAt ? new Date(temporal.lastConfirmedAt) : undefined,
     verificationDueAt: temporal?.verificationDueAt ? new Date(temporal.verificationDueAt) : undefined
   };
+}
+
+function memoryScope(input: Partial<MemoryInput> & Pick<MemoryInput, "userId">): MemoryScope {
+  return {
+    brainId: input.brainId,
+    sourceId: input.sourceId,
+    userId: input.userId,
+    agentId: input.agentId,
+    sessionId: input.sessionId,
+    appId: input.appId,
+    orgId: input.orgId,
+    projectId: input.projectId,
+    deviceId: input.deviceId,
+    runId: input.runId
+  };
+}
+
+function citationsFor(source: Provenance): string[] {
+  if (!source.uri) return [source.kind];
+  const lines = source.lineStart ? `:${source.lineStart}${source.lineEnd && source.lineEnd !== source.lineStart ? `-${source.lineEnd}` : ""}` : "";
+  return [`${source.uri}${lines}`];
+}
+
+function beliefStateFor(input: { temporal?: Memory["temporal"]; metadata?: Record<string, unknown>; archivedAt?: Date | string }): BeliefState {
+  if (input.metadata?.retracted === true) return "retracted";
+  if (typeof input.metadata?.contradiction === "string") return "contradicted";
+  if (input.temporal?.supersededAt) return "superseded";
+  const now = Date.now();
+  if (input.temporal?.verificationDueAt && new Date(input.temporal.verificationDueAt).getTime() <= now) return "needs_verification";
+  if (input.temporal?.validUntil && new Date(input.temporal.validUntil).getTime() < now) return "stale";
+  if (input.archivedAt) return "stale";
+  return "active";
 }
 
 function uniqueRelations(relations: Memory["relations"]): Memory["relations"] {

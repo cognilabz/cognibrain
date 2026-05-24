@@ -20,6 +20,8 @@ Every context pack should answer these questions:
 - Which graph path or retrieval signal made it relevant?
 - Which user, project, app, brain, source, agent, or org scope allowed it?
 
+The canonical stored object is MemoryRecordV2. It is add-only compatible with older memories and includes `schemaVersion:"2.0"`, scope, source, consent, trust, confidence, importance, validity metadata, belief state, relations, provenance citations and an audit trail.
+
 ## First Five Minutes Demo
 
 1. Add or seed memories with source, trust, consent, entities and validity metadata.

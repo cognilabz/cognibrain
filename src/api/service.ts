@@ -432,7 +432,10 @@ export class MemoryService {
         },
         consent: result.memory.consent,
         trust: result.memory.trust,
+        confidence: result.memory.confidence,
         importance: result.memory.importance,
+        beliefState: result.memory.beliefState,
+        provenance: result.memory.provenance,
         validity: {
           eventAt: evidenceDate(result.memory.temporal.eventAt),
           validFrom: evidenceDate(result.memory.temporal.validFrom),

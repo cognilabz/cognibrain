@@ -468,6 +468,41 @@ describe("TypeScript memory core", () => {
     expect(pack.results.some((result) => result.content.includes("private draft"))).toBe(false);
   });
 
+  it("stores MemoryRecordV2 fields and enforces belief-state retrieval decisions", () => {
+    const service = new MemoryService();
+    const active = service.add({
+      userId: "u1",
+      content: "Atlas uses Vitest for release checks.",
+      source: { kind: "reviewed_code", uri: "file://package.json", lineStart: 10, confidence: 0.96 },
+      temporal: { validFrom: "2026-05-01T00:00:00.000Z" }
+    });
+    const review = service.add({
+      userId: "u1",
+      content: "Atlas release checks might be outdated.",
+      beliefState: "needs_verification",
+      source: { kind: "agent", confidence: 0.7 },
+      temporal: { verificationDueAt: "2026-05-01T00:00:00.000Z" }
+    });
+    service.add({
+      userId: "u1",
+      content: "Atlas uses an obsolete release checklist.",
+      beliefState: "retracted",
+      source: { kind: "human", confidence: 0.9 }
+    });
+
+    expect(active.schemaVersion).toBe("2.0");
+    expect(active.scope.userId).toBe("u1");
+    expect(active.confidence).toBe(0.96);
+    expect(active.beliefState).toBe("active");
+    expect(active.provenance.citations[0]).toContain("package.json:10");
+    expect(active.audit[0].type).toBe("created");
+
+    const results = service.search({ userId: "u1", query: "Atlas release checks", limit: 5 });
+    expect(results.some((result) => result.memory.id === active.id && result.decision !== "exclude")).toBe(true);
+    expect(results.find((result) => result.memory.id === review.id)?.decision).toBe("review");
+    expect(results.some((result) => result.memory.beliefState === "retracted")).toBe(false);
+  });
+
   it("redacts sensitive writes, extracts add-only facts, records feedback, and reports metrics", () => {
     const service = new MemoryService({ redactionPolicy: { mode: "redact" } });
     const secret = service.add({

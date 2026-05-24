@@ -232,6 +232,59 @@ switch (command) {
     console.log(JSON.stringify(service.runInference(rules), null, 2));
     break;
   }
+  case "agent-register": {
+    const [id, namespace = "default", ...brainIds] = args;
+    if (!id || brainIds.length === 0) fail("Usage: memctl agent-register <agent-id> [namespace] <brain-id...>");
+    console.log(
+      JSON.stringify(
+        service.registerAgent({
+          id,
+          name: process.env.MEMORY_AGENT_NAME ?? id,
+          namespace,
+          brainIds,
+          permissions: permissionsFromEnv(),
+          personaId: process.env.MEMORY_PERSONA_ID,
+          subscriptions: process.env.MEMORY_AGENT_SUBSCRIPTIONS_JSON ? JSON.parse(process.env.MEMORY_AGENT_SUBSCRIPTIONS_JSON) : undefined
+        }),
+        null,
+        2
+      )
+    );
+    break;
+  }
+  case "agents": {
+    console.log(JSON.stringify(service.listAgents(), null, 2));
+    break;
+  }
+  case "agent-persona": {
+    const [agentId, personaId] = args;
+    if (!agentId || !personaId) fail("Usage: memctl agent-persona <agent-id> <persona-id>");
+    console.log(JSON.stringify(service.assignAgentPersona(agentId, personaId), null, 2));
+    break;
+  }
+  case "persona-set": {
+    const [id, label = id] = args;
+    if (!id) fail("Usage: memctl persona-set <persona-id> [label]");
+    console.log(
+      JSON.stringify(
+        service.setPersona({
+          id,
+          label,
+          summaryStyle: summaryStyleFromEnv(),
+          retrievalWeights: process.env.MEMORY_PERSONA_WEIGHTS_JSON ? JSON.parse(process.env.MEMORY_PERSONA_WEIGHTS_JSON) : undefined,
+          privacyDefault: privacyDefaultFromEnv(),
+          domain: process.env.MEMORY_PERSONA_DOMAIN
+        }),
+        null,
+        2
+      )
+    );
+    break;
+  }
+  case "personas": {
+    console.log(JSON.stringify(service.listPersonas(), null, 2));
+    break;
+  }
   case "brain-create": {
     const [name, visibility = "private"] = args;
     if (!name || !["private", "team", "org", "public"].includes(visibility)) fail("Usage: memctl brain-create <name> [private|team|org|public]");
@@ -249,7 +302,33 @@ switch (command) {
     break;
   }
   case "events": {
-    console.log(JSON.stringify(service.eventFeed(), null, 2));
+    console.log(JSON.stringify(service.eventFeed({ agentId: process.env.MEMORY_AGENT_ID, brainId: process.env.MEMORY_BRAIN_ID, sourceId: process.env.MEMORY_SOURCE_ID }), null, 2));
+    break;
+  }
+  case "federated-search": {
+    const query = args.join(" ");
+    if (!query) fail("Usage: memctl federated-search <query>");
+    const brainIds = process.env.MEMORY_BRAIN_IDS?.split(",").map((item) => item.trim()).filter(Boolean);
+    if (!brainIds?.length) fail("Set MEMORY_BRAIN_IDS for federated-search");
+    console.log(JSON.stringify(service.federatedSearch({ userId, query, brainIds, orgId: process.env.MEMORY_ORG_ID, agentId: process.env.MEMORY_AGENT_ID, includeSharedBrains: true }), null, 2));
+    break;
+  }
+  case "share-request": {
+    const [memoryId, orgId, ...note] = args;
+    if (!memoryId || !orgId) fail("Usage: memctl share-request <memory-id> <org-id> [note]");
+    console.log(JSON.stringify(service.requestSharedMemory(memoryId, orgId, process.env.MEMORY_AGENT_ID ?? userId, note.join(" ") || undefined), null, 2));
+    break;
+  }
+  case "share-approve": {
+    const [memoryId, orgId] = args;
+    if (!memoryId || !orgId) fail("Usage: memctl share-approve <memory-id> <org-id>");
+    console.log(JSON.stringify(service.promoteSharedMemory(memoryId, orgId), null, 2));
+    break;
+  }
+  case "share-revoke": {
+    const [memoryId, ...reason] = args;
+    if (!memoryId) fail("Usage: memctl share-revoke <memory-id> [reason]");
+    console.log(JSON.stringify(service.revokeSharedMemory(memoryId, process.env.MEMORY_AGENT_ID ?? userId, reason.join(" ") || undefined), null, 2));
     break;
   }
   case "audit": {
@@ -327,7 +406,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|brain-create|brains|source-create|events|audit|compliance|storage|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|storage|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -346,4 +425,19 @@ function relationTypesFromEnv() {
 function retrievalModeFromEnv() {
   const value = process.env.MEMORY_RETRIEVAL_MODE;
   return value === "rrf" || value === "graph" || value === "path" || value === "hybrid" ? value : undefined;
+}
+
+function permissionsFromEnv() {
+  const values = (process.env.MEMORY_AGENT_PERMISSIONS ?? "read,write").split(",").map((item) => item.trim()).filter(Boolean);
+  return values.filter((value): value is "read" | "write" | "share" | "admin" => value === "read" || value === "write" || value === "share" || value === "admin");
+}
+
+function summaryStyleFromEnv() {
+  const value = process.env.MEMORY_PERSONA_SUMMARY_STYLE;
+  return value === "descriptive" || value === "narrative" ? value : "concise";
+}
+
+function privacyDefaultFromEnv() {
+  const value = process.env.MEMORY_PERSONA_PRIVACY;
+  return value === "private" || value === "org" || value === "public" ? value : value === "user" ? value : undefined;
 }

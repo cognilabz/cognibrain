@@ -419,6 +419,11 @@ export interface AgentRegistration {
   brainIds: string[];
   permissions: Array<"read" | "write" | "share" | "admin">;
   personaId?: string;
+  subscriptions?: {
+    events?: AuditEvent["type"][];
+    brainIds?: string[];
+    sourceIds?: string[];
+  };
   createdAt: Date | string;
   updatedAt: Date | string;
 }
@@ -441,8 +446,12 @@ export interface AuditEvent {
     | "memory.update"
     | "memory.delete"
     | "memory.share"
+    | "memory.share.request"
+    | "memory.share.revoke"
     | "memory.revert"
     | "memory.consent"
+    | "agent.register"
+    | "persona.set"
     | "extract.run"
     | "reflect.run"
     | "search.run"
@@ -505,6 +514,15 @@ export interface WebhookRegistration {
   secretRef?: string;
   createdAt: Date | string;
   disabledAt?: Date | string;
+}
+
+export interface FederatedSearchReport {
+  query: string;
+  userId: string;
+  requestedBrainIds: string[];
+  searchedBrainIds: string[];
+  blockedBrainIds: string[];
+  results: SearchResult[];
 }
 
 export interface WebhookDelivery {

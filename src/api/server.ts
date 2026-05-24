@@ -241,7 +241,14 @@ const agentSchema = z.object({
   namespace: z.string().min(1),
   brainIds: z.array(z.string()),
   permissions: z.array(z.enum(["read", "write", "share", "admin"])),
-  personaId: z.string().optional()
+  personaId: z.string().optional(),
+  subscriptions: z
+    .object({
+      events: z.array(z.lazy(() => auditTypeSchema)).optional(),
+      brainIds: z.array(z.string()).optional(),
+      sourceIds: z.array(z.string()).optional()
+    })
+    .optional()
 });
 
 const personaSchema = z.object({
@@ -256,7 +263,7 @@ const personaSchema = z.object({
 const webhookSchema = z.object({
   id: z.string().optional(),
   url: z.string().url(),
-  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.revert", "memory.consent", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
+  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
   secretRef: z.string().optional()
 });
 
@@ -270,7 +277,7 @@ const marketplaceModuleSchema = z.object({
   manifest: z.record(z.unknown())
 });
 
-const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.revert", "memory.consent", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"]);
+const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"]);
 
 const offlineOperationSchema = z.object({
   id: z.string().optional(),
@@ -441,6 +448,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && parts[0] === "agents" && parts[1] && parts[2] === "persona") {
+    const body = z.object({ personaId: z.string().min(1) }).parse(await json(request));
+    send(response, 202, defaultService.assignAgentPersona(parts[1], body.personaId));
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/personas") {
     send(response, 200, defaultService.listPersonas());
     return;
@@ -452,7 +465,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (method === "GET" && url.pathname === "/events") {
-    send(response, 200, defaultService.eventFeed());
+    send(response, 200, defaultService.eventFeed({
+      agentId: url.searchParams.get("agentId") ?? undefined,
+      brainId: url.searchParams.get("brainId") ?? undefined,
+      sourceId: url.searchParams.get("sourceId") ?? undefined,
+      type: url.searchParams.get("type") ? auditTypeSchema.parse(url.searchParams.get("type")) : undefined
+    }));
     return;
   }
 
@@ -611,6 +629,16 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && url.pathname === "/federation/search") {
+    const body = searchSchema.extend({ brainIds: z.array(z.string()).min(1) }).parse(await json(request));
+    const report = defaultService.federatedSearch(body);
+    send(response, 200, {
+      ...report,
+      results: report.results.map((result) => ({ ...result, memory: serialize(result.memory) }))
+    });
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/feedback") {
     const body = feedbackSchema.parse(await json(request));
     send(response, 202, serialize(defaultService.feedback(body)));
@@ -620,6 +648,18 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (method === "POST" && parts[0] === "memories" && parts[2] === "promote") {
     const body = z.object({ orgId: z.string().min(1) }).parse(await json(request));
     send(response, 202, serialize(defaultService.promoteSharedMemory(parts[1], body.orgId)));
+    return;
+  }
+
+  if (method === "POST" && parts[0] === "memories" && parts[2] === "share-request") {
+    const body = z.object({ orgId: z.string().min(1), requestedBy: z.string().optional(), note: z.string().optional() }).parse(await json(request));
+    send(response, 202, serialize(defaultService.requestSharedMemory(parts[1], body.orgId, body.requestedBy, body.note)));
+    return;
+  }
+
+  if (method === "POST" && parts[0] === "memories" && parts[2] === "share-revoke") {
+    const body = z.object({ actorId: z.string().optional(), reason: z.string().optional() }).parse(await json(request));
+    send(response, 202, serialize(defaultService.revokeSharedMemory(parts[1], body.actorId, body.reason)));
     return;
   }
 

@@ -48,9 +48,13 @@ Retrieval fuses graph evidence from direct shared entities, typed relation paths
 
 ## Brains, Sources, Agents, And Marketplace
 
-Brains are first-class logical memory databases, and sources are content repositories inside a brain. Memories can now carry `brainId` and `sourceId`, while agents register namespaces, permissions, and optional personas before writing. The service enforces brain/source existence, owner/member write access, agent allow-lists, source default consent, and explicit shared-brain federation, which is the foundation for team memories, cross-brain federation, and multi-agent collaboration.
+Brains are first-class logical memory databases, and sources are content repositories inside a brain. Memories can now carry `brainId` and `sourceId`, while agents register namespaces, permissions, event subscriptions, and optional personas before writing. The service enforces brain/source existence, owner/member write access, agent allow-lists, source default consent, and explicit shared-brain federation, which is the foundation for team memories, cross-brain federation, and multi-agent collaboration.
 
 The local marketplace registry stores connectors, domain modules, personas, and retrieval profiles. Installing a persona module materializes it into the persona registry so setup flows and dashboards can preview modules before applying them.
+
+Multi-agent collaboration is explicit rather than implicit. `registerAgent()` stores agent namespaces, readable brains, permissions, persona defaults, and event subscriptions. `eventFeed()` can filter by agent, brain, source, or event type, giving each agent a scoped view of the memory event stream. `federatedSearch()` returns searched and blocked brain ids alongside results so cross-brain access decisions stay auditable.
+
+Shared team memories use a review workflow. `requestSharedMemory()` marks a memory as pending with requester metadata, `promoteSharedMemory()` approves it for org-visible retrieval, and `revokeSharedMemory()` demotes it back to user visibility while retaining a revocation audit trail.
 
 ## Audit, Webhooks, And Compliance
 

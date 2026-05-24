@@ -38,6 +38,7 @@ import type {
   EntityRecord,
   ExtractionReport,
   FeedbackEvent,
+  FederatedSearchReport,
   GraphReport,
   GraphActivationResult,
   GraphExportOptions,
@@ -193,7 +194,9 @@ export class MemoryService {
 
   add(input: MemoryInput) {
     const sourceDefaultConsent = input.sourceId ? this.sources.get(input.sourceId)?.defaultConsent : undefined;
-    const scopedInput = sourceDefaultConsent ? { ...input, consent: { ...sourceDefaultConsent, ...(input.consent ?? {}) } } : input;
+    const agentPersona = input.agentId ? this.personaForAgent(input.agentId) : undefined;
+    const personaConsent = agentPersona?.privacyDefault ? { visibility: agentPersona.privacyDefault } : undefined;
+    const scopedInput = { ...input, consent: { ...personaConsent, ...sourceDefaultConsent, ...(input.consent ?? {}) } };
     const enriched = this.domainModule?.enrich ? this.domainModule.enrich(scopedInput) : scopedInput;
     this.ensureScopedAccess(enriched);
     const checked = applyRedactionPolicy(enriched, this.redactionPolicy);
@@ -278,7 +281,18 @@ export class MemoryService {
   }
 
   search(options: SearchOptions) {
-    const profile = options.profileId ? this.retrievalProfiles.get(options.profileId) : this.profileFor(options);
+    const persona = options.agentId ? this.personaForAgent(options.agentId) : undefined;
+    const personaProfile = persona?.retrievalWeights
+      ? {
+          id: `persona:${persona.id}`,
+          label: persona.label,
+          weights: normalizeRetrievalWeights(persona.retrievalWeights),
+          scope: { agentId: options.agentId },
+          updatedAt: persona.updatedAt,
+          provenance: "persona"
+        }
+      : undefined;
+    const profile = options.profileId ? this.retrievalProfiles.get(options.profileId) : personaProfile ?? this.profileFor(options);
     const linkedUserIds = options.includeLinkedIdentities ? this.identities.resolve(options.userId).filter((id) => id !== options.userId) : [];
     const federatedBrainIds = options.includeSharedBrains ? options.brainIds ?? this.accessibleBrainIds(options) : options.brainIds;
     const queryExpansions = this.expandSearchQuery(options);
@@ -308,6 +322,24 @@ export class MemoryService {
     this.recordAudit("search.run", { userId: options.userId, brainId: options.brainId, sourceId: options.sourceId, metadata: { resultCount: results.length, profileId: profile?.id } });
     this.persist();
     return results;
+  }
+
+  federatedSearch(options: SearchOptions & { brainIds: string[] }): FederatedSearchReport {
+    const allowed = new Set(this.accessibleBrainIds(options));
+    const requested = [...new Set(options.brainIds)];
+    const searchedBrainIds = requested.filter((id) => allowed.has(id));
+    const blockedBrainIds = requested.filter((id) => !allowed.has(id));
+    const results = searchedBrainIds.length
+      ? this.search({ ...options, brainIds: searchedBrainIds, includeSharedBrains: true })
+      : [];
+    return {
+      query: options.query,
+      userId: options.userId,
+      requestedBrainIds: requested,
+      searchedBrainIds,
+      blockedBrainIds,
+      results
+    };
   }
 
   reflect(userId: string) {
@@ -517,7 +549,7 @@ export class MemoryService {
     const now = new Date().toISOString();
     const agent = { ...input, createdAt: now, updatedAt: now };
     this.agents.set(agent.id, agent);
-    this.recordAudit("memory.write", { actorId: agent.id, metadata: { resource: "agent", namespace: agent.namespace } });
+    this.recordAudit("agent.register", { actorId: agent.id, metadata: { resource: "agent", namespace: agent.namespace, brainIds: agent.brainIds, permissions: agent.permissions } });
     this.persist();
     return agent;
   }
@@ -526,10 +558,22 @@ export class MemoryService {
     return [...this.agents.values()].sort((a, b) => a.namespace.localeCompare(b.namespace));
   }
 
+  assignAgentPersona(agentId: string, personaId: string): AgentRegistration {
+    const agent = this.agents.get(agentId);
+    if (!agent) throw new Error(`Agent not found: ${agentId}`);
+    if (!this.personas.has(personaId)) throw new Error(`Persona not found: ${personaId}`);
+    const updated = { ...agent, personaId, updatedAt: new Date().toISOString() };
+    this.agents.set(agentId, updated);
+    this.recordAudit("agent.register", { actorId: agentId, metadata: { resource: "agent-persona", personaId } });
+    this.persist();
+    return updated;
+  }
+
   setPersona(input: Omit<PersonaProfile, "createdAt" | "updatedAt">): PersonaProfile {
     const now = new Date().toISOString();
     const persona = { ...input, createdAt: now, updatedAt: now };
     this.personas.set(persona.id, persona);
+    this.recordAudit("persona.set", { metadata: { personaId: persona.id, domain: persona.domain, privacyDefault: persona.privacyDefault } });
     this.persist();
     return persona;
   }
@@ -543,9 +587,46 @@ export class MemoryService {
     const updated = this.store.update(memoryId, {
       orgId,
       consent: { ...memory.consent, visibility: "org" },
-      metadata: { shared: { promotedAt: new Date().toISOString(), orgId } }
+      metadata: { shared: { status: "approved", promotedAt: new Date().toISOString(), orgId } }
     });
     this.recordAudit("memory.share", { userId: updated.userId, brainId: updated.brainId, sourceId: updated.sourceId, memoryId: updated.id, metadata: { orgId } });
+    this.persist();
+    return updated;
+  }
+
+  requestSharedMemory(memoryId: string, orgId: string, requestedBy?: string, note?: string): Memory {
+    const memory = this.store.get(memoryId);
+    const updated = this.store.update(memoryId, {
+      metadata: {
+        shared: {
+          status: "pending",
+          orgId,
+          requestedBy,
+          requestedAt: new Date().toISOString(),
+          note
+        }
+      }
+    });
+    this.recordAudit("memory.share.request", { actorId: requestedBy, userId: updated.userId, brainId: updated.brainId, sourceId: updated.sourceId, memoryId: updated.id, metadata: { orgId, note } });
+    this.persist();
+    return updated;
+  }
+
+  revokeSharedMemory(memoryId: string, actorId?: string, reason?: string): Memory {
+    const memory = this.store.get(memoryId);
+    const updated = this.store.update(memoryId, {
+      consent: { ...memory.consent, visibility: "user" },
+      metadata: {
+        shared: {
+          ...(memory.metadata.shared as Record<string, unknown> | undefined),
+          status: "revoked",
+          revokedAt: new Date().toISOString(),
+          revokedBy: actorId,
+          reason
+        }
+      }
+    });
+    this.recordAudit("memory.share.revoke", { actorId, userId: updated.userId, brainId: updated.brainId, sourceId: updated.sourceId, memoryId: updated.id, metadata: { reason } });
     this.persist();
     return updated;
   }
@@ -590,8 +671,24 @@ export class MemoryService {
     return webhook;
   }
 
-  eventFeed(): { auditEvents: AuditEvent[]; deliveries: WebhookDelivery[] } {
-    return { auditEvents: [...this.auditEvents], deliveries: [...this.webhookDeliveries] };
+  eventFeed(filter: { agentId?: string; brainId?: string; sourceId?: string; type?: AuditEvent["type"] } = {}): { auditEvents: AuditEvent[]; deliveries: WebhookDelivery[] } {
+    const agent = filter.agentId ? this.agents.get(filter.agentId) : undefined;
+    const subscriptionEvents = new Set(agent?.subscriptions?.events ?? []);
+    const subscriptionBrainIds = new Set(agent?.subscriptions?.brainIds ?? agent?.brainIds ?? []);
+    const subscriptionSourceIds = new Set(agent?.subscriptions?.sourceIds ?? []);
+    const auditEvents = this.auditEvents
+      .filter((event) => !filter.type || event.type === filter.type)
+      .filter((event) => !filter.brainId || event.brainId === filter.brainId)
+      .filter((event) => !filter.sourceId || event.sourceId === filter.sourceId)
+      .filter((event) => {
+        if (!agent) return true;
+        if (subscriptionEvents.size && !subscriptionEvents.has(event.type)) return false;
+        if (event.brainId && subscriptionBrainIds.size && !subscriptionBrainIds.has(event.brainId) && !agent.permissions.includes("admin")) return false;
+        if (event.sourceId && subscriptionSourceIds.size && !subscriptionSourceIds.has(event.sourceId)) return false;
+        return true;
+      });
+    const visibleEventIds = new Set(auditEvents.map((event) => event.id));
+    return { auditEvents, deliveries: this.webhookDeliveries.filter((delivery) => visibleEventIds.has(delivery.eventId)) };
   }
 
   installMarketplaceModule(module: MarketplaceModule): MarketplaceModule {
@@ -1046,15 +1143,22 @@ export class MemoryService {
   }
 
   private accessibleBrainIds(options: SearchOptions): string[] {
+    const agent = options.agentId ? this.agents.get(options.agentId) : undefined;
     return [...this.brains.values()]
       .filter((brain) => {
         if (brain.id === options.brainId) return true;
         if (brain.ownerUserId === options.userId || brain.memberUserIds?.includes(options.userId)) return true;
+        if (agent?.brainIds.includes(brain.id)) return true;
         if (options.agentId && brain.allowedAgentIds?.includes(options.agentId)) return true;
         if (brain.visibility === "org") return Boolean(options.orgId && brain.orgId === options.orgId);
         return brain.visibility === "public";
       })
       .map((brain) => brain.id);
+  }
+
+  private personaForAgent(agentId: string): PersonaProfile | undefined {
+    const agent = this.agents.get(agentId);
+    return agent?.personaId ? this.personas.get(agent.personaId) : undefined;
   }
 
   private expandSearchQuery(options: SearchOptions): string[] | undefined {

@@ -924,6 +924,62 @@ describe("TypeScript memory core", () => {
     expect(service.search({ userId: "member", orgId: "org1", query: "deployment note" })[0].memory.content).toContain("Offline sync");
   });
 
+  it("supports multi-agent subscriptions, shared-memory review, cross-brain federation, and persona defaults", () => {
+    const service = new MemoryService();
+    const team = service.createBrain({ name: "Team Brain", ownerUserId: "owner", memberUserIds: ["member"], orgId: "org1", visibility: "team", allowedAgentIds: ["agent-review"] });
+    const org = service.createBrain({ name: "Org Brain", ownerUserId: "owner", orgId: "org1", visibility: "org" });
+    const teamSource = service.createSource({ brainId: team.id, name: "Team Source", kind: "docs" });
+    service.setPersona({
+      id: "support",
+      label: "Support",
+      summaryStyle: "descriptive",
+      privacyDefault: "org",
+      retrievalWeights: { keyword: 0.5, trust: 0.3, graph: 0.2 }
+    });
+    service.registerAgent({
+      id: "agent-review",
+      name: "Review Agent",
+      namespace: "review",
+      brainIds: [team.id, org.id],
+      permissions: ["read", "write", "share"],
+      personaId: "support",
+      subscriptions: { events: ["memory.write", "memory.share.request", "memory.share", "memory.share.revoke"], brainIds: [team.id] }
+    });
+
+    const privateMemory = service.add({
+      brainId: team.id,
+      sourceId: teamSource.id,
+      userId: "member",
+      agentId: "agent-review",
+      orgId: "org1",
+      content: "Support agent captured the release escalation playbook.",
+      entities: ["release escalation"],
+      source: { kind: "human", confidence: 0.94 }
+    });
+    expect(privateMemory.consent.visibility).toBe("org");
+
+    const pending = service.requestSharedMemory(privateMemory.id, "org1", "agent-review", "Useful for team support.");
+    expect((pending.metadata.shared as { status?: string }).status).toBe("pending");
+    const promoted = service.promoteSharedMemory(privateMemory.id, "org1");
+    expect((promoted.metadata.shared as { status?: string }).status).toBe("approved");
+
+    const federated = service.federatedSearch({ userId: "member", agentId: "agent-review", orgId: "org1", query: "release escalation", brainIds: [team.id, org.id] });
+    expect(federated.searchedBrainIds).toContain(team.id);
+    expect(federated.searchedBrainIds).toContain(org.id);
+    expect(federated.results.some((result) => result.memory.id === privateMemory.id)).toBe(true);
+
+    const feed = service.eventFeed({ agentId: "agent-review", brainId: team.id });
+    expect(feed.auditEvents.some((event) => event.type === "memory.share.request")).toBe(true);
+    expect(feed.auditEvents.every((event) => !event.brainId || event.brainId === team.id)).toBe(true);
+
+    const search = service.search({ userId: "member", agentId: "agent-review", orgId: "org1", query: "release escalation" });
+    expect(search[0].fusion?.components?.keyword).toBeGreaterThan(0);
+
+    const revoked = service.revokeSharedMemory(privateMemory.id, "agent-review", "No longer approved.");
+    expect((revoked.metadata.shared as { status?: string }).status).toBe("revoked");
+    expect(service.auditTrail({ memoryId: privateMemory.id }).some((event) => event.type === "memory.share.revoke")).toBe(true);
+  });
+
   it("queries temporal intervals and mines recurring behavioural patterns for retrieval", () => {
     const service = new MemoryService();
     for (const timestamp of ["2026-05-01T09:00:00.000Z", "2026-05-08T09:00:00.000Z", "2026-05-15T09:00:00.000Z"]) {

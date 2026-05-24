@@ -14,7 +14,14 @@ export function runNextgenEvaluation() {
 
   const brain = service.createBrain({ name: "Nextgen Team Brain", ownerUserId: "bench", orgId: "org-bench", visibility: "team" });
   const source = service.createSource({ brainId: brain.id, name: "Benchmark Source", kind: "docs" });
-  service.registerAgent({ id: "agent-bench", name: "Benchmark Agent", namespace: "eval", brainIds: [brain.id], permissions: ["read", "write", "share"] });
+  service.registerAgent({
+    id: "agent-bench",
+    name: "Benchmark Agent",
+    namespace: "eval",
+    brainIds: [brain.id],
+    permissions: ["read", "write", "share"],
+    subscriptions: { events: ["memory.write", "memory.share.request", "memory.share", "memory.share.revoke"], brainIds: [brain.id] }
+  });
   service.registerWebhook({ url: "https://example.invalid/hooks/memory", events: ["memory.write", "inference.run", "memory.share"] });
   service.installMarketplaceModule({
     id: "persona-nextgen",
@@ -24,6 +31,7 @@ export function runNextgenEvaluation() {
     description: "Evaluation persona for nextgen proof.",
     manifest: { id: "nextgen", label: "Nextgen", summaryStyle: "concise", privacyDefault: "private" }
   });
+  service.assignAgentPersona("agent-bench", "nextgen");
 
   const atlas = service.add({
     brainId: brain.id,
@@ -98,8 +106,9 @@ export function runNextgenEvaluation() {
   const temporal = service.temporalQuery("bench", { after: "2026-05-01T00:00:00.000Z", before: "2026-05-09T00:00:00.000Z" });
   const patterns = service.behavioralPatterns("bench");
   const timelineSummary = service.summarizeTimeline("bench", { granularity: "week", persist: true, style: "concise" });
-  const behavioralSearch = service.search({ userId: "bench", query: "Friday graph review habit", weights: { behavioral: 1, semantic: 0, keyword: 0, entity: 0, temporal: 0, trust: 0, graph: 0, access: 0 } });
+  const behavioralSearch = service.search({ userId: "bench", query: "Friday graph review habit", includePrivate: true, weights: { behavioral: 1, semantic: 0, keyword: 0, entity: 0, temporal: 0, trust: 0, graph: 0, access: 0 } });
   const entities = service.entityCatalog("bench");
+  const shareRequest = service.requestSharedMemory(atlas.id, "org-bench", "agent-bench", "Benchmark federation review.");
   service.promoteSharedMemory(atlas.id, "org-bench");
   const federated = service.search({ userId: "bench-peer", orgId: "org-bench", query: "release architecture", includeSharedBrains: true, brainIds: [brain.id] });
   const storage = service.storageStatus();
@@ -142,8 +151,11 @@ export function runNextgenEvaluation() {
   const expandedRetrieval = service.search({ userId: "bench", query: "cli launcher", expandQuery: true, mode: "rrf" });
   const contradictionRetrieval = service.search({ userId: "bench", query: "Atlas CacheClient cache reads", mode: "path" });
   const compliance = service.complianceReport(new Date("2026-01-01T00:00:00.000Z"));
+  const agentFeed = service.eventFeed({ agentId: "agent-bench", brainId: brain.id });
   const events = service.eventFeed();
   const audit = service.auditTrail({ memoryId: atlas.id });
+  const federatedReport = service.federatedSearch({ userId: "bench-peer", agentId: "agent-bench", orgId: "org-bench", query: "release architecture", brainIds: [brain.id] });
+  const revoked = service.revokeSharedMemory(atlas.id, "agent-bench", "Benchmark cleanup.");
 
   checks.push({
     id: "graph-inference",
@@ -194,6 +206,17 @@ export function runNextgenEvaluation() {
     id: "webhook-event-feed",
     passed: events.deliveries.some((delivery) => delivery.status === "queued"),
     detail: `${events.deliveries.length} queued deliveries`
+  });
+  checks.push({
+    id: "multi-agent-collaboration",
+    passed:
+      service.listAgents().some((agent) => agent.id === "agent-bench" && agent.personaId === "nextgen") &&
+      service.listPersonas().some((persona) => persona.id === "nextgen") &&
+      (shareRequest.metadata.shared as { status?: string }).status === "pending" &&
+      agentFeed.auditEvents.some((event) => event.type === "memory.share.request") &&
+      federatedReport.searchedBrainIds.includes(brain.id) &&
+      (revoked.metadata.shared as { status?: string }).status === "revoked",
+    detail: `${agentFeed.auditEvents.length} agent-visible events, ${federatedReport.results.length} federated results`
   });
   checks.push({
     id: "compliance-retention",

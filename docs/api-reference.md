@@ -120,13 +120,17 @@ curl -X POST http://localhost:8787/sources \
   -d '{"brainId":"team-brain","name":"Engineering Notes","kind":"docs"}'
 curl -X POST http://localhost:8787/agents \
   -H "content-type: application/json" \
-  -d '{"id":"codex","name":"Codex","namespace":"coding","brainIds":["team-brain"],"permissions":["read","write"]}'
+  -d '{"id":"codex","name":"Codex","namespace":"coding","brainIds":["team-brain"],"permissions":["read","write","share"],"subscriptions":{"events":["memory.write","memory.share.request"],"brainIds":["team-brain"]}}'
 curl -X PUT http://localhost:8787/personas \
   -H "content-type: application/json" \
   -d '{"id":"researcher","label":"Researcher","summaryStyle":"descriptive","privacyDefault":"private"}'
+curl -X POST http://localhost:8787/agents/codex/persona \
+  -H "content-type: application/json" \
+  -d '{"personaId":"researcher"}'
+curl "http://localhost:8787/events?agentId=codex&brainId=team-brain"
 ```
 
-Brains are logical memory databases. Sources are content repositories inside a brain. Agents register namespaces and permissions before writing scoped memories. Personas carry retrieval, summary, and privacy defaults that connectors can apply.
+Brains are logical memory databases. Sources are content repositories inside a brain. Agents register namespaces, permissions, optional personas, and event subscriptions before writing scoped memories. Personas carry retrieval, summary, and privacy defaults that connectors can apply automatically.
 
 ## Feedback
 
@@ -164,6 +168,18 @@ curl -X POST http://localhost:8787/identity-links \
 curl -X POST http://localhost:8787/search \
   -H "content-type: application/json" \
   -d '{"userId":"teammate","orgId":"org-1","query":"release architecture","includeSharedBrains":true,"brainIds":["brain_team"]}'
+curl -X POST http://localhost:8787/federation/search \
+  -H "content-type: application/json" \
+  -d '{"userId":"teammate","agentId":"codex","orgId":"org-1","query":"release architecture","brainIds":["team-brain","org-brain"]}'
+curl -X POST http://localhost:8787/memories/mem_123/share-request \
+  -H "content-type: application/json" \
+  -d '{"orgId":"org-1","requestedBy":"codex","note":"Useful for the team playbook."}'
+curl -X POST http://localhost:8787/memories/mem_123/promote \
+  -H "content-type: application/json" \
+  -d '{"orgId":"org-1"}'
+curl -X POST http://localhost:8787/memories/mem_123/share-revoke \
+  -H "content-type: application/json" \
+  -d '{"actorId":"codex","reason":"No longer approved."}'
 curl -X POST http://localhost:8787/memories/mem_123/consent \
   -H "content-type: application/json" \
   -d '{"visibility":"public","allowTraining":true}'
@@ -197,7 +213,7 @@ curl -X POST http://localhost:8787/lifecycle/preview \
   -d '{"userId":"dev","policy":{"archiveAfterDays":30}}'
 ```
 
-Identity links require an explicit consent token and store only a hash of that token. Shared-brain retrieval is opt-in via `includeSharedBrains` and `brainIds`, then still respects consent and org visibility. `/storage` reports active and available persistence adapters. `/sync/*` lets offline clients queue add/update/delete/consent operations, replay them, and inspect conflicts. `/audit` exposes filtered provenance logs, and memory revert restores the last captured write/update/delete/consent snapshot. Timelines expose event time, validity windows, supersession metadata, and hour/day/week/month period groupings. Timeline summarization can return deterministic or provider-backed summaries and optionally persist auditable reflection memories with `summaryOf` provenance. Temporal interval queries consider event and validity windows, then return filtered events plus changed entities. Pattern reports include reviewed dream patterns, deterministic recurring weekday/entity/tag patterns, sequence patterns, confidence, and false-positive risk for operator approval. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, spreading activation, safe graph-query matches, configurable rule-based inferred relations, and filtered JSON/GraphML exports. Path edges include confidence, trust, timestamp, source and memory provenance. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
+Identity links require an explicit consent token and store only a hash of that token. Shared-brain retrieval is opt-in via `includeSharedBrains` and `brainIds`, then still respects consent and org visibility. `/federation/search` reports searched and blocked brains so agents can audit cross-brain access. Shared-memory review supports request, promote, and revoke steps with audit events. `/storage` reports active and available persistence adapters. `/sync/*` lets offline clients queue add/update/delete/consent operations, replay them, and inspect conflicts. `/audit` exposes filtered provenance logs, and memory revert restores the last captured write/update/delete/consent snapshot. Timelines expose event time, validity windows, supersession metadata, and hour/day/week/month period groupings. Timeline summarization can return deterministic or provider-backed summaries and optionally persist auditable reflection memories with `summaryOf` provenance. Temporal interval queries consider event and validity windows, then return filtered events plus changed entities. Pattern reports include reviewed dream patterns, deterministic recurring weekday/entity/tag patterns, sequence patterns, confidence, and false-positive risk for operator approval. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, spreading activation, safe graph-query matches, configurable rule-based inferred relations, and filtered JSON/GraphML exports. Path edges include confidence, trust, timestamp, source and memory provenance. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
 
 ## Events, Webhooks, Marketplace, And Compliance
 
@@ -214,7 +230,7 @@ curl http://localhost:8787/marketplace
 curl http://localhost:8787/compliance
 ```
 
-Every write/update/delete/search/extract/reflect/share/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Compliance reports summarize storage scope, consent, retention, delete-on-request, encryption metadata, and audit counts.
+Every write/update/delete/search/extract/reflect/share/share-request/share-revoke/agent/persona/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Compliance reports summarize storage scope, consent, retention, delete-on-request, encryption metadata, and audit counts.
 
 ## Reflection
 

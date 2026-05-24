@@ -10,6 +10,7 @@
           "dataset": "BEAM 100K",
           "metric": "Retrieval nugget score@K against BEAM ideal responses and rubrics",
           "accuracy": 0.95,
+          "topK": 20,
           "comparable": true,
           "notes": "Graphonomous reports BEAM 100K 95.0% on its public BEAM benchmark page."
         },
@@ -17,6 +18,7 @@
           "dataset": "BEAM 500K",
           "metric": "Retrieval nugget score@K against BEAM ideal responses and rubrics",
           "accuracy": 0.969,
+          "topK": 20,
           "comparable": true,
           "notes": "Graphonomous reports BEAM 500K 96.9% on its public BEAM benchmark page."
         }
@@ -31,6 +33,7 @@
           "dataset": "BEAM 500K",
           "metric": "Retrieval nugget score@K against BEAM ideal responses and rubrics",
           "accuracy": 0.711,
+          "topK": 20,
           "comparable": true,
           "notes": "Hindsight reports BEAM 500K 71.1% in its public BEAM results post."
         }

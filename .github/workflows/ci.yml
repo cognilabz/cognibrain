@@ -28,6 +28,7 @@ jobs:
             artifacts/evaluation-report.json
             artifacts/nextgen-eval.json
             artifacts/nextgen-benchmarks.json
+            artifacts/answer-generation.json
             artifacts/benchmark-trend.json
             artifacts/leaderboard.json
           if-no-files-found: ignore

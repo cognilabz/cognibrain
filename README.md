@@ -308,12 +308,12 @@ npm run benchmark:market -- --competitors docs/public-market-claims.json --out a
 
 Latest checked evidence:
 
+<!-- benchmark-claims:start -->
 | Dataset | cognibrain | Result |
 | --- | ---: | --- |
-| LoCoMo | `1095/1536`, `71.29%` | Beats best included baseline `63.87%` |
-| LongMemEval-S | `497/500`, `99.40%` | Beats best included baseline `99.00%` |
-| BEAM 100K | `386/400`, `96.50%` | Beats Graphonomous public `95.0%` |
-| BEAM 500K | `683/700`, `97.57%` | Beats Graphonomous public `96.9%` |
+| LoCoMo | `34/40`, `85.00%` | Beats keyword-only `67.50%` |
+| LongMemEval-S | `40/40`, `100.00%` | Saturates with keyword-only `100.00%` |
+<!-- benchmark-claims:end -->
 
 The public market gate is a public-claim comparison, not a vendor-signed rerun. Stronger commercial proof should import vendor artifacts with the same dataset, metric, top-K, and budget.
 

@@ -12,10 +12,12 @@ export interface LeaderboardArtifact {
   };
   entries: Array<{
     suite: string;
+    category: "retrieval" | "answer_generation" | "vendor_claim";
     metric: string;
     score: number;
     artifact: string;
     proof: "local-deterministic" | "public-benchmark";
+    methodology: Record<string, unknown>;
     notes: string[];
   }>;
   publication: {
@@ -24,19 +26,51 @@ export interface LeaderboardArtifact {
   };
 }
 
-export function buildLeaderboardArtifact(options: { nextgenPath?: string; evaluationPath?: string; outputPath?: string } = {}): LeaderboardArtifact {
+export function buildLeaderboardArtifact(options: { nextgenPath?: string; evaluationPath?: string; answerGenerationPath?: string; marketGatePath?: string; outputPath?: string } = {}): LeaderboardArtifact {
   const nextgenPath = options.nextgenPath ?? "artifacts/nextgen-benchmarks.json";
   const evaluationPath = options.evaluationPath ?? "artifacts/evaluation-report.json";
+  const answerGenerationPath = options.answerGenerationPath ?? "artifacts/answer-generation.json";
+  const marketGatePath = options.marketGatePath ?? "artifacts/market-gate.json";
   const entries: LeaderboardArtifact["entries"] = [];
   if (existsSync(nextgenPath)) {
     const report = JSON.parse(readFileSync(nextgenPath, "utf8"));
     for (const suite of report.suites ?? []) {
-      entries.push({ suite: String(suite.id), metric: "suite_score", score: Number(suite.score), artifact: nextgenPath, proof: "local-deterministic", notes: ["Deterministic fixture suite; no user data included."] });
+      entries.push({ suite: String(suite.id), category: "retrieval", metric: "suite_score", score: Number(suite.score), artifact: nextgenPath, proof: "local-deterministic", methodology: { dataset: "deterministic-fixture", topK: 3 }, notes: ["Deterministic fixture suite; no user data included."] });
     }
   }
   if (existsSync(evaluationPath)) {
     const report = JSON.parse(readFileSync(evaluationPath, "utf8"));
-    entries.push({ suite: "synthetic-retrieval", metric: "accuracy", score: Number(report.ours?.accuracy ?? 0), artifact: evaluationPath, proof: "local-deterministic", notes: ["Local synthetic gate calibrated for compact retrieval context."] });
+    entries.push({ suite: "synthetic-retrieval", category: "retrieval", metric: "accuracy", score: Number(report.ours?.accuracy ?? 0), artifact: evaluationPath, proof: "local-deterministic", methodology: { dataset: "synthetic", topK: 4 }, notes: ["Local synthetic gate calibrated for compact retrieval context."] });
+  }
+  if (existsSync(answerGenerationPath)) {
+    const artifact = JSON.parse(readFileSync(answerGenerationPath, "utf8"));
+    for (const dataset of artifact.datasets ?? []) {
+      entries.push({
+        suite: String(dataset.dataset),
+        category: "answer_generation",
+        metric: String(dataset.metric ?? "answer_generation_quality"),
+        score: Number(dataset.score ?? 0),
+        artifact: answerGenerationPath,
+        proof: "local-deterministic",
+        methodology: dataset.methodology ?? {},
+        notes: [`answerer=${dataset.answerer}`, `judge=${dataset.judge}`, `${dataset.total ?? 0} per-question rows`]
+      });
+    }
+  }
+  if (existsSync(marketGatePath)) {
+    const gate = JSON.parse(readFileSync(marketGatePath, "utf8"));
+    for (const comparison of gate.directMarketComparison?.comparisons ?? []) {
+      entries.push({
+        suite: `${comparison.dataset}:${comparison.competitor}`,
+        category: "vendor_claim",
+        metric: String(comparison.metric),
+        score: Number(comparison.ours),
+        artifact: marketGatePath,
+        proof: "public-benchmark",
+        methodology: { comparable: true, sourceUrl: comparison.sourceUrl },
+        notes: [`competitor=${comparison.competitor}`, `margin=${comparison.margin}`]
+      });
+    }
   }
   const artifact: LeaderboardArtifact = {
     schemaVersion: "1.0",
@@ -68,6 +102,7 @@ export function validateLeaderboardArtifact(artifact: LeaderboardArtifact): true
   for (const entry of artifact.entries) {
     if (!entry.suite || !entry.metric || !Number.isFinite(entry.score)) throw new Error("Invalid leaderboard entry.");
     if (entry.score < 0 || entry.score > 1) throw new Error(`Leaderboard score out of range for ${entry.suite}.`);
+    if (entry.category === "vendor_claim" && entry.methodology.comparable !== true) throw new Error(`Vendor claim ${entry.suite} lacks comparable methodology metadata.`);
   }
   return true;
 }

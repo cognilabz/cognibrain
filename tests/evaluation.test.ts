@@ -116,12 +116,15 @@ describe("self verification benchmark loop", () => {
         competitors: [
           {
             name: "fixture-vendor",
+            sourceUrl: "https://example.com/fixture-vendor",
             benchmarks: [
               {
                 dataset: "LongMemEval-S",
                 metric: "Answer-session recall@K against answer_session_ids",
                 accuracy: 0.8,
-                comparable: true
+                comparable: true,
+                topK: 20,
+                notes: "Fixture uses the same dataset, metric and top-K as the local market gate."
               }
             ]
           }
@@ -132,5 +135,44 @@ describe("self verification benchmark loop", () => {
     expect(report.passed).toBe(true);
     expect(report.directMarketComparison.configured).toBe(true);
     expect(report.directMarketComparison.passed).toBe(true);
+  });
+
+  it("treats perfect benchmark ties as saturated without allowing lower ties", () => {
+    const dir = mkdtempSync(join(tmpdir(), "open-memory-market-saturated-"));
+    const locomoPath = join(dir, "locomo.json");
+    const longMemEvalPath = join(dir, "longmemeval.json");
+    const outputPath = join(dir, "market.json");
+    writeFileSync(
+      locomoPath,
+      JSON.stringify({
+        ours: { name: "open-memory-harness", accuracy: 0.9, correct: 9, total: 10 },
+        baselines: [{ name: "keyword-only", accuracy: 0.7, correct: 7, total: 10 }],
+        source: { name: "LoCoMo", metric: "Evidence recall@K against LoCoMo QA evidence dialog ids" }
+      })
+    );
+    writeFileSync(
+      longMemEvalPath,
+      JSON.stringify({
+        ours: { name: "open-memory-harness", accuracy: 1, correct: 10, total: 10 },
+        baselines: [{ name: "keyword-only", accuracy: 1, correct: 10, total: 10 }],
+        source: { name: "LongMemEval-S", metric: "Answer-session recall@K against answer_session_ids" }
+      })
+    );
+
+    const saturated = runMarketGate({ locomoPath, longMemEvalPath, outputPath });
+    expect(saturated.passed).toBe(true);
+    expect(saturated.benchmarks.find((item) => item.dataset === "LongMemEval-S")?.saturated).toBe(true);
+
+    writeFileSync(
+      longMemEvalPath,
+      JSON.stringify({
+        ours: { name: "open-memory-harness", accuracy: 0.8, correct: 8, total: 10 },
+        baselines: [{ name: "keyword-only", accuracy: 0.8, correct: 8, total: 10 }],
+        source: { name: "LongMemEval-S", metric: "Answer-session recall@K against answer_session_ids" }
+      })
+    );
+    const lowerTie = runMarketGate({ locomoPath, longMemEvalPath, outputPath });
+    expect(lowerTie.passed).toBe(false);
+    expect(lowerTie.benchmarks.find((item) => item.dataset === "LongMemEval-S")?.saturated).toBe(false);
   });
 });

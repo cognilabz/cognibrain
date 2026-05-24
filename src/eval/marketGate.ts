@@ -22,6 +22,7 @@ interface GateBenchmarkSummary {
   dataset: string;
   metric: string;
   passed: boolean;
+  saturated: boolean;
   ours: { correct: number; total: number; accuracy: number };
   bestBaseline: { name: string; correct: number; total: number; accuracy: number };
   margin: number;
@@ -72,8 +73,9 @@ export function runMarketGate(options: Partial<GateOptions> = {}) {
   );
   const competitorArtifact = resolved.competitorsPath ? readCompetitors(resolved.competitorsPath) : undefined;
   const directMarketComparison = compareCompetitors(benchmarks, competitorArtifact);
+  const methodologyFailures = competitorArtifact ? competitorMethodologyFailures(competitorArtifact) : [];
   const report = {
-    passed: benchmarks.every((benchmark) => benchmark.passed),
+    passed: benchmarks.every((benchmark) => benchmark.passed) && methodologyFailures.length === 0,
     generatedAt: new Date().toISOString(),
     proofLevel: directMarketComparison.passed
       ? "direct-comparable-market-superiority"
@@ -83,7 +85,8 @@ export function runMarketGate(options: Partial<GateOptions> = {}) {
       "It does not claim direct superiority over commercial vendors unless their comparable artifacts are imported and evaluated with the same metric, top-K, and budget."
     ],
     benchmarks,
-    directMarketComparison
+    directMarketComparison,
+    methodologyFailures
   };
   mkdirSync(resolve(resolved.outputPath, ".."), { recursive: true });
   writeFileSync(resolved.outputPath, JSON.stringify(report, null, 2));
@@ -144,13 +147,16 @@ function summarizeBenchmark(report: BenchmarkReport, fallbackDataset: string): G
   const bestBaseline = report.baselines.reduce((best, current) => (current.accuracy > best.accuracy ? current : best));
   const split = report.source?.split ?? report.config?.split;
   const dataset = report.source?.name === "BEAM" && split ? `BEAM ${split}` : report.source?.name ?? fallbackDataset;
+  const margin = report.ours.accuracy - bestBaseline.accuracy;
+  const saturated = report.ours.accuracy === 1 && bestBaseline.accuracy === 1;
   return {
     dataset,
     metric: report.source?.metric ?? "unknown",
-    passed: report.ours.accuracy > bestBaseline.accuracy,
+    passed: margin > 0 || saturated,
+    saturated,
     ours: pickScore(report.ours),
     bestBaseline: { name: bestBaseline.name, ...pickScore(bestBaseline) },
-    margin: report.ours.accuracy - bestBaseline.accuracy
+    margin
   };
 }
 
@@ -209,6 +215,19 @@ function compareCompetitors(benchmarks: GateBenchmarkSummary[], artifact?: Compe
       : "At least one imported comparable competitor result is not beaten.",
     comparisons
   };
+}
+
+function competitorMethodologyFailures(artifact: CompetitorArtifact) {
+  const failures: Array<{ competitor: string; dataset: string; metric: string; reason: string }> = [];
+  for (const competitor of artifact.competitors) {
+    for (const benchmark of competitor.benchmarks) {
+      if (!benchmark.comparable) continue;
+      if (!competitor.sourceUrl) failures.push({ competitor: competitor.name, dataset: benchmark.dataset, metric: benchmark.metric, reason: "comparable claim requires sourceUrl" });
+      if (!benchmark.notes) failures.push({ competitor: competitor.name, dataset: benchmark.dataset, metric: benchmark.metric, reason: "comparable claim requires methodology notes" });
+      if (benchmark.topK === undefined) failures.push({ competitor: competitor.name, dataset: benchmark.dataset, metric: benchmark.metric, reason: "comparable claim requires topK" });
+    }
+  }
+  return failures;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

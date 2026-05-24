@@ -28,9 +28,7 @@ npm run benchmark:locomo -- --max-questions 80 --top-k 10 --out artifacts/locomo
 
 ## Metric
 
-The current certified runner reports `evidence_recall_at_k`: a question passes when at least one official LoCoMo evidence dialog ID appears in the retrieved top-K memories.
-
-This is not the full LoCoMo answer-generation judge. It is the retrieval certification layer that proves whether the memory system can surface the official evidence required to answer the question. A full answer-generation judge can be layered on top by adding an answerer model and LLM-as-judge or exact-match evaluator.
+The certified runner reports `evidence_recall_at_k`: a question passes when at least one official LoCoMo evidence dialog ID appears in the retrieved top-K memories. `benchmark:certified` now also emits `artifacts/answer-generation.json` unless `--retrieval-only` is passed. That artifact stores per-question prompts, generated extractive answers, retrieved evidence ids, retrieved evidence text, expected terms and deterministic judge decisions. Set `MEMORY_BENCHMARK_ANSWERER` or `MEMORY_BENCHMARK_JUDGE` to label an external answerer or judge when running a comparable evaluation.
 
 The query contains only the benchmark question. The runner does not use the ground-truth answer text for query expansion.
 
@@ -69,7 +67,7 @@ Fast development slice:
 npm run benchmark:beam -- --split 100K --max-conversations 2 --max-questions 40 --top-k 20 --out artifacts/beam-smoke.json
 ```
 
-The current metric is `retrieval_nugget_score_at_k`: a question passes when retrieved memories overlap at least one BEAM ideal-response or rubric nugget by 50% after stopword removal. Abstention questions pass only when retrieved evidence has low overlap with the question. This is a retrieval certification layer, not the full BEAM answer-generation judge.
+The current metric is `retrieval_nugget_score_at_k`: a question passes when retrieved memories overlap at least one BEAM ideal-response or rubric nugget by 50% after stopword removal. Abstention questions pass only when retrieved evidence has low overlap with the question. The answer-generation artifact reuses the same per-question BEAM rows and records generated answers plus deterministic nugget/term coverage so answer quality can be tracked separately from retrieval evidence.
 
 ## User Simulator
 
@@ -113,10 +111,23 @@ The public market is noisy. Mem0's benchmark suite documents LoCoMo, LongMemEval
 For honest open-source comparison, this repo separates:
 
 - retrieval certification on official public data,
+- answer-generation artifacts with per-question prompts, generated answers, evidence ids and judge decisions,
 - local baseline comparison,
-- future full answer-generation evaluation.
+- vendor/public-claim comparison that requires comparable methodology metadata.
 
 Do not claim market leadership from a synthetic suite alone. Use `artifacts/locomo-report.json`, `artifacts/longmemeval-report.json`, `artifacts/beam-report.json`, `artifacts/beam-500k-report.json`, and `artifacts/market-gate.json` as the current certified evidence base.
+
+Run only retrieval certification when you do not want answer artifacts:
+
+```bash
+npm run benchmark:certified -- --retrieval-only
+```
+
+Generate README market claims from artifacts:
+
+```bash
+npm run docs:market-claims
+```
 
 ## Latest LoCoMo Result
 

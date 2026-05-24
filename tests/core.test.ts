@@ -13,6 +13,8 @@ import { AppendOnlyLogPersistenceAdapter, JsonFilePersistenceAdapter, PostgresCo
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
 import { buildLeaderboardArtifact, validateLeaderboardArtifact } from "../src/eval/leaderboard";
 import { runNextgenBenchmarkSuites } from "../src/eval/nextgenBenchmarks";
+import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
+import { runMarketGate } from "../src/eval/marketGate";
 
 describe("TypeScript memory core", () => {
   it("retrieves with trust-aware multi-signal ranking", () => {
@@ -1086,15 +1088,40 @@ describe("TypeScript memory core", () => {
     const dir = mkdtempSync(join(tmpdir(), "memory-leaderboard-"));
     try {
       const nextgenPath = join(dir, "nextgen-benchmarks.json");
+      const answerGenerationPath = join(dir, "answer-generation.json");
       const outputPath = join(dir, "leaderboard.json");
       runNextgenBenchmarkSuites(nextgenPath, join(dir, "benchmark-trend.json"));
-      const artifact = buildLeaderboardArtifact({ nextgenPath, outputPath, evaluationPath: join(dir, "missing-eval.json") });
+      const answers = runAnswerGenerationBenchmark({ reports: [nextgenPath], outputPath: answerGenerationPath });
+      expect(answers.datasets[0].questions[0].generatedAnswer).toBeTruthy();
+      const artifact = buildLeaderboardArtifact({ nextgenPath, answerGenerationPath, outputPath, evaluationPath: join(dir, "missing-eval.json") });
       expect(validateLeaderboardArtifact(artifact)).toBe(true);
       expect(artifact.privacy).toMatchObject({ anonymized: true, noRawPrompts: true, noRawEvidence: true });
       expect(artifact.publication.anonymized).toBe(true);
-      expect(artifact.entries.map((entry) => entry.suite)).toEqual(["answer-generation", "multi-hop-temporal", "behavioral-patterns"]);
+      expect(artifact.entries.some((entry) => entry.category === "answer_generation")).toBe(true);
       expect(JSON.stringify(artifact)).not.toContain("rawPrompt");
       expect(JSON.stringify(artifact)).not.toContain("rawEvidence");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects comparable market claims without methodology metadata", () => {
+    const dir = mkdtempSync(join(tmpdir(), "memory-market-"));
+    try {
+      const locomoPath = join(dir, "locomo.json");
+      const longMemEvalPath = join(dir, "longmemeval.json");
+      const competitorsPath = join(dir, "competitors.json");
+      const report = {
+        source: { name: "LoCoMo", metric: "evidence_recall_at_k" },
+        ours: { name: "cognibrain", accuracy: 0.9, correct: 9, total: 10 },
+        baselines: [{ name: "baseline", accuracy: 0.5, correct: 5, total: 10 }]
+      };
+      writeFileSync(locomoPath, JSON.stringify(report));
+      writeFileSync(longMemEvalPath, JSON.stringify({ ...report, source: { name: "LongMemEval-S", metric: "answer_session_recall_at_k" } }));
+      writeFileSync(competitorsPath, JSON.stringify({ competitors: [{ name: "Vendor", sourceUrl: "https://example.com", benchmarks: [{ dataset: "LoCoMo", metric: "evidence_recall_at_k", accuracy: 0.8, comparable: true }] }] }));
+      const gate = runMarketGate({ locomoPath, longMemEvalPath, competitorsPath, outputPath: join(dir, "market-gate.json") });
+      expect(gate.passed).toBe(false);
+      expect(gate.methodologyFailures.some((failure) => failure.reason.includes("topK"))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

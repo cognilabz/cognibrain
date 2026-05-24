@@ -212,7 +212,9 @@ Inspect connector/provider status and sync connector events:
 
 ```bash
 curl http://localhost:8787/connectors
+curl "http://localhost:8787/connectors/health"
 curl http://localhost:8787/providers
+curl "http://localhost:8787/connectors/list?connectorId=official-chat"
 curl -X POST http://localhost:8787/connectors/sync \
   -H "content-type: application/json" \
   -d '{"connectorId":"official-chat","userId":"dev","events":[{"role":"user","content":"Support confirmed the release note owner.","externalId":"msg-1"}]}'

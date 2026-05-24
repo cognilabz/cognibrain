@@ -37,18 +37,22 @@ The runtime seeds official manifests for common work systems:
 - `official-calendar`
 - `official-cloud_storage`
 
-Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, and metadata mapping. Custom manifests can be registered through the CLI or HTTP API:
+Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, optional list/poll endpoints, and optional writeback configuration. Custom manifests can be registered through the CLI or HTTP API:
 
 ```bash
 ./bin/cognibrain.mjs memory connector-register '{"id":"support-chat","name":"Support Chat","kind":"chat","version":"1.0.0","direction":"two_way","capabilities":["ingest","webhook","writeback"],"auth":"token","defaultSourceKind":"transcript","metadataMapping":{"channel":"metadata.channel","messageId":"externalId"}}'
+./bin/cognibrain.mjs memory connector-health support-chat
+./bin/cognibrain.mjs memory connector-list support-chat
+./bin/cognibrain.mjs memory connector-poll support-chat
 ./bin/cognibrain.mjs memory connector-sync support-chat "Support confirmed the release note owner."
 MEMORY_CONNECTOR_OPERATION=summary MEMORY_EXTERNAL_ID=thread-1 MEMORY_CONNECTOR_TARGET_JSON='{"channel":"support","threadId":"thread-1"}' ./bin/cognibrain.mjs memory connector-writeback support-chat "Release note owner confirmed."
+MEMORY_MEMORY_IDS=mem_123 MEMORY_EXTERNAL_ID=thread-1 ./bin/cognibrain.mjs memory connector-feedback support-chat accepted_change "Accepted connector suggestion."
 ./bin/cognibrain.mjs memory connector-sync-records support-chat
 ```
 
 Connector sync records preserve external ids, applied memory ids, timestamps, export payloads, HTTP request plans, status codes, and failure text. Invalid manifests are rejected before they can write memory, for example writeback on an ingest-only connector.
 
-Writeback-capable manifests can include a `writeback` block with an endpoint, method, auth reference, and allowed operations. Without an endpoint, `connector-writeback` and `/connectors/writeback` create a queued dry-run plan for review. With an endpoint and `dryRun:false`, Cognibrain sends the source-specific payload as HTTP using `x-cognibrain-connector`, `x-cognibrain-operation`, and optional HMAC `x-cognibrain-signature` headers.
+List/poll-capable manifests can include endpoint blocks. `connector-list` returns external items without writing memory. `connector-poll` expects a JSON body with `events`, then routes those events through the same add-only extraction path as `connector-sync`. Set `privacyPolicy:"never_store"` for connectors that should prove polling without storing any event content. Writeback-capable manifests can include a `writeback` block with an endpoint, method, auth reference, and allowed operations. Without an endpoint, `connector-writeback` and `/connectors/writeback` create a queued dry-run plan for review. With an endpoint and `dryRun:false`, Cognibrain sends the source-specific payload as HTTP using `x-cognibrain-connector`, `x-cognibrain-operation`, and optional HMAC `x-cognibrain-signature` headers. `connector-feedback` and `/connectors/feedback` convert accepted changes, rejected suggestions, failing tests, and user corrections into trust/importance updates plus a durable feedback memory.
 
 ## Provider And Media Hooks
 

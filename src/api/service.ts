@@ -133,6 +133,14 @@ interface ConnectorWritebackInput {
   dryRun?: boolean;
 }
 
+interface ConnectorListResult {
+  connectorId: string;
+  status: "applied" | "failed";
+  items: Array<Record<string, unknown>>;
+  responseStatusCode?: number;
+  error?: string;
+}
+
 export interface MemoryMaintenanceStatus {
   enabled: boolean;
   intervalHours: number;
@@ -468,6 +476,46 @@ export class MemoryService {
     return { event: { ...event, timestamp }, updatedMemories, trainingSample, learnedProfile };
   }
 
+  recordConnectorFeedback(input: {
+    connectorId: string;
+    userId: string;
+    kind: "accepted_change" | "rejected_suggestion" | "failing_test" | "user_correction";
+    content: string;
+    memoryIds?: string[];
+    externalId?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const manifest = this.connectorManifests.get(input.connectorId);
+    if (!manifest) throw new Error(`Connector manifest not found: ${input.connectorId}`);
+    const feedbackKind: FeedbackKind = input.kind === "accepted_change" ? "helpful" : input.kind === "failing_test" ? "stale" : "wrong";
+    const updatedMemories = (input.memoryIds ?? [])
+      .filter((memoryId) => Boolean(safeGet(this.store, memoryId)))
+      .map((memoryId) => this.feedback({ memoryId, userId: input.userId, kind: feedbackKind, note: input.content }));
+    const feedbackMemory = this.add({
+      userId: input.userId,
+      content: input.content,
+      type: "feedback",
+      source: { kind: "tool", confidence: input.kind === "accepted_change" ? 0.86 : 0.72 },
+      tags: ["connector-feedback", input.kind, input.connectorId],
+      metadata: { connectorId: input.connectorId, externalId: input.externalId, feedbackKind, ...(input.metadata ?? {}) }
+    });
+    const record: ConnectorSyncRecord = {
+      id: `sync_${contentHash(`${input.connectorId}:feedback:${Date.now()}:${this.connectorSyncRecords.length}`).slice(2)}`,
+      connectorId: input.connectorId,
+      direction: "ingest",
+      status: "applied",
+      memoryIds: [feedbackMemory.id, ...updatedMemories.map((memory) => memory.id)],
+      externalIds: input.externalId ? [input.externalId] : [],
+      timestamp: new Date().toISOString(),
+      operation: "memory_link",
+      payload: { feedbackAdapter: input.kind, feedbackKind, updated: updatedMemories.length }
+    };
+    this.connectorSyncRecords.push(record);
+    this.recordAudit("connector.sync", { userId: input.userId, metadata: { connectorId: input.connectorId, status: record.status, feedbackAdapter: input.kind, memories: record.memoryIds.length } });
+    this.persist();
+    return { record, feedbackMemory, updatedMemories };
+  }
+
   exportUser(userId: string): Memory[] {
     return this.store.list(userId);
   }
@@ -544,11 +592,27 @@ export class MemoryService {
     const manifest = this.connectorManifests.get(connectorId);
     if (!manifest) throw new Error(`Connector manifest not found: ${connectorId}`);
     if (!manifest.capabilities.includes("ingest")) throw new Error(`Connector ${connectorId} does not support ingest`);
+    if (manifest.privacyPolicy === "never_store") {
+      const record: ConnectorSyncRecord = {
+        id: `sync_${contentHash(`${connectorId}:privacy:${Date.now()}:${this.connectorSyncRecords.length}`).slice(2)}`,
+        connectorId,
+        direction: "ingest",
+        status: "applied",
+        memoryIds: [],
+        externalIds: events.map((event) => event.externalId).filter((id): id is string => Boolean(id)),
+        timestamp: new Date().toISOString(),
+        payload: { skipped: true, reason: "privacy_policy_never_store", events: events.length }
+      };
+      this.connectorSyncRecords.push(record);
+      this.recordAudit("connector.sync", { userId: scope.userId, brainId: scope.brainId, sourceId: scope.sourceId, metadata: { connectorId, status: record.status, privacyPolicy: manifest.privacyPolicy, memories: 0 } });
+      this.persist();
+      return record;
+    }
     try {
       const mapped = events.map((event) => ({
         ...event,
         source: event.source ?? { kind: manifest.defaultSourceKind, uri: event.uri, confidence: 0.82 },
-        metadata: { ...(event.metadata ?? {}), connectorId, externalId: event.externalId, mapping: manifest.metadataMapping }
+        metadata: { ...(event.metadata ?? {}), connectorId, externalId: event.externalId, mapping: manifest.metadataMapping, privacyPolicy: manifest.privacyPolicy ?? "project" }
       }));
       const report = this.extract(mapped, scope);
       const record: ConnectorSyncRecord = {
@@ -580,6 +644,101 @@ export class MemoryService {
       this.persist();
       return record;
     }
+  }
+
+  async listConnectorItems(connectorId: string, fetchImpl: typeof fetch = fetch, timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000)): Promise<ConnectorListResult> {
+    const manifest = this.connectorManifests.get(connectorId);
+    if (!manifest) throw new Error(`Connector manifest not found: ${connectorId}`);
+    if (!manifest.list?.endpoint) return { connectorId, status: "failed", items: [], error: `Connector ${connectorId} has no list endpoint` };
+    try {
+      const request = connectorAdapterRequest(manifest, "list", manifest.list.endpoint, manifest.list.method ?? "GET", undefined, manifest.list.authRef);
+      const response = await fetchImpl(request.url, request.method === "GET"
+        ? { method: request.method, headers: request.headers, signal: AbortSignal.timeout(Math.max(1, timeoutMs)) }
+        : { method: request.method, headers: request.headers, body: request.body, signal: AbortSignal.timeout(Math.max(1, timeoutMs)) });
+      const json = await response.json().catch(() => ({})) as { items?: Array<Record<string, unknown>> };
+      return {
+        connectorId,
+        status: response.ok ? "applied" : "failed",
+        items: Array.isArray(json.items) ? json.items : [],
+        responseStatusCode: response.status,
+        error: response.ok ? undefined : `HTTP ${response.status}`
+      };
+    } catch (error) {
+      return { connectorId, status: "failed", items: [], error: error instanceof Error ? error.message : "connector list failed" };
+    }
+  }
+
+  async pollConnector(
+    connectorId: string,
+    scope: Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId">,
+    fetchImpl: typeof fetch = fetch,
+    timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000)
+  ): Promise<ConnectorSyncRecord> {
+    const manifest = this.connectorManifests.get(connectorId);
+    if (!manifest) throw new Error(`Connector manifest not found: ${connectorId}`);
+    if (!manifest.capabilities.includes("poll")) throw new Error(`Connector ${connectorId} does not support poll`);
+    if (!manifest.poll?.endpoint) throw new Error(`Connector ${connectorId} has no poll endpoint`);
+    try {
+      const request = connectorAdapterRequest(manifest, "poll", manifest.poll.endpoint, manifest.poll.method ?? "GET", undefined, manifest.poll.authRef);
+      const response = await fetchImpl(request.url, request.method === "GET"
+        ? { method: request.method, headers: request.headers, signal: AbortSignal.timeout(Math.max(1, timeoutMs)) }
+        : { method: request.method, headers: request.headers, body: request.body, signal: AbortSignal.timeout(Math.max(1, timeoutMs)) });
+      const json = await response.json().catch(() => ({})) as { events?: Array<MemoryExtractionEvent & { externalId?: string }> };
+      const events = Array.isArray(json.events) ? json.events : [];
+      const record = this.syncConnectorEvents(connectorId, events, scope);
+      record.responseStatusCode = response.status;
+      record.request = request;
+      if (!response.ok) {
+        record.status = "failed";
+        record.error = `HTTP ${response.status}`;
+      }
+      this.persist();
+      return record;
+    } catch (error) {
+      const record: ConnectorSyncRecord = {
+        id: `sync_${contentHash(`${connectorId}:poll:${Date.now()}:${this.connectorSyncRecords.length}`).slice(2)}`,
+        connectorId,
+        direction: "ingest",
+        status: "failed",
+        memoryIds: [],
+        externalIds: [],
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "connector poll failed"
+      };
+      this.connectorSyncRecords.push(record);
+      this.recordAudit("connector.sync", { userId: scope.userId, brainId: scope.brainId, sourceId: scope.sourceId, metadata: { connectorId, status: record.status, direction: "ingest", error: record.error } });
+      this.persist();
+      return record;
+    }
+  }
+
+  connectorHealth(connectorId?: string) {
+    return this.listConnectorManifests()
+      .filter((manifest) => !connectorId || manifest.id === connectorId)
+      .map((manifest) => {
+        const records = this.listConnectorSyncRecords(manifest.id);
+        const last = records.at(-1);
+        const lastIngest = [...records].reverse().find((record) => record.direction === "ingest");
+        const lastWriteback = [...records].reverse().find((record) => record.direction === "export");
+        return {
+          connectorId: manifest.id,
+          kind: manifest.kind,
+          direction: manifest.direction,
+          capabilities: manifest.capabilities,
+          privacyPolicy: manifest.privacyPolicy ?? "project",
+          supports: {
+            list: Boolean(manifest.list?.endpoint),
+            poll: Boolean(manifest.poll?.endpoint),
+            ingest: manifest.capabilities.includes("ingest"),
+            writeback: manifest.capabilities.includes("writeback") || manifest.capabilities.includes("export")
+          },
+          lastStatus: last?.status ?? "never_run",
+          lastError: last?.error,
+          lastSyncAt: lastIngest?.timestamp,
+          lastWritebackAt: lastWriteback?.timestamp,
+          records: records.length
+        };
+      });
   }
 
   async writebackConnector(
@@ -2212,6 +2371,25 @@ function connectorWritebackRequest(manifest: ConnectorManifest, record: Connecto
   };
 }
 
+function connectorAdapterRequest(
+  manifest: ConnectorManifest,
+  operation: string,
+  endpoint: string,
+  method: "GET" | "POST",
+  payload?: Record<string, unknown>,
+  authRef?: string
+): NonNullable<ConnectorSyncRecord["request"]> {
+  const body = method === "GET" ? "" : JSON.stringify({ connectorId: manifest.id, kind: manifest.kind, operation, payload: payload ?? {} });
+  const headers: Record<string, string> = {
+    "user-agent": "cognibrain-connector/0.1",
+    "x-cognibrain-connector": manifest.id,
+    "x-cognibrain-operation": operation
+  };
+  if (method !== "GET") headers["content-type"] = "application/json";
+  if (authRef) headers["x-cognibrain-signature"] = `sha256=${createHmac("sha256", authRef).update(body).digest("hex")}`;
+  return { method, url: endpoint, headers, body };
+}
+
 function connectorWritebackOperations(kind: ConnectorManifest["kind"]): ConnectorWritebackOperation[] {
   if (kind === "project_management") return ["comment", "status", "tag", "memory_link"];
   if (kind === "chat") return ["comment", "summary", "memory_link"];
@@ -2268,6 +2446,7 @@ function officialConnectorManifests(): ConnectorManifest[] {
     auth: kind === "custom" ? "none" : "oauth",
     defaultSourceKind,
     metadataMapping,
+    privacyPolicy: "project",
     writeback: capabilities.includes("writeback") ? { operations: connectorWritebackOperations(kind) } : undefined,
     createdAt: now,
     updatedAt: now

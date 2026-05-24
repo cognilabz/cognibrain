@@ -156,11 +156,21 @@ export async function runNextgenEvaluation() {
     kind: "chat",
     version: "1.0.0",
     direction: "two_way",
-    capabilities: ["ingest", "webhook", "writeback"],
+    capabilities: ["ingest", "poll", "webhook", "writeback"],
     auth: "token",
     defaultSourceKind: "transcript",
-    metadataMapping: { channel: "metadata.channel", messageId: "externalId", text: "content" }
+    metadataMapping: { channel: "metadata.channel", messageId: "externalId", text: "content" },
+    privacyPolicy: "project",
+    list: { endpoint: "https://connector.local/eval-chat/list" },
+    poll: { endpoint: "https://connector.local/eval-chat/poll" }
   });
+  const connectorFetch = async (url: string | URL | Request) => {
+    const href = String(url);
+    if (href.includes("/list")) return new Response(JSON.stringify({ items: [{ externalId: "eval-item-1", title: "Eval item" }] }), { status: 200 });
+    return new Response(JSON.stringify({ events: [{ role: "assistant", content: "Eval poll captured a durable connector decision.", externalId: "eval-poll-1", metadata: { channel: "ops" } }] }), { status: 200 });
+  };
+  const connectorList = await service.listConnectorItems(connectorManifest.id, connectorFetch as typeof fetch);
+  const connectorPoll = await service.pollConnector(connectorManifest.id, { userId: "bench", brainId: brain.id, sourceId: source.id, agentId: "agent-bench", orgId: "org-bench" }, connectorFetch as typeof fetch);
   const connectorSync = service.syncConnectorEvents(
     connectorManifest.id,
     [{ role: "assistant", content: "Eval connector captured the operator escalation decision.", externalId: "eval-msg-1", metadata: { channel: "ops" } }],
@@ -173,6 +183,14 @@ export async function runNextgenEvaluation() {
     target: { channel: "ops", threadId: "eval-thread-1" },
     content: "Eval connector writeback summary.",
     dryRun: true
+  });
+  const connectorFeedback = service.recordConnectorFeedback({
+    connectorId: connectorManifest.id,
+    userId: "bench",
+    kind: "accepted_change",
+    content: "Eval connector accepted the durable memory suggestion.",
+    memoryIds: connectorSync.memoryIds,
+    externalId: "eval-thread-1"
   });
   const translation = service.translateText("Speicher soll nicht fehler", "de");
   const mediaIngest = service.ingestMedia(
@@ -275,16 +293,21 @@ export async function runNextgenEvaluation() {
     id: "connectors-ingestion",
     passed:
       service.listConnectorManifests().some((manifest) => manifest.id === "official-email") &&
+      connectorList.status === "applied" &&
+      connectorList.items.length === 1 &&
+      connectorPoll.status === "applied" &&
+      connectorPoll.memoryIds.length === 1 &&
       connectorSync.status === "applied" &&
       connectorSync.memoryIds.length === 1 &&
       connectorWriteback.status === "queued" &&
       connectorWriteback.payload?.adapter === "chat.post_message" &&
+      connectorFeedback.record.payload?.feedbackAdapter === "accepted_change" &&
       service.listConnectorSyncRecords("eval-chat").length >= 2 &&
       translation.translated.includes("memory") &&
       mediaIngest.memories.some((memory) => memory.metadata.translatedFrom === "de") &&
       service.providerStatus().tasks.includes("translate") &&
       service.auditTrail({ type: "connector.sync" }).length >= 1,
-    detail: `${service.listConnectorManifests().length} connector manifests, ${connectorSync.memoryIds.length} synced memories, writeback=${connectorWriteback.adapter}, translation provider=${translation.provider}`
+    detail: `${service.listConnectorManifests().length} connector manifests, ${connectorList.items.length} listed, ${connectorPoll.memoryIds.length} polled, ${connectorSync.memoryIds.length} synced, writeback=${connectorWriteback.adapter}, feedback=${connectorFeedback.record.payload?.feedbackAdapter}, translation provider=${translation.provider}`
   });
   checks.push({
     id: "learning-adaptation",

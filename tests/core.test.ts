@@ -1076,6 +1076,7 @@ describe("TypeScript memory core", () => {
   it("plans source-specific connector writebacks and can deliver them over HTTP", async () => {
     const service = new MemoryService();
     const memory = service.add({ userId: "u1", content: "Connector writeback should preserve reviewed release decisions.", source: { kind: "human", confidence: 0.9 } });
+    const initialTrust = memory.trust;
     const codePlan = await service.writebackConnector("official-code", {
       memoryIds: [memory.id],
       content: "Use this release decision in the pull request summary.",
@@ -1130,6 +1131,117 @@ describe("TypeScript memory core", () => {
       const body = received[0].body;
       expect(JSON.parse(body).payload.adapter).toBe("chat.post_message");
       expect(received[0].headers["x-cognibrain-signature"]).toBe(`sha256=${createHmac("sha256", "connector-secret").update(body).digest("hex")}`);
+      const feedback = service.recordConnectorFeedback({
+        connectorId: "unit-chat-writeback",
+        userId: "u1",
+        kind: "accepted_change",
+        content: "Connector accepted the release decision.",
+        memoryIds: [memory.id],
+        externalId: "t-1"
+      });
+      expect(feedback.record.payload?.feedbackAdapter).toBe("accepted_change");
+      expect(feedback.updatedMemories[0].trust).toBeGreaterThan(initialTrust);
+      expect(feedback.feedbackMemory.tags).toContain("connector-feedback");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("lists, polls, ingests, and writebacks every official connector category with mock servers", async () => {
+    const service = new MemoryService();
+    const kinds = ["email", "chat", "project_management", "docs", "code", "calendar", "cloud_storage"] as const;
+    const calls: Array<{ url?: string; body: string }> = [];
+    const server = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk) => {
+        body += String(chunk);
+      });
+      request.on("end", () => {
+        calls.push({ url: request.url, body });
+        const [, kind, action] = request.url?.split("/") ?? [];
+        response.setHeader("content-type", "application/json");
+        if (action === "list") {
+          response.end(JSON.stringify({ items: [{ externalId: `${kind}-item-1`, title: `${kind} item` }] }));
+          return;
+        }
+        if (action === "poll") {
+          response.end(JSON.stringify({ events: [{ role: "user", content: `${kind} connector poll captured a durable release decision.`, externalId: `${kind}-event-1` }] }));
+          return;
+        }
+        response.writeHead(202);
+        response.end(JSON.stringify({ ok: true }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected TCP test server address.");
+      const defaultSourceKind = (kind: (typeof kinds)[number]) => kind === "chat" ? "transcript" : kind === "code" ? "reviewed_code" : kind === "email" || kind === "calendar" ? "human" : "import";
+      for (const kind of kinds) {
+        const connectorId = `mock-${kind}`;
+        service.registerConnectorManifest({
+          id: connectorId,
+          name: `Mock ${kind}`,
+          kind,
+          version: "1.0.0",
+          direction: "two_way",
+          capabilities: ["ingest", "poll", "writeback"],
+          auth: "token",
+          defaultSourceKind: defaultSourceKind(kind),
+          metadataMapping: { externalId: "externalId" },
+          privacyPolicy: "project",
+          list: { endpoint: `http://127.0.0.1:${address.port}/${kind}/list` },
+          poll: { endpoint: `http://127.0.0.1:${address.port}/${kind}/poll` },
+          writeback: { endpoint: `http://127.0.0.1:${address.port}/${kind}/write/{externalId}`, operations: ["comment", "summary", "tag", "status", "memory_link"] }
+        });
+        const listed = await service.listConnectorItems(connectorId);
+        expect(listed.status).toBe("applied");
+        expect(listed.items[0].externalId).toBe(`${kind}-item-1`);
+        const polled = await service.pollConnector(connectorId, { userId: "u1" });
+        expect(polled.status).toBe("applied");
+        expect(polled.memoryIds).toHaveLength(1);
+        const writeback = await service.writebackConnector(connectorId, { externalId: `${kind}-item-1`, content: `${kind} writeback summary`, target: { externalId: `${kind}-item-1` }, dryRun: false });
+        expect(writeback.status).toBe("applied");
+        expect(writeback.responseStatusCode).toBe(202);
+      }
+      const health = service.connectorHealth();
+      expect(health.filter((item) => item.connectorId.startsWith("mock-") && item.lastStatus === "applied")).toHaveLength(kinds.length);
+      expect(calls.filter((call) => call.url?.includes("/poll")).length).toBe(kinds.length);
+      expect(calls.filter((call) => call.url?.includes("/write/")).length).toBe(kinds.length);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("honors never-store connector privacy policy during polling", async () => {
+    const service = new MemoryService();
+    const server = createServer((_request, response) => {
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ events: [{ role: "user", content: "Never store connector event should remain outside memory.", externalId: "private-1" }] }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected TCP test server address.");
+      service.registerConnectorManifest({
+        id: "private-chat",
+        name: "Private Chat",
+        kind: "chat",
+        version: "1.0.0",
+        direction: "two_way",
+        capabilities: ["ingest", "poll"],
+        auth: "token",
+        defaultSourceKind: "transcript",
+        metadataMapping: {},
+        privacyPolicy: "never_store",
+        poll: { endpoint: `http://127.0.0.1:${address.port}/poll` }
+      });
+      const record = await service.pollConnector("private-chat", { userId: "u1" });
+      expect(record.status).toBe("applied");
+      expect(record.memoryIds).toHaveLength(0);
+      expect(record.payload?.reason).toBe("privacy_policy_never_store");
+      expect(service.list("u1")).toHaveLength(0);
+      expect(service.connectorHealth("private-chat")[0].privacyPolicy).toBe("never_store");
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

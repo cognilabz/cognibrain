@@ -498,6 +498,37 @@ switch (command) {
     console.log(JSON.stringify(service.listConnectorSyncRecords(args[0]), null, 2));
     break;
   }
+  case "connector-health": {
+    console.log(JSON.stringify(service.connectorHealth(args[0]), null, 2));
+    break;
+  }
+  case "connector-list": {
+    const connectorId = args[0];
+    if (!connectorId) fail("Usage: memctl connector-list <connector-id>");
+    console.log(JSON.stringify(await service.listConnectorItems(connectorId), null, 2));
+    break;
+  }
+  case "connector-poll": {
+    const connectorId = args[0];
+    if (!connectorId) fail("Usage: memctl connector-poll <connector-id>");
+    console.log(
+      JSON.stringify(
+        await service.pollConnector(connectorId, {
+          userId,
+          agentId: process.env.MEMORY_AGENT_ID,
+          sessionId: process.env.MEMORY_SESSION_ID,
+          appId: process.env.MEMORY_APP_ID,
+          orgId: process.env.MEMORY_ORG_ID,
+          projectId: process.env.MEMORY_PROJECT_ID,
+          brainId: process.env.MEMORY_BRAIN_ID,
+          sourceId: process.env.MEMORY_SOURCE_ID
+        }),
+        null,
+        2
+      )
+    );
+    break;
+  }
   case "connector-writeback": {
     const [connectorId, ...contentParts] = args;
     if (!connectorId) fail("Usage: memctl connector-writeback <connector-id> [content]");
@@ -512,6 +543,26 @@ switch (command) {
           target,
           metadata: metadataFromEnv(),
           dryRun: process.env.MEMORY_CONNECTOR_DRY_RUN !== "false"
+        }),
+        null,
+        2
+      )
+    );
+    break;
+  }
+  case "connector-feedback": {
+    const [connectorId, kind, ...contentParts] = args;
+    if (!connectorId || !kind || contentParts.length === 0 || !isConnectorFeedbackKind(kind)) fail("Usage: memctl connector-feedback <connector-id> <accepted_change|rejected_suggestion|failing_test|user_correction> <content>");
+    console.log(
+      JSON.stringify(
+        service.recordConnectorFeedback({
+          connectorId,
+          userId,
+          kind,
+          content: contentParts.join(" "),
+          memoryIds: process.env.MEMORY_MEMORY_IDS?.split(",").map((item) => item.trim()).filter(Boolean),
+          externalId: process.env.MEMORY_EXTERNAL_ID,
+          metadata: metadataFromEnv()
         }),
         null,
         2
@@ -631,7 +682,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|api-spec|migration-export|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-writeback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|api-spec|migration-export|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -684,6 +735,10 @@ function connectorKindFromEnv() {
 function connectorOperationFromEnv() {
   const value = process.env.MEMORY_CONNECTOR_OPERATION;
   return value === "tag" || value === "comment" || value === "status" || value === "summary" || value === "memory_link" ? value : undefined;
+}
+
+function isConnectorFeedbackKind(value: string): value is "accepted_change" | "rejected_suggestion" | "failing_test" | "user_correction" {
+  return value === "accepted_change" || value === "rejected_suggestion" || value === "failing_test" || value === "user_correction";
 }
 
 function mediaTypeFromEnv() {

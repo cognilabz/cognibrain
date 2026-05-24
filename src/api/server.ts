@@ -317,6 +317,21 @@ const connectorManifestSchema = z.object({
   auth: z.enum(["none", "api_key", "oauth", "token"]),
   defaultSourceKind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]),
   metadataMapping: z.record(z.string()),
+  privacyPolicy: z.enum(["personal", "project", "team", "never_store"]).optional(),
+  list: z
+    .object({
+      endpoint: z.string().url().optional(),
+      method: z.enum(["GET", "POST"]).optional(),
+      authRef: z.string().optional()
+    })
+    .optional(),
+  poll: z
+    .object({
+      endpoint: z.string().url().optional(),
+      method: z.enum(["GET", "POST"]).optional(),
+      authRef: z.string().optional()
+    })
+    .optional(),
   writeback: z
     .object({
       endpoint: z.string().url().optional(),
@@ -361,6 +376,28 @@ const connectorWritebackSchema = z.object({
   target: z.record(z.unknown()).optional(),
   metadata: z.record(z.unknown()).optional(),
   dryRun: z.boolean().optional()
+});
+
+const connectorFeedbackSchema = z.object({
+  connectorId: z.string().min(1),
+  userId: z.string().min(1),
+  kind: z.enum(["accepted_change", "rejected_suggestion", "failing_test", "user_correction"]),
+  content: z.string().min(1),
+  memoryIds: z.array(z.string()).optional(),
+  externalId: z.string().optional(),
+  metadata: z.record(z.unknown()).optional()
+});
+
+const connectorPollSchema = z.object({
+  connectorId: z.string().min(1),
+  userId: z.string().min(1),
+  brainId: z.string().optional(),
+  sourceId: z.string().optional(),
+  agentId: z.string().optional(),
+  sessionId: z.string().optional(),
+  appId: z.string().optional(),
+  orgId: z.string().optional(),
+  projectId: z.string().optional()
 });
 
 const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split", "retention.enforce", "security.key.rotate", "privacy.insights"]);
@@ -732,6 +769,21 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && url.pathname === "/connectors/health") {
+    send(response, 200, defaultService.connectorHealth(url.searchParams.get("connectorId") ?? undefined));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/connectors/list") {
+    const connectorId = url.searchParams.get("connectorId");
+    if (!connectorId) {
+      send(response, 400, { error: "connectorId is required" });
+      return;
+    }
+    send(response, 200, await defaultService.listConnectorItems(connectorId));
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/connectors/sync") {
     const body = connectorSyncSchema.parse(await json(request));
     const { connectorId, events, ...scope } = body;
@@ -739,10 +791,22 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && url.pathname === "/connectors/poll") {
+    const body = connectorPollSchema.parse(await json(request));
+    const { connectorId, ...scope } = body;
+    send(response, 202, await defaultService.pollConnector(connectorId, scope));
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/connectors/writeback") {
     const body = connectorWritebackSchema.parse(await json(request));
     const { connectorId, ...input } = body;
     send(response, 202, await defaultService.writebackConnector(connectorId, input));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/connectors/feedback") {
+    send(response, 202, defaultService.recordConnectorFeedback(connectorFeedbackSchema.parse(await json(request))));
     return;
   }
 

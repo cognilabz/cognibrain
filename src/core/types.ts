@@ -473,6 +473,17 @@ export interface ConnectorManifest {
   auth: "none" | "api_key" | "oauth" | "token";
   defaultSourceKind: SourceKind;
   metadataMapping: Record<string, string>;
+  privacyPolicy?: "personal" | "project" | "team" | "never_store";
+  list?: {
+    endpoint?: string;
+    method?: "GET" | "POST";
+    authRef?: string;
+  };
+  poll?: {
+    endpoint?: string;
+    method?: "GET" | "POST";
+    authRef?: string;
+  };
   writeback?: {
     endpoint?: string;
     method?: "POST" | "PUT" | "PATCH";
@@ -497,7 +508,7 @@ export interface ConnectorSyncRecord {
   payload?: Record<string, unknown>;
   adapter?: string;
   request?: {
-    method: "POST" | "PUT" | "PATCH";
+    method: "GET" | "POST" | "PUT" | "PATCH";
     url: string;
     headers: Record<string, string>;
     body: string;

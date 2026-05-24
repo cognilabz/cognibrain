@@ -64,15 +64,23 @@ curl -X POST http://localhost:8787/extract \
 ```bash
 curl http://localhost:8787/connectors
 curl "http://localhost:8787/connectors?kind=chat"
+curl "http://localhost:8787/connectors/health?connectorId=support-chat"
 curl -X POST http://localhost:8787/connectors \
   -H "content-type: application/json" \
-  -d '{"id":"support-chat","name":"Support Chat","kind":"chat","version":"1.0.0","direction":"two_way","capabilities":["ingest","webhook","writeback"],"auth":"token","defaultSourceKind":"transcript","metadataMapping":{"channel":"metadata.channel","messageId":"externalId","text":"content"}}'
+  -d '{"id":"support-chat","name":"Support Chat","kind":"chat","version":"1.0.0","direction":"two_way","capabilities":["ingest","poll","webhook","writeback"],"auth":"token","defaultSourceKind":"transcript","metadataMapping":{"channel":"metadata.channel","messageId":"externalId","text":"content"},"privacyPolicy":"project","list":{"endpoint":"https://connector.example/list"},"poll":{"endpoint":"https://connector.example/poll"},"writeback":{"endpoint":"https://connector.example/channels/{channel}","operations":["summary","comment"]}}'
+curl "http://localhost:8787/connectors/list?connectorId=support-chat"
+curl -X POST http://localhost:8787/connectors/poll \
+  -H "content-type: application/json" \
+  -d '{"connectorId":"support-chat","userId":"dev","projectId":"memory"}'
 curl -X POST http://localhost:8787/connectors/sync \
   -H "content-type: application/json" \
   -d '{"connectorId":"support-chat","userId":"dev","events":[{"role":"user","content":"Support confirmed the release note owner.","externalId":"msg-1","metadata":{"channel":"support"}}]}'
 curl -X POST http://localhost:8787/connectors/writeback \
   -H "content-type: application/json" \
   -d '{"connectorId":"support-chat","operation":"summary","externalId":"thread-1","target":{"channel":"support","threadId":"thread-1"},"content":"Release note owner confirmed.","dryRun":true}'
+curl -X POST http://localhost:8787/connectors/feedback \
+  -H "content-type: application/json" \
+  -d '{"connectorId":"support-chat","userId":"dev","kind":"accepted_change","content":"Accepted connector suggestion.","memoryIds":["mem_123"],"externalId":"thread-1"}'
 curl "http://localhost:8787/connectors/sync-records?connectorId=support-chat"
 curl http://localhost:8787/providers
 curl -X POST http://localhost:8787/translate \
@@ -83,7 +91,7 @@ curl -X POST http://localhost:8787/ingest/media \
   -d '{"userId":"dev","event":{"role":"operator","content":"Speicher soll release notes erfassen.","mediaType":"audio","language":"de","uri":"file:///review.m4a"}}'
 ```
 
-The service seeds official manifests for email, chat, project management, docs, code, calendar, and cloud storage. Custom manifests declare direction, auth, capabilities, default source kind, metadata mapping, and optional writeback endpoint metadata. `/connectors/sync` maps external events into add-only extraction, records connector sync status, and emits audit events. `/connectors/writeback` renders source-specific export payloads for email replies, chat posts, issue updates, doc comments, code review comments, calendar notes, or generic custom connectors. With `dryRun:true`, the response is an auditable queued writeback plan. With a manifest `writeback.endpoint` and `dryRun:false`, Cognibrain sends the plan as an HTTP request with connector headers, optional HMAC signature, status-code capture, and timeout governed by `MEMORY_CONNECTOR_TIMEOUT_MS` or 10 seconds by default. `/providers` reports whether JSON-command intelligence is active and which tasks fall back deterministically. `/translate` and `/ingest/media` support multilingual and media-transcript ingestion without requiring hosted services.
+The service seeds official manifests for email, chat, project management, docs, code, calendar, and cloud storage. Custom manifests declare direction, auth, capabilities, default source kind, metadata mapping, privacy policy, optional list/poll endpoints, and optional writeback endpoint metadata. `/connectors/list` calls a connector list endpoint and returns normalized external items. `/connectors/poll` calls a poll endpoint, ingests returned events through the same add-only extraction path, and records last state for `/connectors/health`. A `privacyPolicy` of `never_store` records the poll but writes no memories. `/connectors/sync` maps explicit external events into add-only extraction, records connector sync status, and emits audit events. `/connectors/writeback` renders source-specific export payloads for email replies, chat posts, issue updates, doc comments, code review comments, calendar notes, or generic custom connectors. With `dryRun:true` or omitted, the response is an auditable queued writeback plan. With a manifest `writeback.endpoint` and `dryRun:false`, Cognibrain sends the plan as an HTTP request with connector headers, optional HMAC signature, status-code capture, and timeout governed by `MEMORY_CONNECTOR_TIMEOUT_MS` or 10 seconds by default. `/connectors/feedback` maps accepted changes, rejected suggestions, failing tests, and user corrections into trust/importance feedback plus an auditable connector feedback memory. `/providers` reports whether JSON-command intelligence is active and which tasks fall back deterministically. `/translate` and `/ingest/media` support multilingual and media-transcript ingestion without requiring hosted services.
 
 ## Entity Catalog And Disambiguation
 

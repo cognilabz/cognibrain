@@ -50,6 +50,15 @@ type RuntimeStatus = {
   maintenance?: { enabled: boolean; writeThreshold: number; intervalHours: number };
   metrics?: MetricsReport;
 };
+type ConnectorHealth = {
+  connectorId: string;
+  kind: string;
+  privacyPolicy: string;
+  lastStatus: string;
+  lastSyncAt?: string;
+  lastWritebackAt?: string;
+  records: number;
+};
 type MarketplaceModuleCard = {
   id: string;
   kind: "connector" | "domain" | "persona" | "retrieval_profile";
@@ -293,6 +302,7 @@ function App() {
   const [version, setVersion] = useState(0);
   const apiUrl = useMemo(getApiUrl, []);
   const [runtime, setRuntime] = useState<RuntimeStatus>({ state: "checking", label: "checking" });
+  const [connectorHealth, setConnectorHealth] = useState<ConnectorHealth[]>([]);
 
   const { store, retrieval, reflection } = useMemo(() => {
     const store = new MemoryStore();
@@ -319,10 +329,18 @@ function App() {
         if (!healthResponse.ok || !maintenanceResponse.ok) throw new Error("runtime unavailable");
         const metricsResponse = await fetch(`${apiUrl}/metrics`);
         const maintenance = (await maintenanceResponse.json()) as RuntimeStatus["maintenance"];
+        const connectorResponse = await fetch(`${apiUrl}/connectors/health`);
         const metrics = metricsResponse.ok ? ((await metricsResponse.json()) as MetricsReport) : undefined;
-        if (!cancelled) setRuntime({ state: "online", label: "online", maintenance, metrics });
+        const connectors = connectorResponse.ok ? ((await connectorResponse.json()) as ConnectorHealth[]) : [];
+        if (!cancelled) {
+          setRuntime({ state: "online", label: "online", maintenance, metrics });
+          setConnectorHealth(connectors);
+        }
       } catch {
-        if (!cancelled) setRuntime({ state: "offline", label: "offline" });
+        if (!cancelled) {
+          setRuntime({ state: "offline", label: "offline" });
+          setConnectorHealth([]);
+        }
       }
     }
     checkRuntime();
@@ -564,6 +582,8 @@ function App() {
           <Metric label="Freshness" value={`${Math.round(health.freshness * 100)}%`} />
           <Metric label="No-hit" value={String(runtime.metrics?.noHitSearches ?? 0)} />
           <Metric label="Dreams" value={String(runtime.metrics?.dreams ?? 0)} />
+          <Metric label="Connectors" value={String(connectorHealth.length)} />
+          <Metric label="Writebacks" value={String(connectorHealth.filter((item) => item.lastWritebackAt).length)} />
         </section>
 
         {view === "memories" ? (

@@ -140,6 +140,12 @@ switch (command) {
     console.log(JSON.stringify(service.timeline(userId), null, 2));
     break;
   }
+  case "timeline-summarize": {
+    const granularity = args[0];
+    if (granularity && !["hour", "day", "week", "month", "all"].includes(granularity)) fail("Usage: memctl timeline-summarize [hour|day|week|month|all]");
+    console.log(JSON.stringify(service.summarizeTimeline(userId, { granularity: granularity as "hour" | "day" | "week" | "month" | "all" | undefined, persist: process.env.MEMORY_PERSIST_SUMMARIES === "true" }), null, 2));
+    break;
+  }
   case "temporal": {
     console.log(JSON.stringify(service.temporalQuery(userId, { after: process.env.MEMORY_AFTER, before: process.env.MEMORY_BEFORE }), null, 2));
     break;
@@ -221,7 +227,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-query|infer|brain-create|brains|source-create|events|compliance|lifecycle-preview|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-query|infer|brain-create|brains|source-create|events|compliance|lifecycle-preview|export|delete-user> ...");
 }
 
 function fail(message: string): never {

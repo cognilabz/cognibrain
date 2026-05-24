@@ -141,6 +141,12 @@ const entityMergeSchema = z.object({
   userId: z.string().optional()
 });
 
+const timelineSummarySchema = z.object({
+  granularity: z.enum(["hour", "day", "week", "month", "all"]).optional(),
+  persist: z.boolean().optional(),
+  style: z.enum(["concise", "descriptive", "narrative"]).optional()
+});
+
 const feedbackSchema = z.object({
   memoryId: z.string().min(1),
   userId: z.string().optional(),
@@ -487,6 +493,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && parts[0] === "timeline" && parts[1]) {
     send(response, 200, defaultService.timeline(parts[1]));
+    return;
+  }
+
+  if (method === "POST" && parts[0] === "timeline" && parts[1] && parts[2] === "summarize") {
+    send(response, 202, defaultService.summarizeTimeline(parts[1], timelineSummarySchema.parse(await json(request))));
     return;
   }
 

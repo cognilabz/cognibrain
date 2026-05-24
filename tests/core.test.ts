@@ -565,17 +565,41 @@ describe("TypeScript memory core", () => {
     expect(service.search({ userId: "device-b", query: "simulator proof", includeLinkedIdentities: true })[0].memory.userId).toBe("device-a");
   });
 
-  it("filters temporal searches and exposes timeline periods", () => {
-    const service = new MemoryService();
+  it("filters temporal searches and exposes multi-scale timeline summaries", () => {
+    const service = new MemoryService({
+      intelligence: {
+        summarizer: {
+          summarize: ({ theme }) => ({
+            content: `Provider narrative for ${theme}.`,
+            confidence: 0.84,
+            metadata: { provider: "test-timeline" }
+          })
+        }
+      }
+    });
     service.add({ userId: "u1", content: "Atlas used SQLite in January.", source: { kind: "human", confidence: 0.96 }, timestamp: "2026-01-10T00:00:00.000Z" });
     service.add({ userId: "u1", content: "Atlas used Redis after February.", source: { kind: "human", confidence: 0.96 }, timestamp: "2026-03-10T00:00:00.000Z" });
+    service.add({
+      userId: "u1",
+      content: "Atlas migration was valid for the whole second week of February.",
+      source: { kind: "human", confidence: 0.96 },
+      timestamp: "2026-02-08T12:00:00.000Z",
+      temporal: { validFrom: "2026-02-08T00:00:00.000Z", validUntil: "2026-02-15T00:00:00.000Z" }
+    });
     const after = service.search({ userId: "u1", query: "after 2026-02 Atlas used", now: new Date("2026-04-01T00:00:00.000Z") });
     expect(after[0].memory.content).toContain("Redis");
+    const interval = service.temporalQuery("u1", { after: "2026-02-10T00:00:00.000Z", before: "2026-02-11T00:00:00.000Z" });
+    expect(interval.events.some((event) => event.content.includes("whole second week"))).toBe(true);
     const timeline = service.timeline("u1");
     expect(timeline.periods.map((period) => period.period)).toContain("2026-01");
     expect(timeline.periods.map((period) => period.period)).toContain("2026-03");
+    expect(timeline.periods.some((period) => period.granularity === "hour")).toBe(true);
     expect(timeline.periods.some((period) => period.granularity === "day")).toBe(true);
     expect(timeline.periods.some((period) => period.granularity === "week")).toBe(true);
+    const summaries = service.summarizeTimeline("u1", { granularity: "month", persist: true, style: "narrative" });
+    expect(summaries.summaries.some((summary) => summary.mode === "provider" && summary.summaryMemoryId)).toBe(true);
+    const summaryMemory = service.list("u1").find((memory) => memory.metadata.dreamJob === "timeline-summary");
+    expect(summaryMemory?.metadata.summaryOf).toBeDefined();
   });
 
   it("exposes canonical entity and typed graph reports", () => {
@@ -771,7 +795,7 @@ describe("TypeScript memory core", () => {
     expect(compliance.auditByType["memory.write"]).toBeGreaterThan(0);
   });
 
-  it("queries temporal intervals and mines recurring behavioural patterns", () => {
+  it("queries temporal intervals and mines recurring behavioural patterns for retrieval", () => {
     const service = new MemoryService();
     for (const timestamp of ["2026-05-01T09:00:00.000Z", "2026-05-08T09:00:00.000Z", "2026-05-15T09:00:00.000Z"]) {
       service.add({
@@ -798,6 +822,8 @@ describe("TypeScript memory core", () => {
     expect(temporal.changedEntities.some((entity) => entity.entity === "mira")).toBe(true);
 
     const patterns = service.behavioralPatterns("u1");
-    expect(patterns.patterns.some((pattern) => pattern.cadence === "weekly:friday" && pattern.support >= 3)).toBe(true);
+    expect(patterns.patterns.some((pattern) => pattern.cadence === "weekly:friday" && pattern.support >= 3 && typeof pattern.falsePositiveRisk === "number")).toBe(true);
+    const friday = service.search({ userId: "u1", query: "Friday release habit", weights: { behavioral: 1, semantic: 0, keyword: 0, entity: 0, temporal: 0, trust: 0, graph: 0, access: 0 } });
+    expect(friday[0].signals.behavioral).toBeGreaterThan(0.5);
   });
 });

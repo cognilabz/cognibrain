@@ -32,9 +32,13 @@ Domain modules can enrich writes, choose default retrieval weights, tune lifecyc
 
 Memories can store typed relations such as `calls`, `imports`, `depends_on`, `supersedes`, `contradicts`, `confirmed_by`, `suggested_by`, and `executed_by`. The service maintains a canonical entity registry with aliases and memory ids, and `/graph` exposes typed relation edges with direction, confidence, and validity metadata. `/entities` exposes merge suggestions from spelling/token similarity, while `/entities/merge` and `/entities/split` let operators correct aliases and recanonicalize stored memories. Retrieval blends entity overlap and typed relation hints into graph scoring and exposes the graph path in result explanations.
 
-Temporal metadata tracks event time, valid windows, last confirmation, supersession, and verification due dates. Search parses simple before/after/last-week temporal constraints, and the timeline API exposes event order plus daily, weekly, and monthly period groupings. Dream maintenance schedules verification for time-sensitive stale facts instead of relying only on age-based archival.
+Temporal metadata tracks event time, valid windows, last confirmation, supersession, and verification due dates. Search parses simple before/after/last-week temporal constraints, and the timeline API exposes event order plus hourly, daily, weekly, and monthly period groupings. Interval queries use validity-window overlap, so a fact valid for a week can be found by a query for any day in that week. Dream maintenance schedules verification for time-sensitive stale facts instead of relying only on age-based archival.
 
-`temporalQuery()` adds interval filtering and changed-entity reports for questions like "what changed between these two dates?" `behavioralPatterns()` combines reviewed dream-pattern memories with deterministic recurring weekday/tag/entity mining, keeping newly mined patterns in pending-review state until feedback approves them.
+`temporalQuery()` adds interval filtering and changed-entity reports for questions like "what changed between these two dates?" `behavioralPatterns()` combines reviewed dream-pattern memories with deterministic recurring weekday/tag/entity mining and recurring sequence mining, keeping newly mined patterns in pending-review state until feedback approves them. Pattern reports include support, confidence, last-observed time, and false-positive risk.
+
+Retrieval now includes a behavioural signal alongside semantic, keyword, entity, temporal, trust, graph, and access signals. The signal boosts memories and reviewed pattern summaries that match a query's weekday, cadence, or habit anchor, and it is tunable through the same retrieval-weight profile APIs.
+
+`summarizeTimeline()` generates hour/day/week/month summaries with `summaryOf` provenance. It uses deterministic summaries by default and can call the configured JSON-command summarizer for provider-backed narrative styles. When `persist` is true, summaries are stored as reflection memories so later retrieval can reuse them without scanning every raw event.
 
 ## Graph-Native Reasoning
 
@@ -82,7 +86,7 @@ Pinned memories and lifecycle-protected layers/source kinds are never faded or a
 
 `npm run eval` runs a synthetic benchmark with single-hop, multi-hop, temporal correction, contradiction, and abstention cases. It compares cognibrain against vector-only, keyword-only, and recency-only baselines and writes `artifacts/evaluation-report.json`. CI uploads this artifact on every push and pull request. Scheduled and manually triggered CI runs execute `npm run benchmark:certified` and upload the certified market-proof JSON artifacts.
 
-`npm run verify:nextgen` extends the loop with `src/eval/nextgen.ts`, which proves the new graph, inference, brain/source, staged extraction/enrichment, entity disambiguation, webhook, compliance, and marketplace surfaces using deterministic fixtures before building the production dashboard.
+`npm run verify:nextgen` extends the loop with `src/eval/nextgen.ts`, which proves the new graph, inference, brain/source, temporal/pattern reasoning, timeline summaries, staged extraction/enrichment, entity disambiguation, webhook, compliance, and marketplace surfaces using deterministic fixtures before building the production dashboard.
 
 ## Dashboard
 

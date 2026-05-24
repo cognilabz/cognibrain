@@ -83,6 +83,8 @@ export function runNextgenEvaluation() {
   const query = service.graphQuery("MATCH (a)-[:transitive_depends_on]->(b) WHERE trust>0.8", "bench");
   const temporal = service.temporalQuery("bench", { after: "2026-05-01T00:00:00.000Z", before: "2026-05-09T00:00:00.000Z" });
   const patterns = service.behavioralPatterns("bench");
+  const timelineSummary = service.summarizeTimeline("bench", { granularity: "week", persist: true, style: "concise" });
+  const behavioralSearch = service.search({ userId: "bench", query: "Friday graph review habit", weights: { behavioral: 1, semantic: 0, keyword: 0, entity: 0, temporal: 0, trust: 0, graph: 0, access: 0 } });
   const entities = service.entityCatalog("bench");
   service.promoteSharedMemory(atlas.id, "org-bench");
   const compliance = service.complianceReport(new Date("2026-01-01T00:00:00.000Z"));
@@ -120,8 +122,12 @@ export function runNextgenEvaluation() {
   });
   checks.push({
     id: "temporal-patterns",
-    passed: temporal.events.length >= 2 && patterns.patterns.some((pattern) => pattern.cadence === "weekly:friday"),
-    detail: `${temporal.events.length} interval events, ${patterns.patterns.length} patterns`
+    passed:
+      temporal.events.length >= 2 &&
+      patterns.patterns.some((pattern) => pattern.cadence === "weekly:friday" && typeof pattern.falsePositiveRisk === "number") &&
+      timelineSummary.summaries.some((summary) => summary.summaryMemoryId) &&
+      behavioralSearch.some((result) => (result.signals.behavioral ?? 0) > 0.5),
+    detail: `${temporal.events.length} interval events, ${patterns.patterns.length} patterns, ${timelineSummary.summaries.length} summaries`
   });
   checks.push({
     id: "extraction-enrichment",

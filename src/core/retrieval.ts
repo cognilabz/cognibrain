@@ -84,6 +84,7 @@ export class RetrievalEngine {
     const eventAt = memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt;
     const ageDays = Math.max(0, (now.getTime() - eventAt.getTime()) / 86_400_000);
     const temporal = memory.pinned ? 1 : Math.exp(-ageDays / 180);
+    const behavioral = behavioralRelevance(memory, queryTokens, queryText, eventAt, now);
     const trust = memory.trust * memory.importance;
     const access = clamp(Math.log1p(memory.accessCount) / 8);
     const score = clamp(
@@ -91,6 +92,7 @@ export class RetrievalEngine {
         keyword * weights.keyword +
         entity * weights.entity +
         temporal * weights.temporal +
+        behavioral * weights.behavioral +
         trust * weights.trust +
         graph * weights.graph +
         access * weights.access
@@ -101,8 +103,8 @@ export class RetrievalEngine {
       score,
       initialScore: score,
       decision: "include",
-      explanation: explainSignals({ semantic, keyword, entity, temporal, trust, graph, access }, graphPaths),
-      signals: { semantic, keyword, entity, temporal, trust, graph, access },
+      explanation: explainSignals({ semantic, keyword, entity, temporal, behavioral, trust, graph, access }, graphPaths),
+      signals: { semantic, keyword, entity, temporal, behavioral, trust, graph, access },
       graphPaths,
       citation: citationFor(memory),
       stale: ageDays > STALE_DAYS && !memory.pinned
@@ -200,6 +202,44 @@ function isCompoundEntity(entity: string): boolean {
   return /\s/.test(entity.trim());
 }
 
+function behavioralRelevance(memory: Memory, queryTokens: string[], queryText: string, eventAt: Date, now: Date): number {
+  const queryWeekday = weekdayInQuery(queryText) ?? (/\btoday|heute\b/.test(queryText) ? weekdayName(now) : undefined);
+  const eventWeekday = weekdayName(eventAt);
+  const memoryText = `${memory.content} ${memory.tags.join(" ")} ${memory.entities.join(" ")}`.toLowerCase();
+  const coverage = keywordCoverage(queryTokens, tokenize(memoryText));
+  const cadence = typeof memory.metadata.cadence === "string" ? memory.metadata.cadence : typeof memory.metadata.recurrenceWindow === "string" ? memory.metadata.recurrenceWindow : undefined;
+  const isPattern = memory.metadata.dreamJob === "behavior-pattern" || memory.metadata.patternType === "behavioral";
+  const patternApproved = (memory.metadata.patternReview as { status?: string } | undefined)?.status === "approved";
+  const patternPending = (memory.metadata.patternReview as { status?: string } | undefined)?.status === "pending";
+  let score = 0;
+  if (queryWeekday && eventWeekday === queryWeekday && coverage > 0) score = Math.max(score, 0.45 + coverage * 0.35);
+  if (queryWeekday && cadence?.includes(queryWeekday)) score = Math.max(score, 0.72);
+  if (isPattern && coverage > 0) score = Math.max(score, patternApproved ? 0.95 : patternPending ? 0.68 : 0.78);
+  if (isPattern && queryWeekday && cadence?.includes(queryWeekday)) score = Math.max(score, patternApproved ? 1 : 0.82);
+  return clamp(score);
+}
+
+function weekdayInQuery(queryText: string): string | undefined {
+  for (const weekday of ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]) {
+    if (queryText.includes(weekday)) return weekday;
+  }
+  const german: Record<string, string> = {
+    montag: "monday",
+    dienstag: "tuesday",
+    mittwoch: "wednesday",
+    donnerstag: "thursday",
+    freitag: "friday",
+    samstag: "saturday",
+    sonntag: "sunday"
+  };
+  for (const [word, weekday] of Object.entries(german)) if (queryText.includes(word)) return weekday;
+  return undefined;
+}
+
+function weekdayName(date: Date): string {
+  return date.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }).toLowerCase();
+}
+
 function scopeMatches(memory: Memory, options: SearchOptions): boolean {
   if (options.scopeMode === "all") return true;
   if (options.sessionId && memory.sessionId && memory.sessionId !== options.sessionId) return false;
@@ -271,7 +311,7 @@ function heuristicRerank(query: string, results: SearchResult[]): SearchResult[]
 }
 
 function relevanceEvidence(result: SearchResult): number {
-  return result.signals.semantic + result.signals.keyword + result.signals.entity + result.signals.graph;
+  return result.signals.semantic + result.signals.keyword + result.signals.entity + result.signals.graph + (result.signals.behavioral ?? 0);
 }
 
 function isSuppressedContradiction(result: SearchResult, all: SearchResult[]): boolean {

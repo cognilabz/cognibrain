@@ -55,6 +55,7 @@ import type {
   ReflectionSummarizer,
   BehavioralPatternReport,
   TemporalQueryReport,
+  TimelineSummaryReport,
   TimelineReport,
   WebhookDelivery,
   WebhookRegistration
@@ -167,12 +168,14 @@ export class MemoryService {
     this.defaultReranker = provider.reranker;
     this.defaultVerifier = provider.verifier;
     this.defaultExtractor = provider.extractor;
+    this.defaultSummarizer = provider.summarizer;
     this.load();
   }
 
   private readonly defaultReranker?: SearchOptions["reranker"];
   private readonly defaultVerifier?: SearchOptions["verifier"];
   private readonly defaultExtractor?: MemoryExtractor;
+  private readonly defaultSummarizer?: ReflectionSummarizer;
 
   add(input: MemoryInput) {
     const enriched = this.domainModule?.enrich ? this.domainModule.enrich(input) : input;
@@ -610,14 +613,75 @@ export class MemoryService {
     };
   }
 
+  summarizeTimeline(
+    userId: string,
+    options: { granularity?: TimelineSummaryReport["granularity"]; persist?: boolean; style?: "concise" | "descriptive" | "narrative" } = {}
+  ): TimelineSummaryReport {
+    const now = new Date();
+    const granularity = options.granularity ?? "all";
+    const periods = this.timeline(userId).periods.filter((period) => granularity === "all" || period.granularity === granularity);
+    const existingSummaryIds = new Set(
+      this.store
+        .list(userId)
+        .filter((memory) => memory.metadata.dreamJob === "timeline-summary")
+        .map((memory) => `${memory.metadata.granularity}:${memory.metadata.period}`)
+    );
+    const summaries: TimelineSummaryReport["summaries"] = [];
+    for (const period of periods) {
+      const memories = period.memoryIds.map((id) => safeGet(this.store, id)).filter((memory): memory is Memory => Boolean(memory && !memory.archivedAt && memory.layer !== "reflection"));
+      if (!memories.length) continue;
+      const generated = this.defaultSummarizer?.summarize({ theme: `timeline ${period.granularity} ${period.period}`, memories, now });
+      const providerContent = generated?.content?.trim();
+      const content = providerContent
+        ? providerContent.slice(0, 1200)
+        : deterministicTimelineSummary(period.period, period.granularity, memories, options.style ?? "concise");
+      const mode = providerContent ? "provider" : "deterministic";
+      let summaryMemoryId: string | undefined;
+      const key = `${period.granularity}:${period.period}`;
+      if (options.persist && !existingSummaryIds.has(key)) {
+        const summary = this.add({
+          userId,
+          content,
+          type: "episodic",
+          layer: "reflection",
+          source: { kind: mode === "provider" ? "agent" : "tool", confidence: generated?.confidence ?? 0.76 },
+          tags: ["timeline-summary", period.granularity, period.period],
+          entities: [...new Set(memories.flatMap((memory) => memory.entities))].slice(0, 12),
+          timestamp: now.toISOString(),
+          metadata: {
+            summaryOf: memories.map((memory) => memory.id),
+            period: period.period,
+            granularity: period.granularity,
+            dreamJob: "timeline-summary",
+            summaryMode: mode,
+            summaryStyle: options.style ?? "concise",
+            generatedAt: now.toISOString(),
+            provider: generated?.metadata?.provider
+          }
+        });
+        summaryMemoryId = summary.id;
+        existingSummaryIds.add(key);
+      }
+      summaries.push({
+        period: period.period,
+        granularity: period.granularity,
+        content,
+        memoryIds: memories.map((memory) => memory.id),
+        summaryMemoryId,
+        confidence: generated?.confidence ?? 0.76,
+        mode
+      });
+    }
+    this.recordAudit("reflect.run", { userId, metadata: { resource: "timeline-summary", granularity, persisted: Boolean(options.persist), summaries: summaries.length } });
+    this.persist();
+    return { userId, generatedAt: now.toISOString(), granularity, persisted: Boolean(options.persist), summaries };
+  }
+
   temporalQuery(userId: string, options: { after?: Date | string; before?: Date | string } = {}): TemporalQueryReport {
     const after = options.after ? new Date(options.after) : undefined;
     const before = options.before ? new Date(options.before) : undefined;
     const events = this.timeline(userId).events.filter((event) => {
-      const eventAt = new Date(event.eventAt);
-      if (after && eventAt < after) return false;
-      if (before && eventAt >= before) return false;
-      return true;
+      return intervalOverlaps(event, after, before);
     });
     const byEntity = new Map<string, { memoryIds: string[]; dates: Date[] }>();
     for (const event of events) {
@@ -654,9 +718,10 @@ export class MemoryService {
         confidence: Number(memory.metadata.confidence ?? memory.trust),
         cadence: String(memory.metadata.recurrenceWindow ?? "observed-period"),
         pendingReview: (memory.metadata.patternReview as { status?: string } | undefined)?.status === "pending",
-        lastObservedAt: String(memory.metadata.lastObservedAt ?? memory.createdAt.toISOString())
+        lastObservedAt: String(memory.metadata.lastObservedAt ?? memory.createdAt.toISOString()),
+        falsePositiveRisk: Number(memory.metadata.falsePositiveRisk ?? 0.2)
       }));
-    const mined = mineRecurringPatterns(memories);
+    const mined = [...mineRecurringPatterns(memories), ...mineRecurringSequences(memories)];
     return { userId, patterns: [...generated, ...mined].sort((a, b) => b.confidence - a.confidence || b.support - a.support) };
   }
 
@@ -1188,9 +1253,59 @@ function mineRecurringPatterns(memories: Memory[]): BehavioralPatternReport["pat
         confidence: Math.min(0.92, 0.45 + support.length * 0.12),
         cadence: `weekly:${weekday}`,
         pendingReview: true,
-        lastObservedAt
+        lastObservedAt,
+        falsePositiveRisk: clamp01(0.55 - support.length * 0.08)
       };
     });
+}
+
+function mineRecurringSequences(memories: Memory[]): BehavioralPatternReport["patterns"] {
+  const byDay = new Map<string, Memory[]>();
+  for (const memory of memories.filter((item) => item.layer !== "reflection")) {
+    const eventAt = memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt;
+    const day = isoDay(eventAt);
+    const current = byDay.get(day) ?? [];
+    current.push(memory);
+    byDay.set(day, current);
+  }
+  const sequenceGroups = new Map<string, Memory[]>();
+  for (const dayMemories of byDay.values()) {
+    const ordered = dayMemories.sort((a, b) => new Date(a.temporal.eventAt ?? a.createdAt).getTime() - new Date(b.temporal.eventAt ?? b.createdAt).getTime());
+    for (let index = 0; index < ordered.length - 1; index += 1) {
+      const first = sequenceAnchor(ordered[index]);
+      const second = sequenceAnchor(ordered[index + 1]);
+      if (!first || !second || first === second) continue;
+      const key = `${first}->${second}`;
+      sequenceGroups.set(key, [...(sequenceGroups.get(key) ?? []), ordered[index], ordered[index + 1]]);
+    }
+  }
+  return [...sequenceGroups.entries()]
+    .map(([key, support]) => ({ key, support: dedupeMemories(support) }))
+    .filter((item) => item.support.length >= 4)
+    .map(({ key, support }) => ({
+      key: `sequence:${key}`,
+      label: `Recurring sequence: ${key.replace("->", " then ")}`,
+      support: support.length,
+      memoryIds: support.map((memory) => memory.id),
+      confidence: Math.min(0.88, 0.42 + support.length * 0.08),
+      cadence: "sequence",
+      pendingReview: true,
+      lastObservedAt: new Date(Math.max(...support.map((memory) => (memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt).getTime()))).toISOString(),
+      falsePositiveRisk: clamp01(0.62 - support.length * 0.06)
+    }));
+}
+
+function sequenceAnchor(memory: Memory): string | undefined {
+  return [...memory.tags, ...memory.entities].map((value) => value.toLowerCase()).find((value) => value.length > 2);
+}
+
+function dedupeMemories(memories: Memory[]): Memory[] {
+  const seen = new Set<string>();
+  return memories.filter((memory) => {
+    if (seen.has(memory.id)) return false;
+    seen.add(memory.id);
+    return true;
+  });
 }
 
 function groupedPeriods(events: TimelineReport["events"], summaries: Map<string, string>): TimelineReport["periods"] {
@@ -1198,6 +1313,7 @@ function groupedPeriods(events: TimelineReport["events"], summaries: Map<string,
   for (const event of events) {
     const date = new Date(event.eventAt);
     for (const [granularity, period] of [
+      ["hour", isoHour(date)],
       ["day", isoDay(date)],
       ["week", isoWeek(date)],
       ["month", isoMonth(date)]
@@ -1209,6 +1325,29 @@ function groupedPeriods(events: TimelineReport["events"], summaries: Map<string,
     }
   }
   return [...groups.values()].sort((a, b) => a.period.localeCompare(b.period) || a.granularity.localeCompare(b.granularity));
+}
+
+function deterministicTimelineSummary(period: string, granularity: TimelineReport["periods"][number]["granularity"], memories: Memory[], style: "concise" | "descriptive" | "narrative"): string {
+  const lead = style === "narrative" ? `During ${period}, the timeline shows` : style === "descriptive" ? `Timeline ${granularity} ${period} includes` : `Timeline summary for ${period}:`;
+  const facts = memories
+    .slice()
+    .sort((a, b) => (b.trust * b.importance) - (a.trust * a.importance))
+    .slice(0, style === "concise" ? 3 : 6)
+    .map((memory) => memory.content.replace(/\s+/g, " ").slice(0, 110));
+  return `${lead} ${facts.join(" | ")}`;
+}
+
+function intervalOverlaps(event: TimelineReport["events"][number], after?: Date, before?: Date): boolean {
+  if (!after && !before) return true;
+  const start = new Date(event.validFrom ?? event.eventAt);
+  const end = event.validUntil ? new Date(event.validUntil) : new Date(event.eventAt);
+  if (before && start >= before) return false;
+  if (after && end < after) return false;
+  return true;
+}
+
+function isoHour(date: Date): string {
+  return `${isoDay(date)}T${String(date.getUTCHours()).padStart(2, "0")}:00Z`;
 }
 
 function isoDay(date: Date): string {

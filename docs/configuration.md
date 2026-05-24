@@ -67,15 +67,16 @@ The current ranker combines:
 - keyword coverage,
 - entity match,
 - temporal decay,
+- behavioural cadence and approved pattern fit,
 - trust and importance,
 - graph boost through shared entities,
 - typed relationship hints,
 - access frequency,
 - evidence gating so trust alone cannot retrieve unrelated memories.
 
-The default benchmarked profile is semantic `0.26`, keyword `0.24`, entity `0.16`, temporal `0.08`, trust `0.18`, graph `0.06`, and access `0.02`. API search requests, service constructors, and `MEMORY_CONFIG_PATH` can pass weight overrides; values are normalized before scoring.
+The default benchmarked profile is semantic `0.26`, keyword `0.24`, entity `0.16`, temporal `0.08`, behavioural `0.05`, trust `0.18`, graph `0.06`, and access `0.02`; values are normalized before scoring. API search requests, service constructors, and `MEMORY_CONFIG_PATH` can pass weight overrides.
 
-Search can also receive optional reranker and verifier implementations in the TypeScript API. The built-in reranker is deterministic and favors candidates with stronger post-retrieval query coverage before the verifier marks stale or contradiction-tagged results for warning or review. For production adapters, set `MEMORY_INTELLIGENCE_COMMAND` to a JSON-command provider. The command receives stdin JSON with a `task` of `rerank`, `verify`, `contradiction`, or `summarize` and returns JSON decisions. Timeouts fail closed to the deterministic fallback.
+Search can also receive optional reranker and verifier implementations in the TypeScript API. The built-in reranker is deterministic and favors candidates with stronger post-retrieval query coverage before the verifier marks stale or contradiction-tagged results for warning or review. For production adapters, set `MEMORY_INTELLIGENCE_COMMAND` to a JSON-command provider. The command receives stdin JSON with a `task` of `rerank`, `verify`, `contradiction`, `summarize`, or `extract` and returns JSON decisions. Timeouts fail closed to the deterministic fallback.
 
 Retrieval profiles are stored with normalized weights, optional user/project/app/org/agent scope, provenance, training sample count, and update timestamp. Use `memctl profiles`, `memctl profile-set`, `PUT /profiles`, or `profileId` on search requests to select a policy without editing source code.
 

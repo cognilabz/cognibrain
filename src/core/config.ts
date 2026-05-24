@@ -5,6 +5,7 @@ export const DEFAULT_RETRIEVAL_WEIGHTS: RetrievalWeights = {
   keyword: 0.24,
   entity: 0.16,
   temporal: 0.08,
+  behavioral: 0.05,
   trust: 0.18,
   graph: 0.06,
   access: 0.02
@@ -53,6 +54,7 @@ export function normalizeRetrievalWeights(input?: Partial<RetrievalWeights>): Re
     keyword: Number.isFinite(raw.keyword) && raw.keyword > 0 ? raw.keyword : 0,
     entity: Number.isFinite(raw.entity) && raw.entity > 0 ? raw.entity : 0,
     temporal: Number.isFinite(raw.temporal) && raw.temporal > 0 ? raw.temporal : 0,
+    behavioral: Number.isFinite(raw.behavioral) && raw.behavioral > 0 ? raw.behavioral : 0,
     trust: Number.isFinite(raw.trust) && raw.trust > 0 ? raw.trust : 0,
     graph: Number.isFinite(raw.graph) && raw.graph > 0 ? raw.graph : 0,
     access: Number.isFinite(raw.access) && raw.access > 0 ? raw.access : 0
@@ -64,6 +66,7 @@ export function normalizeRetrievalWeights(input?: Partial<RetrievalWeights>): Re
     keyword: sanitized.keyword / total,
     entity: sanitized.entity / total,
     temporal: sanitized.temporal / total,
+    behavioral: sanitized.behavioral / total,
     trust: sanitized.trust / total,
     graph: sanitized.graph / total,
     access: sanitized.access / total

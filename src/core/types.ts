@@ -181,6 +181,7 @@ export interface SearchResult {
     keyword: number;
     entity: number;
     temporal: number;
+    behavioral?: number;
     trust: number;
     graph: number;
     access?: number;
@@ -195,6 +196,7 @@ export interface RetrievalWeights {
   keyword: number;
   entity: number;
   temporal: number;
+  behavioral: number;
   trust: number;
   graph: number;
   access: number;
@@ -297,7 +299,23 @@ export interface TimelineReport {
     supersededAt?: Date | string;
     entities: string[];
   }>;
-  periods: Array<{ period: string; granularity: "day" | "week" | "month"; memoryIds: string[]; summary?: string }>;
+  periods: Array<{ period: string; granularity: "hour" | "day" | "week" | "month"; memoryIds: string[]; summary?: string }>;
+}
+
+export interface TimelineSummaryReport {
+  userId: string;
+  generatedAt: Date | string;
+  granularity: "hour" | "day" | "week" | "month" | "all";
+  persisted: boolean;
+  summaries: Array<{
+    period: string;
+    granularity: "hour" | "day" | "week" | "month";
+    content: string;
+    memoryIds: string[];
+    summaryMemoryId?: string;
+    confidence: number;
+    mode: "deterministic" | "provider";
+  }>;
 }
 
 export interface TemporalQueryReport {
@@ -319,6 +337,7 @@ export interface BehavioralPatternReport {
     cadence?: string;
     pendingReview: boolean;
     lastObservedAt: Date | string;
+    falsePositiveRisk?: number;
   }>;
 }
 

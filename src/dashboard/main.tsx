@@ -204,7 +204,7 @@ function App() {
   const [artifactText, setArtifactText] = useState("");
   const [lastCycle, setLastCycle] = useState<ReflectionReport | null>(null);
   const [lastClean, setLastClean] = useState<string[]>([]);
-  const [retrievalWeights, setRetrievalWeights] = useState({ semantic: 0.26, keyword: 0.24, entity: 0.16, temporal: 0.08, trust: 0.18, graph: 0.06, access: 0.02 });
+  const [retrievalWeights, setRetrievalWeights] = useState({ semantic: 0.26, keyword: 0.24, entity: 0.16, temporal: 0.08, behavioral: 0.05, trust: 0.18, graph: 0.06, access: 0.02 });
   const [lifecyclePolicy, setLifecyclePolicy] = useState({ fadeAfterDays: 45, archiveAfterDays: 90 });
   const [version, setVersion] = useState(0);
   const apiUrl = useMemo(getApiUrl, []);
@@ -691,7 +691,7 @@ function DreamView({
   runDreamCycle: () => void;
   lastClean: string[];
   retrievalWeights: Record<string, number>;
-  setRetrievalWeights: React.Dispatch<React.SetStateAction<{ semantic: number; keyword: number; entity: number; temporal: number; trust: number; graph: number; access: number }>>;
+  setRetrievalWeights: React.Dispatch<React.SetStateAction<{ semantic: number; keyword: number; entity: number; temporal: number; behavioral: number; trust: number; graph: number; access: number }>>;
   lifecyclePolicy: { fadeAfterDays: number; archiveAfterDays: number };
   setLifecyclePolicy: React.Dispatch<React.SetStateAction<{ fadeAfterDays: number; archiveAfterDays: number }>>;
 }) {

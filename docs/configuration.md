@@ -33,7 +33,10 @@ Environment variables:
 | `MEMORY_DREAM_INTERVAL_HOURS` | `6` | Interval for due background dream checks after new writes |
 | `MEMORY_DREAM_WRITE_THRESHOLD` | `12` | Number of writes for a user before automatic dream runs |
 | `MEMORY_DREAM_CHECK_INTERVAL_MINUTES` | `15` | API server interval for scanning due dream cycles |
-| `MEMORY_REDACTION_MODE` | `redact` | `redact`, `reject`, `archive`, or `off` for sensitive-memory handling |
+| `MEMORY_REDACTION_MODE` | `redact` | `redact`, `reject`, `archive`, `encrypt`, or `off` for sensitive-memory handling |
+| `MEMORY_ENCRYPTION_KEY` | unset | Local AES-GCM key material used only when `MEMORY_REDACTION_MODE=encrypt` |
+| `MEMORY_ENCRYPTION_KEY_ID` | `local` | Non-secret key id stored in encrypted-memory metadata |
+| `MEMORY_ENCRYPTION_KEY_VERSION` | `1` | Non-secret key version stored in encrypted-memory metadata |
 | `MEMORY_DEFAULT_TOKEN_BUDGET` | `900` | Suggested context budget for harness connectors |
 | `MEMORY_NEVER_STORE_SECRETS` | `true` | Policy flag host connectors should honor before writing memories |
 
@@ -84,9 +87,9 @@ The learned-weight path starts from feedback events and optional labeled trainin
 
 ## Privacy And Retention
 
-The default redaction layer catches common API keys, tokens, private keys, credentials, high-entropy tokens, and email addresses. `redact` preserves useful context while replacing sensitive spans. `reject` blocks the write. `archive` stores the redacted memory and archives it immediately. `encrypt` stores an AES-GCM encrypted payload marker and audit metadata; set `MEMORY_ENCRYPTION_KEY` before using it.
+The default redaction layer catches common API keys, tokens, private keys, credentials, high-entropy tokens, and email addresses. `redact` preserves useful context while replacing sensitive spans. `reject` blocks the write. `archive` stores the redacted memory and archives it immediately. `encrypt` stores an AES-GCM encrypted payload marker and audit metadata; set `MEMORY_ENCRYPTION_KEY` before using it. `MEMORY_ENCRYPTION_KEY_ID` and `MEMORY_ENCRYPTION_KEY_VERSION` are non-secret labels used for compliance reports and rotation metadata.
 
-Consent metadata controls retrieval visibility. Private memories are excluded unless a caller explicitly asks for private memory; org-visible memories remain scoped to the matching organization. Retention dates are respected by search and can be paired with export/delete APIs.
+Consent metadata controls retrieval visibility. Private memories are excluded unless a caller explicitly asks for private memory; org-visible memories remain scoped to the matching organization. Retention dates are respected by search and can be paired with export/delete APIs. Additional retention rules can be managed with `memctl retention-rule`, `/retention/rules`, and `/retention/enforce`; rules can target users, brains, sources, source kinds, consent visibility, entities, relation types, or tags.
 
 Identity links are opt-in. `POST /identity-links` stores only a hash of a consent token and lets callers use `includeLinkedIdentities` during retrieval. Revoked links are ignored.
 

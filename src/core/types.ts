@@ -58,6 +58,33 @@ export interface ConsentPolicy {
   deleteOnRequest?: boolean;
 }
 
+export interface RetentionRule {
+  id: string;
+  label: string;
+  retentionDays: number;
+  action: "archive" | "delete";
+  scope?: {
+    userId?: string;
+    brainId?: string;
+    sourceId?: string;
+    sourceKind?: SourceKind;
+    visibility?: ConsentVisibility;
+    entity?: string;
+    relationType?: RelationType;
+    tag?: string;
+  };
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface RetentionEnforcementReport {
+  generatedAt: Date | string;
+  evaluated: number;
+  archived: string[];
+  deleted: string[];
+  rulesMatched: Record<string, number>;
+}
+
 export interface MemoryRelation {
   type: RelationType;
   sourceEntity?: string;
@@ -497,7 +524,10 @@ export interface AuditEvent {
     | "marketplace.install"
     | "inference.run"
     | "entity.merge"
-    | "entity.split";
+    | "entity.split"
+    | "retention.enforce"
+    | "security.key.rotate"
+    | "privacy.insights";
   actorId?: string;
   userId?: string;
   brainId?: string;
@@ -645,7 +675,49 @@ export interface ComplianceReport {
   retentionExpired: number;
   deleteOnRequest: number;
   auditByType: Record<string, number>;
+  retentionRules?: RetentionRule[];
+  encryption?: {
+    keyIds: Record<string, number>;
+    keyVersions: Record<string, number>;
+    rotated: number;
+    missingKeyMetadata: number;
+    backupRefs: string[];
+  };
+  dataFlows?: Array<{ type: string; count: number; lastSeenAt?: Date | string }>;
   risks: string[];
+}
+
+export interface SecurityKeyReport {
+  encrypted: number;
+  keyIds: Record<string, number>;
+  keyVersions: Record<string, number>;
+  rotated: number;
+  missingKeyMetadata: number;
+  backupRefs: string[];
+}
+
+export interface KeyRotationReport {
+  generatedAt: Date | string;
+  rotated: string[];
+  skipped: string[];
+  keyId: string;
+  keyVersion: string;
+  backupRef?: string;
+}
+
+export interface DifferentialPrivacyReport {
+  generatedAt: Date | string;
+  epsilon: number;
+  kAnonymity: number;
+  suppressedGroups: number;
+  aggregates: Array<{
+    dimension: string;
+    key: string;
+    noisyCount: number;
+    exactCount?: number;
+    suppressed: boolean;
+  }>;
+  notes: string[];
 }
 
 export interface DomainEvaluationCase {

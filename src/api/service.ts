@@ -62,7 +62,10 @@ import type {
   RetrievalProfile,
   RetrievalTrainingSample,
   RetrievalWeights,
+  RetentionEnforcementReport,
+  RetentionRule,
   SearchOptions,
+  SecurityKeyReport,
   ReflectionSummarizer,
   StorageBackendStatus,
   SyncReport,
@@ -74,6 +77,8 @@ import type {
   InjectionFeedbackEvent,
   InjectionFeedbackReport,
   AdaptiveDreamPolicyReport,
+  DifferentialPrivacyReport,
+  KeyRotationReport,
   ObservationReport,
   PredictionReport,
   BehavioralPatternReport,
@@ -143,6 +148,7 @@ export class MemoryService {
   private offlineOperations: OfflineOperation[] = [];
   private connectorManifests = new Map<string, ConnectorManifest>();
   private connectorSyncRecords: ConnectorSyncRecord[] = [];
+  private retentionRules = new Map<string, RetentionRule>();
   private searchEvents: Array<{
     timestamp: string;
     userId: string;
@@ -176,7 +182,12 @@ export class MemoryService {
     };
     this.domainModule = options.domainModule;
     const provider = options.intelligence ?? providerFromEnv();
-    this.redactionPolicy = options.redactionPolicy ?? runtimeConfig.redactionPolicy ?? options.domainModule?.redactionPolicy ?? { mode: redactionModeFromEnv(process.env.MEMORY_REDACTION_MODE), encryptionKey: process.env.MEMORY_ENCRYPTION_KEY };
+    this.redactionPolicy = options.redactionPolicy ?? runtimeConfig.redactionPolicy ?? options.domainModule?.redactionPolicy ?? {
+      mode: redactionModeFromEnv(process.env.MEMORY_REDACTION_MODE),
+      encryptionKey: process.env.MEMORY_ENCRYPTION_KEY,
+      encryptionKeyId: process.env.MEMORY_ENCRYPTION_KEY_ID,
+      encryptionKeyVersion: process.env.MEMORY_ENCRYPTION_KEY_VERSION
+    };
     this.entities = new EntityRegistry({ ...(runtimeConfig.entityAliases ?? {}), ...(options.domainModule?.aliases ?? {}), ...(options.entityAliases ?? {}) });
     const defaultWeights = normalizeRetrievalWeights({ ...runtimeConfig.retrievalWeights, ...options.domainModule?.retrievalWeights, ...options.retrievalWeights });
     this.retrievalProfiles.set("default", {
@@ -299,6 +310,7 @@ export class MemoryService {
   }
 
   search(options: SearchOptions) {
+    this.enforceRetention(new Date(), options.userId);
     const persona = options.agentId ? this.personaForAgent(options.agentId) : undefined;
     const personaProfile = persona?.retrievalWeights
       ? {
@@ -361,6 +373,7 @@ export class MemoryService {
   }
 
   reflect(userId: string) {
+    this.enforceRetention(new Date(), userId);
     const report = this.reflection.run(userId);
     this.recordDream(report.lifecycle.qualityScore, report.contradictions.length, report.lifecycle.actions);
     this.recordAudit("reflect.run", { userId, metadata: { created: report.created.length, demoted: report.demoted.length, contradictions: report.contradictions.length } });
@@ -370,6 +383,7 @@ export class MemoryService {
   }
 
   dream(userId: string) {
+    this.enforceRetention(new Date(), userId);
     const report = this.reflection.run(userId);
     this.recordDream(report.lifecycle.qualityScore, report.contradictions.length, report.lifecycle.actions);
     this.recordAudit("reflect.run", { userId, metadata: { created: report.created.length, demoted: report.demoted.length, contradictions: report.contradictions.length } });
@@ -893,6 +907,154 @@ export class MemoryService {
     return [...this.marketplaceModules.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  setRetentionRule(input: Omit<RetentionRule, "id" | "createdAt" | "updatedAt"> & { id?: string }): RetentionRule {
+    if (input.retentionDays < 0) throw new Error("Retention days must be non-negative.");
+    const now = new Date().toISOString();
+    const existing = input.id ? this.retentionRules.get(input.id) : undefined;
+    const scope = input.scope ? { ...input.scope, entity: input.scope.entity?.toLowerCase(), tag: input.scope.tag?.toLowerCase() } : undefined;
+    const rule: RetentionRule = {
+      ...input,
+      scope,
+      id: input.id ?? `ret_${contentHash(`${input.label}:${now}`).slice(2)}`,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    this.retentionRules.set(rule.id, rule);
+    this.recordAudit("retention.enforce", { metadata: { action: "rule.set", rule } });
+    this.persist();
+    return rule;
+  }
+
+  listRetentionRules(): RetentionRule[] {
+    return [...this.retentionRules.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  enforceRetention(now = new Date(), userId?: string): RetentionEnforcementReport {
+    const report: RetentionEnforcementReport = {
+      generatedAt: now.toISOString(),
+      evaluated: 0,
+      archived: [],
+      deleted: [],
+      rulesMatched: {}
+    };
+    const memories = this.store.list(userId).filter((memory) => !memory.archivedAt);
+    for (const memory of memories) {
+      report.evaluated += 1;
+      const consentExpired = memory.consent.retentionUntil && new Date(memory.consent.retentionUntil).getTime() <= now.getTime();
+      const matchedRules = [...this.retentionRules.values()].filter((rule) => retentionRuleMatches(memory, rule, now));
+      for (const rule of matchedRules) report.rulesMatched[rule.id] = (report.rulesMatched[rule.id] ?? 0) + 1;
+      const deleteRule = matchedRules.find((rule) => rule.action === "delete");
+      if (deleteRule) {
+        this.store.delete(memory.id);
+        report.deleted.push(memory.id);
+        this.recordAudit("retention.enforce", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "delete", ruleId: deleteRule.id, before: memory } });
+        continue;
+      }
+      const archiveRule = matchedRules[0];
+      if (consentExpired || archiveRule) {
+        const archived = this.store.archive(memory.id);
+        report.archived.push(memory.id);
+        this.recordAudit("retention.enforce", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "archive", reason: consentExpired ? "consent.retentionUntil" : "retention.rule", ruleId: archiveRule?.id, after: archived } });
+      }
+    }
+    if (report.archived.length || report.deleted.length) this.persist();
+    return report;
+  }
+
+  securityKeyReport(): SecurityKeyReport {
+    const report: SecurityKeyReport = { encrypted: 0, keyIds: {}, keyVersions: {}, rotated: 0, missingKeyMetadata: 0, backupRefs: [] };
+    for (const memory of this.store.list()) {
+      const privacy = memory.metadata.privacy as { encrypted?: boolean; keyId?: string; keyVersion?: string; rotatedAt?: string; rotationHistory?: unknown[]; backupRef?: string } | undefined;
+      if (!privacy?.encrypted) continue;
+      report.encrypted += 1;
+      if (privacy.keyId) report.keyIds[privacy.keyId] = (report.keyIds[privacy.keyId] ?? 0) + 1;
+      if (privacy.keyVersion) report.keyVersions[privacy.keyVersion] = (report.keyVersions[privacy.keyVersion] ?? 0) + 1;
+      if (!privacy.keyId || !privacy.keyVersion) report.missingKeyMetadata += 1;
+      if (privacy.rotatedAt || privacy.rotationHistory?.length) report.rotated += 1;
+      if (privacy.backupRef && !report.backupRefs.includes(privacy.backupRef)) report.backupRefs.push(privacy.backupRef);
+    }
+    return report;
+  }
+
+  rotateEncryptionKeyMetadata(input: { keyId: string; keyVersion: string; backupRef?: string; actorId?: string }): KeyRotationReport {
+    const now = new Date().toISOString();
+    const rotated: string[] = [];
+    const skipped: string[] = [];
+    for (const memory of this.store.list()) {
+      const privacy = memory.metadata.privacy as Record<string, unknown> | undefined;
+      if (!privacy?.encrypted) {
+        skipped.push(memory.id);
+        continue;
+      }
+      const history = Array.isArray(privacy.rotationHistory) ? privacy.rotationHistory : [];
+      this.store.update(memory.id, {
+        metadata: {
+          ...memory.metadata,
+          privacy: {
+            ...privacy,
+            previousKeyId: privacy.keyId,
+            previousKeyVersion: privacy.keyVersion,
+            keyId: input.keyId,
+            keyVersion: input.keyVersion,
+            rotatedAt: now,
+            backupRef: input.backupRef,
+            rotationHistory: [...history, { rotatedAt: now, keyId: input.keyId, keyVersion: input.keyVersion, backupRef: input.backupRef }]
+          }
+        }
+      });
+      rotated.push(memory.id);
+    }
+    this.recordAudit("security.key.rotate", { actorId: input.actorId, metadata: { rotated: rotated.length, skipped: skipped.length, keyId: input.keyId, keyVersion: input.keyVersion, backupRef: input.backupRef } });
+    this.persist();
+    return { generatedAt: now, rotated, skipped, keyId: input.keyId, keyVersion: input.keyVersion, backupRef: input.backupRef };
+  }
+
+  privacyInsights(options: { epsilon?: number; kAnonymity?: number; includeExact?: boolean } = {}): DifferentialPrivacyReport {
+    const epsilon = Math.max(0.1, options.epsilon ?? 1);
+    const kAnonymity = Math.max(2, Math.round(options.kAnonymity ?? 3));
+    const groups = new Map<string, number>();
+    const add = (dimension: string, key: string | undefined) => {
+      const safeKey = key || "none";
+      groups.set(`${dimension}:${safeKey}`, (groups.get(`${dimension}:${safeKey}`) ?? 0) + 1);
+    };
+    for (const memory of this.store.list()) {
+      add("consent", memory.consent.visibility);
+      add("sourceKind", memory.source.kind);
+      add("brain", memory.brainId);
+      add("source", memory.sourceId);
+    }
+    for (const event of this.searchEvents) {
+      add("searchSession", event.sessionId);
+      add("searchProject", event.projectId);
+    }
+    let suppressedGroups = 0;
+    const aggregates = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([compound, exactCount]) => {
+      const [dimension, ...keyParts] = compound.split(":");
+      const key = keyParts.join(":");
+      const suppressed = exactCount < kAnonymity;
+      if (suppressed) suppressedGroups += 1;
+      const noisyCount = suppressed ? 0 : Math.max(0, Math.round(exactCount + deterministicLaplaceNoise(`${compound}:${exactCount}`, epsilon)));
+      return {
+        dimension,
+        key,
+        noisyCount,
+        ...(options.includeExact ? { exactCount } : {}),
+        suppressed
+      };
+    });
+    const report: DifferentialPrivacyReport = {
+      generatedAt: new Date().toISOString(),
+      epsilon,
+      kAnonymity,
+      suppressedGroups,
+      aggregates,
+      notes: ["Groups below k-anonymity are suppressed.", "Counts use deterministic Laplace-style noise for local reproducibility."]
+    };
+    this.recordAudit("privacy.insights", { metadata: { epsilon, kAnonymity, suppressedGroups, aggregates: aggregates.length } });
+    this.persist();
+    return report;
+  }
+
   complianceReport(now = new Date()): ComplianceReport {
     const memories = this.store.list();
     const consent: ComplianceReport["consent"] = { private: 0, user: 0, org: 0, public: 0 };
@@ -907,6 +1069,14 @@ export class MemoryService {
     }
     const auditByType: Record<string, number> = {};
     for (const event of this.auditEvents) auditByType[event.type] = (auditByType[event.type] ?? 0) + 1;
+    const encryption = this.securityKeyReport();
+    const dataFlows = Object.entries(auditByType)
+      .map(([type, count]) => ({
+        type,
+        count,
+        lastSeenAt: this.auditEvents.filter((event) => event.type === type).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]?.timestamp
+      }))
+      .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type));
     return {
       generatedAt: now.toISOString(),
       totals: { memories: memories.length, auditEvents: this.auditEvents.length, brains: this.brains.size, sources: this.sources.size },
@@ -915,8 +1085,12 @@ export class MemoryService {
       retentionExpired,
       deleteOnRequest,
       auditByType,
+      retentionRules: this.listRetentionRules(),
+      encryption,
+      dataFlows,
       risks: [
         ...(retentionExpired ? [`${retentionExpired} memories are past retention and should be archived or deleted.`] : []),
+        ...(encryption.missingKeyMetadata ? [`${encryption.missingKeyMetadata} encrypted memories are missing key id/version metadata.`] : []),
         ...(memories.some((memory) => memory.consent.visibility === "public" && memory.trust < 0.5) ? ["Low-trust public memories require operator review."] : [])
       ]
     };
@@ -1565,6 +1739,7 @@ export class MemoryService {
     this.offlineOperations = raw.offlineOperations ?? [];
     for (const manifest of raw.connectorManifests ?? []) this.connectorManifests.set(manifest.id, manifest);
     this.connectorSyncRecords = raw.connectorSyncRecords ?? [];
+    this.retentionRules = new Map((raw.retentionRules ?? []).map((rule) => [rule.id, rule]));
     this.store.import(raw.memories ?? []);
     for (const memory of this.store.list()) this.entities.ingest(memory);
   }
@@ -1592,7 +1767,8 @@ export class MemoryService {
       marketplaceModules: [...this.marketplaceModules.values()],
       offlineOperations: this.offlineOperations,
       connectorManifests: [...this.connectorManifests.values()],
-      connectorSyncRecords: this.connectorSyncRecords
+      connectorSyncRecords: this.connectorSyncRecords,
+      retentionRules: [...this.retentionRules.values()]
     };
     this.persistence.save(payload);
   }
@@ -1609,7 +1785,12 @@ export function createDefaultMemoryService() {
       writeThreshold: Number(process.env.MEMORY_DREAM_WRITE_THRESHOLD ?? 12)
     },
     configPath: process.env.MEMORY_CONFIG_PATH,
-    redactionPolicy: { mode: redactionModeFromEnv(process.env.MEMORY_REDACTION_MODE), encryptionKey: process.env.MEMORY_ENCRYPTION_KEY }
+    redactionPolicy: {
+      mode: redactionModeFromEnv(process.env.MEMORY_REDACTION_MODE),
+      encryptionKey: process.env.MEMORY_ENCRYPTION_KEY,
+      encryptionKeyId: process.env.MEMORY_ENCRYPTION_KEY_ID,
+      encryptionKeyVersion: process.env.MEMORY_ENCRYPTION_KEY_VERSION
+    }
   });
 }
 
@@ -2017,6 +2198,29 @@ function observationClusters(memories: Memory[]): Array<{ label: string; memorie
     .map(([label, group]) => ({ label, memories: dedupeMemories(group).sort((a, b) => b.trust * b.importance - a.trust * a.importance) }))
     .filter((cluster) => cluster.memories.length >= 2)
     .sort((a, b) => b.memories.length - a.memories.length || b.memories[0].trust - a.memories[0].trust);
+}
+
+function retentionRuleMatches(memory: Memory, rule: RetentionRule, now: Date): boolean {
+  const scope = rule.scope ?? {};
+  if (scope.userId && memory.userId !== scope.userId) return false;
+  if (scope.brainId && memory.brainId !== scope.brainId) return false;
+  if (scope.sourceId && memory.sourceId !== scope.sourceId) return false;
+  if (scope.sourceKind && memory.source.kind !== scope.sourceKind) return false;
+  if (scope.visibility && memory.consent.visibility !== scope.visibility) return false;
+  if (scope.entity && !memory.entities.includes(scope.entity.toLowerCase())) return false;
+  if (scope.relationType && !memory.relations.some((relation) => relation.type === scope.relationType)) return false;
+  if (scope.tag && !memory.tags.includes(scope.tag)) return false;
+  const effectiveDate = memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt;
+  const ageDays = (now.getTime() - effectiveDate.getTime()) / 86_400_000;
+  return ageDays >= rule.retentionDays;
+}
+
+function deterministicLaplaceNoise(seed: string, epsilon: number): number {
+  const hash = contentHash(seed);
+  const integer = Number.parseInt(hash.slice(0, 12), 36);
+  const u = Math.min(0.999999, Math.max(0.000001, (integer % 1_000_000) / 1_000_000));
+  const centered = u - 0.5;
+  return -(Math.sign(centered) || 1) * Math.log(1 - 2 * Math.abs(centered)) / epsilon;
 }
 
 function deterministicObservation(label: string, memories: Memory[], style: ObservationReport["style"]): string {

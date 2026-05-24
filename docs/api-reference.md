@@ -265,9 +265,21 @@ curl -X POST http://localhost:8787/marketplace/install \
   -d '{"id":"persona-researcher","kind":"persona","name":"Researcher","version":"1.0.0","description":"Citation-heavy defaults","manifest":{"id":"researcher","label":"Researcher","summaryStyle":"descriptive"}}'
 curl http://localhost:8787/marketplace
 curl http://localhost:8787/compliance
+curl http://localhost:8787/compliance/export
+curl -X POST http://localhost:8787/retention/rules \
+  -H "content-type: application/json" \
+  -d '{"label":"Transcript archive","retentionDays":30,"action":"archive","scope":{"sourceKind":"transcript"}}'
+curl -X POST http://localhost:8787/retention/enforce \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev"}'
+curl http://localhost:8787/security/keys
+curl -X POST http://localhost:8787/security/key-rotation \
+  -H "content-type: application/json" \
+  -d '{"keyId":"local","keyVersion":"2","backupRef":"local-backup://2026-05"}'
+curl "http://localhost:8787/privacy/insights?epsilon=0.8&k=3"
 ```
 
-Every write/update/delete/search/extract/reflect/share/share-request/share-revoke/agent/persona/connector/provider/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries, simulate delivery, and verify retry metadata before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Compliance reports summarize storage scope, consent, retention, delete-on-request, encryption metadata, and audit counts.
+Every write/update/delete/search/extract/reflect/share/share-request/share-revoke/agent/persona/connector/provider/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries, simulate delivery, and verify retry metadata before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Retention rules can target memory user, brain, source, source kind, visibility, entity, relation type, or tag and are enforced before search and dream. Compliance reports summarize storage scope, consent, retention rules, delete-on-request, encryption key metadata, data flows, and audit counts. Privacy insights return noised aggregates and suppress groups below the configured k-anonymity threshold.
 
 ## Reflection
 
@@ -332,4 +344,4 @@ When the service is configured with a domain module, this endpoint runs the modu
 npm run verify:nextgen
 ```
 
-This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, connector ingestion, injection-feedback learning, adaptive dream policy, generated observations, prediction reports, multi-tenant audit, webhook event feeds, compliance retention, and marketplace persona installation.
+This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, connector ingestion, injection-feedback learning, adaptive dream policy, generated observations, prediction reports, security/compliance retention, key rotation, privacy insights, multi-tenant audit, webhook event feeds, and marketplace persona installation.

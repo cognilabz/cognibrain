@@ -365,6 +365,39 @@ switch (command) {
     console.log(JSON.stringify(service.complianceReport(), null, 2));
     break;
   }
+  case "compliance-export": {
+    console.log(JSON.stringify(service.complianceReport(), null, 2));
+    break;
+  }
+  case "retention-rule": {
+    const [label, days, action, scopeJson] = args;
+    if (!label || !days || !action) fail("Usage: memctl retention-rule <label> <retention-days> <archive|delete> [scope-json]");
+    if (action !== "archive" && action !== "delete") fail(`Unsupported retention action: ${action}`);
+    console.log(JSON.stringify(service.setRetentionRule({ label, retentionDays: Number(days), action, scope: scopeJson ? JSON.parse(scopeJson) : undefined }), null, 2));
+    break;
+  }
+  case "retention-rules": {
+    console.log(JSON.stringify(service.listRetentionRules(), null, 2));
+    break;
+  }
+  case "retention-enforce": {
+    console.log(JSON.stringify(service.enforceRetention(args[0] ? new Date(args[0]) : new Date(), process.env.MEMORY_RETENTION_USER_ID ?? userId), null, 2));
+    break;
+  }
+  case "key-report": {
+    console.log(JSON.stringify(service.securityKeyReport(), null, 2));
+    break;
+  }
+  case "key-rotate": {
+    const [keyId, keyVersion, backupRef] = args;
+    if (!keyId || !keyVersion) fail("Usage: memctl key-rotate <key-id> <key-version> [backup-ref]");
+    console.log(JSON.stringify(service.rotateEncryptionKeyMetadata({ keyId, keyVersion, backupRef, actorId: process.env.MEMORY_AGENT_ID ?? userId }), null, 2));
+    break;
+  }
+  case "privacy-insights": {
+    console.log(JSON.stringify(service.privacyInsights({ epsilon: args[0] ? Number(args[0]) : undefined, kAnonymity: args[1] ? Number(args[1]) : undefined, includeExact: process.env.MEMORY_PRIVACY_INCLUDE_EXACT === "true" }), null, 2));
+    break;
+  }
   case "storage": {
     console.log(JSON.stringify(service.storageStatus(), null, 2));
     break;
@@ -540,7 +573,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|storage|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {

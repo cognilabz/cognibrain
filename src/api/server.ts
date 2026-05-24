@@ -328,7 +328,33 @@ const connectorSyncSchema = z.object({
   )
 });
 
-const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"]);
+const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split", "retention.enforce", "security.key.rotate", "privacy.insights"]);
+
+const retentionRuleSchema = z.object({
+  id: z.string().optional(),
+  label: z.string().min(1),
+  retentionDays: z.number().min(0),
+  action: z.enum(["archive", "delete"]),
+  scope: z
+    .object({
+      userId: z.string().optional(),
+      brainId: z.string().optional(),
+      sourceId: z.string().optional(),
+      sourceKind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]).optional(),
+      visibility: z.enum(["private", "user", "org", "public"]).optional(),
+      entity: z.string().optional(),
+      relationType: relationTypeSchema.optional(),
+      tag: z.string().optional()
+    })
+    .optional()
+});
+
+const keyRotationSchema = z.object({
+  keyId: z.string().min(1),
+  keyVersion: z.string().min(1),
+  backupRef: z.string().optional(),
+  actorId: z.string().optional()
+});
 
 const offlineOperationSchema = z.object({
   id: z.string().optional(),
@@ -562,6 +588,46 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/compliance") {
     send(response, 200, defaultService.complianceReport());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/compliance/export") {
+    send(response, 200, defaultService.complianceReport());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/retention/rules") {
+    send(response, 200, defaultService.listRetentionRules());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/retention/rules") {
+    send(response, 202, defaultService.setRetentionRule(retentionRuleSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/retention/enforce") {
+    const body = z.object({ userId: z.string().optional(), now: z.string().optional() }).parse(await json(request));
+    send(response, 202, defaultService.enforceRetention(body.now ? new Date(body.now) : new Date(), body.userId));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/security/keys") {
+    send(response, 200, defaultService.securityKeyReport());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/security/key-rotation") {
+    send(response, 202, defaultService.rotateEncryptionKeyMetadata(keyRotationSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/privacy/insights") {
+    send(response, 200, defaultService.privacyInsights({
+      epsilon: url.searchParams.get("epsilon") ? Number(url.searchParams.get("epsilon")) : undefined,
+      kAnonymity: url.searchParams.get("k") ? Number(url.searchParams.get("k")) : undefined,
+      includeExact: url.searchParams.get("includeExact") === "true"
+    }));
     return;
   }
 

@@ -504,7 +504,7 @@ describe("TypeScript memory core", () => {
   });
 
   it("encrypts sensitive writes when encryption mode is configured", () => {
-    const service = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "test-key-with-enough-length" } });
+    const service = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "test-key-with-enough-length", encryptionKeyId: "local", encryptionKeyVersion: "1" } });
     const memory = service.add({
       userId: "u1",
       content: "The password=supersecret token should not be stored in plaintext.",
@@ -512,7 +512,57 @@ describe("TypeScript memory core", () => {
     });
     expect(memory.content).toContain("[encrypted:aes-256-gcm:");
     expect(memory.content).not.toContain("supersecret");
-    expect(memory.metadata.privacy).toMatchObject({ encrypted: true, action: "encrypt" });
+    expect(memory.metadata.privacy).toMatchObject({ encrypted: true, action: "encrypt", keyId: "local", keyVersion: "1" });
+  });
+
+  it("enforces retention, rotates encrypted key metadata, and emits privacy-safe insights", () => {
+    const service = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "test-key-with-enough-length", encryptionKeyId: "primary", encryptionKeyVersion: "1" } });
+    const staleSearch = service.add({
+      userId: "u1",
+      content: "Atlas compliance memory should expire from retrieval.",
+      entities: ["atlas"],
+      timestamp: "2020-01-01T00:00:00.000Z",
+      source: { kind: "human", confidence: 0.96 }
+    });
+    service.add({
+      userId: "u1",
+      content: "The token ghp_abcdefghijklmnopqrstuvwxyz123456 should rotate key metadata.",
+      source: { kind: "human", confidence: 0.95 }
+    });
+    const staleDream = service.add({
+      userId: "u2",
+      content: "Dream retention should archive old source memories.",
+      timestamp: "2020-01-01T00:00:00.000Z",
+      source: { kind: "transcript", confidence: 0.42 }
+    });
+    service.add({ userId: "u3", content: "Privacy insight aggregate one.", source: { kind: "human", confidence: 0.95 } });
+    service.add({ userId: "u4", content: "Privacy insight aggregate two.", source: { kind: "human", confidence: 0.95 } });
+
+    const rule = service.setRetentionRule({ label: "Atlas archive", retentionDays: 1, action: "archive", scope: { entity: "atlas" } });
+    expect(service.listRetentionRules()[0].id).toBe(rule.id);
+    const search = service.search({ userId: "u1", query: "Atlas compliance memory", includePrivate: true });
+    expect(search.some((result) => result.memory.id === staleSearch.id)).toBe(false);
+    expect(service.exportUser("u1").find((memory) => memory.id === staleSearch.id)?.archivedAt).toBeDefined();
+
+    service.setRetentionRule({ label: "Transcript archive", retentionDays: 1, action: "archive", scope: { userId: "u2", sourceKind: "transcript" } });
+    service.dream("u2");
+    expect(service.exportUser("u2").find((memory) => memory.id === staleDream.id)?.archivedAt).toBeDefined();
+
+    const keysBefore = service.securityKeyReport();
+    expect(keysBefore.keyIds.primary).toBe(1);
+    const rotation = service.rotateEncryptionKeyMetadata({ keyId: "primary", keyVersion: "2", backupRef: "local-backup://2026-05" });
+    expect(rotation.rotated).toHaveLength(1);
+    expect(service.securityKeyReport()).toMatchObject({ rotated: 1, backupRefs: ["local-backup://2026-05"] });
+
+    const insights = service.privacyInsights({ epsilon: 0.8, kAnonymity: 2, includeExact: true });
+    expect(insights.aggregates.some((item) => item.dimension === "sourceKind" && item.key === "human" && item.suppressed === false)).toBe(true);
+    expect(insights.aggregates.some((item) => item.dimension === "sourceKind" && item.key === "transcript" && item.suppressed === true && item.noisyCount === 0)).toBe(true);
+
+    const compliance = service.complianceReport();
+    expect(compliance.retentionRules?.length).toBeGreaterThanOrEqual(2);
+    expect(compliance.encryption?.keyVersions["2"]).toBe(1);
+    expect(compliance.dataFlows?.some((flow) => flow.type === "security.key.rotate")).toBe(true);
+    expect(service.auditTrail({ type: "retention.enforce" }).length).toBeGreaterThan(0);
   });
 
   it("manages retrieval profiles and learns a bounded profile from feedback", () => {

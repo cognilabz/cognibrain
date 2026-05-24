@@ -24,9 +24,11 @@ Each memory can carry `userId`, `agentId`, `sessionId`, `appId`, `orgId`, `proje
 
 ## Privacy And Feedback
 
-The default local service redacts common secrets before storing memory text. Consent metadata supports private, user, org, and public visibility plus retention and delete-on-request policy. Feedback events such as `helpful`, `wrong`, `always_include`, and `never_include` update bounded trust/importance scores and create audit metadata for later learning.
+The default local service redacts common secrets before storing memory text. Consent metadata supports private, user, org, and public visibility plus retention and delete-on-request policy. Retention rules can additionally target a user, brain, source, source kind, visibility, entity, relation type, or tag. `enforceRetention()` archives or deletes matched memories before search and dream runs, and records `retention.enforce` audit events so cleanup is visible in compliance exports. Feedback events such as `helpful`, `wrong`, `always_include`, and `never_include` update bounded trust/importance scores and create audit metadata for later learning.
 
-Domain modules can enrich writes, choose default retrieval weights, tune lifecycle policy, swap the redaction mode, define aliases, and ship application-level evaluation fixtures. The built-in coding module tags API, CLI, class, test, package, endpoint, and import memories so programming work can lean harder on entity and graph signals without changing the public API. Entity extraction also recognizes code symbols, endpoints, package names, repository aliases, and common German/English variants. Sensitive writes can be redacted, rejected, archived, or encrypted with AES-GCM metadata when `MEMORY_ENCRYPTION_KEY` is configured.
+Domain modules can enrich writes, choose default retrieval weights, tune lifecycle policy, swap the redaction mode, define aliases, and ship application-level evaluation fixtures. The built-in coding module tags API, CLI, class, test, package, endpoint, and import memories so programming work can lean harder on entity and graph signals without changing the public API. Entity extraction also recognizes code symbols, endpoints, package names, repository aliases, and common German/English variants. Sensitive writes can be redacted, rejected, archived, or encrypted with AES-GCM metadata when `MEMORY_ENCRYPTION_KEY` is configured. Encrypted entries store key id/version metadata, and `rotateEncryptionKeyMetadata()` records auditable rotation and backup references without exposing key material.
+
+`privacyInsights()` returns differentially private aggregate counts with deterministic local noise and k-anonymity suppression. Small groups return `noisyCount: 0` and are marked suppressed, which lets dashboards show useful usage trends without leaking singleton users, projects, or source groups.
 
 ## Typed Relations And Time
 
@@ -66,7 +68,7 @@ Shared team memories use a review workflow. `requestSharedMemory()` marks a memo
 
 Every core action records an append-only audit event: memory write/update/delete/share, consent updates, memory revert, extraction, provider calls, connector registration/sync, search, reflection, sync queue/replay, webhook registration, marketplace installation, inference, and entity merge/split operations. `auditTrail()` and `/audit` filter those events by user, memory, or type. Update/delete/consent events capture before/after snapshots so `revertMemory()` can restore a previous memory without hand-editing storage. Webhook registrations produce queued delivery records for matching audit events, and `deliverWebhookQueue()` records attempts, last errors, last-attempt timestamps, and backoff timestamps. This creates an inspectable event-feed boundary before real network delivery is enabled.
 
-Compliance reports summarize memory counts, brain/source counts, consent visibility, encrypted entries, expired retention entries, delete-on-request flags, and audit counts by type. This gives operators a concrete exportable control surface instead of a policy note buried in documentation.
+Compliance reports summarize memory counts, brain/source counts, consent visibility, retention rules, encrypted entries, key ids/versions, backup references, expired retention entries, delete-on-request flags, data-flow counts, and audit counts by type. This gives operators a concrete exportable control surface instead of a policy note buried in documentation.
 
 ## Offline Sync And Storage
 
@@ -104,7 +106,7 @@ Pinned memories and lifecycle-protected layers/source kinds are never faded or a
 
 `npm run eval` runs a synthetic benchmark with single-hop, multi-hop, temporal correction, contradiction, and abstention cases. It compares cognibrain against vector-only, keyword-only, and recency-only baselines and writes `artifacts/evaluation-report.json`. CI uploads this artifact on every push and pull request. Scheduled and manually triggered CI runs execute `npm run benchmark:certified` and upload the certified market-proof JSON artifacts.
 
-`npm run verify:nextgen` extends the loop with `src/eval/nextgen.ts`, which proves the new graph path, activation, query, export, inference, brain/source, temporal/pattern reasoning, timeline summaries, staged extraction/enrichment, connector sync, provider translation, media ingestion, webhook delivery, injection-feedback learning, adaptive dream policies, generated observations, prediction reports, entity disambiguation, compliance, and marketplace surfaces using deterministic fixtures before building the production dashboard.
+`npm run verify:nextgen` extends the loop with `src/eval/nextgen.ts`, which proves the new graph path, activation, query, export, inference, brain/source, temporal/pattern reasoning, timeline summaries, staged extraction/enrichment, connector sync, provider translation, media ingestion, webhook delivery, injection-feedback learning, adaptive dream policies, generated observations, prediction reports, retention enforcement, encryption key rotation metadata, differentially private insights, entity disambiguation, compliance, and marketplace surfaces using deterministic fixtures before building the production dashboard.
 
 ## Dashboard
 

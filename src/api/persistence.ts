@@ -16,6 +16,7 @@ import type {
   MetricsReport,
   OfflineOperation,
   PersonaProfile,
+  RetentionRule,
   RetrievalProfile,
   RetrievalTrainingSample,
   WebhookDelivery,
@@ -46,6 +47,7 @@ export interface PersistedMemoryFile {
   offlineOperations?: OfflineOperation[];
   connectorManifests?: ConnectorManifest[];
   connectorSyncRecords?: ConnectorSyncRecord[];
+  retentionRules?: RetentionRule[];
 }
 
 export interface MemoryPersistenceAdapter {

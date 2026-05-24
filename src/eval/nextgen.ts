@@ -191,6 +191,23 @@ export function runNextgenEvaluation() {
   const audit = service.auditTrail({ memoryId: atlas.id });
   const federatedReport = service.federatedSearch({ userId: "bench-peer", agentId: "agent-bench", orgId: "org-bench", query: "release architecture", brainIds: [brain.id] });
   const revoked = service.revokeSharedMemory(atlas.id, "agent-bench", "Benchmark cleanup.");
+  const securityService = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "nextgen-test-key-with-enough-length", encryptionKeyId: "nextgen", encryptionKeyVersion: "1" } });
+  const expiredSecurity = securityService.add({
+    userId: "security",
+    content: "Atlas security retention note should leave retrieval.",
+    entities: ["atlas"],
+    timestamp: "2020-01-01T00:00:00.000Z",
+    source: { kind: "human", confidence: 0.95 }
+  });
+  securityService.add({ userId: "security", content: "The token ghp_abcdefghijklmnopqrstuvwxyz123456 rotates metadata only.", source: { kind: "human", confidence: 0.95 } });
+  securityService.add({ userId: "dp1", content: "Privacy aggregate human one.", source: { kind: "human", confidence: 0.95 } });
+  securityService.add({ userId: "dp2", content: "Privacy aggregate human two.", source: { kind: "human", confidence: 0.95 } });
+  securityService.add({ userId: "dp3", content: "Privacy aggregate transcript singleton.", source: { kind: "transcript", confidence: 0.42 } });
+  const retentionRule = securityService.setRetentionRule({ label: "Security archive", retentionDays: 1, action: "archive", scope: { entity: "atlas" } });
+  const retainedSearch = securityService.search({ userId: "security", query: "Atlas security retention note", includePrivate: true });
+  const keyRotation = securityService.rotateEncryptionKeyMetadata({ keyId: "nextgen", keyVersion: "2", backupRef: "local-backup://nextgen" });
+  const dpInsights = securityService.privacyInsights({ epsilon: 0.8, kAnonymity: 2, includeExact: true });
+  const securityCompliance = securityService.complianceReport();
 
   checks.push({
     id: "graph-inference",
@@ -281,6 +298,18 @@ export function runNextgenEvaluation() {
     id: "compliance-retention",
     passed: compliance.retentionExpired === 1 && compliance.deleteOnRequest >= 1,
     detail: `${compliance.retentionExpired} expired retention entries, ${compliance.deleteOnRequest} delete-on-request entries`
+  });
+  checks.push({
+    id: "security-compliance",
+    passed:
+      securityService.listRetentionRules().some((rule) => rule.id === retentionRule.id) &&
+      !retainedSearch.some((result) => result.memory.id === expiredSecurity.id) &&
+      securityService.exportUser("security").some((memory) => memory.id === expiredSecurity.id && memory.archivedAt) &&
+      keyRotation.rotated.length === 1 &&
+      securityService.securityKeyReport().backupRefs.includes("local-backup://nextgen") &&
+      dpInsights.aggregates.some((item) => item.dimension === "sourceKind" && item.key === "transcript" && item.suppressed) &&
+      securityCompliance.dataFlows?.some((flow) => flow.type === "security.key.rotate") === true,
+    detail: `${securityService.listRetentionRules().length} retention rules, ${keyRotation.rotated.length} key rotations, ${dpInsights.suppressedGroups} DP groups suppressed`
   });
   checks.push({
     id: "temporal-patterns",

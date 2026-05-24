@@ -5,6 +5,8 @@ import { createCipheriv, createHash, randomBytes } from "node:crypto";
 export interface RedactionPolicy {
   mode: "off" | "redact" | "reject" | "archive" | "encrypt";
   encryptionKey?: string;
+  encryptionKeyId?: string;
+  encryptionKeyVersion?: string;
 }
 
 export interface RedactionResult {
@@ -55,7 +57,9 @@ export function applyRedactionPolicy(input: MemoryInput, policy: RedactionPolicy
                 algorithm: encrypted.algorithm,
                 iv: encrypted.iv,
                 authTag: encrypted.authTag,
-                keyFingerprint: encrypted.keyFingerprint
+                keyFingerprint: encrypted.keyFingerprint,
+                keyId: policy.encryptionKeyId ?? process.env.MEMORY_ENCRYPTION_KEY_ID ?? "local",
+                keyVersion: policy.encryptionKeyVersion ?? process.env.MEMORY_ENCRYPTION_KEY_VERSION ?? "1"
               }
             : {})
         }

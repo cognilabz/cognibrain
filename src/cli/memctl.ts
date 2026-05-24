@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
+import { createPersistenceFromEnv } from "../api/persistence";
 import { MemoryService } from "../api/service";
 import { buildLeaderboardArtifact } from "../eval/leaderboard";
 import { runNextgenBenchmarkSuites } from "../eval/nextgenBenchmarks";
@@ -8,7 +9,7 @@ import type { FeedbackKind } from "../core";
 const userId = process.env.MEMORY_USER_ID ?? process.env.USER ?? "local";
 const dbPath = resolve(process.env.MEMORY_DB_PATH ?? ".memory-harness.json");
 const service = new MemoryService({
-  persistencePath: dbPath,
+  persistence: createPersistenceFromEnv(dbPath),
   autoDream: {
     enabled: process.env.MEMORY_AUTO_DREAM !== "false",
     intervalHours: Number(process.env.MEMORY_DREAM_INTERVAL_HOURS ?? 6),

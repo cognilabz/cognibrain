@@ -27,8 +27,9 @@ Environment variables:
 | `NODE_ENV` | unset | Set to `production` in Docker |
 | `COGNIBRAIN_RUNTIME_ROOT` | launch directory | Directory for `.cognibrain/` runtime state and default memory JSON |
 | `MEMORY_DB_PATH` | `.memory-harness.json` | Local API and CLI persistence file |
-| `MEMORY_STORAGE_BACKEND` | `json` | Persistence backend: `json` for atomic snapshot file, `jsonl` for append-only durable snapshots |
+| `MEMORY_STORAGE_BACKEND` | `json` | Persistence backend: `json`, `jsonl`/`append-only`, or `sqlite` |
 | `MEMORY_EVENT_LOG_PATH` | `.memory-harness.jsonl` | Append-only persistence log when `MEMORY_STORAGE_BACKEND=jsonl` |
+| `MEMORY_SQLITE_PATH` | `.memory-harness.sqlite` | SQLite database path when `MEMORY_STORAGE_BACKEND=sqlite` |
 | `MEMORY_AUTO_DREAM` | `true` | Set to `false` to disable automatic dream-cycle maintenance |
 | `MEMORY_DREAM_INTERVAL_HOURS` | `6` | Interval for due background dream checks after new writes |
 | `MEMORY_DREAM_WRITE_THRESHOLD` | `12` | Number of writes for a user before automatic dream runs |
@@ -161,7 +162,13 @@ Durable audit mode appends each saved snapshot to JSONL and reloads the latest v
 MEMORY_STORAGE_BACKEND=jsonl MEMORY_EVENT_LOG_PATH=.memory-harness.jsonl npm run start:local
 ```
 
-`GET /storage` and `memctl storage` expose the active backend plus adapter capabilities. The append-only adapter is the compatibility bridge for hosted deployments: SQL or cloud adapters can replay snapshots, compact them, and implement the same `MemoryPersistenceAdapter` contract without changing API callers.
+SQLite mode stores snapshots transactionally and records each saved payload in an append-only SQL event table:
+
+```bash
+MEMORY_STORAGE_BACKEND=sqlite MEMORY_SQLITE_PATH=.memory-harness.sqlite npm run start:local
+```
+
+`GET /storage` and `memctl storage` expose the active backend plus adapter capabilities, including durability, transactionality, append-only support, SQL support and migration safety. SQLite is the first real SQL backend. Postgres, CockroachDB and Cassandra-class deployments still require dedicated adapters before the repo can claim distributed storage.
 
 Offline clients can queue operations while disconnected and replay them later:
 

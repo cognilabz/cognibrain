@@ -76,7 +76,7 @@ Compliance reports summarize memory counts, brain/source counts, consent visibil
 
 ## Offline Sync And Storage
 
-`storageStatus()` exposes the active adapter and the supported local-first backend contracts: in-memory for tests, atomic JSON snapshots for desktop/CLI, and append-only JSONL for replayable durable logs. The append-only mode is distributed-ready at the boundary because hosted SQL or cloud adapters can consume and compact the same payload contract.
+`storageStatus()` exposes the active adapter and the supported local-first backend contracts: in-memory for tests, atomic JSON snapshots for desktop/CLI, append-only JSONL for replayable durable logs, and SQLite transactional snapshots with an append-only SQL event table when `node:sqlite` is available. JSON-to-SQL migration is covered by tests. Postgres, CockroachDB, Cassandra and hosted replication still require dedicated adapters before distributed storage is complete.
 
 Offline clients can queue add/update/delete/consent operations with `queueOfflineOperation()` or `/sync/offline-operations`. `syncOfflineOperations()` preserves add-only writes, applies updates only when the server copy has not changed since the offline timestamp, and returns manual-review conflicts instead of silently overwriting newer facts.
 

@@ -7,7 +7,7 @@ import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { MemoryService } from "../src/api/service";
 import { CognibrainClient } from "../src/sdk/client";
-import { AppendOnlyLogPersistenceAdapter } from "../src/api/persistence";
+import { AppendOnlyLogPersistenceAdapter, JsonFilePersistenceAdapter, SQLitePersistenceAdapter, sqliteAvailable } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
 import { buildLeaderboardArtifact, validateLeaderboardArtifact } from "../src/eval/leaderboard";
 import { runNextgenBenchmarkSuites } from "../src/eval/nextgenBenchmarks";
@@ -817,6 +817,49 @@ describe("TypeScript memory core", () => {
         persistence: new AppendOnlyLogPersistenceAdapter(logPath)
       });
       expect(reloaded.search({ userId: "u1", query: "audit log backend", limit: 1 })[0].memory.content).toContain("append-only");
+      expect(reloaded.learnRetrievalProfile().samples).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("supports SQLite persistence and JSON-to-SQL migration when node:sqlite is available", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-sqlite-"));
+    try {
+      const jsonPath = join(dir, "memory.json");
+      const sqlitePath = join(dir, "memory.sqlite");
+      const jsonAdapter = new JsonFilePersistenceAdapter(jsonPath);
+      const source = new MemoryService({ persistence: jsonAdapter });
+      source.add({
+        userId: "u1",
+        content: "SQLite backends keep transactional memory snapshots.",
+        entities: ["sqlite", "transactional snapshots"],
+        source: { kind: "human", confidence: 0.97 }
+      });
+      source.addTrainingSample({
+        userId: "u1",
+        query: "sqlite backend",
+        selectedMemoryId: source.list("u1")[0].id,
+        outcome: "helpful",
+        signals: { trust: 1, keyword: 0.8 }
+      });
+
+      const status = source.storageStatus();
+      expect(status.adapters.some((adapter) => adapter.kind === "sqlite" && adapter.sql)).toBe(true);
+
+      if (!sqliteAvailable()) {
+        expect(status.adapters.find((adapter) => adapter.kind === "sqlite")?.migrationSafe).toBe(false);
+        return;
+      }
+
+      const payload = jsonAdapter.load();
+      expect(payload).toBeDefined();
+      const sqliteAdapter = new SQLitePersistenceAdapter(sqlitePath);
+      if (payload && !Array.isArray(payload)) sqliteAdapter.save(payload);
+
+      const reloaded = new MemoryService({ persistence: sqliteAdapter });
+      expect(reloaded.storageStatus().active).toBe("sqlite");
+      expect(reloaded.search({ userId: "u1", query: "transactional sqlite snapshots", limit: 1 })[0].memory.content).toContain("SQLite");
       expect(reloaded.learnRetrievalProfile().samples).toBe(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });

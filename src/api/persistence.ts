@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import type {
   DomainEvaluationReport,
@@ -54,6 +55,18 @@ export interface MemoryPersistenceAdapter {
   readonly kind: string;
   load(): PersistedMemoryFile | Memory[] | undefined;
   save(payload: PersistedMemoryFile): void;
+  capabilities?(): PersistenceCapabilities;
+}
+
+export interface PersistenceCapabilities {
+  durable: boolean;
+  distributedReady: boolean;
+  transactional: boolean;
+  appendOnly: boolean;
+  sql: boolean;
+  encryptedAtRest: boolean;
+  migrationSafe: boolean;
+  notes: string[];
 }
 
 export class JsonFilePersistenceAdapter implements MemoryPersistenceAdapter {
@@ -76,6 +89,19 @@ export class JsonFilePersistenceAdapter implements MemoryPersistenceAdapter {
     const tempPath = `${this.path}.${process.pid}.tmp`;
     writeFileSync(tempPath, JSON.stringify(payload, null, 2));
     renameSync(tempPath, this.path);
+  }
+
+  capabilities(): PersistenceCapabilities {
+    return {
+      durable: true,
+      distributedReady: false,
+      transactional: true,
+      appendOnly: false,
+      sql: false,
+      encryptedAtRest: false,
+      migrationSafe: true,
+      notes: ["Atomic snapshot writes for local-first desktop and CLI usage."]
+    };
   }
 }
 
@@ -111,6 +137,91 @@ export class AppendOnlyLogPersistenceAdapter implements MemoryPersistenceAdapter
     };
     appendFileSync(this.path, `${JSON.stringify(entry)}\n`);
   }
+
+  capabilities(): PersistenceCapabilities {
+    return {
+      durable: true,
+      distributedReady: true,
+      transactional: false,
+      appendOnly: true,
+      sql: false,
+      encryptedAtRest: false,
+      migrationSafe: true,
+      notes: ["JSONL snapshots can be tailed, replicated, compacted, or replayed by SQL/cloud adapters."]
+    };
+  }
+}
+
+export class SQLitePersistenceAdapter implements MemoryPersistenceAdapter {
+  readonly kind = "sqlite";
+  private readonly path: string;
+  private database?: SQLiteDatabase;
+
+  constructor(path: string) {
+    this.path = resolve(path);
+  }
+
+  load(): PersistedMemoryFile | undefined {
+    const row = this.db()
+      .prepare("select payload from memory_snapshots order by id desc limit 1")
+      .get() as { payload?: string } | undefined;
+    return row?.payload ? (JSON.parse(row.payload) as PersistedMemoryFile) : undefined;
+  }
+
+  save(payload: PersistedMemoryFile): void {
+    const db = this.db();
+    const serialized = JSON.stringify(payload);
+    const createdAt = new Date().toISOString();
+    db.exec("begin immediate");
+    try {
+      db.prepare("insert into memory_snapshots (created_at, version, payload) values (?, ?, ?)").run(createdAt, payload.version, serialized);
+      db.prepare("insert into persistence_events (created_at, event_type, payload) values (?, ?, ?)").run(createdAt, "snapshot", serialized);
+      db.prepare("delete from memory_snapshots where id not in (select id from memory_snapshots order by id desc limit 20)").run();
+      db.exec("commit");
+    } catch (error) {
+      db.exec("rollback");
+      throw error;
+    }
+  }
+
+  capabilities(): PersistenceCapabilities {
+    return {
+      durable: true,
+      distributedReady: false,
+      transactional: true,
+      appendOnly: true,
+      sql: true,
+      encryptedAtRest: false,
+      migrationSafe: true,
+      notes: ["SQLite transactional snapshot store with an append-only event table for local production deployments."]
+    };
+  }
+
+  private db(): SQLiteDatabase {
+    if (this.database) return this.database;
+    mkdirSync(dirname(this.path), { recursive: true });
+    const DatabaseSync = loadSQLite();
+    this.database = new DatabaseSync(this.path);
+    this.database.exec("pragma journal_mode = WAL");
+    this.database.exec("pragma foreign_keys = ON");
+    this.database.exec(`
+      create table if not exists memory_snapshots (
+        id integer primary key autoincrement,
+        created_at text not null,
+        version integer not null,
+        payload text not null
+      );
+      create table if not exists persistence_events (
+        id integer primary key autoincrement,
+        created_at text not null,
+        event_type text not null,
+        payload text not null
+      );
+      create index if not exists idx_memory_snapshots_created_at on memory_snapshots(created_at);
+      create index if not exists idx_persistence_events_created_at on persistence_events(created_at);
+    `);
+    return this.database;
+  }
 }
 
 export function createPersistenceFromEnv(defaultPath = ".memory-harness.json"): MemoryPersistenceAdapter {
@@ -118,5 +229,34 @@ export function createPersistenceFromEnv(defaultPath = ".memory-harness.json"): 
   if (backend === "jsonl" || backend === "append-only" || backend === "log") {
     return new AppendOnlyLogPersistenceAdapter(process.env.MEMORY_EVENT_LOG_PATH ?? ".memory-harness.jsonl");
   }
+  if (backend === "sqlite" || backend === "sql") {
+    return new SQLitePersistenceAdapter(process.env.MEMORY_SQLITE_PATH ?? defaultPath.replace(/\.json$/i, ".sqlite"));
+  }
   return new JsonFilePersistenceAdapter(defaultPath);
+}
+
+export function sqliteAvailable(): boolean {
+  try {
+    loadSQLite();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+type SQLiteStatement = {
+  get(...values: unknown[]): unknown;
+  run(...values: unknown[]): unknown;
+};
+
+type SQLiteDatabase = {
+  exec(sql: string): unknown;
+  prepare(sql: string): SQLiteStatement;
+};
+
+function loadSQLite(): new (path: string) => SQLiteDatabase {
+  const require = createRequire(import.meta.url);
+  const sqlite = require("node:sqlite") as { DatabaseSync?: new (path: string) => SQLiteDatabase };
+  if (!sqlite.DatabaseSync) throw new Error("node:sqlite DatabaseSync is unavailable in this Node runtime.");
+  return sqlite.DatabaseSync;
 }

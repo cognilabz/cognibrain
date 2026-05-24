@@ -3,8 +3,11 @@ import { createJsonCommandIntelligenceFromEnv } from "../core/providers";
 import { loadRuntimeConfig } from "../core/runtimeConfig";
 import {
   createPersistenceFromEnv,
+  AppendOnlyLogPersistenceAdapter,
   JsonFilePersistenceAdapter,
+  SQLitePersistenceAdapter,
   type MemoryPersistenceAdapter,
+  sqliteAvailable,
   type PersistedMemoryFile
 } from "./persistence";
 import {
@@ -634,32 +637,31 @@ export class MemoryService {
   }
 
   storageStatus(): StorageBackendStatus {
-    return {
-      active: this.persistence?.kind ?? "memory",
-      adapters: [
-        {
-          kind: "memory",
+    const memory = {
+      kind: "memory",
+      durable: false,
+      distributedReady: false,
+      transactional: false,
+      notes: ["Process-local adapter for tests and embedded runtimes."]
+    };
+    const json = { kind: "json-file", ...new JsonFilePersistenceAdapter(".memory-harness.json").capabilities() };
+    const jsonl = { kind: "append-only-log", ...new AppendOnlyLogPersistenceAdapter(".memory-harness.jsonl").capabilities(), encryptedAppendLog: this.redactionPolicy.mode === "encrypt" };
+    const sqlite = sqliteAvailable()
+      ? { kind: "sqlite", ...new SQLitePersistenceAdapter(".memory-harness.sqlite").capabilities() }
+      : {
+          kind: "sqlite",
           durable: false,
           distributedReady: false,
           transactional: false,
-          notes: ["Process-local adapter for tests and embedded runtimes."]
-        },
-        {
-          kind: "json-file",
-          durable: true,
-          distributedReady: false,
-          transactional: true,
-          notes: ["Atomic snapshot writes for local-first desktop and CLI usage."]
-        },
-        {
-          kind: "append-only-log",
-          durable: true,
-          distributedReady: true,
-          transactional: false,
-          encryptedAppendLog: this.redactionPolicy.mode === "encrypt",
-          notes: ["JSONL snapshots can be tailed, replicated, compacted, or replayed by SQL/cloud adapters."]
-        }
-      ]
+          appendOnly: false,
+          sql: true,
+          encryptedAtRest: false,
+          migrationSafe: false,
+          notes: ["Unavailable in this Node runtime; use Node with node:sqlite or another SQL adapter."]
+        };
+    return {
+      active: this.persistence?.kind ?? "memory",
+      adapters: [memory, json, jsonl, sqlite]
     };
   }
 

@@ -544,6 +544,10 @@ export interface StorageBackendStatus {
     durable: boolean;
     distributedReady: boolean;
     transactional: boolean;
+    appendOnly?: boolean;
+    sql?: boolean;
+    encryptedAtRest?: boolean;
+    migrationSafe?: boolean;
     encryptedAppendLog?: boolean;
     notes: string[];
   }>;

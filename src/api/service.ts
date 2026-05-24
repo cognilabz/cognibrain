@@ -66,6 +66,8 @@ import type {
   MemoryExtractionEvent,
   MemoryExtractor,
   MemoryInput,
+  MemoryPolicyOperation,
+  MemoryPolicyRule,
   MemoryRouteReport,
   MemoryScope,
   MemorySource,
@@ -80,6 +82,7 @@ import type {
   ManagedTenant,
   OfflineOperation,
   PersonaProfile,
+  PolicyDecision,
   RelationType,
   RetrievalProfile,
   RetrievalTrainingSample,
@@ -200,6 +203,7 @@ export class MemoryService {
   private connectorManifests = new Map<string, ConnectorManifest>();
   private connectorAuthSessions = new Map<string, ConnectorAuthSession>();
   private connectorSyncRecords: ConnectorSyncRecord[] = [];
+  private policyRules = new Map<string, MemoryPolicyRule>();
   private retentionRules = new Map<string, RetentionRule>();
   private searchEvents: Array<{
     timestamp: string;
@@ -281,6 +285,11 @@ export class MemoryService {
     const scopedInput = { ...input, consent: { ...personaConsent, ...sourceDefaultConsent, ...(input.consent ?? {}) } };
     const enriched = this.domainModule?.enrich ? this.domainModule.enrich(scopedInput) : scopedInput;
     this.ensureScopedAccess(enriched);
+    const writeDecision = this.evaluatePolicy("write", enriched);
+    if (!writeDecision.allowed) {
+      this.recordAudit("policy.violation", { userId: enriched.userId, brainId: enriched.brainId, sourceId: enriched.sourceId, metadata: { operation: "write", decision: writeDecision } });
+      throw new Error(`Memory write denied by policy: ${writeDecision.reasons.join("; ")}`);
+    }
     const checked = applyRedactionPolicy(enriched, this.redactionPolicy);
     if (checked.rejected || !checked.input) {
       throw new Error(`Memory rejected by redaction policy: ${checked.matches.map((match) => match.detector).join(", ")}`);
@@ -416,7 +425,7 @@ export class MemoryService {
     const linkedUserIds = effectiveOptions.includeLinkedIdentities ? this.identities.resolve(effectiveOptions.userId).filter((id) => id !== effectiveOptions.userId) : [];
     const federatedBrainIds = effectiveOptions.includeSharedBrains ? effectiveOptions.brainIds ?? this.accessibleBrainIds(effectiveOptions) : effectiveOptions.brainIds;
     const queryExpansions = this.expandSearchQuery(effectiveOptions);
-    const results = this.retrieval.search({
+    const rawResults = this.retrieval.search({
       ...effectiveOptions,
       brainIds: federatedBrainIds,
       linkedUserIds,
@@ -424,6 +433,13 @@ export class MemoryService {
       weights: options.weights ?? profile?.weights ?? intent.recommendedWeights,
       reranker: effectiveOptions.reranker ?? this.defaultReranker,
       verifier: effectiveOptions.verifier ?? this.defaultVerifier
+    });
+    const denied: PolicyDecision[] = [];
+    const results = rawResults.filter((result) => {
+      const decision = this.evaluatePolicy("retrieve", result.memory, { userId: effectiveOptions.userId, orgId: effectiveOptions.orgId, agentId: effectiveOptions.agentId });
+      if (decision.allowed) return true;
+      denied.push(decision);
+      return false;
     });
     this.metrics.searches += 1;
     this.metrics.noHitSearches += results.length === 0 ? 1 : 0;
@@ -439,7 +455,8 @@ export class MemoryService {
       lowConfidence: results.some((result) => result.decision === "warn" || result.decision === "review"),
       queryHash: contentHash(effectiveOptions.query)
     });
-    this.recordAudit("search.run", { userId: effectiveOptions.userId, brainId: effectiveOptions.brainId, sourceId: effectiveOptions.sourceId, metadata: { resultCount: results.length, profileId: profile?.id, intent: intent.intent } });
+    if (denied.length) this.recordAudit("policy.violation", { userId: effectiveOptions.userId, brainId: effectiveOptions.brainId, sourceId: effectiveOptions.sourceId, metadata: { operation: "retrieve", denied: denied.length, decisions: denied } });
+    this.recordAudit("search.run", { userId: effectiveOptions.userId, brainId: effectiveOptions.brainId, sourceId: effectiveOptions.sourceId, metadata: { resultCount: results.length, deniedByPolicy: denied.length, profileId: profile?.id, intent: intent.intent } });
     this.persist();
     return results;
   }
@@ -627,6 +644,8 @@ export class MemoryService {
 
   reflect(userId: string) {
     this.enforceRetention(new Date(), userId);
+    const blocked = this.memoriesDeniedForOperation(userId, "dream");
+    if (blocked.length) return this.blockedReflectionReport(userId, "reflect", blocked);
     const report = this.reflection.run(userId);
     this.recordDream(report.lifecycle.qualityScore, report.contradictions.length, report.lifecycle.actions);
     this.recordAudit("reflect.run", { userId, metadata: { created: report.created.length, demoted: report.demoted.length, contradictions: report.contradictions.length } });
@@ -637,6 +656,8 @@ export class MemoryService {
 
   dream(userId: string) {
     this.enforceRetention(new Date(), userId);
+    const blocked = this.memoriesDeniedForOperation(userId, "dream");
+    if (blocked.length) return this.blockedReflectionReport(userId, "dream", blocked);
     const report = this.reflection.run(userId);
     this.scheduleVerificationFromDream(userId);
     this.recordDream(report.lifecycle.qualityScore, report.contradictions.length, report.lifecycle.actions);
@@ -822,14 +843,32 @@ export class MemoryService {
   }
 
   exportUser(userId: string): Memory[] {
-    return this.store.list(userId);
+    const denied: PolicyDecision[] = [];
+    const allowed = this.store.list(userId).filter((memory) => {
+      const decision = this.evaluatePolicy("export", memory, { userId });
+      if (decision.allowed) return true;
+      denied.push(decision);
+      return false;
+    });
+    if (denied.length) this.recordAudit("policy.violation", { userId, metadata: { operation: "export", denied: denied.length, decisions: denied } });
+    return allowed;
   }
 
   deleteUser(userId: string): number {
     const memories = this.store.list(userId);
-    for (const memory of memories) this.store.delete(memory.id);
+    let deleted = 0;
+    const denied: PolicyDecision[] = [];
+    for (const memory of memories) {
+      const decision = this.evaluatePolicy("delete", memory, { userId });
+      if (!decision.allowed) {
+        denied.push(decision);
+        continue;
+      }
+      if (this.store.delete(memory.id)) deleted += 1;
+    }
+    if (denied.length) this.recordAudit("policy.violation", { userId, metadata: { operation: "delete", denied: denied.length, decisions: denied } });
     this.persist();
-    return memories.length;
+    return deleted;
   }
 
   createBrain(input: Omit<Brain, "id" | "createdAt" | "updatedAt"> & { id?: string }): Brain {
@@ -1795,6 +1834,8 @@ export class MemoryService {
         "/migration/export": ["POST"],
         "/migration/import": ["POST"],
         "/backup/verify": ["POST"],
+        "/policy/rules": ["GET", "POST"],
+        "/policy/evaluate": ["POST"],
         "/privacy/insights": ["GET"],
         "/privacy/cross-brain-compute": ["POST"],
         "/security/key-provider": ["GET"],
@@ -1822,6 +1863,7 @@ export class MemoryService {
         profiles: this.retrievalProfiles.size,
         personas: this.personas.size,
         connectors: this.connectorManifests.size,
+        policyRules: this.policyRules.size,
         retentionRules: this.retentionRules.size
       },
       backup: {
@@ -1841,13 +1883,14 @@ export class MemoryService {
         personas: [...this.personas.values()],
         connectors: [...this.connectorManifests.values()],
         marketplaceModules: [...this.marketplaceModules.values()],
+        policyRules: [...this.policyRules.values()],
         retentionRules: [...this.retentionRules.values()],
         compliance: this.complianceReport()
       }
     };
   }
 
-  importMigrationBundle(bundle: ManagedMigrationBundle): { importedMemories: number; importedEpisodes: number; importedProfiles: number; importedPersonas: number; importedConnectors: number; importedRetentionRules: number } {
+  importMigrationBundle(bundle: ManagedMigrationBundle): { importedMemories: number; importedEpisodes: number; importedProfiles: number; importedPersonas: number; importedConnectors: number; importedPolicyRules: number; importedRetentionRules: number } {
     const manifest = bundle.manifest as {
       memories?: Memory[];
       episodes?: EpisodeRecord[];
@@ -1855,6 +1898,7 @@ export class MemoryService {
       personas?: PersonaProfile[];
       connectors?: ConnectorManifest[];
       marketplaceModules?: MarketplaceModule[];
+      policyRules?: MemoryPolicyRule[];
       retentionRules?: RetentionRule[];
     };
     const imported = manifest.memories?.length ? this.store.import(manifest.memories) : [];
@@ -1863,6 +1907,7 @@ export class MemoryService {
     for (const persona of manifest.personas ?? []) this.personas.set(persona.id, persona);
     for (const connector of manifest.connectors ?? []) this.connectorManifests.set(connector.id, connector);
     for (const module of manifest.marketplaceModules ?? []) this.marketplaceModules.set(module.id, module);
+    for (const rule of manifest.policyRules ?? []) this.policyRules.set(rule.id, rule);
     for (const rule of manifest.retentionRules ?? []) this.retentionRules.set(rule.id, rule);
     this.recordAudit("sync.run", { metadata: { action: "migration.import", importedMemories: imported.length, target: bundle.target } });
     this.persist();
@@ -1872,6 +1917,7 @@ export class MemoryService {
       importedProfiles: manifest.retrievalProfiles?.length ?? 0,
       importedPersonas: manifest.personas?.length ?? 0,
       importedConnectors: manifest.connectors?.length ?? 0,
+      importedPolicyRules: manifest.policyRules?.length ?? 0,
       importedRetentionRules: manifest.retentionRules?.length ?? 0
     };
   }
@@ -1992,6 +2038,47 @@ export class MemoryService {
       rotationPolicyDays,
       backupRefs: security.backupRefs,
       notes
+    };
+  }
+
+  setPolicyRule(input: Omit<MemoryPolicyRule, "id" | "createdAt" | "updatedAt"> & { id?: string }): MemoryPolicyRule {
+    if (!input.label?.trim()) throw new Error("Policy rule label is required.");
+    if (!input.operations?.length) throw new Error("Policy rule operations are required.");
+    const now = new Date().toISOString();
+    const existing = input.id ? this.policyRules.get(input.id) : undefined;
+    const rule: MemoryPolicyRule = {
+      id: input.id ?? `policy_${contentHash(`${input.label}:${now}:${this.policyRules.size}`).slice(2, 12)}`,
+      label: input.label.trim(),
+      effect: input.effect,
+      operations: [...new Set(input.operations)],
+      scope: input.scope,
+      priority: input.priority ?? existing?.priority ?? 0,
+      reason: input.reason,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    this.policyRules.set(rule.id, rule);
+    this.recordAudit("policy.violation", { actorId: "policy-engine", metadata: { operation: "rule.set", rule } });
+    this.persist();
+    return rule;
+  }
+
+  listPolicyRules(): MemoryPolicyRule[] {
+    return [...this.policyRules.values()].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.label.localeCompare(b.label));
+  }
+
+  evaluatePolicy(operation: MemoryPolicyOperation, target: Memory | MemoryInput, actor: Partial<MemoryScope> = {}): PolicyDecision {
+    const matching = this.listPolicyRules()
+      .filter((rule) => rule.operations.includes("all") || rule.operations.includes(operation))
+      .filter((rule) => policyRuleMatches(rule, target, actor));
+    const decisive = matching[0];
+    const allowed = decisive ? decisive.effect === "allow" : true;
+    return {
+      operation,
+      allowed,
+      memoryId: "id" in target ? target.id : undefined,
+      matchedRules: matching.map((rule) => ({ id: rule.id, label: rule.label, effect: rule.effect, reason: rule.reason })),
+      reasons: matching.length ? matching.map((rule) => rule.reason ?? `${rule.effect} by ${rule.label}`) : ["no matching policy rule"]
     };
   }
 
@@ -2352,6 +2439,7 @@ export class MemoryService {
       retentionExpired,
       deleteOnRequest,
       auditByType,
+      policyRules: this.listPolicyRules(),
       retentionRules: this.listRetentionRules(),
       encryption,
       keyProvider,
@@ -2991,6 +3079,33 @@ export class MemoryService {
     this.store.update(memory.id, { entities, relations });
   }
 
+  private memoriesDeniedForOperation(userId: string, operation: MemoryPolicyOperation): PolicyDecision[] {
+    return this.store.list(userId)
+      .filter((memory) => !memory.archivedAt)
+      .map((memory) => this.evaluatePolicy(operation, memory, { userId }))
+      .filter((decision) => !decision.allowed);
+  }
+
+  private blockedReflectionReport(userId: string, operation: "reflect" | "dream", blocked: PolicyDecision[]) {
+    this.recordAudit("policy.violation", { userId, metadata: { operation, denied: blocked.length, decisions: blocked } });
+    this.persist();
+    return {
+      created: [],
+      demoted: [],
+      contradictions: [],
+      lifecycle: {
+        evaluated: blocked.length,
+        summarized: 0,
+        faded: 0,
+        archived: 0,
+        reorganized: 0,
+        qualityScore: 1,
+        issues: [`${operation} blocked by policy for ${blocked.length} memories`],
+        actions: blocked.map((decision) => `policy blocked ${operation} for ${decision.memoryId ?? "memory"}`)
+      }
+    };
+  }
+
   private load(): void {
     const raw = this.persistence?.load();
     if (!raw) return;
@@ -3030,6 +3145,7 @@ export class MemoryService {
     for (const manifest of raw.connectorManifests ?? []) this.connectorManifests.set(manifest.id, manifest);
     this.connectorAuthSessions = new Map((raw.connectorAuthSessions ?? []).map((session) => [session.id, session]));
     this.connectorSyncRecords = raw.connectorSyncRecords ?? [];
+    this.policyRules = new Map((raw.policyRules ?? []).map((rule) => [rule.id, rule]));
     this.retentionRules = new Map((raw.retentionRules ?? []).map((rule) => [rule.id, rule]));
     this.store.import(raw.memories ?? []);
     for (const memory of this.store.list()) this.entities.ingest(memory);
@@ -3063,6 +3179,7 @@ export class MemoryService {
       connectorManifests: [...this.connectorManifests.values()],
       connectorAuthSessions: [...this.connectorAuthSessions.values()],
       connectorSyncRecords: this.connectorSyncRecords,
+      policyRules: [...this.policyRules.values()],
       retentionRules: [...this.retentionRules.values()]
     };
     this.persistence.save(payload);
@@ -3740,6 +3857,37 @@ function observationClusters(memories: Memory[]): Array<{ label: string; memorie
     .map(([label, group]) => ({ label, memories: dedupeMemories(group).sort((a, b) => b.trust * b.importance - a.trust * a.importance) }))
     .filter((cluster) => cluster.memories.length >= 2)
     .sort((a, b) => b.memories.length - a.memories.length || b.memories[0].trust - a.memories[0].trust);
+}
+
+function policyRuleMatches(rule: MemoryPolicyRule, target: Memory | MemoryInput, actor: Partial<MemoryScope>): boolean {
+  const scope = rule.scope;
+  if (!scope) return true;
+  const memory = "id" in target ? target : undefined;
+  const metadata = (target.metadata ?? {}) as Record<string, unknown>;
+  const consent = target.consent as Partial<ConsentPolicy> | undefined;
+  const source = target.source;
+  const value = {
+    userId: target.userId ?? actor.userId,
+    orgId: target.orgId ?? actor.orgId,
+    brainId: target.brainId ?? actor.brainId,
+    sourceId: target.sourceId ?? actor.sourceId,
+    sourceKind: source?.kind,
+    memoryType: target.type,
+    connectorId: typeof metadata.connectorId === "string" ? metadata.connectorId : undefined,
+    visibility: consent?.visibility,
+    tags: target.tags ?? []
+  };
+  if (scope.userId && value.userId !== scope.userId) return false;
+  if (scope.orgId && value.orgId !== scope.orgId) return false;
+  if (scope.brainId && value.brainId !== scope.brainId) return false;
+  if (scope.sourceId && value.sourceId !== scope.sourceId) return false;
+  if (scope.sourceKind && value.sourceKind !== scope.sourceKind) return false;
+  if (scope.memoryType && value.memoryType !== scope.memoryType) return false;
+  if (scope.connectorId && value.connectorId !== scope.connectorId) return false;
+  if (scope.visibility && value.visibility !== scope.visibility) return false;
+  if (scope.tag && !value.tags.includes(scope.tag)) return false;
+  if (memory && scope.visibility && memory.consent.visibility !== scope.visibility) return false;
+  return true;
 }
 
 function retentionRuleMatches(memory: Memory, rule: RetentionRule, now: Date): boolean {

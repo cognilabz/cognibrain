@@ -492,6 +492,29 @@ switch (command) {
     console.log(JSON.stringify(service.complianceReport(), null, 2));
     break;
   }
+  case "policy-rules": {
+    console.log(JSON.stringify(service.listPolicyRules(), null, 2));
+    break;
+  }
+  case "policy-rule": {
+    const [label, effect, operations, scopeJson] = args;
+    if (!label || (effect !== "allow" && effect !== "deny") || !operations) fail("Usage: memctl policy-rule <label> <allow|deny> <operation[,operation]> [scope-json]");
+    console.log(JSON.stringify(service.setPolicyRule({
+      label,
+      effect,
+      operations: operations.split(",").map((item) => item.trim()).filter(Boolean) as Array<"write" | "retrieve" | "dream" | "export" | "delete" | "all">,
+      scope: scopeJson ? JSON.parse(scopeJson) : undefined,
+      priority: process.env.MEMORY_POLICY_PRIORITY ? Number(process.env.MEMORY_POLICY_PRIORITY) : undefined,
+      reason: process.env.MEMORY_POLICY_REASON
+    }), null, 2));
+    break;
+  }
+  case "policy-evaluate": {
+    const [operation, memoryId] = args;
+    if (!operation || !memoryId) fail("Usage: memctl policy-evaluate <write|retrieve|dream|export|delete> <memory-id>");
+    console.log(JSON.stringify(service.evaluatePolicy(operation as "write" | "retrieve" | "dream" | "export" | "delete", service.get(memoryId), { userId }), null, 2));
+    break;
+  }
   case "retention-rule": {
     const [label, days, action, scopeJson] = args;
     if (!label || !days || !action) fail("Usage: memctl retention-rule <label> <retention-days> <archive|delete> [scope-json]");
@@ -929,7 +952,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|action|search|inspect|route|intent|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|action|search|inspect|route|intent|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {

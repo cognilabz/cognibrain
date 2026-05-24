@@ -41,6 +41,20 @@ Memory writes can include scope, consent, relations, and temporal metadata:
 
 The default redaction policy checks writes for common secrets and stores redacted text instead of raw secret values.
 
+## Policy And Vault Controls
+
+```bash
+curl -X POST http://localhost:8787/policy/rules \
+  -H "content-type: application/json" \
+  -d '{"label":"legal hold","effect":"deny","operations":["retrieve","dream","export","delete"],"scope":{"tag":"legal"},"reason":"legal memories require review"}'
+curl http://localhost:8787/policy/rules
+curl -X POST http://localhost:8787/policy/evaluate \
+  -H "content-type: application/json" \
+  -d '{"operation":"retrieve","memoryId":"mem_123"}'
+```
+
+Policy rules are evaluated for writes, retrieval, dream/reflection, export, and deletion. Denied operations emit `policy.violation` audit events and are included in compliance exports. Sensitive-memory vault mode is configured through `MEMORY_REDACTION_MODE=encrypt`, `MEMORY_ENCRYPTION_KEY`, `MEMORY_ENCRYPTION_KEY_ID`, and `MEMORY_ENCRYPTION_KEY_VERSION`; `/backup/verify`, `/security/key-provider`, `/compliance/export`, and CLI `key-report`/`key-rotate` expose vault readiness without returning key material.
+
 ## Extract Add-Only Memories
 
 ```bash

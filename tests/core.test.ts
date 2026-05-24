@@ -658,6 +658,58 @@ describe("TypeScript memory core", () => {
     expect(imported.transportSecurityReport({ mode: "managed", publicUrl: "http://memory.example.com" }).warning).toContain("TLS");
   });
 
+  it("enforces policy rules across retrieval, dream, export, delete, and writes", () => {
+    const service = new MemoryService();
+    const privateMemory = service.add({
+      userId: "u-policy",
+      content: "Atlas private legal decision must stay in the vault.",
+      tags: ["legal"],
+      consent: { visibility: "private" },
+      source: { kind: "human", confidence: 0.96 }
+    });
+    service.add({
+      userId: "u-policy",
+      content: "Atlas public implementation detail can be retrieved.",
+      tags: ["public-note"],
+      consent: { visibility: "user" },
+      source: { kind: "human", confidence: 0.96 }
+    });
+
+    service.setPolicyRule({
+      label: "Block private legal retrieval",
+      effect: "deny",
+      operations: ["retrieve", "dream", "export", "delete"],
+      scope: { userId: "u-policy", tag: "legal" },
+      reason: "legal memories require explicit operator review"
+    });
+
+    const search = service.search({ userId: "u-policy", query: "Atlas decision vault", includePrivate: true });
+    expect(search.some((result) => result.memory.id === privateMemory.id)).toBe(false);
+    expect(service.evaluatePolicy("retrieve", privateMemory).allowed).toBe(false);
+    expect(service.exportUser("u-policy").some((memory) => memory.id === privateMemory.id)).toBe(false);
+    expect(service.deleteUser("u-policy")).toBe(1);
+    expect(service.get(privateMemory.id)).toBeDefined();
+    const dream = service.dream("u-policy");
+    expect(dream.lifecycle.issues.join(" ")).toContain("blocked by policy");
+
+    service.setPolicyRule({
+      label: "Block connector write",
+      effect: "deny",
+      operations: ["write"],
+      scope: { connectorId: "restricted-chat" }
+    });
+    expect(() =>
+      service.add({
+        userId: "u-policy",
+        content: "Restricted connector event.",
+        metadata: { connectorId: "restricted-chat" },
+        source: { kind: "transcript", confidence: 0.8 }
+      })
+    ).toThrow(/denied by policy/);
+    expect(service.complianceReport().policyRules?.length).toBe(2);
+    expect(service.auditTrail({ type: "policy.violation" }).length).toBeGreaterThan(0);
+  });
+
   it("enforces retention, rotates encrypted key metadata, and emits privacy-safe insights", () => {
     const service = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "test-key-with-enough-length", encryptionKeyId: "primary", encryptionKeyVersion: "1" } });
     const staleSearch = service.add({

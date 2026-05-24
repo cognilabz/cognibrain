@@ -23,7 +23,17 @@ MEMORY_ID=$(./bin/cognibrain.mjs memory add "User wants release notes shared wit
 
 Consent flags decide whether a memory can be used privately, by the user, by the org, or publicly. Retention rules demote or delete stale memories by scope.
 
-## 3. Export And Audit
+## 3. Enforce Policy Rules
+
+```bash
+./bin/cognibrain.mjs memory policy-rule "legal hold" deny retrieve,dream,export,delete '{"tag":"legal"}'
+./bin/cognibrain.mjs memory policy-rules
+./bin/cognibrain.mjs memory policy-evaluate retrieve "$MEMORY_ID"
+```
+
+Policy rules are enforced during retrieval, dream/reflection, export/delete, and writes. Denials are visible as `policy.violation` audit events so operators can prove why a memory did not enter context.
+
+## 4. Export And Audit
 
 ```bash
 ./bin/cognibrain.mjs memory compliance-export

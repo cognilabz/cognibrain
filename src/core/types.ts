@@ -97,6 +97,38 @@ export interface RetentionEnforcementReport {
   rulesMatched: Record<string, number>;
 }
 
+export type MemoryPolicyOperation = "write" | "retrieve" | "dream" | "export" | "delete" | "all";
+
+export interface MemoryPolicyRule {
+  id: string;
+  label: string;
+  effect: "allow" | "deny";
+  operations: MemoryPolicyOperation[];
+  scope?: {
+    userId?: string;
+    orgId?: string;
+    brainId?: string;
+    sourceId?: string;
+    sourceKind?: SourceKind;
+    tag?: string;
+    memoryType?: MemoryType;
+    connectorId?: string;
+    visibility?: ConsentVisibility;
+  };
+  priority?: number;
+  reason?: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface PolicyDecision {
+  operation: MemoryPolicyOperation;
+  allowed: boolean;
+  memoryId?: string;
+  matchedRules: Array<{ id: string; label: string; effect: MemoryPolicyRule["effect"]; reason?: string }>;
+  reasons: string[];
+}
+
 export interface MemoryRelation {
   type: RelationType;
   sourceEntity?: string;
@@ -741,6 +773,7 @@ export interface AuditEvent {
     | "inference.run"
     | "entity.merge"
     | "entity.split"
+    | "policy.violation"
     | "retention.enforce"
     | "security.key.rotate"
     | "privacy.insights"
@@ -901,6 +934,7 @@ export interface ManagedMigrationBundle {
     profiles: number;
     personas: number;
     connectors: number;
+    policyRules?: number;
     retentionRules: number;
   };
   backup: {
@@ -1063,6 +1097,7 @@ export interface ComplianceReport {
   retentionExpired: number;
   deleteOnRequest: number;
   auditByType: Record<string, number>;
+  policyRules?: MemoryPolicyRule[];
   retentionRules?: RetentionRule[];
   encryption?: {
     keyIds: Record<string, number>;

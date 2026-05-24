@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import { defaultService } from "./service";
-import type { ExtractionReport, ManagedMigrationBundle, Memory } from "../core";
+import type { ExtractionReport, ManagedMigrationBundle, Memory, MemoryPolicyOperation } from "../core";
 
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -501,7 +501,29 @@ const connectorPollSchema = z.object({
   projectId: z.string().optional()
 });
 
-const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "managed.tenant", "inference.run", "entity.merge", "entity.split", "retention.enforce", "security.key.rotate", "privacy.insights", "privacy.compute"]);
+const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.share.request", "memory.share.revoke", "memory.revert", "memory.consent", "agent.register", "persona.set", "connector.register", "connector.auth", "connector.sync", "provider.call", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.submit", "marketplace.scan", "marketplace.review", "marketplace.publish", "marketplace.install", "managed.tenant", "inference.run", "entity.merge", "entity.split", "policy.violation", "retention.enforce", "security.key.rotate", "privacy.insights", "privacy.compute"]);
+
+const policyRuleSchema = z.object({
+  id: z.string().optional(),
+  label: z.string().min(1),
+  effect: z.enum(["allow", "deny"]),
+  operations: z.array(z.enum(["write", "retrieve", "dream", "export", "delete", "all"])).min(1),
+  scope: z
+    .object({
+      userId: z.string().optional(),
+      orgId: z.string().optional(),
+      brainId: z.string().optional(),
+      sourceId: z.string().optional(),
+      sourceKind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]).optional(),
+      tag: z.string().optional(),
+      memoryType: z.enum(["user", "feedback", "project", "reference", "episodic", "procedural"]).optional(),
+      connectorId: z.string().optional(),
+      visibility: z.enum(["private", "user", "org", "public"]).optional()
+    })
+    .optional(),
+  priority: z.number().optional(),
+  reason: z.string().optional()
+});
 
 const retentionRuleSchema = z.object({
   id: z.string().optional(),
@@ -867,6 +889,31 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/compliance/export") {
     send(response, 200, defaultService.complianceReport());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/policy/rules") {
+    send(response, 200, defaultService.listPolicyRules());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/policy/rules") {
+    send(response, 202, defaultService.setPolicyRule(policyRuleSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/policy/evaluate") {
+    const body = z
+      .object({
+        operation: z.enum(["write", "retrieve", "dream", "export", "delete", "all"]),
+        memoryId: z.string().optional(),
+        input: memoryInputSchema.partial().optional(),
+        actor: z.record(z.unknown()).optional()
+      })
+      .parse(await json(request));
+    const target = body.memoryId ? defaultService.get(body.memoryId) : body.input;
+    if (!target) throw new Error("policy evaluation requires memoryId or input");
+    send(response, 200, defaultService.evaluatePolicy(body.operation as MemoryPolicyOperation, target as Memory, body.actor ?? {}));
     return;
   }
 

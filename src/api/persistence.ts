@@ -21,6 +21,7 @@ import type {
   MetricsReport,
   OfflineOperation,
   PersonaProfile,
+  MemoryPolicyRule,
   RetentionRule,
   RetrievalProfile,
   RetrievalTrainingSample,
@@ -56,6 +57,7 @@ export interface PersistedMemoryFile {
   connectorManifests?: ConnectorManifest[];
   connectorAuthSessions?: ConnectorAuthSession[];
   connectorSyncRecords?: ConnectorSyncRecord[];
+  policyRules?: MemoryPolicyRule[];
   retentionRules?: RetentionRule[];
 }
 

@@ -97,6 +97,14 @@ The default redaction layer catches common API keys, tokens, private keys, crede
 
 Consent metadata controls retrieval visibility. Private memories are excluded unless a caller explicitly asks for private memory; org-visible memories remain scoped to the matching organization. Retention dates are respected by search and can be paired with export/delete APIs. Additional retention rules can be managed with `memctl retention-rule`, `/retention/rules`, and `/retention/enforce`; rules can target users, brains, sources, source kinds, consent visibility, entities, relation types, or tags.
 
+Policy rules provide a harder enforcement layer for operators. Use `memctl policy-rule` or `POST /policy/rules` to allow or deny `write`, `retrieve`, `dream`, `export`, `delete`, or `all` operations by user, org, brain, source, source kind, tag, memory type, connector id, or visibility. Retrieval filters denied memories before context injection, dream/reflection fails closed when protected memories would be touched, export/delete skip denied records, and denied writes raise a policy error. Every denial emits a `policy.violation` audit event and appears in compliance exports.
+
+```bash
+./bin/cognibrain.mjs memory policy-rule "legal hold" deny retrieve,dream,export,delete '{"tag":"legal"}'
+./bin/cognibrain.mjs memory policy-rules
+./bin/cognibrain.mjs memory policy-evaluate retrieve mem_123
+```
+
 Identity links are opt-in. `POST /identity-links` stores only a hash of a consent token and lets callers use `includeLinkedIdentities` during retrieval. Revoked links are ignored.
 
 ## Continuous Benchmarking
@@ -201,6 +209,8 @@ MEMORY_ENCRYPTION_KEY_VERSION=1 \
 MEMORY_KEY_SCOPE=org \
 npm run cli -- key-provider
 ```
+
+In encrypted mode, secret-shaped memory content is stored as an AES-GCM vault marker rather than plaintext, key ids/versions are kept as non-secret metadata, and `key-report`, `key-rotate`, `backup-verify`, and `compliance-export` prove vault coverage without printing key material. Use an external secret manager for production key material and keep only `MEMORY_ENCRYPTION_KEY_ID` plus `MEMORY_ENCRYPTION_KEY_VERSION` in deploy manifests.
 
 Before moving a local brain to a hosted or self-hosted runtime, export a bundle and verify encrypted recovery:
 

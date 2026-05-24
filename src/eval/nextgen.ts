@@ -48,10 +48,26 @@ export function runNextgenEvaluation() {
     relations: [{ type: "imports", sourceEntity: "cacheclient", targetEntity: "redisadapter", confidence: 0.89 }],
     source: { kind: "reviewed_code", confidence: 0.96 }
   });
+  for (const timestamp of ["2026-05-01T09:00:00.000Z", "2026-05-08T09:00:00.000Z"]) {
+    service.add({
+      brainId: brain.id,
+      sourceId: source.id,
+      userId: "bench",
+      agentId: "agent-bench",
+      content: "Benchmark operator reviews graph reports on Friday.",
+      tags: ["review", "graph"],
+      entities: ["operator"],
+      timestamp,
+      temporal: { eventAt: timestamp },
+      source: { kind: "human", confidence: 0.94 }
+    });
+  }
 
   const inference = service.runInference();
   const paths = service.graphPaths("atlas", "redisadapter", { userId: "bench", maxDepth: 3 });
   const query = service.graphQuery("MATCH (a)-[:transitive_depends_on]->(b) WHERE trust>0.8", "bench");
+  const temporal = service.temporalQuery("bench", { after: "2026-05-01T00:00:00.000Z", before: "2026-05-09T00:00:00.000Z" });
+  const patterns = service.behavioralPatterns("bench");
   service.promoteSharedMemory(atlas.id, "org-bench");
   const compliance = service.complianceReport(new Date("2026-01-01T00:00:00.000Z"));
   const events = service.eventFeed();
@@ -85,6 +101,11 @@ export function runNextgenEvaluation() {
     id: "compliance-retention",
     passed: compliance.retentionExpired === 1 && compliance.deleteOnRequest >= 1,
     detail: `${compliance.retentionExpired} expired retention entries, ${compliance.deleteOnRequest} delete-on-request entries`
+  });
+  checks.push({
+    id: "temporal-patterns",
+    passed: temporal.events.length >= 2 && patterns.patterns.some((pattern) => pattern.cadence === "weekly:friday"),
+    detail: `${temporal.events.length} interval events, ${patterns.patterns.length} patterns`
   });
   checks.push({
     id: "marketplace-persona",

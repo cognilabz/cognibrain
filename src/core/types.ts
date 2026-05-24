@@ -291,6 +291,28 @@ export interface TimelineReport {
   periods: Array<{ period: string; granularity: "day" | "week" | "month"; memoryIds: string[]; summary?: string }>;
 }
 
+export interface TemporalQueryReport {
+  userId: string;
+  after?: Date | string;
+  before?: Date | string;
+  events: TimelineReport["events"];
+  changedEntities: Array<{ entity: string; memoryIds: string[]; firstAt: Date | string; lastAt: Date | string }>;
+}
+
+export interface BehavioralPatternReport {
+  userId: string;
+  patterns: Array<{
+    key: string;
+    label: string;
+    support: number;
+    memoryIds: string[];
+    confidence: number;
+    cadence?: string;
+    pendingReview: boolean;
+    lastObservedAt: Date | string;
+  }>;
+}
+
 export interface EntityRecord {
   id: string;
   canonical: string;

@@ -445,6 +445,19 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && parts[0] === "temporal" && parts[1]) {
+    send(response, 200, defaultService.temporalQuery(parts[1], {
+      after: url.searchParams.get("after") ?? undefined,
+      before: url.searchParams.get("before") ?? undefined
+    }));
+    return;
+  }
+
+  if (method === "GET" && parts[0] === "patterns" && parts[1]) {
+    send(response, 200, defaultService.behavioralPatterns(parts[1]));
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/lifecycle/preview") {
     const body = z.object({ userId: z.string().min(1), policy: z.record(z.unknown()).optional() }).parse(await json(request));
     send(response, 200, defaultService.lifecyclePreview(body.userId, body.policy));

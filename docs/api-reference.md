@@ -145,6 +145,8 @@ curl -X POST http://localhost:8787/identity-links \
   -H "content-type: application/json" \
   -d '{"primaryUserId":"device-b","linkedUserId":"device-a","consentToken":"user-approved-token"}'
 curl http://localhost:8787/timeline/dev
+curl "http://localhost:8787/temporal/dev?after=2026-05-01T00:00:00.000Z&before=2026-06-01T00:00:00.000Z"
+curl http://localhost:8787/patterns/dev
 curl "http://localhost:8787/graph?userId=dev"
 curl "http://localhost:8787/graph/paths?userId=dev&from=atlas&to=redisadapter&maxDepth=3"
 curl -X POST http://localhost:8787/graph/query \
@@ -156,7 +158,7 @@ curl -X POST http://localhost:8787/lifecycle/preview \
   -d '{"userId":"dev","policy":{"archiveAfterDays":30}}'
 ```
 
-Identity links require an explicit consent token and store only a hash of that token. Timelines expose event time, validity windows, supersession metadata, and day/week/month period groupings. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, safe graph-query matches, and rule-based inferred relations. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
+Identity links require an explicit consent token and store only a hash of that token. Timelines expose event time, validity windows, supersession metadata, and day/week/month period groupings. Temporal interval queries return filtered events plus changed entities. Pattern reports include reviewed dream patterns and deterministic recurring weekday/entity/tag patterns for operator approval. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, safe graph-query matches, and rule-based inferred relations. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
 
 ## Events, Webhooks, Marketplace, And Compliance
 
@@ -237,4 +239,4 @@ When the service is configured with a domain module, this endpoint runs the modu
 npm run verify:nextgen
 ```
 
-This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph query, multi-tenant audit, webhook event feeds, compliance retention, and marketplace persona installation.
+This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph query, temporal interval and pattern reporting, multi-tenant audit, webhook event feeds, compliance retention, and marketplace persona installation.

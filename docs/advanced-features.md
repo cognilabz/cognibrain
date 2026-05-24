@@ -28,6 +28,8 @@ Memories can store typed relations such as `calls`, `imports`, `depends_on`, `su
 
 Temporal metadata tracks event time, valid windows, last confirmation, supersession, and verification due dates. Search parses simple before/after/last-week temporal constraints, and the timeline API exposes event order plus daily, weekly, and monthly period groupings. Dream maintenance schedules verification for time-sensitive stale facts instead of relying only on age-based archival.
 
+`temporalQuery()` adds interval filtering and changed-entity reports for questions like "what changed between these two dates?" `behavioralPatterns()` combines reviewed dream-pattern memories with deterministic recurring weekday/tag/entity mining, keeping newly mined patterns in pending-review state until feedback approves them.
+
 ## Graph-Native Reasoning
 
 The next-generation graph substrate adds ranked path search, a compact graph query surface, and auditable inference rules. `graphPaths(from, to)` traverses memory and entity nodes across typed edges, returning the shortest and highest-confidence chains with explanations. `graphQuery()` accepts safe `MATCH ... :relation ... WHERE trust>n` style queries for harnesses that need structured graph inspection. `runInference()` applies typed relation rules such as `depends_on + imports -> transitive_depends_on`, records an audit event, and writes inferred edges back to the store with evidence.

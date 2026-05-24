@@ -129,6 +129,14 @@ switch (command) {
     console.log(JSON.stringify(service.timeline(userId), null, 2));
     break;
   }
+  case "temporal": {
+    console.log(JSON.stringify(service.temporalQuery(userId, { after: process.env.MEMORY_AFTER, before: process.env.MEMORY_BEFORE }), null, 2));
+    break;
+  }
+  case "patterns": {
+    console.log(JSON.stringify(service.behavioralPatterns(userId), null, 2));
+    break;
+  }
   case "graph": {
     console.log(JSON.stringify(service.graph(userId), null, 2));
     break;
@@ -186,7 +194,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|graph|graph-path|graph-query|infer|brain-create|brains|source-create|events|compliance|lifecycle-preview|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|temporal|patterns|graph|graph-path|graph-query|infer|brain-create|brains|source-create|events|compliance|lifecycle-preview|export|delete-user> ...");
 }
 
 function fail(message: string): never {

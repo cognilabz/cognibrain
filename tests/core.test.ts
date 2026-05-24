@@ -713,4 +713,34 @@ describe("TypeScript memory core", () => {
     expect(compliance.retentionExpired).toBe(1);
     expect(compliance.auditByType["memory.write"]).toBeGreaterThan(0);
   });
+
+  it("queries temporal intervals and mines recurring behavioural patterns", () => {
+    const service = new MemoryService();
+    for (const timestamp of ["2026-05-01T09:00:00.000Z", "2026-05-08T09:00:00.000Z", "2026-05-15T09:00:00.000Z"]) {
+      service.add({
+        userId: "u1",
+        content: "Mira reviews release notes on Friday mornings.",
+        tags: ["review", "release"],
+        entities: ["mira"],
+        timestamp,
+        temporal: { eventAt: timestamp },
+        source: { kind: "human", confidence: 0.95 }
+      });
+    }
+    service.add({
+      userId: "u1",
+      content: "Mira tested deployment on Monday.",
+      tags: ["deploy"],
+      timestamp: "2026-05-18T09:00:00.000Z",
+      temporal: { eventAt: "2026-05-18T09:00:00.000Z" },
+      source: { kind: "human", confidence: 0.95 }
+    });
+
+    const temporal = service.temporalQuery("u1", { after: "2026-05-07T00:00:00.000Z", before: "2026-05-16T00:00:00.000Z" });
+    expect(temporal.events).toHaveLength(2);
+    expect(temporal.changedEntities.some((entity) => entity.entity === "mira")).toBe(true);
+
+    const patterns = service.behavioralPatterns("u1");
+    expect(patterns.patterns.some((pattern) => pattern.cadence === "weekly:friday" && pattern.support >= 3)).toBe(true);
+  });
 });

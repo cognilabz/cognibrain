@@ -50,6 +50,8 @@ import type {
   RetrievalWeights,
   SearchOptions,
   ReflectionSummarizer,
+  BehavioralPatternReport,
+  TemporalQueryReport,
   TimelineReport,
   WebhookDelivery,
   WebhookRegistration
@@ -579,6 +581,56 @@ export class MemoryService {
     };
   }
 
+  temporalQuery(userId: string, options: { after?: Date | string; before?: Date | string } = {}): TemporalQueryReport {
+    const after = options.after ? new Date(options.after) : undefined;
+    const before = options.before ? new Date(options.before) : undefined;
+    const events = this.timeline(userId).events.filter((event) => {
+      const eventAt = new Date(event.eventAt);
+      if (after && eventAt < after) return false;
+      if (before && eventAt >= before) return false;
+      return true;
+    });
+    const byEntity = new Map<string, { memoryIds: string[]; dates: Date[] }>();
+    for (const event of events) {
+      for (const entity of event.entities) {
+        const current = byEntity.get(entity) ?? { memoryIds: [], dates: [] };
+        current.memoryIds.push(event.memoryId);
+        current.dates.push(new Date(event.eventAt));
+        byEntity.set(entity, current);
+      }
+    }
+    return {
+      userId,
+      after: options.after,
+      before: options.before,
+      events,
+      changedEntities: [...byEntity.entries()].map(([entity, value]) => ({
+        entity,
+        memoryIds: [...new Set(value.memoryIds)],
+        firstAt: new Date(Math.min(...value.dates.map((date) => date.getTime()))).toISOString(),
+        lastAt: new Date(Math.max(...value.dates.map((date) => date.getTime()))).toISOString()
+      }))
+    };
+  }
+
+  behavioralPatterns(userId: string): BehavioralPatternReport {
+    const memories = this.store.list(userId).filter((memory) => !memory.archivedAt);
+    const generated = memories
+      .filter((memory) => memory.metadata.dreamJob === "behavior-pattern")
+      .map((memory) => ({
+        key: String(memory.metadata.pattern ?? memory.id),
+        label: memory.content,
+        support: Array.isArray(memory.metadata.summaryOf) ? memory.metadata.summaryOf.length : 1,
+        memoryIds: Array.isArray(memory.metadata.summaryOf) ? memory.metadata.summaryOf.map(String) : [memory.id],
+        confidence: Number(memory.metadata.confidence ?? memory.trust),
+        cadence: String(memory.metadata.recurrenceWindow ?? "observed-period"),
+        pendingReview: (memory.metadata.patternReview as { status?: string } | undefined)?.status === "pending",
+        lastObservedAt: String(memory.metadata.lastObservedAt ?? memory.createdAt.toISOString())
+      }));
+    const mined = mineRecurringPatterns(memories);
+    return { userId, patterns: [...generated, ...mined].sort((a, b) => b.confidence - a.confidence || b.support - a.support) };
+  }
+
   graph(userId?: string): GraphReport {
     const memories = this.store.list(userId).filter((memory) => !memory.archivedAt);
     return this.entities.graph(memories);
@@ -915,6 +967,37 @@ function profileLoss(weights: RetrievalWeights, samples: RetrievalTrainingSample
 
 function dot(weights: RetrievalWeights, signals: Partial<RetrievalWeights>): number {
   return (Object.keys(weights) as Array<keyof RetrievalWeights>).reduce((sum, key) => sum + weights[key] * (signals[key] ?? 0), 0);
+}
+
+function mineRecurringPatterns(memories: Memory[]): BehavioralPatternReport["patterns"] {
+  const groups = new Map<string, Memory[]>();
+  for (const memory of memories) {
+    const eventAt = memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt;
+    const weekday = eventAt.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }).toLowerCase();
+    const anchors = [...memory.tags, ...memory.entities].filter((value) => value.length > 2).slice(0, 4);
+    for (const anchor of anchors) {
+      const key = `${weekday}:${anchor.toLowerCase()}`;
+      const current = groups.get(key) ?? [];
+      current.push(memory);
+      groups.set(key, current);
+    }
+  }
+  return [...groups.entries()]
+    .filter(([, support]) => support.length >= 2)
+    .map(([key, support]) => {
+      const [weekday, anchor] = key.split(":");
+      const lastObservedAt = new Date(Math.max(...support.map((memory) => (memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt).getTime()))).toISOString();
+      return {
+        key,
+        label: `Recurring ${anchor} memory on ${weekday}s`,
+        support: support.length,
+        memoryIds: support.map((memory) => memory.id),
+        confidence: Math.min(0.92, 0.45 + support.length * 0.12),
+        cadence: `weekly:${weekday}`,
+        pendingReview: true,
+        lastObservedAt
+      };
+    });
 }
 
 function groupedPeriods(events: TimelineReport["events"], summaries: Map<string, string>): TimelineReport["periods"] {

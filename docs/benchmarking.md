@@ -1,12 +1,13 @@
 # Benchmarking
 
-cognibrain has five benchmark layers:
+cognibrain has six benchmark layers:
 
 1. `npm run eval` runs the local transparent proof suite.
 2. `npm run benchmark:locomo` runs against the official LoCoMo dataset from `snap-research/locomo`.
 3. `npm run benchmark:longmemeval` runs against LongMemEval-S from Hugging Face.
 4. `npm run benchmark:beam` runs against BEAM splits from Hugging Face.
-5. `npm run benchmark:market` combines certified artifacts into one machine-readable gate.
+5. `npm run benchmark:nextgen` runs deterministic Agent Memory OS suites, including the `usp-evidence-pack` why-used benchmark.
+6. `npm run benchmark:market` combines certified artifacts into one machine-readable gate.
 
 ## Official LoCoMo Runner
 
@@ -31,6 +32,17 @@ npm run benchmark:locomo -- --max-questions 80 --top-k 10 --out artifacts/locomo
 The certified runner reports `evidence_recall_at_k`: a question passes when at least one official LoCoMo evidence dialog ID appears in the retrieved top-K memories. `benchmark:certified` now also emits `artifacts/answer-generation.json` unless `--retrieval-only` is passed. That artifact stores per-question prompts, generated extractive answers, retrieved evidence ids, retrieved evidence text, expected terms and deterministic judge decisions. Set `MEMORY_BENCHMARK_ANSWERER` or `MEMORY_BENCHMARK_JUDGE` to label an external answerer or judge when running a comparable evaluation.
 
 The query contains only the benchmark question. The runner does not use the ground-truth answer text for query expansion.
+
+## USP Evidence-Pack Benchmark
+
+`npm run benchmark:nextgen` includes `usp-evidence-pack`, a deterministic suite for the product claim that cognibrain is an inspectable Agent Memory OS. It verifies:
+
+- why-used explanations exist for selected context,
+- source citations point back to evidence,
+- validity windows survive into the exported pack,
+- private memories are not included without explicit private retrieval.
+
+This suite is intentionally different from ordinary recall accuracy. It measures whether a retrieved memory can be proved, governed and reused safely.
 
 ## Official LongMemEval-S Runner
 

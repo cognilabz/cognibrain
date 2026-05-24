@@ -237,6 +237,52 @@ export interface SearchResult {
   stale: boolean;
 }
 
+export interface EvidencePack {
+  schemaVersion: "1.0";
+  id: string;
+  generatedAt: string;
+  query: string;
+  userId: string;
+  profileId?: string;
+  tokenBudget: number;
+  context: string;
+  results: Array<{
+    memoryId: string;
+    content: string;
+    source: Provenance;
+    scope: MemoryScope;
+    consent: ConsentPolicy;
+    trust: number;
+    importance: number;
+    validity: {
+      eventAt?: string;
+      validFrom?: string;
+      validUntil?: string;
+      lastConfirmedAt?: string;
+      verificationDueAt?: string;
+      stale: boolean;
+      decision?: SearchResult["decision"];
+    };
+    retrieval: {
+      score: number;
+      initialScore?: number;
+      mode?: RetrievalMode;
+      signals: SearchResult["signals"];
+      explanation: string[];
+      graphPaths: string[];
+      citation: string;
+      contradiction?: SearchResult["contradiction"];
+    };
+  }>;
+  summary: {
+    included: number;
+    warnings: number;
+    excluded: number;
+    stale: number;
+    contradictions: number;
+  };
+}
+
 export interface RetrievalWeights {
   semantic: number;
   keyword: number;

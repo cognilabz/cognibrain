@@ -10,7 +10,7 @@ interface SuiteScore {
 }
 
 export function runNextgenBenchmarkSuites(outputPath = "artifacts/nextgen-benchmarks.json", trendPath = "artifacts/benchmark-trend.json") {
-  const suites = [answerGenerationSuite(), multiHopTemporalSuite(), behavioralPatternSuite()];
+  const suites = [answerGenerationSuite(), multiHopTemporalSuite(), behavioralPatternSuite(), uspEvidenceSuite()];
   const trend = benchmarkTrend(suites, trendPath);
   const report = {
     passed: suites.every((suite) => suite.passed),
@@ -74,6 +74,37 @@ function behavioralPatternSuite(): SuiteScore {
     { id: "false-positive-risk", passed: Boolean(friday && (friday.falsePositiveRisk ?? 1) <= 0.5), score: friday ? 1 - (friday.falsePositiveRisk ?? 1) : 0, expected: ["risk<=0.5"], actual: String(friday?.falsePositiveRisk ?? "missing") }
   ];
   return finalizeSuite("behavioral-patterns", details);
+}
+
+function uspEvidenceSuite(): SuiteScore {
+  const service = new MemoryService();
+  service.add({
+    userId: "usp",
+    content: "Atlas deploys require npm test before release.",
+    orgId: "org-1",
+    entities: ["atlas", "release"],
+    tags: ["procedure", "release"],
+    source: { kind: "reviewed_code", uri: "file://AGENTS.md", lineStart: 12, lineEnd: 14, confidence: 0.97 },
+    consent: { visibility: "org" },
+    temporal: { validFrom: "2026-05-01T00:00:00.000Z", lastConfirmedAt: "2026-05-20T00:00:00.000Z" }
+  });
+  service.add({
+    userId: "usp",
+    content: "Atlas release notes are private until approved.",
+    entities: ["atlas", "release notes"],
+    tags: ["privacy"],
+    source: { kind: "human", confidence: 0.94 },
+    consent: { visibility: "private" }
+  });
+  const pack = service.evidencePack({ userId: "usp", orgId: "org-1", query: "Why should Atlas run tests before release?", limit: 3, tokenBudget: 500 });
+  const first = pack.results[0];
+  const details = [
+    { id: "why-used-explanation", passed: Boolean(first?.retrieval.explanation.length && first.retrieval.signals.trust > 0), score: first?.retrieval.explanation.length ? 1 : 0, expected: ["explanation", "trust signal"], actual: JSON.stringify(first?.retrieval.explanation ?? []) },
+    { id: "source-citation", passed: Boolean(first?.retrieval.citation.includes("AGENTS.md") && first.retrieval.citation.includes(":12")), score: first?.retrieval.citation.includes("AGENTS.md") ? 1 : 0, expected: ["file citation"], actual: first?.retrieval.citation ?? "missing" },
+    { id: "temporal-validity", passed: first?.validity.validFrom === "2026-05-01T00:00:00.000Z" && first?.validity.stale === false, score: first?.validity.validFrom ? 1 : 0, expected: ["validFrom", "not stale"], actual: JSON.stringify(first?.validity ?? {}) },
+    { id: "consent-boundary", passed: !pack.results.some((result) => result.content.includes("private until approved")), score: pack.results.some((result) => result.content.includes("private until approved")) ? 0 : 1, expected: ["private excluded"], actual: pack.results.map((result) => result.consent.visibility).join(",") }
+  ];
+  return finalizeSuite("usp-evidence-pack", details);
 }
 
 function synthesizeAnswer(evidence: string[]): string {

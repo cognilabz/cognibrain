@@ -1,4 +1,4 @@
-import type { FeedbackKind, MarketplaceModule, Memory, MemoryInput, SearchOptions, SearchResult } from "../core";
+import type { EvidencePack, FeedbackKind, MarketplaceModule, Memory, MemoryInput, SearchOptions, SearchResult } from "../core";
 
 export interface CognibrainClientOptions {
   baseUrl?: string;
@@ -20,6 +20,10 @@ export class CognibrainClient {
 
   search(options: SearchOptions): Promise<SearchResult[]> {
     return this.request("/search", { method: "POST", body: options });
+  }
+
+  evidencePack(options: SearchOptions & { tokenBudget?: number }): Promise<EvidencePack> {
+    return this.request("/evidence-pack", { method: "POST", body: options });
   }
 
   feedback(memoryId: string, kind: FeedbackKind, userId?: string, note?: string): Promise<Memory> {

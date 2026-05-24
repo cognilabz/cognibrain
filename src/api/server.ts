@@ -106,6 +106,10 @@ const searchSchema = z.object({
   relationTypes: z.array(relationTypeSchema).optional()
 });
 
+const evidencePackSchema = searchSchema.extend({
+  tokenBudget: z.number().int().positive().max(8000).optional()
+});
+
 const graphExportSchema = z.object({
   userId: z.string().optional(),
   relationTypes: z.array(relationTypeSchema).optional(),
@@ -1112,6 +1116,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
         memory: serialize(result.memory)
       }))
     );
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/evidence-pack") {
+    send(response, 200, defaultService.evidencePack(evidencePackSchema.parse(await json(request))));
     return;
   }
 

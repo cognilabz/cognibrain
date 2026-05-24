@@ -136,6 +136,16 @@ curl -X POST http://localhost:8787/search \
 
 Search results include ranked memories, signal breakdowns, citations, and stale flags.
 
+## Evidence Pack
+
+```bash
+curl -X POST http://localhost:8787/evidence-pack \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","appId":"codex","query":"Why should Atlas run tests before release?","limit":5,"tokenBudget":900}'
+```
+
+Evidence packs are the canonical "why was this memory used?" artifact. The response includes the compact context block plus per-memory source, scope, consent, validity window, stale/decision state, score signals, graph paths, citation and explanation. CLI users can run `cognibrain memory why-used "<query>"` or `cognibrain memory evidence-pack "<query>"`; MCP users receive the same structure through `memory_context_pack`.
+
 Search accepts optional scope and retrieval-weight overrides:
 
 ```json

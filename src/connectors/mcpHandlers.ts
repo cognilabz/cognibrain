@@ -90,7 +90,7 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
     },
 
     contextPack(args: MemoryContextPackArgs) {
-      const results = service.search({
+      const pack = service.evidencePack({
         userId: args.userId,
         agentId: args.agentId,
         sessionId: args.sessionId,
@@ -99,11 +99,13 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
         projectId: args.projectId,
         query: args.query,
         limit: args.limit ?? 8,
-        includeArchived: args.includeArchived
+        includeArchived: args.includeArchived,
+        tokenBudget: args.tokenBudget ?? 900
       });
       return {
-        context: service.retrieval.contextPack(results, args.tokenBudget ?? 900),
-        results: results.map(serializeSearchResult)
+        context: pack.context,
+        evidencePack: pack,
+        results: pack.results
       };
     },
 

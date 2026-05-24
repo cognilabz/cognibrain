@@ -5,7 +5,7 @@
 <h1 align="center">cognibrain</h1>
 
 <p align="center">
-  <strong>Inspectable memory infrastructure for AI agents.</strong>
+  <strong>Inspectable Agent Memory OS.</strong>
 </p>
 
 <p align="center">
@@ -15,9 +15,11 @@
   <a href="#documentation">Documentation</a>
 </p>
 
-cognibrain is a local-first TypeScript memory platform for AI agents that need durable context without opaque recall. It stores memories with source quality, trust, citations, lifecycle state, retrieval evidence, graph paths, brain/source scope, audit events, and pluggable persistence so teams can see why an agent remembers something before that memory influences real work.
+cognibrain is a local-first TypeScript Agent Memory OS for teams that need durable context without opaque recall. It remembers across agent harnesses, proves every memory with source and retrieval evidence, explains why context was selected, respects scope and consent boundaries, and keeps memory valid over time through graph, temporal, contradiction and dream-maintenance surfaces.
 
 The project includes the memory engine, HTTP API, CLI, official connector manifests, provider adapters, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
+
+**Claim:** memory you can prove, route, govern, and reuse across every agent.
 
 ![cognibrain desktop dashboard](docs/assets/dashboard-desktop.png)
 
@@ -37,25 +39,28 @@ The project includes the memory engine, HTTP API, CLI, official connector manife
 | --- | --- |
 | ![cognibrain dream cycle](docs/assets/dashboard-lifecycle.png) | ![cognibrain benchmark proof](docs/assets/dashboard-benchmarks.png) |
 
-## Why cognibrain
+## Why Agent Memory OS
 
-Agent memory often fails in one of two ways: it is either a simple vector search that misses time, trust, and contradictions, or a vague long-term summary that cannot be audited. cognibrain is built for operational memory: compact enough to use, structured enough to inspect, and measurable enough to improve.
+Agent memory often fails in one of two ways: it is either a simple vector search that misses time, trust, consent and contradictions, or a vague long-term summary that cannot be audited. cognibrain is built as a memory operating system: compact enough to use, structured enough to inspect, governed enough for teams, and measurable enough to improve.
 
-It is designed for teams that care about:
+The core question is not just “can the agent remember?” It is:
 
-- source-aware recall instead of unqualified chat-history reuse,
-- a platform/operator split: install and run the platform once, then inspect what the operator lets into context,
-- zero-dependency entity linking from proper nouns, paths, quoted phrases, and compound terms,
-- ranked evidence with citations and trust signals,
-- graph-native path explanation and rule-based inferred relations,
-- brain/source/agent/persona primitives for multi-agent team memory,
-- official connector manifests for email, chat, project management, docs, code, calendars, and cloud storage,
-- provider adapters for extraction, translation, query expansion, reranking, verification, contradiction, and summaries with deterministic fallbacks,
-- pluggable storage with atomic JSON snapshots, append-only JSONL logs, SQLite, Postgres-compatible/Cockroach-compatible SQL semantics, storage introspection, and offline sync replay,
-- audit, webhook delivery/retry, marketplace, and compliance surfaces,
-- lifecycle maintenance for stale or contradictory facts,
-- clear integration surfaces for coding agents and AI workflows,
-- reproducible benchmark gates instead of unsupported memory claims.
+- What is known, who owns it, and where did it come from?
+- Is it still valid now, or stale, contradicted, private, or superseded?
+- Why was this memory retrieved for this task?
+- Which graph path, temporal signal, trust score, source citation, consent rule, and retrieval profile allowed it into context?
+- Can the same memory be reused safely across Codex, Claude Code, Cursor, Copilot, MCP and HTTP workflows?
+
+That makes cognibrain different from narrower memory products:
+
+| Product category | Main promise | cognibrain position |
+| --- | --- | --- |
+| Drop-in memory API | Store and recall user facts quickly | Adds inspectable context packs, governance, graph paths, lifecycle state, local ownership and harness routing |
+| Personal markdown brain | User-owned notes and backlinks | Adds API-first multi-agent/team scopes, consent enforcement, benchmarks, connectors and dashboard operations |
+| Temporal graph memory | Conversation graph over time | Adds source-quality gates, evidence export, marketplace modules, compliance surfaces and local-first packaging |
+| Graph/vector control plane | Hybrid retrieval over knowledge | Adds “why-used” proof, dream maintenance, policy-aware context injection and cross-harness reuse |
+
+The short version: **cognibrain remembers across agents, proves every memory, explains every retrieval, respects every boundary, and learns from every run.**
 
 ## Dashboard
 
@@ -135,6 +140,15 @@ Search memory:
 ```bash
 ./bin/cognibrain.mjs memory search "What language does Atlas use?"
 ```
+
+Explain why memories were used and export the same evidence an agent would receive:
+
+```bash
+./bin/cognibrain.mjs memory why-used "Why should Atlas run tests before release?"
+./bin/cognibrain.mjs memory evidence-pack "Why should Atlas run tests before release?"
+```
+
+The returned evidence pack is the first-five-minutes proof surface: it contains the compact context block plus per-memory source citation, consent boundary, scope, validity window, stale/decision state, retrieval signals, graph paths and reason phrases. The same artifact is available through `POST /evidence-pack` and MCP `memory_context_pack`, so CLI, dashboard and harness integrations can all answer: “why was this memory used?”
 
 Extract add-only memories from an event or conversation:
 
@@ -335,6 +349,7 @@ docker/            Container and compose files
 ## Documentation
 
 - [API Reference](docs/api-reference.md)
+- [Agent Memory OS](docs/agent-memory-os.md)
 - [Configuration](docs/configuration.md)
 - [Integration Guide](docs/integration-guide.md)
 - [Memory Lifecycle](docs/lifecycle.md)

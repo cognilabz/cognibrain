@@ -425,6 +425,8 @@ describe("TypeScript memory core", () => {
 
     const pack = handlers.contextPack({ userId: "u1", query: "LoCoMo", tokenBudget: 120 });
     expect(pack.context).toContain("LoCoMo");
+    expect(pack.evidencePack.results[0].retrieval.explanation.length).toBeGreaterThan(0);
+    expect(pack.evidencePack.results[0].retrieval.citation).toBeTruthy();
 
     const health = handlers.health({ userId: "u1" });
     expect(health.active).toBe(1);
@@ -434,6 +436,36 @@ describe("TypeScript memory core", () => {
 
     const maintenance = handlers.maintenance();
     expect(maintenance.enabled).toBe(false);
+  });
+
+  it("exports evidence packs that explain why memories were used", () => {
+    const service = new MemoryService();
+    service.add({
+      userId: "u1",
+      orgId: "org1",
+      content: "Atlas release requires npm test before publish.",
+      entities: ["atlas", "release"],
+      tags: ["procedure"],
+      source: { kind: "reviewed_code", uri: "file://AGENTS.md", lineStart: 7, lineEnd: 9, confidence: 0.97 },
+      consent: { visibility: "org" },
+      temporal: { validFrom: "2026-05-01T00:00:00.000Z", lastConfirmedAt: "2026-05-20T00:00:00.000Z" }
+    });
+    service.add({
+      userId: "u1",
+      content: "Atlas private draft should stay hidden.",
+      entities: ["atlas"],
+      source: { kind: "human", confidence: 0.95 },
+      consent: { visibility: "private" }
+    });
+
+    const pack = service.evidencePack({ userId: "u1", orgId: "org1", query: "Why run tests before Atlas release?", tokenBudget: 500, limit: 5 });
+    expect(pack.id).toMatch(/^ctx_/);
+    expect(pack.context).toContain("npm test");
+    expect(pack.results[0].retrieval.signals.trust).toBeGreaterThan(0);
+    expect(pack.results[0].retrieval.explanation.length).toBeGreaterThan(0);
+    expect(pack.results[0].retrieval.citation).toContain("AGENTS.md:7");
+    expect(pack.results[0].validity.validFrom).toBe("2026-05-01T00:00:00.000Z");
+    expect(pack.results.some((result) => result.content.includes("private draft"))).toBe(false);
   });
 
   it("redacts sensitive writes, extracts add-only facts, records feedback, and reports metrics", () => {
@@ -1204,7 +1236,7 @@ describe("TypeScript memory core", () => {
     try {
       const report = runNextgenBenchmarkSuites(join(dir, "nextgen-benchmarks.json"), join(dir, "benchmark-trend.json"));
       expect(report.passed).toBe(true);
-      expect(report.suites.map((suite) => suite.id)).toEqual(["answer-generation", "multi-hop-temporal", "behavioral-patterns"]);
+      expect(report.suites.map((suite) => suite.id)).toEqual(["answer-generation", "multi-hop-temporal", "behavioral-patterns", "usp-evidence-pack"]);
       expect(report.trend.points.at(-1)?.meanScore).toBeGreaterThan(0.9);
     } finally {
       rmSync(dir, { recursive: true, force: true });

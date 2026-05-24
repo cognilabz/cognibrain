@@ -47,6 +47,7 @@ import type {
   EnrichmentCandidate,
   EntityMergeSuggestion,
   EntityRecord,
+  EvidencePack,
   ExtractionReport,
   FeedbackKind,
   FeedbackEvent,
@@ -396,6 +397,70 @@ export class MemoryService {
     this.recordAudit("search.run", { userId: options.userId, brainId: options.brainId, sourceId: options.sourceId, metadata: { resultCount: results.length, profileId: profile?.id } });
     this.persist();
     return results;
+  }
+
+  evidencePack(options: SearchOptions & { tokenBudget?: number }): EvidencePack {
+    const tokenBudget = options.tokenBudget ?? 900;
+    const results = this.search(options);
+    const context = this.retrieval.contextPack(results, tokenBudget);
+    const includedResults = results.filter((result) => result.decision !== "exclude" && context.includes(`[${result.memory.id}]`));
+    const id = `ctx_${contentHash(`${options.userId}:${options.query}:${includedResults.map((result) => result.memory.id).join(",")}:${tokenBudget}`).slice(2, 14)}`;
+    return {
+      schemaVersion: "1.0",
+      id,
+      generatedAt: new Date().toISOString(),
+      query: options.query,
+      userId: options.userId,
+      profileId: options.profileId,
+      tokenBudget,
+      context,
+      results: includedResults.map((result) => ({
+        memoryId: result.memory.id,
+        content: result.memory.content,
+        source: result.memory.source,
+        scope: {
+          userId: result.memory.userId,
+          brainId: result.memory.brainId,
+          sourceId: result.memory.sourceId,
+          agentId: result.memory.agentId,
+          sessionId: result.memory.sessionId,
+          appId: result.memory.appId,
+          orgId: result.memory.orgId,
+          projectId: result.memory.projectId,
+          deviceId: result.memory.deviceId,
+          runId: result.memory.runId
+        },
+        consent: result.memory.consent,
+        trust: result.memory.trust,
+        importance: result.memory.importance,
+        validity: {
+          eventAt: evidenceDate(result.memory.temporal.eventAt),
+          validFrom: evidenceDate(result.memory.temporal.validFrom),
+          validUntil: evidenceDate(result.memory.temporal.validUntil),
+          lastConfirmedAt: evidenceDate(result.memory.temporal.lastConfirmedAt),
+          verificationDueAt: evidenceDate(result.memory.temporal.verificationDueAt),
+          stale: result.stale,
+          decision: result.decision
+        },
+        retrieval: {
+          score: result.score,
+          initialScore: result.initialScore,
+          mode: result.retrievalMode,
+          signals: result.signals,
+          explanation: result.explanation ?? [],
+          graphPaths: result.graphPaths ?? [],
+          citation: result.citation,
+          contradiction: result.contradiction
+        }
+      })),
+      summary: {
+        included: includedResults.filter((result) => !result.decision || result.decision === "include").length,
+        warnings: includedResults.filter((result) => result.decision === "warn" || result.decision === "review").length,
+        excluded: results.filter((result) => result.decision === "exclude").length,
+        stale: includedResults.filter((result) => result.stale).length,
+        contradictions: includedResults.filter((result) => result.contradiction).length
+      }
+    };
   }
 
   federatedSearch(options: SearchOptions & { brainIds: string[] }): FederatedSearchReport {
@@ -1461,6 +1526,7 @@ export class MemoryService {
       paths: {
         "/memories": ["GET", "POST"],
         "/search": ["POST"],
+        "/evidence-pack": ["POST"],
         "/feedback": ["POST"],
         "/feedback/injection": ["POST"],
         "/graph": ["GET"],
@@ -3494,6 +3560,11 @@ function intervalOverlaps(event: TimelineReport["events"][number], after?: Date,
   if (before && start >= before) return false;
   if (after && end < after) return false;
   return true;
+}
+
+function evidenceDate(value: Date | string | undefined): string | undefined {
+  if (!value) return undefined;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
 function isoHour(date: Date): string {

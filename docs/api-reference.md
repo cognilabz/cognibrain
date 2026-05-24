@@ -263,7 +263,17 @@ curl "http://localhost:8787/audit?type=sync.run"
 curl -X POST http://localhost:8787/marketplace/install \
   -H "content-type: application/json" \
   -d '{"id":"persona-researcher","kind":"persona","name":"Researcher","version":"1.0.0","description":"Citation-heavy defaults","manifest":{"id":"researcher","label":"Researcher","summaryStyle":"descriptive"}}'
+curl -X POST http://localhost:8787/marketplace/install \
+  -H "content-type: application/json" \
+  -d '{"id":"domain-research"}'
+curl -X POST http://localhost:8787/marketplace/plan \
+  -H "content-type: application/json" \
+  -d '{"id":"retrieval-trust-heavy"}'
 curl http://localhost:8787/marketplace
+curl http://localhost:8787/sdk/openapi
+curl -X POST http://localhost:8787/migration/export \
+  -H "content-type: application/json" \
+  -d '{"target":"managed","backupRef":"local-backup://2026-05","ssoProvider":"oidc","secretManager":"vault"}'
 curl http://localhost:8787/compliance
 curl http://localhost:8787/compliance/export
 curl -X POST http://localhost:8787/retention/rules \
@@ -279,7 +289,7 @@ curl -X POST http://localhost:8787/security/key-rotation \
 curl "http://localhost:8787/privacy/insights?epsilon=0.8&k=3"
 ```
 
-Every write/update/delete/search/extract/reflect/share/share-request/share-revoke/agent/persona/connector/provider/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries, simulate delivery, and verify retry metadata before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Retention rules can target memory user, brain, source, source kind, visibility, entity, relation type, or tag and are enforced before search and dream. Compliance reports summarize storage scope, consent, retention rules, delete-on-request, encryption key metadata, data flows, and audit counts. Privacy insights return noised aggregates and suppress groups below the configured k-anonymity threshold.
+Every write/update/delete/search/extract/reflect/share/share-request/share-revoke/agent/persona/connector/provider/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries, simulate delivery, and verify retry metadata before enabling real network delivery. Marketplace installs persist module metadata, validate security scan metadata, materialize personas, register connectors, and save retrieval profiles. `/sdk/openapi` exposes the generated client/API description, and `/migration/export` produces a local-to-managed or backup bundle with SSO and secret-manager placeholders. Retention rules can target memory user, brain, source, source kind, visibility, entity, relation type, or tag and are enforced before search and dream. Compliance reports summarize storage scope, consent, retention rules, delete-on-request, encryption key metadata, data flows, and audit counts. Privacy insights return noised aggregates and suppress groups below the configured k-anonymity threshold.
 
 ## Reflection
 

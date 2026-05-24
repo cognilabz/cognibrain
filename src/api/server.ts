@@ -288,7 +288,22 @@ const marketplaceModuleSchema = z.object({
   version: z.string().min(1),
   description: z.string(),
   installState: z.enum(["available", "installed"]).optional(),
+  security: z
+    .object({
+      scannedAt: z.string(),
+      status: z.enum(["passed", "warning", "blocked"]),
+      permissions: z.array(z.string()),
+      risks: z.array(z.string())
+    })
+    .optional(),
   manifest: z.record(z.unknown())
+});
+
+const migrationExportSchema = z.object({
+  target: z.enum(["self_hosted", "managed", "backup"]).optional(),
+  backupRef: z.string().optional(),
+  ssoProvider: z.string().optional(),
+  secretManager: z.string().optional()
 });
 
 const connectorManifestSchema = z.object({
@@ -582,7 +597,28 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (method === "POST" && url.pathname === "/marketplace/install") {
-    send(response, 202, defaultService.installMarketplaceModule(marketplaceModuleSchema.parse(await json(request))));
+    const body = (await json(request)) as Record<string, unknown>;
+    if (typeof body?.id === "string" && !body.kind) {
+      send(response, 202, defaultService.installMarketplaceModuleById(body.id));
+    } else {
+      send(response, 202, defaultService.installMarketplaceModule(marketplaceModuleSchema.parse(body)));
+    }
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/marketplace/plan") {
+    const body = (await json(request)) as Record<string, unknown>;
+    send(response, 200, typeof body?.id === "string" && !body.kind ? defaultService.marketplaceInstallPlan(body.id) : defaultService.marketplaceInstallPlan(marketplaceModuleSchema.parse(body)));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/sdk/openapi") {
+    send(response, 200, defaultService.apiDescription());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/migration/export") {
+    send(response, 202, defaultService.managedMigrationBundle(migrationExportSchema.parse(await json(request))));
     return;
   }
 

@@ -22,6 +22,7 @@ import {
   normalizeRetrievalWeights,
   queryMemoryGraph,
   runDomainEvaluation,
+  DOMAIN_MODULES,
   ReflectionEngine,
   RetrievalEngine,
   type LifecyclePolicy,
@@ -55,7 +56,9 @@ import type {
   MemoryInput,
   MemorySource,
   MarketplaceModule,
+  MarketplaceInstallPlan,
   MetricsReport,
+  ManagedMigrationBundle,
   OfflineOperation,
   PersonaProfile,
   RelationType,
@@ -211,6 +214,7 @@ export class MemoryService {
     this.defaultQueryExpander = provider.queryExpander;
     this.defaultTranslator = provider.translator;
     for (const manifest of officialConnectorManifests()) this.connectorManifests.set(manifest.id, manifest);
+    for (const module of officialMarketplaceModules()) this.marketplaceModules.set(module.id, module);
     this.load();
   }
 
@@ -883,7 +887,9 @@ export class MemoryService {
   }
 
   installMarketplaceModule(module: MarketplaceModule): MarketplaceModule {
-    const installed = { ...module, installState: "installed" as const };
+    const plan = this.marketplaceInstallPlan(module);
+    if (!plan.valid) throw new Error(`Marketplace module failed validation: ${plan.risks.join(", ")}`);
+    const installed = { ...module, security: module.security ?? securityScanFor(module), installState: "installed" as const };
     this.marketplaceModules.set(installed.id, installed);
     if (installed.kind === "persona") {
       const manifest = installed.manifest as Partial<PersonaProfile>;
@@ -898,13 +904,99 @@ export class MemoryService {
         });
       }
     }
-    this.recordAudit("marketplace.install", { metadata: { moduleId: installed.id, kind: installed.kind } });
+    if (installed.kind === "connector") {
+      this.registerConnectorManifest(installed.manifest as unknown as ConnectorManifest);
+    }
+    if (installed.kind === "retrieval_profile") {
+      const manifest = installed.manifest as Partial<RetrievalProfile>;
+      if (manifest.id && manifest.weights) this.setRetrievalProfile({ id: manifest.id, label: manifest.label ?? installed.name, weights: manifest.weights, provenance: "marketplace" });
+    }
+    this.recordAudit("marketplace.install", { metadata: { moduleId: installed.id, kind: installed.kind, actions: plan.actions, risks: plan.risks } });
     this.persist();
     return installed;
   }
 
+  installMarketplaceModuleById(moduleId: string): MarketplaceModule {
+    const module = this.marketplaceModules.get(moduleId);
+    if (!module) throw new Error(`Marketplace module not found: ${moduleId}`);
+    return this.installMarketplaceModule(module);
+  }
+
+  marketplaceInstallPlan(moduleOrId: MarketplaceModule | string): MarketplaceInstallPlan {
+    const module = typeof moduleOrId === "string" ? this.marketplaceModules.get(moduleOrId) : moduleOrId;
+    if (!module) return { moduleId: String(moduleOrId), valid: false, actions: [], risks: ["module not found"] };
+    const risks = marketplaceRisks(module);
+    const actions = [`record ${module.kind} module ${module.id}`];
+    if (module.kind === "persona") actions.push("materialize persona defaults");
+    if (module.kind === "connector") actions.push("register connector manifest");
+    if (module.kind === "retrieval_profile") actions.push("save retrieval profile");
+    if (module.kind === "domain") actions.push("make domain module available for runtime config");
+    return { moduleId: module.id, valid: risks.every((risk) => !risk.startsWith("blocked:")), actions, risks };
+  }
+
   listMarketplaceModules(): MarketplaceModule[] {
     return [...this.marketplaceModules.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  apiDescription() {
+    return {
+      openapi: "3.1.0",
+      info: { title: "cognibrain API", version: "0.1.0" },
+      paths: {
+        "/memories": ["GET", "POST"],
+        "/search": ["POST"],
+        "/feedback": ["POST"],
+        "/feedback/injection": ["POST"],
+        "/graph": ["GET"],
+        "/graph/query": ["POST"],
+        "/marketplace": ["GET"],
+        "/marketplace/install": ["POST"],
+        "/marketplace/plan": ["POST"],
+        "/migration/export": ["POST"],
+        "/privacy/insights": ["GET"],
+        "/compliance/export": ["GET"]
+      },
+      clients: {
+        typescript: "src/sdk/client.ts",
+        python: "sdk/python/cognibrain_client.py",
+        go: "sdk/go/cognibrain/client.go",
+        rust: "sdk/rust/src/lib.rs"
+      }
+    };
+  }
+
+  managedMigrationBundle(options: { target?: ManagedMigrationBundle["target"]; backupRef?: string; ssoProvider?: string; secretManager?: string } = {}): ManagedMigrationBundle {
+    const target = options.target ?? "backup";
+    const keyReport = this.securityKeyReport();
+    return {
+      generatedAt: new Date().toISOString(),
+      target,
+      counts: {
+        memories: this.store.list().length,
+        profiles: this.retrievalProfiles.size,
+        personas: this.personas.size,
+        connectors: this.connectorManifests.size,
+        retentionRules: this.retentionRules.size
+      },
+      backup: {
+        recommended: target !== "backup",
+        encryptionKeyIds: Object.keys(keyReport.keyIds),
+        backupRef: options.backupRef
+      },
+      placeholders: {
+        sso: { required: target === "managed", provider: options.ssoProvider, note: "Provision SCIM/OIDC externally; this local bundle carries only the provider label." },
+        secretManager: { required: keyReport.encrypted > 0, provider: options.secretManager, note: "Move MEMORY_ENCRYPTION_KEY into the target secret manager before importing encrypted memories." }
+      },
+      manifest: {
+        memories: this.store.export(),
+        retrievalProfiles: [...this.retrievalProfiles.values()],
+        personas: [...this.personas.values()],
+        connectors: [...this.connectorManifests.values()],
+        marketplaceModules: [...this.marketplaceModules.values()],
+        retentionRules: [...this.retentionRules.values()],
+        compliance: this.complianceReport()
+      }
+    };
   }
 
   setRetentionRule(input: Omit<RetentionRule, "id" | "createdAt" | "updatedAt"> & { id?: string }): RetentionRule {
@@ -1735,7 +1827,7 @@ export class MemoryService {
     this.auditEvents = raw.auditEvents ?? [];
     this.webhooks = new Map((raw.webhooks ?? []).map((webhook) => [webhook.id, webhook]));
     this.webhookDeliveries = raw.webhookDeliveries ?? [];
-    this.marketplaceModules = new Map((raw.marketplaceModules ?? []).map((module) => [module.id, module]));
+    this.marketplaceModules = new Map([...officialMarketplaceModules(), ...(raw.marketplaceModules ?? [])].map((module) => [module.id, module]));
     this.offlineOperations = raw.offlineOperations ?? [];
     for (const manifest of raw.connectorManifests ?? []) this.connectorManifests.set(manifest.id, manifest);
     this.connectorSyncRecords = raw.connectorSyncRecords ?? [];
@@ -2020,6 +2112,87 @@ function officialConnectorManifests(): ConnectorManifest[] {
     base("calendar", "Calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", attendees: "entities.attendees", start: "temporal.eventAt" }, "human"),
     base("cloud_storage", "Cloud Storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title" }, "import")
   ];
+}
+
+function officialMarketplaceModules(): MarketplaceModule[] {
+  const scannedAt = "2026-01-01T00:00:00.000Z";
+  const security = (permissions: string[] = []): MarketplaceModule["security"] => ({ scannedAt, status: "passed", permissions, risks: [] });
+  return [
+    ...officialConnectorManifests().map((manifest): MarketplaceModule => ({
+      id: `market-${manifest.id}`,
+      kind: "connector" as const,
+      name: `${manifest.name} Connector`,
+      version: manifest.version,
+      description: `Official ${manifest.name.toLowerCase()} connector manifest with local-first install metadata.`,
+      installState: "available" as const,
+      security: security(manifest.capabilities),
+      manifest: { ...manifest } as Record<string, unknown>
+    })),
+    ...DOMAIN_MODULES.filter((domain) => domain.id !== "general").map((domain): MarketplaceModule => ({
+      id: `domain-${domain.id}`,
+      kind: "domain" as const,
+      name: `${domain.label} Domain`,
+      version: "1.0.0",
+      description: `Domain module for ${domain.label.toLowerCase()} memory behavior.`,
+      installState: "available" as const,
+      security: security(["enrich", ...(domain.redactionPolicy ? ["redaction-policy"] : [])]),
+      manifest: {
+        id: domain.id,
+        label: domain.label,
+        retrievalWeights: domain.retrievalWeights,
+        lifecyclePolicy: domain.lifecyclePolicy,
+        aliases: domain.aliases,
+        redactionMode: domain.redactionPolicy?.mode
+      }
+    })),
+    {
+      id: "retrieval-trust-heavy",
+      kind: "retrieval_profile",
+      name: "Trust Heavy Retrieval",
+      version: "1.0.0",
+      description: "Prioritizes high-trust and entity-linked context for production agents.",
+      installState: "available",
+      security: security(["retrieval-profile"]),
+      manifest: { id: "trust-heavy", label: "Trust Heavy", weights: { trust: 0.36, entity: 0.24, graph: 0.14, semantic: 0.14, keyword: 0.08, temporal: 0.04 } }
+    },
+    {
+      id: "persona-operator",
+      kind: "persona",
+      name: "Operator Persona",
+      version: "1.0.0",
+      description: "Concise summaries, private defaults, and high-trust retrieval.",
+      installState: "available",
+      security: security(["persona"]),
+      manifest: { id: "operator", label: "Operator", summaryStyle: "concise", privacyDefault: "private", retrievalWeights: { trust: 0.34, graph: 0.2 } }
+    }
+  ];
+}
+
+function marketplaceRisks(module: MarketplaceModule): string[] {
+  const risks: string[] = [];
+  if (!module.id.trim() || !module.name.trim() || !module.version.trim()) risks.push("blocked: module requires id, name and version");
+  if (module.security?.status === "blocked") risks.push("blocked: security scan blocked install");
+  if (module.kind === "connector") {
+    try {
+      validateConnectorManifest(module.manifest as unknown as ConnectorManifest);
+    } catch (error) {
+      risks.push(`blocked: ${error instanceof Error ? error.message : "invalid connector manifest"}`);
+    }
+  }
+  if (module.kind === "retrieval_profile" && !(module.manifest as Partial<RetrievalProfile>).weights) risks.push("blocked: retrieval profile requires weights");
+  if (module.kind === "persona" && (!(module.manifest as Partial<PersonaProfile>).id || !(module.manifest as Partial<PersonaProfile>).label)) risks.push("blocked: persona requires id and label");
+  if (!module.security) risks.push("warning: module has no security scan metadata");
+  return risks;
+}
+
+function securityScanFor(module: MarketplaceModule): MarketplaceModule["security"] {
+  const risks = marketplaceRisks({ ...module, security: { scannedAt: new Date().toISOString(), status: "passed", permissions: [], risks: [] } }).filter((risk) => risk !== "warning: module has no security scan metadata");
+  return {
+    scannedAt: new Date().toISOString(),
+    status: risks.some((risk) => risk.startsWith("blocked:")) ? "blocked" : risks.length ? "warning" : "passed",
+    permissions: module.kind === "connector" ? ((module.manifest as Partial<ConnectorManifest>).capabilities ?? []) : [module.kind],
+    risks
+  };
 }
 
 function validateConnectorManifest(input: Omit<ConnectorManifest, "createdAt" | "updatedAt">): void {

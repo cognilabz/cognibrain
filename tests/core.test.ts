@@ -6,6 +6,7 @@ import { CODING_DOMAIN_MODULE, MemoryStore, ReflectionEngine, RetrievalEngine, h
 import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { MemoryService } from "../src/api/service";
+import { CognibrainClient } from "../src/sdk/client";
 import { AppendOnlyLogPersistenceAdapter } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
 
@@ -899,7 +900,7 @@ describe("TypeScript memory core", () => {
     expect(service.listSources(brain.id)[0].id).toBe(source.id);
     expect(service.listAgents()[0].id).toBe("agent-codex");
     expect(service.listPersonas()[0].id).toBe("researcher");
-    expect(service.listMarketplaceModules()[0].installState).toBe("installed");
+    expect(service.listMarketplaceModules().some((module) => module.id === "persona-researcher" && module.installState === "installed")).toBe(true);
     expect(service.eventFeed().deliveries.some((delivery) => delivery.status === "queued")).toBe(true);
 
     const compliance = service.complianceReport(new Date("2026-01-01T00:00:00.000Z"));
@@ -907,6 +908,37 @@ describe("TypeScript memory core", () => {
     expect(compliance.totals.sources).toBe(1);
     expect(compliance.retentionExpired).toBe(1);
     expect(compliance.auditByType["memory.write"]).toBeGreaterThan(0);
+  });
+
+  it("validates marketplace modules, installs built-ins, exports migration bundles, and exposes an SDK client", async () => {
+    const service = new MemoryService();
+    expect(service.listMarketplaceModules().some((module) => module.id === "domain-research" && module.security?.status === "passed")).toBe(true);
+    const plan = service.marketplaceInstallPlan("domain-research");
+    expect(plan.valid).toBe(true);
+    expect(plan.actions).toContain("make domain module available for runtime config");
+
+    const installedProfile = service.installMarketplaceModuleById("retrieval-trust-heavy");
+    expect(installedProfile.installState).toBe("installed");
+    expect(service.getRetrievalProfiles().some((profile) => profile.id === "trust-heavy")).toBe(true);
+
+    const bundle = service.managedMigrationBundle({ target: "managed", backupRef: "local-backup://market", ssoProvider: "oidc", secretManager: "vault" });
+    expect(bundle.placeholders.sso.required).toBe(true);
+    expect(bundle.counts.connectors).toBeGreaterThan(0);
+    expect(service.apiDescription().clients.typescript).toContain("src/sdk/client.ts");
+
+    const calls: Array<{ url: string; body?: string }> = [];
+    const client = new CognibrainClient({
+      baseUrl: "http://memory.local",
+      fetchImpl: (async (url, init) => {
+        calls.push({ url: String(url), body: String(init?.body ?? "") });
+        return new Response(JSON.stringify({ id: "mem_sdk", content: "SDK memory" }), { status: 200, headers: { "content-type": "application/json" } });
+      }) as typeof fetch
+    });
+    const added = await client.add({ userId: "sdk", content: "SDK memory" });
+    await client.feedback("mem_sdk", "helpful", "sdk");
+    await client.graphQuery("MATCH (a)-[:mentions]->(b) RETURN a,b", "sdk");
+    expect(added.id).toBe("mem_sdk");
+    expect(calls.map((call) => call.url)).toEqual(["http://memory.local/memories", "http://memory.local/feedback", "http://memory.local/graph/query"]);
   });
 
   it("validates connector manifests, syncs connector events, retries webhooks, and ingests translated media", () => {

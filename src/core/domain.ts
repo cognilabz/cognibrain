@@ -55,3 +55,68 @@ export const STRICT_PRIVACY_DOMAIN_MODULE: DomainModule = {
   redactionPolicy: { mode: "reject" },
   lifecyclePolicy: { archiveAfterDays: 30, fadeAfterDays: 14 }
 };
+
+export const RESEARCH_DOMAIN_MODULE: DomainModule = {
+  id: "research",
+  label: "Research and citations",
+  retrievalWeights: { semantic: 0.3, trust: 0.24, temporal: 0.12 },
+  aliases: { paper: ["publication", "study"], citation: ["source", "reference"] },
+  enrich(input) {
+    return /(?:paper|study|citation|source|doi|arxiv)/i.test(input.content) ? { ...input, tags: [...(input.tags ?? []), "research"] } : input;
+  }
+};
+
+export const LEGAL_DOMAIN_MODULE: DomainModule = {
+  id: "legal",
+  label: "Legal and contracts",
+  retrievalWeights: { trust: 0.3, temporal: 0.18, keyword: 0.24 },
+  redactionPolicy: { mode: "redact" },
+  aliases: { contract: ["agreement", "clause"], regulation: ["law", "statute"] },
+  enrich(input) {
+    return /(?:contract|clause|regulation|statute|gdpr|policy)/i.test(input.content) ? { ...input, tags: [...(input.tags ?? []), "legal"] } : input;
+  }
+};
+
+export const FINANCE_DOMAIN_MODULE: DomainModule = {
+  id: "finance",
+  label: "Finance and controls",
+  retrievalWeights: { trust: 0.28, temporal: 0.2, entity: 0.2 },
+  aliases: { invoice: ["bill", "payment"], revenue: ["arr", "mrr"] },
+  enrich(input) {
+    return /(?:invoice|revenue|payment|forecast|budget|audit)/i.test(input.content) ? { ...input, tags: [...(input.tags ?? []), "finance"] } : input;
+  }
+};
+
+export const HEALTHCARE_DOMAIN_MODULE: DomainModule = {
+  id: "healthcare",
+  label: "Healthcare privacy",
+  retrievalWeights: { trust: 0.32, temporal: 0.18, semantic: 0.22 },
+  redactionPolicy: { mode: "redact" },
+  lifecyclePolicy: { archiveAfterDays: 45, fadeAfterDays: 21 },
+  aliases: { patient: ["member", "subject"], medication: ["medicine", "drug"] },
+  enrich(input) {
+    return /(?:patient|diagnosis|medication|treatment|clinic|hipaa)/i.test(input.content) ? { ...input, tags: [...(input.tags ?? []), "healthcare"] } : input;
+  }
+};
+
+export const SECURITY_DOMAIN_MODULE: DomainModule = {
+  id: "security",
+  label: "Security operations",
+  retrievalWeights: { trust: 0.26, temporal: 0.18, graph: 0.12 },
+  redactionPolicy: { mode: "redact" },
+  aliases: { incident: ["alert", "finding"], vulnerability: ["cve", "weakness"] },
+  enrich(input) {
+    return /(?:incident|alert|vulnerability|cve|secret|token|iam)/i.test(input.content) ? { ...input, tags: [...(input.tags ?? []), "security"] } : input;
+  }
+};
+
+export const DOMAIN_MODULES: DomainModule[] = [
+  GENERAL_DOMAIN_MODULE,
+  CODING_DOMAIN_MODULE,
+  RESEARCH_DOMAIN_MODULE,
+  LEGAL_DOMAIN_MODULE,
+  FINANCE_DOMAIN_MODULE,
+  HEALTHCARE_DOMAIN_MODULE,
+  SECURITY_DOMAIN_MODULE,
+  STRICT_PRIVACY_DOMAIN_MODULE
+];

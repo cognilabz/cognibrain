@@ -191,6 +191,10 @@ export function runNextgenEvaluation() {
   const audit = service.auditTrail({ memoryId: atlas.id });
   const federatedReport = service.federatedSearch({ userId: "bench-peer", agentId: "agent-bench", orgId: "org-bench", query: "release architecture", brainIds: [brain.id] });
   const revoked = service.revokeSharedMemory(atlas.id, "agent-bench", "Benchmark cleanup.");
+  const marketplacePlan = service.marketplaceInstallPlan("domain-research");
+  const installedRetrieval = service.installMarketplaceModuleById("retrieval-trust-heavy");
+  const migrationBundle = service.managedMigrationBundle({ target: "managed", backupRef: "local-backup://nextgen", ssoProvider: "oidc", secretManager: "vault" });
+  const apiDescription = service.apiDescription();
   const securityService = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "nextgen-test-key-with-enough-length", encryptionKeyId: "nextgen", encryptionKeyVersion: "1" } });
   const expiredSecurity = securityService.add({
     userId: "security",
@@ -332,8 +336,15 @@ export function runNextgenEvaluation() {
   });
   checks.push({
     id: "marketplace-persona",
-    passed: service.listMarketplaceModules().some((module) => module.id === "persona-nextgen" && module.installState === "installed") && service.listPersonas().some((persona) => persona.id === "nextgen"),
-    detail: `${service.listMarketplaceModules().length} marketplace modules`
+    passed:
+      service.listMarketplaceModules().some((module) => module.id === "persona-nextgen" && module.installState === "installed") &&
+      service.listPersonas().some((persona) => persona.id === "nextgen") &&
+      marketplacePlan.valid &&
+      installedRetrieval.installState === "installed" &&
+      service.getRetrievalProfiles().some((profile) => profile.id === "trust-heavy") &&
+      migrationBundle.placeholders.sso.required &&
+      apiDescription.clients.typescript === "src/sdk/client.ts",
+    detail: `${service.listMarketplaceModules().length} marketplace modules, migration memories=${migrationBundle.counts.memories}`
   });
 
   const report = {

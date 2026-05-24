@@ -617,6 +617,41 @@ export interface MarketplaceModule {
   version: string;
   description: string;
   installState?: "available" | "installed";
+  security?: {
+    scannedAt: Date | string;
+    status: "passed" | "warning" | "blocked";
+    permissions: string[];
+    risks: string[];
+  };
+  manifest: Record<string, unknown>;
+}
+
+export interface MarketplaceInstallPlan {
+  moduleId: string;
+  valid: boolean;
+  actions: string[];
+  risks: string[];
+}
+
+export interface ManagedMigrationBundle {
+  generatedAt: Date | string;
+  target: "self_hosted" | "managed" | "backup";
+  counts: {
+    memories: number;
+    profiles: number;
+    personas: number;
+    connectors: number;
+    retentionRules: number;
+  };
+  backup: {
+    recommended: boolean;
+    encryptionKeyIds: string[];
+    backupRef?: string;
+  };
+  placeholders: {
+    sso: { required: boolean; provider?: string; note: string };
+    secretManager: { required: boolean; provider?: string; note: string };
+  };
   manifest: Record<string, unknown>;
 }
 

@@ -402,6 +402,32 @@ switch (command) {
     console.log(JSON.stringify(service.storageStatus(), null, 2));
     break;
   }
+  case "marketplace": {
+    console.log(JSON.stringify(service.listMarketplaceModules(), null, 2));
+    break;
+  }
+  case "marketplace-plan": {
+    const id = args[0];
+    if (!id) fail("Usage: memctl marketplace-plan <module-id>");
+    console.log(JSON.stringify(service.marketplaceInstallPlan(id), null, 2));
+    break;
+  }
+  case "marketplace-install": {
+    const idOrJson = args[0];
+    if (!idOrJson) fail("Usage: memctl marketplace-install <module-id|module-json>");
+    const module = idOrJson.trim().startsWith("{") ? service.installMarketplaceModule(JSON.parse(idOrJson)) : service.installMarketplaceModuleById(idOrJson);
+    console.log(JSON.stringify(module, null, 2));
+    break;
+  }
+  case "api-spec": {
+    console.log(JSON.stringify(service.apiDescription(), null, 2));
+    break;
+  }
+  case "migration-export": {
+    const target = args[0] === "self_hosted" || args[0] === "managed" || args[0] === "backup" ? args[0] : undefined;
+    console.log(JSON.stringify(service.managedMigrationBundle({ target, backupRef: process.env.MEMORY_BACKUP_REF, ssoProvider: process.env.MEMORY_SSO_PROVIDER, secretManager: process.env.MEMORY_SECRET_MANAGER }), null, 2));
+    break;
+  }
   case "provider-status": {
     console.log(JSON.stringify(service.providerStatus(), null, 2));
     break;
@@ -573,7 +599,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|federated-search|share-request|share-approve|share-revoke|audit|compliance|compliance-export|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|storage|marketplace|marketplace-plan|marketplace-install|api-spec|migration-export|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {

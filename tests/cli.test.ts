@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const cli = join(root, "bin", "cognibrain.mjs");
+const connectCli = join(root, "bin", "cognibrain-connect.mjs");
 
 describe("cognibrain CLI", () => {
   it("prints the one-command surface", () => {
@@ -74,6 +75,27 @@ describe("cognibrain CLI", () => {
       const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8"));
       expect(Object.keys(manifest.harnesses)).toEqual(["codex", "claude", "copilot", "cursor"]);
       expect(manifest.harnesses.copilot.feedback).toContain("accepted_change");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("offers an npx-style connector installer for individual harnesses", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-connect-"));
+    const codexHome = join(dir, ".codex");
+    try {
+      const output = execFileSync(process.execPath, [connectCli, "claude-code", "--no-start", "--no-doctor"], {
+        cwd: dir,
+        env: { ...process.env, CODEX_HOME: codexHome, MEMORY_AUTO_DREAM: "false" },
+        encoding: "utf8"
+      });
+
+      expect(output).toContain("cognibrain connector package ready for claude-code");
+      expect(output).toContain("doctor --publish");
+      expect(existsSync(join(dir, ".mcp.json"))).toBe(true);
+      expect(existsSync(join(dir, ".claude", "settings.json"))).toBe(true);
+      const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8"));
+      expect(manifest.harnesses.claude.feedback).toContain("memory feedback-injection");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

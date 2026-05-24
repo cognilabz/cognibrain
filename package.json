@@ -5,7 +5,8 @@
   "type": "module",
   "description": "TypeScript memory layer for inspectable AI-agent recall and benchmark proof.",
   "bin": {
-    "cognibrain": "./bin/cognibrain.mjs"
+    "cognibrain": "./bin/cognibrain.mjs",
+    "cognibrain-connect": "./bin/cognibrain-connect.mjs"
   },
   "files": [
     "bin/",
@@ -56,6 +57,7 @@
     "doctor": "node bin/cognibrain.mjs doctor",
     "doctor:publish": "node bin/cognibrain.mjs doctor --publish",
     "setup": "node bin/cognibrain.mjs setup",
+    "connect": "node bin/cognibrain-connect.mjs",
     "clean": "node bin/cognibrain.mjs clean",
     "start:local": "node scripts/start-local.mjs",
     "start:daemon": "node scripts/start-local.mjs --daemon",

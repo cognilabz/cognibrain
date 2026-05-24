@@ -105,9 +105,13 @@ After publishing the package, the same one-click path is:
 
 ```bash
 npx cognibrain setup --all-harnesses
+npx cognibrain-connect claude-code
+npx cognibrain-connect codex --no-start
+npx cognibrain-connect all
 ```
 
 `setup` installs the Codex Skill, optionally writes MCP configs for Codex, Claude, Cursor, and VS Code, starts the API plus dashboard, and runs `doctor`.
+`cognibrain-connect` is the dedicated package-style connector installer: it writes the same reviewable harness package manifest, starts the local API/dashboard unless disabled, and prints the publish doctor command so teams can verify connector health after installation.
 
 Then open the printed dashboard URL. Runtime and publish helpers:
 

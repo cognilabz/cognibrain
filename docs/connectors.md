@@ -6,6 +6,8 @@ The CLI is the human and automation surface: install, start, stop, status, healt
 
 ```bash
 ./bin/cognibrain.mjs setup --all-harnesses
+npx cognibrain-connect claude-code
+npx cognibrain-connect all --no-start
 ./bin/cognibrain.mjs status
 ./bin/cognibrain.mjs memory search "project conventions"
 ./bin/cognibrain.mjs memory connectors
@@ -13,6 +15,7 @@ The CLI is the human and automation surface: install, start, stop, status, healt
 ```
 
 This mirrors the current AI-tooling direction: make the install path a small memorable command, then let each harness opt into deeper integration.
+`cognibrain-connect` is the npm-bin surface for that path. It accepts `codex`, `claude-code`, `cursor`, `github-copilot`, `vscode`, or `all`, delegates to the same setup engine, writes `.cognibrain-harness-package.json`, and prints a `doctor --publish` health command after installation.
 
 Harness config commands:
 

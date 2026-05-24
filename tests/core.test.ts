@@ -1275,6 +1275,14 @@ describe("TypeScript memory core", () => {
     const plan = service.marketplaceInstallPlan("domain-research");
     expect(plan.valid).toBe(true);
     expect(plan.actions).toContain("make domain module available for runtime config");
+    expect(plan.actions).toContain("verify module signature metadata");
+    expect(plan.actions.some((action) => action.startsWith("request permissions:"))).toBe(true);
+
+    const installedDomain = service.installMarketplaceModuleById("domain-coding");
+    expect(installedDomain.installState).toBe("installed");
+    expect(service.getRetrievalProfiles().some((profile) => profile.id === "domain:coding")).toBe(true);
+    const codingMemory = service.add({ userId: "domain-market", content: "CacheClient calls the API endpoint.", source: { kind: "human", confidence: 0.95 } });
+    expect(codingMemory.tags).toContain("coding");
 
     const installedProfile = service.installMarketplaceModuleById("retrieval-trust-heavy");
     expect(installedProfile.installState).toBe("installed");
@@ -1350,7 +1358,8 @@ describe("TypeScript memory core", () => {
 
     const scanned = service.scanMarketplaceSubmission(submitted.id);
     expect(scanned.status).toBe("scanned");
-    expect(scanned.scan?.status).toBe("passed");
+    expect(scanned.scan?.status).toBe("warning");
+    expect(scanned.scan?.risks).toContain("warning: module has no signature metadata");
 
     const reviewed = service.reviewMarketplaceSubmission(submitted.id, { reviewer: "operator", rating: 4.8, comment: "Manifest and privacy defaults are reviewable.", approve: true });
     expect(reviewed.status).toBe("approved");
@@ -1368,6 +1377,17 @@ describe("TypeScript memory core", () => {
     expect(installed.installState).toBe("installed");
     expect(installed.trustSignals?.installCount).toBe(1);
     expect(service.listMarketplaceSubmissions("published")).toHaveLength(1);
+
+    const blocked = service.marketplaceInstallPlan({
+      ...module,
+      id: "bad-signature",
+      signature: { signer: "unknown", algorithm: "sha256", digest: "bad", status: "invalid" },
+      compatibility: { minCognibrainVersion: "99.0.0" },
+      security: { scannedAt: new Date().toISOString(), status: "passed", permissions: ["persona"], risks: [] }
+    });
+    expect(blocked.valid).toBe(false);
+    expect(blocked.risks.some((risk) => risk.includes("signature is invalid"))).toBe(true);
+    expect(blocked.risks.some((risk) => risk.includes("requires cognibrain"))).toBe(true);
   });
 
   it("runs deterministic nextgen benchmark suites", () => {

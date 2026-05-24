@@ -874,6 +874,18 @@ export interface MarketplaceModule {
   version: string;
   description: string;
   installState?: "available" | "installed";
+  signature?: {
+    signer: string;
+    algorithm: "sha256" | "ed25519";
+    digest: string;
+    status?: "verified" | "invalid" | "unverified";
+    verifiedAt?: Date | string;
+  };
+  compatibility?: {
+    minCognibrainVersion?: string;
+    maxCognibrainVersion?: string;
+    engines?: string[];
+  };
   security?: {
     scannedAt: Date | string;
     status: "passed" | "warning" | "blocked";

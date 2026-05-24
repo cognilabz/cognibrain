@@ -120,6 +120,8 @@ import type {
   WebhookRegistration
 } from "../core";
 
+const COGNIBRAIN_VERSION = "0.1.0";
+
 export interface MemoryServiceOptions {
   persistencePath?: string;
   persistence?: MemoryPersistenceAdapter;
@@ -283,7 +285,7 @@ export class MemoryService {
     const agentPersona = input.agentId ? this.personaForAgent(input.agentId) : undefined;
     const personaConsent = agentPersona?.privacyDefault ? { visibility: agentPersona.privacyDefault } : undefined;
     const scopedInput = { ...input, consent: { ...personaConsent, ...sourceDefaultConsent, ...(input.consent ?? {}) } };
-    const enriched = this.domainModule?.enrich ? this.domainModule.enrich(scopedInput) : scopedInput;
+    const enriched = this.applyDomainEnrichment(scopedInput);
     this.ensureScopedAccess(enriched);
     const writeDecision = this.evaluatePolicy("write", enriched);
     if (!writeDecision.allowed) {
@@ -1612,6 +1614,21 @@ export class MemoryService {
     if (installed.kind === "connector") {
       this.registerConnectorManifest(installed.manifest as unknown as ConnectorManifest);
     }
+    if (installed.kind === "domain") {
+      const manifest = installed.manifest as { id?: string };
+      const domain = DOMAIN_MODULES.find((item) => item.id === manifest.id);
+      if (domain) {
+        if (domain.aliases) this.entities.configureAliases(domain.aliases);
+        if (domain.retrievalWeights) {
+          this.setRetrievalProfile({
+            id: `domain:${domain.id}`,
+            label: `${domain.label} Domain`,
+            weights: domain.retrievalWeights,
+            provenance: "marketplace"
+          });
+        }
+      }
+    }
     if (installed.kind === "retrieval_profile") {
       const manifest = installed.manifest as Partial<RetrievalProfile>;
       if (manifest.id && manifest.weights) this.setRetrievalProfile({ id: manifest.id, label: manifest.label ?? installed.name, weights: manifest.weights, provenance: "marketplace" });
@@ -1632,6 +1649,9 @@ export class MemoryService {
     if (!module) return { moduleId: String(moduleOrId), valid: false, actions: [], risks: ["module not found"] };
     const risks = marketplaceRisks(module);
     const actions = [`record ${module.kind} module ${module.id}`];
+    actions.push("verify module signature metadata");
+    actions.push("check cognibrain version compatibility");
+    if (module.security?.permissions?.length) actions.push(`request permissions: ${module.security.permissions.join(", ")}`);
     if (module.kind === "persona") actions.push("materialize persona defaults");
     if (module.kind === "connector") actions.push("register connector manifest");
     if (module.kind === "retrieval_profile") actions.push("save retrieval profile");
@@ -3079,6 +3099,17 @@ export class MemoryService {
     this.store.update(memory.id, { entities, relations });
   }
 
+  private applyDomainEnrichment(input: MemoryInput): MemoryInput {
+    const modules = [
+      ...(this.domainModule ? [this.domainModule] : []),
+      ...this.listMarketplaceModules()
+        .filter((module) => module.kind === "domain" && module.installState === "installed")
+        .map((module) => DOMAIN_MODULES.find((domain) => domain.id === (module.manifest as { id?: string }).id))
+        .filter((domain): domain is DomainModule => Boolean(domain))
+    ];
+    return modules.reduce((current, domain) => domain.enrich ? domain.enrich(current) : current, input);
+  }
+
   private memoriesDeniedForOperation(userId: string, operation: MemoryPolicyOperation): PolicyDecision[] {
     return this.store.list(userId)
       .filter((memory) => !memory.archivedAt)
@@ -3592,6 +3623,16 @@ function officialConnectorManifests(): ConnectorManifest[] {
 function officialMarketplaceModules(): MarketplaceModule[] {
   const scannedAt = "2026-01-01T00:00:00.000Z";
   const security = (permissions: string[] = []): MarketplaceModule["security"] => ({ scannedAt, status: "passed", permissions, risks: [] });
+  const signed = (id: string): Pick<MarketplaceModule, "signature" | "compatibility"> => ({
+    signature: {
+      signer: "cognilabz",
+      algorithm: "sha256",
+      digest: contentHash(`cognibrain:${id}:1.0.0`),
+      status: "verified",
+      verifiedAt: scannedAt
+    },
+    compatibility: { minCognibrainVersion: "0.1.0", engines: ["node>=20"] }
+  });
   return [
     ...officialConnectorManifests().map((manifest): MarketplaceModule => ({
       id: `market-${manifest.id}`,
@@ -3601,6 +3642,7 @@ function officialMarketplaceModules(): MarketplaceModule[] {
       description: `Official ${manifest.name.toLowerCase()} connector manifest with local-first install metadata.`,
       installState: "available" as const,
       security: security(manifest.capabilities),
+      ...signed(`market-${manifest.id}`),
       manifest: { ...manifest } as Record<string, unknown>
     })),
     ...DOMAIN_MODULES.filter((domain) => domain.id !== "general").map((domain): MarketplaceModule => ({
@@ -3611,6 +3653,7 @@ function officialMarketplaceModules(): MarketplaceModule[] {
       description: `Domain module for ${domain.label.toLowerCase()} memory behavior.`,
       installState: "available" as const,
       security: security(["enrich", ...(domain.redactionPolicy ? ["redaction-policy"] : [])]),
+      ...signed(`domain-${domain.id}`),
       manifest: {
         id: domain.id,
         label: domain.label,
@@ -3628,6 +3671,7 @@ function officialMarketplaceModules(): MarketplaceModule[] {
       description: "Prioritizes high-trust and entity-linked context for production agents.",
       installState: "available",
       security: security(["retrieval-profile"]),
+      ...signed("retrieval-trust-heavy"),
       manifest: { id: "trust-heavy", label: "Trust Heavy", weights: { trust: 0.36, entity: 0.24, graph: 0.14, semantic: 0.14, keyword: 0.08, temporal: 0.04 } }
     },
     {
@@ -3638,6 +3682,7 @@ function officialMarketplaceModules(): MarketplaceModule[] {
       description: "Concise summaries, private defaults, and high-trust retrieval.",
       installState: "available",
       security: security(["persona"]),
+      ...signed("persona-operator"),
       manifest: { id: "operator", label: "Operator", summaryStyle: "concise", privacyDefault: "private", retrievalWeights: { trust: 0.34, graph: 0.2 } }
     }
   ];
@@ -3647,6 +3692,12 @@ function marketplaceRisks(module: MarketplaceModule): string[] {
   const risks: string[] = [];
   if (!module.id.trim() || !module.name.trim() || !module.version.trim()) risks.push("blocked: module requires id, name and version");
   if (module.security?.status === "blocked") risks.push("blocked: security scan blocked install");
+  if (!module.signature) risks.push("warning: module has no signature metadata");
+  if (module.signature?.status === "invalid") risks.push("blocked: module signature is invalid");
+  if (module.signature && !module.signature.digest.trim()) risks.push("blocked: module signature digest is empty");
+  if (module.compatibility?.minCognibrainVersion && compareVersions(COGNIBRAIN_VERSION, module.compatibility.minCognibrainVersion) < 0) risks.push(`blocked: requires cognibrain >= ${module.compatibility.minCognibrainVersion}`);
+  if (module.compatibility?.maxCognibrainVersion && compareVersions(COGNIBRAIN_VERSION, module.compatibility.maxCognibrainVersion) > 0) risks.push(`blocked: supports cognibrain <= ${module.compatibility.maxCognibrainVersion}`);
+  if (!module.security?.permissions?.length) risks.push("warning: module declares no requested permissions");
   if (module.kind === "connector") {
     try {
       validateConnectorManifest(module.manifest as unknown as ConnectorManifest);
@@ -3665,9 +3716,19 @@ function securityScanFor(module: MarketplaceModule): NonNullable<MarketplaceModu
   return {
     scannedAt: new Date().toISOString(),
     status: risks.some((risk) => risk.startsWith("blocked:")) ? "blocked" : risks.length ? "warning" : "passed",
-    permissions: module.kind === "connector" ? ((module.manifest as Partial<ConnectorManifest>).capabilities ?? []) : [module.kind],
+    permissions: module.security?.permissions?.length ? module.security.permissions : module.kind === "connector" ? ((module.manifest as Partial<ConnectorManifest>).capabilities ?? []) : [module.kind],
     risks
   };
+}
+
+function compareVersions(left: string, right: string): number {
+  const leftParts = left.split(".").map((part) => Number(part) || 0);
+  const rightParts = right.split(".").map((part) => Number(part) || 0);
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const diff = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  return 0;
 }
 
 function clampRating(value: number): number {

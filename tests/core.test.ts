@@ -9,6 +9,7 @@ import { MemoryService } from "../src/api/service";
 import { CognibrainClient } from "../src/sdk/client";
 import { AppendOnlyLogPersistenceAdapter } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
+import { runNextgenBenchmarkSuites } from "../src/eval/nextgenBenchmarks";
 
 describe("TypeScript memory core", () => {
   it("retrieves with trust-aware multi-signal ranking", () => {
@@ -939,6 +940,18 @@ describe("TypeScript memory core", () => {
     await client.graphQuery("MATCH (a)-[:mentions]->(b) RETURN a,b", "sdk");
     expect(added.id).toBe("mem_sdk");
     expect(calls.map((call) => call.url)).toEqual(["http://memory.local/memories", "http://memory.local/feedback", "http://memory.local/graph/query"]);
+  });
+
+  it("runs deterministic nextgen benchmark suites", () => {
+    const dir = mkdtempSync(join(tmpdir(), "memory-bench-"));
+    try {
+      const report = runNextgenBenchmarkSuites(join(dir, "nextgen-benchmarks.json"), join(dir, "benchmark-trend.json"));
+      expect(report.passed).toBe(true);
+      expect(report.suites.map((suite) => suite.id)).toEqual(["answer-generation", "multi-hop-temporal", "behavioral-patterns"]);
+      expect(report.trend.points.at(-1)?.meanScore).toBeGreaterThan(0.9);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("validates connector manifests, syncs connector events, retries webhooks, and ingests translated media", () => {

@@ -271,6 +271,7 @@ curl -X POST http://localhost:8787/marketplace/plan \
   -d '{"id":"retrieval-trust-heavy"}'
 curl http://localhost:8787/marketplace
 curl http://localhost:8787/sdk/openapi
+curl http://localhost:8787/benchmarks/trend
 curl -X POST http://localhost:8787/migration/export \
   -H "content-type: application/json" \
   -d '{"target":"managed","backupRef":"local-backup://2026-05","ssoProvider":"oidc","secretManager":"vault"}'
@@ -354,4 +355,4 @@ When the service is configured with a domain module, this endpoint runs the modu
 npm run verify:nextgen
 ```
 
-This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json` and proves graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, connector ingestion, injection-feedback learning, adaptive dream policy, generated observations, prediction reports, security/compliance retention, key rotation, privacy insights, multi-tenant audit, webhook event feeds, and marketplace persona installation.
+This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, deterministic nextgen benchmark suites, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json`; `benchmark:nextgen` writes `artifacts/nextgen-benchmarks.json` plus `artifacts/benchmark-trend.json`. Together they prove graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, connector ingestion, injection-feedback learning, adaptive dream policy, generated observations, prediction reports, security/compliance retention, key rotation, privacy insights, multi-tenant audit, webhook event feeds, and marketplace persona installation.

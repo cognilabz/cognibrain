@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import { defaultService } from "./service";
 import type { ExtractionReport, Memory } from "../core";
@@ -614,6 +615,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/sdk/openapi") {
     send(response, 200, defaultService.apiDescription());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/benchmarks/trend") {
+    const path = url.searchParams.get("path") ?? "artifacts/benchmark-trend.json";
+    send(response, 200, existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : { points: [] });
     return;
   }
 

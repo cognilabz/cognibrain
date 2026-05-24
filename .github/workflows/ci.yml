@@ -19,12 +19,16 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run verify
+      - run: npm run verify:nextgen
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: synthetic-evaluation-report
-          path: artifacts/evaluation-report.json
+          path: |
+            artifacts/evaluation-report.json
+            artifacts/nextgen-eval.json
+            artifacts/nextgen-benchmarks.json
+            artifacts/benchmark-trend.json
           if-no-files-found: ignore
 
   certified-benchmarks:

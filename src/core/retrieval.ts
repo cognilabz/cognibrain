@@ -15,9 +15,13 @@ export class RetrievalEngine {
     const queryEntities = new Set(queryTokens);
     const temporalConstraint = parseTemporalConstraint(options.query, now);
     const userIds = new Set([options.userId, ...((options as SearchOptions & { linkedUserIds?: string[] }).linkedUserIds ?? [])]);
+    const sharedBrainIds = new Set(options.brainIds ?? (options.brainId ? [options.brainId] : []));
     const candidates = this.store.list().filter((memory) => {
-      if (!userIds.has(memory.userId)) return false;
+      const directOrLinkedUser = userIds.has(memory.userId);
+      const sharedBrainCandidate = Boolean(options.includeSharedBrains && memory.brainId && sharedBrainIds.has(memory.brainId));
+      if (!directOrLinkedUser && !sharedBrainCandidate) return false;
       if (options.brainId && memory.brainId && memory.brainId !== options.brainId) return false;
+      if (options.brainIds?.length && memory.brainId && !sharedBrainIds.has(memory.brainId)) return false;
       if (options.sourceId && memory.sourceId && memory.sourceId !== options.sourceId) return false;
       if (!options.includeArchived && memory.archivedAt) return false;
       if (options.agentId && memory.agentId && memory.agentId !== options.agentId) return false;
@@ -271,7 +275,10 @@ function scopeMatches(memory: Memory, options: SearchOptions): boolean {
 function consentAllows(memory: Memory, options: SearchOptions, now: Date): boolean {
   const retentionUntil = memory.consent.retentionUntil ? new Date(memory.consent.retentionUntil) : undefined;
   if (retentionUntil && retentionUntil.getTime() <= now.getTime()) return false;
-  if (memory.consent.visibility === "private") return options.includePrivate === true;
+  const linkedUserIds = (options as SearchOptions & { linkedUserIds?: string[] }).linkedUserIds ?? [];
+  const directOrLinkedUser = memory.userId === options.userId || linkedUserIds.includes(memory.userId);
+  if (memory.consent.visibility === "private") return directOrLinkedUser && options.includePrivate === true;
+  if (memory.consent.visibility === "user") return directOrLinkedUser;
   if (memory.consent.visibility === "org") return !!options.orgId && memory.orgId === options.orgId;
   return true;
 }

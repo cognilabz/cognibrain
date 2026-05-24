@@ -51,6 +51,7 @@ import type {
   MemorySource,
   MarketplaceModule,
   MetricsReport,
+  OfflineOperation,
   PersonaProfile,
   RelationType,
   RetrievalProfile,
@@ -58,6 +59,9 @@ import type {
   RetrievalWeights,
   SearchOptions,
   ReflectionSummarizer,
+  StorageBackendStatus,
+  SyncReport,
+  ConsentPolicy,
   BehavioralPatternReport,
   TemporalQueryReport,
   TimelineSummaryReport,
@@ -120,6 +124,7 @@ export class MemoryService {
   private webhooks = new Map<string, WebhookRegistration>();
   private webhookDeliveries: WebhookDelivery[] = [];
   private marketplaceModules = new Map<string, MarketplaceModule>();
+  private offlineOperations: OfflineOperation[] = [];
   private searchEvents: Array<{
     timestamp: string;
     userId: string;
@@ -183,7 +188,9 @@ export class MemoryService {
   private readonly defaultSummarizer?: ReflectionSummarizer;
 
   add(input: MemoryInput) {
-    const enriched = this.domainModule?.enrich ? this.domainModule.enrich(input) : input;
+    const sourceDefaultConsent = input.sourceId ? this.sources.get(input.sourceId)?.defaultConsent : undefined;
+    const scopedInput = sourceDefaultConsent ? { ...input, consent: { ...sourceDefaultConsent, ...(input.consent ?? {}) } } : input;
+    const enriched = this.domainModule?.enrich ? this.domainModule.enrich(scopedInput) : scopedInput;
     this.ensureScopedAccess(enriched);
     const checked = applyRedactionPolicy(enriched, this.redactionPolicy);
     if (checked.rejected || !checked.input) {
@@ -251,8 +258,9 @@ export class MemoryService {
   }
 
   update(id: string, patch: Partial<MemoryInput>) {
+    const before = this.store.get(id);
     const memory = this.store.update(id, patch);
-    this.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id });
+    this.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { before, after: memory } });
     this.afterWrite(memory.userId);
     return memory;
   }
@@ -260,7 +268,7 @@ export class MemoryService {
   delete(id: string) {
     const memory = this.store.get(id);
     const deleted = this.store.delete(id);
-    if (deleted) this.recordAudit("memory.delete", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id });
+    if (deleted) this.recordAudit("memory.delete", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { before: memory } });
     if (deleted) this.afterWrite(memory.userId);
     return deleted;
   }
@@ -268,8 +276,10 @@ export class MemoryService {
   search(options: SearchOptions) {
     const profile = options.profileId ? this.retrievalProfiles.get(options.profileId) : this.profileFor(options);
     const linkedUserIds = options.includeLinkedIdentities ? this.identities.resolve(options.userId).filter((id) => id !== options.userId) : [];
+    const federatedBrainIds = options.includeSharedBrains ? options.brainIds ?? this.accessibleBrainIds(options) : options.brainIds;
     const results = this.retrieval.search({
       ...options,
+      brainIds: federatedBrainIds,
       linkedUserIds,
       weights: options.weights ?? profile?.weights,
       reranker: options.reranker ?? this.defaultReranker,
@@ -388,6 +398,113 @@ export class MemoryService {
 
   listSources(brainId?: string): MemorySource[] {
     return [...this.sources.values()].filter((source) => !brainId || source.brainId === brainId).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  storageStatus(): StorageBackendStatus {
+    return {
+      active: this.persistence?.kind ?? "memory",
+      adapters: [
+        {
+          kind: "memory",
+          durable: false,
+          distributedReady: false,
+          transactional: false,
+          notes: ["Process-local adapter for tests and embedded runtimes."]
+        },
+        {
+          kind: "json-file",
+          durable: true,
+          distributedReady: false,
+          transactional: true,
+          notes: ["Atomic snapshot writes for local-first desktop and CLI usage."]
+        },
+        {
+          kind: "append-only-log",
+          durable: true,
+          distributedReady: true,
+          transactional: false,
+          encryptedAppendLog: this.redactionPolicy.mode === "encrypt",
+          notes: ["JSONL snapshots can be tailed, replicated, compacted, or replayed by SQL/cloud adapters."]
+        }
+      ]
+    };
+  }
+
+  auditTrail(filter: { userId?: string; memoryId?: string; type?: AuditEvent["type"] } = {}): AuditEvent[] {
+    return this.auditEvents
+      .filter((event) => !filter.userId || event.userId === filter.userId)
+      .filter((event) => !filter.memoryId || event.memoryId === filter.memoryId)
+      .filter((event) => !filter.type || event.type === filter.type)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  updateConsent(memoryId: string, consent: Partial<ConsentPolicy>): Memory {
+    const before = this.store.get(memoryId);
+    const memory = this.store.update(memoryId, { consent });
+    this.recordAudit("memory.consent", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId, metadata: { before, after: memory, beforeConsent: before.consent, afterConsent: memory.consent } });
+    this.persist();
+    return memory;
+  }
+
+  revertMemory(memoryId: string, auditEventId?: string): Memory {
+    const candidates = this.auditEvents
+      .filter((event) => event.memoryId === memoryId && (event.type === "memory.update" || event.type === "memory.consent" || event.type === "memory.delete"))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const event = auditEventId ? candidates.find((candidate) => candidate.id === auditEventId) : candidates[0];
+    const before = event?.metadata?.before as Memory | undefined;
+    if (!event || !before) throw new Error(`No revert snapshot found for memory ${memoryId}`);
+    const restored = this.restoreMemorySnapshot(before);
+    this.recordAudit("memory.revert", { userId: restored.userId, brainId: restored.brainId, sourceId: restored.sourceId, memoryId, metadata: { revertedEventId: event.id } });
+    this.persist();
+    return restored;
+  }
+
+  queueOfflineOperation(input: Omit<OfflineOperation, "id" | "occurredAt" | "status"> & { id?: string; occurredAt?: Date | string; status?: OfflineOperation["status"] }): OfflineOperation {
+    const operation: OfflineOperation = {
+      ...input,
+      id: input.id ?? `op_${contentHash(`${input.type}:${input.userId}:${input.clientMutationId ?? Date.now()}`).slice(2)}`,
+      occurredAt: input.occurredAt ?? new Date().toISOString(),
+      status: input.status ?? "queued"
+    };
+    this.offlineOperations.push(operation);
+    this.recordAudit("sync.queue", { userId: operation.userId, memoryId: operation.memoryId, metadata: { operationId: operation.id, type: operation.type } });
+    this.persist();
+    return operation;
+  }
+
+  syncOfflineOperations(): SyncReport {
+    const applied: OfflineOperation[] = [];
+    const conflicts: OfflineOperation[] = [];
+    const failed: OfflineOperation[] = [];
+    const remaining: OfflineOperation[] = [];
+    for (const operation of this.offlineOperations) {
+      if (operation.status !== "queued") {
+        remaining.push(operation);
+        continue;
+      }
+      const resolved = this.applyOfflineOperation(operation);
+      if (resolved.status === "applied") applied.push(resolved);
+      else if (resolved.status === "conflict") conflicts.push(resolved);
+      else failed.push(resolved);
+      if (resolved.status !== "applied") remaining.push(resolved);
+    }
+    this.offlineOperations = remaining;
+    const report: SyncReport = {
+      generatedAt: new Date().toISOString(),
+      applied,
+      conflicts,
+      failed,
+      remaining: [...this.offlineOperations]
+    };
+    this.recordAudit("sync.run", { metadata: { applied: applied.length, conflicts: conflicts.length, failed: failed.length, remaining: remaining.length } });
+    this.persist();
+    return report;
+  }
+
+  syncStatus(): { queued: OfflineOperation[]; counts: Record<OfflineOperation["status"], number> } {
+    const counts: Record<OfflineOperation["status"], number> = { queued: 0, applied: 0, conflict: 0, failed: 0 };
+    for (const operation of this.offlineOperations) counts[operation.status] += 1;
+    return { queued: [...this.offlineOperations], counts };
   }
 
   registerAgent(input: Omit<AgentRegistration, "createdAt" | "updatedAt">): AgentRegistration {
@@ -904,12 +1021,73 @@ export class MemoryService {
       if (!source) throw new Error(`Source not found: ${input.sourceId}`);
       if (input.brainId && source.brainId !== input.brainId) throw new Error(`Source ${input.sourceId} is not part of brain ${input.brainId}`);
     }
-    if (input.brainId && !this.brains.has(input.brainId)) throw new Error(`Brain not found: ${input.brainId}`);
+    if (input.brainId) {
+      const brain = this.brains.get(input.brainId);
+      if (!brain) throw new Error(`Brain not found: ${input.brainId}`);
+      const member = brain.ownerUserId === input.userId || brain.memberUserIds?.includes(input.userId);
+      const agentAllowed = Boolean(input.agentId && (brain.allowedAgentIds?.includes(input.agentId) || this.agents.get(input.agentId)?.permissions.includes("admin")));
+      if (!member && !agentAllowed && brain.visibility !== "public") throw new Error(`User ${input.userId} cannot write to brain ${input.brainId}`);
+    }
     if (input.agentId) {
       const agent = this.agents.get(input.agentId);
       if (agent && input.brainId && !agent.brainIds.includes(input.brainId) && !agent.permissions.includes("admin")) {
         throw new Error(`Agent ${input.agentId} cannot write to brain ${input.brainId}`);
       }
+    }
+  }
+
+  private accessibleBrainIds(options: SearchOptions): string[] {
+    return [...this.brains.values()]
+      .filter((brain) => {
+        if (brain.id === options.brainId) return true;
+        if (brain.ownerUserId === options.userId || brain.memberUserIds?.includes(options.userId)) return true;
+        if (options.agentId && brain.allowedAgentIds?.includes(options.agentId)) return true;
+        if (brain.visibility === "org") return Boolean(options.orgId && brain.orgId === options.orgId);
+        return brain.visibility === "public";
+      })
+      .map((brain) => brain.id);
+  }
+
+  private restoreMemorySnapshot(snapshot: Memory): Memory {
+    const restored = {
+      ...snapshot,
+      createdAt: new Date(snapshot.createdAt),
+      updatedAt: new Date(),
+      lastAccessedAt: snapshot.lastAccessedAt ? new Date(snapshot.lastAccessedAt) : undefined,
+      archivedAt: snapshot.archivedAt ? new Date(snapshot.archivedAt) : undefined
+    };
+    this.store.import([restored]);
+    const memory = this.store.get(restored.id);
+    this.entities.ingest(memory);
+    return memory;
+  }
+
+  private applyOfflineOperation(operation: OfflineOperation): OfflineOperation {
+    try {
+      if (operation.type === "add") {
+        if (!operation.input) return { ...operation, status: "failed", reason: "add operation requires input" };
+        const memory = this.add({ ...operation.input, userId: operation.input.userId ?? operation.userId });
+        return { ...operation, status: "applied", appliedMemoryId: memory.id, conflictResolution: "add_only" };
+      }
+      if (!operation.memoryId) return { ...operation, status: "failed", reason: `${operation.type} operation requires memoryId` };
+      const current = safeGet(this.store, operation.memoryId);
+      if (!current) return { ...operation, status: "conflict", conflictResolution: "manual_review", reason: "target memory was not found" };
+      const occurredAt = new Date(operation.occurredAt).getTime();
+      if (new Date(current.updatedAt).getTime() > occurredAt && operation.type !== "delete") {
+        return { ...operation, status: "conflict", conflictResolution: "manual_review", reason: "server memory changed after offline operation" };
+      }
+      if (operation.type === "update") {
+        this.update(operation.memoryId, operation.patch ?? {});
+        return { ...operation, status: "applied", appliedMemoryId: operation.memoryId, conflictResolution: "last_write_wins" };
+      }
+      if (operation.type === "consent") {
+        this.updateConsent(operation.memoryId, operation.consent ?? {});
+        return { ...operation, status: "applied", appliedMemoryId: operation.memoryId, conflictResolution: "last_write_wins" };
+      }
+      this.delete(operation.memoryId);
+      return { ...operation, status: "applied", appliedMemoryId: operation.memoryId, conflictResolution: "delete_wins" };
+    } catch (error) {
+      return { ...operation, status: "failed", reason: error instanceof Error ? error.message : "unknown sync failure" };
     }
   }
 
@@ -976,6 +1154,7 @@ export class MemoryService {
     this.webhooks = new Map((raw.webhooks ?? []).map((webhook) => [webhook.id, webhook]));
     this.webhookDeliveries = raw.webhookDeliveries ?? [];
     this.marketplaceModules = new Map((raw.marketplaceModules ?? []).map((module) => [module.id, module]));
+    this.offlineOperations = raw.offlineOperations ?? [];
     this.store.import(raw.memories ?? []);
     for (const memory of this.store.list()) this.entities.ingest(memory);
   }
@@ -1000,7 +1179,8 @@ export class MemoryService {
       auditEvents: this.auditEvents,
       webhooks: [...this.webhooks.values()],
       webhookDeliveries: this.webhookDeliveries,
-      marketplaceModules: [...this.marketplaceModules.values()]
+      marketplaceModules: [...this.marketplaceModules.values()],
+      offlineOperations: this.offlineOperations
     };
     this.persistence.save(payload);
   }

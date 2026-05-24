@@ -48,6 +48,17 @@ export function runNextgenEvaluation() {
     relations: [{ type: "imports", sourceEntity: "cacheclient", targetEntity: "redisadapter", confidence: 0.89 }],
     source: { kind: "reviewed_code", confidence: 0.96 }
   });
+  const federationProof = service.add({
+    brainId: brain.id,
+    sourceId: source.id,
+    userId: "bench",
+    agentId: "agent-bench",
+    orgId: "org-bench",
+    content: "Shared team brain publishes active release architecture notes.",
+    entities: ["release architecture", "team brain"],
+    consent: { visibility: "org" },
+    source: { kind: "human", confidence: 0.96 }
+  });
   for (const timestamp of ["2026-05-01T09:00:00.000Z", "2026-05-08T09:00:00.000Z"]) {
     service.add({
       brainId: brain.id,
@@ -90,8 +101,27 @@ export function runNextgenEvaluation() {
   const behavioralSearch = service.search({ userId: "bench", query: "Friday graph review habit", weights: { behavioral: 1, semantic: 0, keyword: 0, entity: 0, temporal: 0, trust: 0, graph: 0, access: 0 } });
   const entities = service.entityCatalog("bench");
   service.promoteSharedMemory(atlas.id, "org-bench");
+  const federated = service.search({ userId: "bench-peer", orgId: "org-bench", query: "release architecture", includeSharedBrains: true, brainIds: [brain.id] });
+  const storage = service.storageStatus();
+  const consented = service.updateConsent(atlas.id, { visibility: "public", allowTraining: true });
+  service.update(atlas.id, { content: "Atlas temporarily used a stale cache note." });
+  const reverted = service.revertMemory(atlas.id);
+  service.queueOfflineOperation({
+    type: "add",
+    userId: "bench",
+    input: {
+      brainId: brain.id,
+      sourceId: source.id,
+      userId: "bench",
+      orgId: "org-bench",
+      content: "Offline benchmark note syncs through the local queue.",
+      source: { kind: "human", confidence: 0.9 }
+    }
+  });
+  const sync = service.syncOfflineOperations();
   const compliance = service.complianceReport(new Date("2026-01-01T00:00:00.000Z"));
   const events = service.eventFeed();
+  const audit = service.auditTrail({ memoryId: atlas.id });
 
   checks.push({
     id: "graph-inference",
@@ -115,8 +145,20 @@ export function runNextgenEvaluation() {
   });
   checks.push({
     id: "multi-tenant-audit",
-    passed: compliance.totals.brains === 1 && compliance.totals.sources === 1 && (compliance.auditByType["memory.write"] ?? 0) >= 1,
-    detail: `${compliance.totals.auditEvents} audit events`
+    passed:
+      compliance.totals.brains === 1 &&
+      compliance.totals.sources === 1 &&
+      (compliance.auditByType["memory.write"] ?? 0) >= 1 &&
+      federated.some((result) => result.memory.id === federationProof.id) &&
+      audit.some((event) => event.type === "memory.revert") &&
+      consented.consent.visibility === "public" &&
+      reverted.content.includes("CacheClient"),
+    detail: `${compliance.totals.auditEvents} audit events, ${federated.length} federated results`
+  });
+  checks.push({
+    id: "offline-storage-sync",
+    passed: sync.applied.length === 1 && sync.remaining.length === 0 && storage.adapters.some((adapter) => adapter.kind === "append-only-log" && adapter.distributedReady),
+    detail: `${sync.applied.length} sync operations applied through ${storage.active}`
   });
   checks.push({
     id: "webhook-event-feed",

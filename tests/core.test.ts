@@ -816,6 +816,73 @@ describe("TypeScript memory core", () => {
     expect(compliance.auditByType["memory.write"]).toBeGreaterThan(0);
   });
 
+  it("enforces brain membership, explicit shared-brain federation, consent updates, audit revert, storage status, and offline sync", () => {
+    const service = new MemoryService();
+    const brain = service.createBrain({
+      name: "Federated Brain",
+      ownerUserId: "owner",
+      memberUserIds: ["member"],
+      orgId: "org1",
+      visibility: "team",
+      consentRequired: true
+    });
+    const source = service.createSource({ brainId: brain.id, name: "Team Docs", kind: "docs", defaultConsent: { visibility: "org" } });
+
+    expect(() =>
+      service.add({
+        brainId: brain.id,
+        sourceId: source.id,
+        userId: "outsider",
+        orgId: "org1",
+        content: "Outsider should not write to a team brain.",
+        source: { kind: "human", confidence: 0.9 }
+      })
+    ).toThrow(/cannot write/);
+
+    const shared = service.add({
+      brainId: brain.id,
+      sourceId: source.id,
+      userId: "owner",
+      orgId: "org1",
+      content: "Federated brain keeps release architecture notes.",
+      entities: ["federated brain", "release architecture"],
+      source: { kind: "human", confidence: 0.95 }
+    });
+
+    expect(service.search({ userId: "member", orgId: "org1", query: "release architecture", includeSharedBrains: false })).toHaveLength(0);
+    expect(service.search({ userId: "member", orgId: "org1", query: "release architecture", includeSharedBrains: true, brainIds: [brain.id] })[0].memory.id).toBe(shared.id);
+
+    const consented = service.updateConsent(shared.id, { visibility: "public", allowTraining: true });
+    expect(consented.consent.visibility).toBe("public");
+    expect(service.auditTrail({ memoryId: shared.id }).some((event) => event.type === "memory.consent")).toBe(true);
+
+    service.update(shared.id, { content: "Federated brain keeps outdated release notes." });
+    const reverted = service.revertMemory(shared.id);
+    expect(reverted.content).toContain("release architecture notes");
+    expect(service.auditTrail({ memoryId: shared.id }).some((event) => event.type === "memory.revert")).toBe(true);
+
+    const storage = service.storageStatus();
+    expect(storage.adapters.some((adapter) => adapter.kind === "append-only-log" && adapter.distributedReady)).toBe(true);
+
+    const queued = service.queueOfflineOperation({
+      type: "add",
+      userId: "member",
+      input: {
+        brainId: brain.id,
+        sourceId: source.id,
+        userId: "member",
+        orgId: "org1",
+        content: "Offline sync captured member deployment note.",
+        source: { kind: "human", confidence: 0.9 }
+      }
+    });
+    expect(queued.status).toBe("queued");
+    const sync = service.syncOfflineOperations();
+    expect(sync.applied).toHaveLength(1);
+    expect(sync.remaining).toHaveLength(0);
+    expect(service.search({ userId: "member", orgId: "org1", query: "deployment note" })[0].memory.content).toContain("Offline sync");
+  });
+
   it("queries temporal intervals and mines recurring behavioural patterns for retrieval", () => {
     const service = new MemoryService();
     for (const timestamp of ["2026-05-01T09:00:00.000Z", "2026-05-08T09:00:00.000Z", "2026-05-15T09:00:00.000Z"]) {

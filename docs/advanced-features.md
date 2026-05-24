@@ -20,7 +20,7 @@ The entity catalog exposes canonical records, suggested merges, and attention-ra
 
 ## Scopes
 
-Each memory can carry `userId`, `agentId`, `sessionId`, `appId`, `orgId`, `projectId`, `deviceId`, and `runId`. Search composes these scopes so a harness can isolate a session, aggregate across an app, or include organization-shared memory only when policy allows it. Identity links are explicit consent records that store only a hashed subject token and allow cross-device recall only when callers opt into linked identities.
+Each memory can carry `userId`, `agentId`, `sessionId`, `appId`, `orgId`, `projectId`, `deviceId`, and `runId`. Search composes these scopes so a harness can isolate a session, aggregate across an app, or include organization-shared memory only when policy allows it. Brains now carry owner, member, organization, visibility, and allowed-agent metadata. Shared-brain retrieval requires callers to opt in with `includeSharedBrains` and a brain allow-list, and private/user-only memories stay hidden unless identity or org consent allows access. Identity links are explicit consent records that store only a hashed subject token and allow cross-device recall only when callers opt into linked identities.
 
 ## Privacy And Feedback
 
@@ -48,15 +48,21 @@ Retrieval fuses graph evidence from direct shared entities, typed relation paths
 
 ## Brains, Sources, Agents, And Marketplace
 
-Brains are first-class logical memory databases, and sources are content repositories inside a brain. Memories can now carry `brainId` and `sourceId`, while agents register namespaces, permissions, and optional personas before writing. The service enforces brain/source existence and agent write permissions, which is the foundation for team memories, cross-brain federation, and multi-agent collaboration.
+Brains are first-class logical memory databases, and sources are content repositories inside a brain. Memories can now carry `brainId` and `sourceId`, while agents register namespaces, permissions, and optional personas before writing. The service enforces brain/source existence, owner/member write access, agent allow-lists, source default consent, and explicit shared-brain federation, which is the foundation for team memories, cross-brain federation, and multi-agent collaboration.
 
 The local marketplace registry stores connectors, domain modules, personas, and retrieval profiles. Installing a persona module materializes it into the persona registry so setup flows and dashboards can preview modules before applying them.
 
 ## Audit, Webhooks, And Compliance
 
-Every core action records an append-only audit event: memory write/update/delete/share, extraction, search, reflection, webhook registration, marketplace installation, inference, and entity merge/split operations. Webhook registrations produce queued delivery records for matching audit events, creating an inspectable event-feed boundary before real network delivery is enabled.
+Every core action records an append-only audit event: memory write/update/delete/share, consent updates, memory revert, extraction, search, reflection, sync queue/replay, webhook registration, marketplace installation, inference, and entity merge/split operations. `auditTrail()` and `/audit` filter those events by user, memory, or type. Update/delete/consent events capture before/after snapshots so `revertMemory()` can restore a previous memory without hand-editing storage. Webhook registrations produce queued delivery records for matching audit events, creating an inspectable event-feed boundary before real network delivery is enabled.
 
 Compliance reports summarize memory counts, brain/source counts, consent visibility, encrypted entries, expired retention entries, delete-on-request flags, and audit counts by type. This gives operators a concrete exportable control surface instead of a policy note buried in documentation.
+
+## Offline Sync And Storage
+
+`storageStatus()` exposes the active adapter and the supported local-first backend contracts: in-memory for tests, atomic JSON snapshots for desktop/CLI, and append-only JSONL for replayable durable logs. The append-only mode is distributed-ready at the boundary because hosted SQL or cloud adapters can consume and compact the same payload contract.
+
+Offline clients can queue add/update/delete/consent operations with `queueOfflineOperation()` or `/sync/offline-operations`. `syncOfflineOperations()` preserves add-only writes, applies updates only when the server copy has not changed since the offline timestamp, and returns manual-review conflicts instead of silently overwriting newer facts.
 
 ## Trust and Provenance
 

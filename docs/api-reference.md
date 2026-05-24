@@ -158,6 +158,21 @@ Profiles store normalized weights with provenance. The learning endpoint derives
 curl -X POST http://localhost:8787/identity-links \
   -H "content-type: application/json" \
   -d '{"primaryUserId":"device-b","linkedUserId":"device-a","consentToken":"user-approved-token"}'
+curl -X POST http://localhost:8787/search \
+  -H "content-type: application/json" \
+  -d '{"userId":"teammate","orgId":"org-1","query":"release architecture","includeSharedBrains":true,"brainIds":["brain_team"]}'
+curl -X POST http://localhost:8787/memories/mem_123/consent \
+  -H "content-type: application/json" \
+  -d '{"visibility":"public","allowTraining":true}'
+curl "http://localhost:8787/audit?memoryId=mem_123"
+curl -X POST http://localhost:8787/memories/mem_123/revert \
+  -H "content-type: application/json" \
+  -d '{}'
+curl http://localhost:8787/storage
+curl -X POST http://localhost:8787/sync/offline-operations \
+  -H "content-type: application/json" \
+  -d '{"type":"add","userId":"local","input":{"userId":"local","content":"Offline note captured before reconnecting."}}'
+curl -X POST http://localhost:8787/sync/run
 curl http://localhost:8787/timeline/dev
 curl -X POST http://localhost:8787/timeline/dev/summarize \
   -H "content-type: application/json" \
@@ -179,7 +194,7 @@ curl -X POST http://localhost:8787/lifecycle/preview \
   -d '{"userId":"dev","policy":{"archiveAfterDays":30}}'
 ```
 
-Identity links require an explicit consent token and store only a hash of that token. Timelines expose event time, validity windows, supersession metadata, and hour/day/week/month period groupings. Timeline summarization can return deterministic or provider-backed summaries and optionally persist auditable reflection memories with `summaryOf` provenance. Temporal interval queries consider event and validity windows, then return filtered events plus changed entities. Pattern reports include reviewed dream patterns, deterministic recurring weekday/entity/tag patterns, sequence patterns, confidence, and false-positive risk for operator approval. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, spreading activation, safe graph-query matches, configurable rule-based inferred relations, and filtered JSON/GraphML exports. Path edges include confidence, trust, timestamp, source and memory provenance. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
+Identity links require an explicit consent token and store only a hash of that token. Shared-brain retrieval is opt-in via `includeSharedBrains` and `brainIds`, then still respects consent and org visibility. `/storage` reports active and available persistence adapters. `/sync/*` lets offline clients queue add/update/delete/consent operations, replay them, and inspect conflicts. `/audit` exposes filtered provenance logs, and memory revert restores the last captured write/update/delete/consent snapshot. Timelines expose event time, validity windows, supersession metadata, and hour/day/week/month period groupings. Timeline summarization can return deterministic or provider-backed summaries and optionally persist auditable reflection memories with `summaryOf` provenance. Temporal interval queries consider event and validity windows, then return filtered events plus changed entities. Pattern reports include reviewed dream patterns, deterministic recurring weekday/entity/tag patterns, sequence patterns, confidence, and false-positive risk for operator approval. The graph endpoints expose canonical entities, aliases, typed relation edges, ranked connection paths, spreading activation, safe graph-query matches, configurable rule-based inferred relations, and filtered JSON/GraphML exports. Path edges include confidence, trust, timestamp, source and memory provenance. Lifecycle preview reports keep/fade/archive/protect actions without mutating memory state.
 
 ## Events, Webhooks, Marketplace, And Compliance
 
@@ -188,6 +203,7 @@ curl -X POST http://localhost:8787/webhooks \
   -H "content-type: application/json" \
   -d '{"url":"https://example.invalid/memory","events":["memory.write","inference.run"]}'
 curl http://localhost:8787/events
+curl "http://localhost:8787/audit?type=sync.run"
 curl -X POST http://localhost:8787/marketplace/install \
   -H "content-type: application/json" \
   -d '{"id":"persona-researcher","kind":"persona","name":"Researcher","version":"1.0.0","description":"Citation-heavy defaults","manifest":{"id":"researcher","label":"Researcher","summaryStyle":"descriptive"}}'
@@ -195,7 +211,7 @@ curl http://localhost:8787/marketplace
 curl http://localhost:8787/compliance
 ```
 
-Every write/update/delete/search/extract/reflect/share/inference/entity-merge/entity-split operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Compliance reports summarize storage scope, consent, retention, delete-on-request, encryption metadata, and audit counts.
+Every write/update/delete/search/extract/reflect/share/inference/entity-merge/entity-split/consent/revert/sync operation records an audit event. Webhooks are queued as local delivery records so operators can inspect retries before enabling real network delivery. Marketplace installs persist module metadata and can materialize personas. Compliance reports summarize storage scope, consent, retention, delete-on-request, encryption metadata, and audit counts.
 
 ## Reflection
 

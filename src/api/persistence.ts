@@ -12,6 +12,7 @@ import type {
   Memory,
   MemorySource,
   MetricsReport,
+  OfflineOperation,
   PersonaProfile,
   RetrievalProfile,
   RetrievalTrainingSample,
@@ -40,6 +41,7 @@ export interface PersistedMemoryFile {
   webhooks?: WebhookRegistration[];
   webhookDeliveries?: WebhookDelivery[];
   marketplaceModules?: MarketplaceModule[];
+  offlineOperations?: OfflineOperation[];
 }
 
 export interface MemoryPersistenceAdapter {

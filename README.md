@@ -45,7 +45,7 @@ It is designed for teams that care about:
 - ranked evidence with citations and trust signals,
 - graph-native path explanation and rule-based inferred relations,
 - brain/source/agent/persona primitives for multi-agent team memory,
-- pluggable storage with atomic JSON snapshots or append-only JSONL audit logs,
+- pluggable storage with atomic JSON snapshots, append-only JSONL logs, storage introspection, and offline sync replay,
 - audit, webhook, marketplace, and compliance surfaces,
 - lifecycle maintenance for stale or contradictory facts,
 - clear integration surfaces for coding agents and AI workflows,
@@ -194,7 +194,7 @@ The `dream` cycle is the self-maintenance loop for the memory store:
 
 Pinned memories are never faded or archived.
 
-The current runtime also supports configurable and learned retrieval profiles, behavioural retrieval scoring, graph path/activation/export reasoning, JSON-command intelligence adapters, deterministic fallback reranking, verifier/summarizer/classifier/extractor providers, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), explicit identity links, privacy consent flags, secret redaction/encryption, canonical entity records with merge/split suggestions, typed relations, staged add-only extraction with media/language envelopes, enrichment candidates, hour/day/week/month temporal timelines, persisted timeline summaries, multilingual contradiction checks, behavioral-pattern review, feedback-based trust/importance updates, domain evaluations, local metrics, lifecycle preview, and export/delete APIs.
+The current runtime also supports configurable and learned retrieval profiles, behavioural retrieval scoring, graph path/activation/export reasoning, JSON-command intelligence adapters, deterministic fallback reranking, verifier/summarizer/classifier/extractor providers, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), multi-tenant brains/sources with explicit shared-brain federation, consent mutation, audit history and revert, offline operation queues, explicit identity links, privacy consent flags, secret redaction/encryption, canonical entity records with merge/split suggestions, typed relations, staged add-only extraction with media/language envelopes, enrichment candidates, hour/day/week/month temporal timelines, persisted timeline summaries, multilingual contradiction checks, behavioral-pattern review, feedback-based trust/importance updates, domain evaluations, local metrics, lifecycle preview, and export/delete APIs.
 
 ## Connectors
 

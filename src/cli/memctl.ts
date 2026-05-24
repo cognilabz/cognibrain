@@ -53,7 +53,16 @@ switch (command) {
   case "search": {
     const query = args.join(" ");
     if (!query) fail("Usage: memctl search <query>");
-    const results = service.search({ userId, query, limit: 5, profileId: process.env.MEMORY_PROFILE_ID, includeLinkedIdentities: process.env.MEMORY_INCLUDE_LINKED === "true" });
+    const results = service.search({
+      userId,
+      query,
+      limit: 5,
+      profileId: process.env.MEMORY_PROFILE_ID,
+      includeLinkedIdentities: process.env.MEMORY_INCLUDE_LINKED === "true",
+      includeSharedBrains: process.env.MEMORY_INCLUDE_SHARED_BRAINS === "true",
+      brainIds: process.env.MEMORY_BRAIN_IDS ? process.env.MEMORY_BRAIN_IDS.split(",").map((item) => item.trim()).filter(Boolean) : undefined,
+      orgId: process.env.MEMORY_ORG_ID
+    });
     console.log(
       results
         .map((result, index) => `${index + 1}. ${result.score.toFixed(2)} ${result.memory.content}\n   ${result.citation}`)
@@ -226,8 +235,66 @@ switch (command) {
     console.log(JSON.stringify(service.eventFeed(), null, 2));
     break;
   }
+  case "audit": {
+    console.log(JSON.stringify(service.auditTrail({ memoryId: args[0], userId: process.env.MEMORY_AUDIT_USER_ID }), null, 2));
+    break;
+  }
   case "compliance": {
     console.log(JSON.stringify(service.complianceReport(), null, 2));
+    break;
+  }
+  case "storage": {
+    console.log(JSON.stringify(service.storageStatus(), null, 2));
+    break;
+  }
+  case "consent": {
+    const [memoryId, visibility] = args;
+    if (!memoryId || !["private", "user", "org", "public"].includes(visibility)) fail("Usage: memctl consent <memory-id> <private|user|org|public>");
+    console.log(JSON.stringify(service.updateConsent(memoryId, { visibility: visibility as "private" | "user" | "org" | "public" }), null, 2));
+    break;
+  }
+  case "revert": {
+    const [memoryId, auditEventId] = args;
+    if (!memoryId) fail("Usage: memctl revert <memory-id> [audit-event-id]");
+    console.log(JSON.stringify(service.revertMemory(memoryId, auditEventId), null, 2));
+    break;
+  }
+  case "offline-add": {
+    const content = args.join(" ");
+    if (!content) fail("Usage: memctl offline-add <content>");
+    console.log(
+      JSON.stringify(
+        service.queueOfflineOperation({
+          type: "add",
+          userId,
+          clientMutationId: process.env.MEMORY_CLIENT_MUTATION_ID,
+          input: {
+            userId,
+            content,
+            brainId: process.env.MEMORY_BRAIN_ID,
+            sourceId: process.env.MEMORY_SOURCE_ID,
+            orgId: process.env.MEMORY_ORG_ID,
+            source: { kind: "human", confidence: 0.9 }
+          }
+        }),
+        null,
+        2
+      )
+    );
+    break;
+  }
+  case "offline-update": {
+    const [memoryId, ...contentParts] = args;
+    if (!memoryId || contentParts.length === 0) fail("Usage: memctl offline-update <memory-id> <content>");
+    console.log(JSON.stringify(service.queueOfflineOperation({ type: "update", userId, memoryId, patch: { content: contentParts.join(" ") } }), null, 2));
+    break;
+  }
+  case "sync": {
+    console.log(JSON.stringify(service.syncOfflineOperations(), null, 2));
+    break;
+  }
+  case "sync-status": {
+    console.log(JSON.stringify(service.syncStatus(), null, 2));
     break;
   }
   case "lifecycle-preview": {
@@ -243,7 +310,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|brain-create|brains|source-create|events|compliance|lifecycle-preview|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|search|reflect|dream|health|maintenance|feedback|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-merge|entity-split|graph-path|graph-activate|graph-export|graph-query|infer|brain-create|brains|source-create|events|audit|compliance|storage|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|export|delete-user> ...");
 }
 
 function fail(message: string): never {

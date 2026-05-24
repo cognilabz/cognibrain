@@ -139,6 +139,7 @@ export interface Memory {
 
 export interface SearchOptions {
   brainId?: string;
+  brainIds?: string[];
   sourceId?: string;
   userId: string;
   agentId?: string;
@@ -156,6 +157,7 @@ export interface SearchOptions {
   weights?: Partial<RetrievalWeights>;
   includePrivate?: boolean;
   includeLinkedIdentities?: boolean;
+  includeSharedBrains?: boolean;
   linkedUserIds?: string[];
   profileId?: string;
   verifier?: ContextVerifier;
@@ -369,6 +371,8 @@ export interface Brain {
   id: string;
   name: string;
   ownerUserId: string;
+  memberUserIds?: string[];
+  allowedAgentIds?: string[];
   orgId?: string;
   visibility: "private" | "team" | "org" | "public";
   createdAt: Date | string;
@@ -416,9 +420,13 @@ export interface AuditEvent {
     | "memory.update"
     | "memory.delete"
     | "memory.share"
+    | "memory.revert"
+    | "memory.consent"
     | "extract.run"
     | "reflect.run"
     | "search.run"
+    | "sync.queue"
+    | "sync.run"
     | "webhook.register"
     | "marketplace.install"
     | "inference.run"
@@ -431,6 +439,42 @@ export interface AuditEvent {
   memoryId?: string;
   timestamp: Date | string;
   metadata?: Record<string, unknown>;
+}
+
+export interface StorageBackendStatus {
+  active: string;
+  adapters: Array<{
+    kind: string;
+    durable: boolean;
+    distributedReady: boolean;
+    transactional: boolean;
+    encryptedAppendLog?: boolean;
+    notes: string[];
+  }>;
+}
+
+export interface OfflineOperation {
+  id: string;
+  type: "add" | "update" | "delete" | "consent";
+  userId: string;
+  memoryId?: string;
+  clientMutationId?: string;
+  occurredAt: Date | string;
+  status: "queued" | "applied" | "conflict" | "failed";
+  conflictResolution?: "add_only" | "last_write_wins" | "delete_wins" | "manual_review";
+  input?: MemoryInput;
+  patch?: Partial<MemoryInput>;
+  consent?: Partial<ConsentPolicy>;
+  reason?: string;
+  appliedMemoryId?: string;
+}
+
+export interface SyncReport {
+  generatedAt: Date | string;
+  applied: OfflineOperation[];
+  conflicts: OfflineOperation[];
+  failed: OfflineOperation[];
+  remaining: OfflineOperation[];
 }
 
 export interface WebhookRegistration {

@@ -80,6 +80,7 @@ const memoryInputSchema = z.object({
 
 const searchSchema = z.object({
   brainId: z.string().optional(),
+  brainIds: z.array(z.string()).optional(),
   sourceId: z.string().optional(),
   userId: z.string().min(1),
   agentId: z.string().optional(),
@@ -94,6 +95,7 @@ const searchSchema = z.object({
   includeArchived: z.boolean().optional(),
   includePrivate: z.boolean().optional(),
   includeLinkedIdentities: z.boolean().optional(),
+  includeSharedBrains: z.boolean().optional(),
   profileId: z.string().optional(),
   weights: z.record(z.number()).optional(),
   graphDepth: z.number().int().positive().max(8).optional(),
@@ -214,6 +216,8 @@ const brainSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1),
   ownerUserId: z.string().min(1),
+  memberUserIds: z.array(z.string()).optional(),
+  allowedAgentIds: z.array(z.string()).optional(),
   orgId: z.string().optional(),
   visibility: z.enum(["private", "team", "org", "public"]),
   consentRequired: z.boolean().optional()
@@ -249,7 +253,7 @@ const personaSchema = z.object({
 const webhookSchema = z.object({
   id: z.string().optional(),
   url: z.string().url(),
-  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "extract.run", "reflect.run", "search.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
+  events: z.array(z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.revert", "memory.consent", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"])),
   secretRef: z.string().optional()
 });
 
@@ -261,6 +265,27 @@ const marketplaceModuleSchema = z.object({
   description: z.string(),
   installState: z.enum(["available", "installed"]).optional(),
   manifest: z.record(z.unknown())
+});
+
+const auditTypeSchema = z.enum(["memory.write", "memory.update", "memory.delete", "memory.share", "memory.revert", "memory.consent", "extract.run", "reflect.run", "search.run", "sync.queue", "sync.run", "webhook.register", "marketplace.install", "inference.run", "entity.merge", "entity.split"]);
+
+const offlineOperationSchema = z.object({
+  id: z.string().optional(),
+  type: z.enum(["add", "update", "delete", "consent"]),
+  userId: z.string().min(1),
+  memoryId: z.string().optional(),
+  clientMutationId: z.string().optional(),
+  occurredAt: z.string().optional(),
+  input: memoryInputSchema.optional(),
+  patch: memoryInputSchema.partial().optional(),
+  consent: z
+    .object({
+      visibility: z.enum(["private", "user", "org", "public"]).optional(),
+      allowTraining: z.boolean().optional(),
+      retentionUntil: z.string().optional(),
+      deleteOnRequest: z.boolean().optional()
+    })
+    .optional()
 });
 
 export const server = createServer(async (request, response) => {
@@ -428,6 +453,15 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && url.pathname === "/audit") {
+    send(response, 200, defaultService.auditTrail({
+      userId: url.searchParams.get("userId") ?? undefined,
+      memoryId: url.searchParams.get("memoryId") ?? undefined,
+      type: url.searchParams.get("type") ? auditTypeSchema.parse(url.searchParams.get("type")) : undefined
+    }));
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/webhooks") {
     send(response, 201, defaultService.registerWebhook(webhookSchema.parse(await json(request))));
     return;
@@ -445,6 +479,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && url.pathname === "/compliance") {
     send(response, 200, defaultService.complianceReport());
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/storage") {
+    send(response, 200, defaultService.storageStatus());
     return;
   }
 
@@ -504,10 +543,42 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       send(response, 200, serialize(defaultService.update(parts[1], memoryInputSchema.partial().parse(await json(request)))));
       return;
     }
+    if (method === "POST" && parts[2] === "consent") {
+      const body = z
+        .object({
+          visibility: z.enum(["private", "user", "org", "public"]).optional(),
+          allowTraining: z.boolean().optional(),
+          retentionUntil: z.string().optional(),
+          deleteOnRequest: z.boolean().optional()
+        })
+        .parse(await json(request));
+      send(response, 202, serialize(defaultService.updateConsent(parts[1], body)));
+      return;
+    }
+    if (method === "POST" && parts[2] === "revert") {
+      const body = z.object({ auditEventId: z.string().optional() }).parse(await json(request));
+      send(response, 202, serialize(defaultService.revertMemory(parts[1], body.auditEventId)));
+      return;
+    }
     if (method === "DELETE") {
       send(response, defaultService.delete(parts[1]) ? 204 : 404, null);
       return;
     }
+  }
+
+  if (method === "GET" && url.pathname === "/sync/status") {
+    send(response, 200, defaultService.syncStatus());
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/sync/offline-operations") {
+    send(response, 201, defaultService.queueOfflineOperation(offlineOperationSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/sync/run") {
+    send(response, 202, defaultService.syncOfflineOperations());
+    return;
   }
 
   if (method === "POST" && url.pathname === "/search") {

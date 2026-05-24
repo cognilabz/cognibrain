@@ -158,8 +158,13 @@ Durable audit mode appends each saved snapshot to JSONL and reloads the latest v
 MEMORY_STORAGE_BACKEND=jsonl MEMORY_EVENT_LOG_PATH=.memory-harness.jsonl npm run start:local
 ```
 
-Production storage options to add next:
+`GET /storage` and `memctl storage` expose the active backend plus adapter capabilities. The append-only adapter is the compatibility bridge for hosted deployments: SQL or cloud adapters can replay snapshots, compact them, and implement the same `MemoryPersistenceAdapter` contract without changing API callers.
 
-- SQLite for a single-user local daemon,
-- Postgres for team deployment,
-- optional vector index for embeddings.
+Offline clients can queue operations while disconnected and replay them later:
+
+```bash
+MEMORY_USER_ID=dev npm run cli -- offline-add "Captured while offline"
+MEMORY_USER_ID=dev npm run cli -- sync
+```
+
+The sync engine applies add-only writes, uses last-write-wins only when the server copy has not changed since the offline timestamp, and returns manual-review conflicts for stale updates.

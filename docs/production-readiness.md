@@ -6,11 +6,11 @@ cognibrain is ready to present as an open-source, self-hosted Engineering Memory
 
 | Area | Ready today | Required gate |
 | --- | --- | --- |
-| Local install | React/Ink guided setup, CLI, API, dashboard, MCP, harness package generation | `npx cognibrain init`, `./bootstrap.sh --self-hosted`, or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
+| Local install | React/Ink guided setup, CLI, API, dashboard, MCP, harness package generation, connector config, adapter config and skill lifecycle | `npx cognibrain init`, `./bootstrap.sh --self-hosted`, or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
 | Team API | API-key auth, actor ids, policy rules, scoped retrieval, audit events | `MEMORY_REQUIRE_AUTH=true` and `MEMORY_API_KEYS` set before exposing the server |
 | Durable storage | JSON/JSONL, SQLite FTS5, Postgres-compatible CI mode, psql-backed Postgres/Cockroach remote driver | `npm run verify:postgres` against the target Postgres path |
 | Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, Engineering Memory types, coding context packs, action guards, patch evidence trails, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen`, `npm run benchmark:cognicode`, `npm run verify:status`, and `npm run audit:plan1_3` |
-| Connectors | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, real GitHub/Slack/Discord/Jira/Confluence/Notion/Linear vendor drivers, HTTP adapter verifier, vendor driver verifier | `npm run verify:connectors`, `npm run verify:vendor-connectors`, and deployment-specific vendor credential smoke tests |
+| Connectors and adapters | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, real GitHub/Slack/Discord/Jira/Confluence/Notion/Linear vendor drivers, CLI contracts for current product/ops systems, HTTP adapter verifier, vendor driver verifier, provider/storage/media/benchmark/MCP adapter configs | `npm run verify:connectors`, `npm run verify:vendor-connectors`, `npx cognibrain connector doctor`, `npx cognibrain adapter doctor`, and deployment-specific vendor credential smoke tests |
 | Benchmarks | CogniCodeBench, LoCoMo, LongMemEval, BEAM, nextgen, answer-generation, market gate, load artifacts | `npm run benchmark:cognicode`, `npm run benchmark:certified`, `npm run benchmark:market`, and the selected `benchmark:load` profile |
 | Open-source packaging | MIT license, contribution guide, security policy, Docker, Kubernetes, npm package dry-run, Python PyPI-style SDK package | `./bin/cognibrain.mjs doctor --publish`, `npm pack --dry-run`, and Python SDK tests |
 
@@ -53,6 +53,10 @@ Detailed production pages:
 ```bash
 npm install
 npx cognibrain init --profile solo-dev --yes
+npx cognibrain config show --json
+npx cognibrain connector list
+npx cognibrain adapter list
+npx cognibrain skill status
 ./bin/cognibrain.mjs memory add "Atlas releases require npm test before publish."
 ./bin/cognibrain.mjs memory evidence-pack "What should Atlas do before release?"
 ./bin/cognibrain.mjs doctor

@@ -9,16 +9,17 @@ The product is useful when a team keeps seeing the same agent mistake:
 - stale migration advice,
 - ignored review corrections,
 - missing repo-specific architecture rules,
-- scattered knowledge across GitHub, Slack, Jira, Confluence, Notion or Linear.
+- scattered knowledge across GitHub, Slack, Jira, Confluence, Notion, Linear, incident tools or product systems.
 
 ## What You Get
 
 | Surface | What it does |
 | --- | --- |
-| Setup CLI | React/Ink guided setup, self-hosted profiles, connector stubs, harness config and `doctor --fix`. |
+| Setup CLI | React/Ink guided setup, self-hosted profiles, connector stubs, adapter stubs, harness config, skill lifecycle and `doctor --fix`. |
 | Memory runtime | Local API, dashboard, MCP tools and durable storage options. |
 | Agent integrations | Codex, Claude Code, Cursor, Copilot, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI config generation. |
-| Connectors | First-class GitHub, Slack, Discord, Jira, Confluence, Notion and Linear drivers; planned contracts for GitLab, Azure DevOps, Teams and Google apps. |
+| Connectors | First-class GitHub, Slack, Discord, Jira, Confluence, Notion and Linear drivers; planned contracts for GitLab, Azure DevOps, Teams, Google apps, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog. |
+| Adapters | CLI-configured storage, provider intelligence, embedding, media, benchmark and remote MCP adapter contracts. |
 | Proof | Evidence packs, patch evidence trails, CogniCodeBench, Benchmark Arena and release checks. |
 
 ## Fast Path
@@ -26,7 +27,10 @@ The product is useful when a team keeps seeing the same agent mistake:
 ```bash
 npm install
 npx cognibrain init
+npx cognibrain config show --json
 npx cognibrain connector add github
+npx cognibrain adapter add storage-sqlite
+npx cognibrain skill status
 npx cognibrain doctor --fix
 npm run demo:first-win
 ```
@@ -37,6 +41,7 @@ For a team profile:
 npx cognibrain init --profile team
 npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --set project=ENG
 npx cognibrain connector add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
+npx cognibrain adapter add storage-postgres --url-env MEMORY_POSTGRES_URL
 npm run verify:compatibility
 ```
 

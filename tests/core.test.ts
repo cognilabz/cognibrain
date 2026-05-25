@@ -2846,6 +2846,9 @@ describe("TypeScript memory core", () => {
     expect(health.find((item) => item.connectorId === "official-jira")?.externalVendor?.missingEnv).toContain("MEMORY_JIRA_PROJECT");
     expect(health.find((item) => item.connectorId === "official-confluence")?.kind).toBe("docs");
     expect(health.find((item) => item.connectorId === "official-linear")?.kind).toBe("project_management");
+    const planned = service.connectorHealth().filter((item) => ["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"].includes(item.connectorId));
+    expect(planned.map((item) => item.connectorId)).toEqual(expect.arrayContaining(["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"]));
+    expect(planned.every((item) => item.supports.poll && item.supports.writeback)).toBe(true);
   });
 
   it("writes guided init and connector setup state without storing credential values", () => {
@@ -2861,21 +2864,30 @@ describe("TypeScript memory core", () => {
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "add", "github"], { cwd: dir, env, encoding: "utf8" });
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "add", "jira", "--set", "baseUrl=https://example.atlassian.net", "--set", "project=CB", "--email-env", "MEMORY_JIRA_EMAIL", "--token-env", "MEMORY_JIRA_API_TOKEN"], { cwd: dir, env, encoding: "utf8" });
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "add", "gitlab", "--set", "project=cognilabz/cognibrain"], { cwd: dir, env, encoding: "utf8" });
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "adapter", "add", "storage-sqlite", "--set", "path=.cognibrain/memory.sqlite"], { cwd: dir, env, encoding: "utf8" });
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "adapter", "add", "mcp-remote", "--set", "url=https://memory.example.com/mcp", "--token-env", "MEMORY_MCP_REMOTE_TOKEN"], { cwd: dir, env, encoding: "utf8" });
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "doctor", "--fix", "--no-start", "--no-skill"], { cwd: dir, env, encoding: "utf8" });
       const setupPath = join(dir, ".cognibrain", "setup-state.json");
       const connectorPath = join(dir, ".cognibrain", "connectors", "github.json");
       const jiraPath = join(dir, ".cognibrain", "connectors", "jira.json");
       const gitlabPath = join(dir, ".cognibrain", "connectors", "gitlab.json");
+      const sqlitePath = join(dir, ".cognibrain", "adapters", "storage-sqlite.json");
+      const mcpRemotePath = join(dir, ".cognibrain", "adapters", "mcp-remote.json");
       expect(existsSync(setupPath)).toBe(true);
       expect(existsSync(connectorPath)).toBe(true);
       expect(existsSync(jiraPath)).toBe(true);
       expect(existsSync(gitlabPath)).toBe(true);
+      expect(existsSync(sqlitePath)).toBe(true);
+      expect(existsSync(mcpRemotePath)).toBe(true);
       const setup = JSON.parse(readFileSync(setupPath, "utf8"));
       const connector = JSON.parse(readFileSync(connectorPath, "utf8"));
       const jira = JSON.parse(readFileSync(jiraPath, "utf8"));
       const gitlab = JSON.parse(readFileSync(gitlabPath, "utf8"));
+      const sqlite = JSON.parse(readFileSync(sqlitePath, "utf8"));
+      const mcpRemote = JSON.parse(readFileSync(mcpRemotePath, "utf8"));
       expect(setup.profile).toBe("solo-dev");
       expect(setup.metadata.uiFramework).toBe("ink-react");
+      expect(setup.adapters).toContain("storage-sqlite");
       expect(connector.configured).toBe(true);
       expect(connector.requiredEnv.every((item: { valueRef?: string }) => item.valueRef?.startsWith("env:"))).toBe(true);
       expect(jira.settings.baseUrl).toBe("https://example.atlassian.net");
@@ -2883,7 +2895,11 @@ describe("TypeScript memory core", () => {
       expect(jira.settings.tokenEnv).toBe("env:MEMORY_JIRA_API_TOKEN");
       expect(gitlab.status).toBe("planned-contract");
       expect(gitlab.nextSteps.some((step: string) => step.includes("custom connector"))).toBe(true);
-      expect(JSON.stringify({ setup, connector, jira, gitlab })).not.toContain("test-token-should-not-be-written");
+      expect(sqlite.kind).toBe("storage");
+      expect(sqlite.configured).toBe(true);
+      expect(mcpRemote.kind).toBe("transport");
+      expect(mcpRemote.settings.tokenEnv).toBe("env:MEMORY_MCP_REMOTE_TOKEN");
+      expect(JSON.stringify({ setup, connector, jira, gitlab, sqlite, mcpRemote })).not.toContain("test-token-should-not-be-written");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

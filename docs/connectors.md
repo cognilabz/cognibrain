@@ -6,8 +6,11 @@ The CLI is the human and automation surface: install, start, stop, status, healt
 
 ```bash
 npx cognibrain init --profile team
+npx cognibrain config show --json
 npx cognibrain connector add github --set repo=cognilabz/cognibrain
 npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --set project=ENG
+npx cognibrain adapter add storage-postgres --url-env MEMORY_POSTGRES_URL
+npx cognibrain skill status
 npx cognibrain doctor --fix
 ```
 
@@ -24,12 +27,17 @@ npx cognibrain-connect all --no-start
 
 This mirrors the current AI-tooling direction: make the install path a small memorable command, then let each harness opt into deeper integration.
 The setup path uses a React/Ink terminal UI in interactive shells and writes deterministic JSON in CI. This is credential-safe connector setup: connector files keep non-secret choices and `env:` references only; token values stay in the environment.
+All setup surfaces have a CLI command: `config` for harness paths and generated files, `connector` for source systems, `adapter` for storage/provider/benchmark/MCP transport contracts, and `skill` for the Codex Skill lifecycle.
 `cognibrain-connect` is the npm-bin surface for that path. It accepts `codex`, `claude-code`, `cursor`, `github-copilot`, `vscode`, `opencode`, `openclaw`, `langgraph`, `crewai`, or `all`, delegates to the same setup engine, writes `.cognibrain-harness-package.json`, and prints a `doctor --publish` health command after installation.
 `cognibrain-connect` also ships package-style setup for OpenCode, OpenClaw, LangGraph, and CrewAI. Those targets install MCP configs or helper files that fetch evidence packs and send tool-outcome telemetry through the same HTTP API.
 
 Harness config commands:
 
 ```bash
+./bin/cognibrain.mjs config list
+./bin/cognibrain.mjs config show --json
+./bin/cognibrain.mjs config paths
+./bin/cognibrain.mjs config doctor
 ./bin/cognibrain.mjs config codex
 ./bin/cognibrain.mjs config claude
 ./bin/cognibrain.mjs config copilot
@@ -89,8 +97,14 @@ The runtime seeds official manifests for common work systems:
 - `official-google-drive`
 - `official-gmail`
 - `official-google-calendar`
+- `official-asana`
+- `official-clickup`
+- `official-sentry`
+- `official-datadog`
+- `official-pagerduty`
+- `official-posthog`
 
-Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, OAuth scope references, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, list/poll endpoints, and writeback configuration when supported. Service-specific manifests map GitHub issues and pull requests, GitLab and Azure DevOps issues/reviews/pipelines, Jira and Linear work items, Confluence and Notion pages, Slack/Discord/Teams decisions, Google Drive files, Gmail threads, and Google Calendar events into auditable memory events. The official GitHub, Slack, Discord, Jira, Confluence, Notion and Linear manifests use built-in `vendor://` endpoints backed by real vendor API drivers instead of placeholder HTTP adapter URLs. GitLab, Azure DevOps and Microsoft Teams are planned connector contracts with manifest, OAuth, list, poll and writeback shapes, but no certified vendor driver yet. Custom manifests can be registered through the CLI or HTTP API:
+Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, OAuth scope references, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, list/poll endpoints, and writeback configuration when supported. Service-specific manifests map GitHub issues and pull requests, GitLab and Azure DevOps issues/reviews/pipelines, Jira and Linear work items, Confluence and Notion pages, Slack/Discord/Teams decisions, Google Drive files, Gmail threads, Google Calendar events, Asana/ClickUp tasks, Sentry issues, Datadog monitors, PagerDuty incidents and PostHog feature flags into auditable memory events. The official GitHub, Slack, Discord, Jira, Confluence, Notion and Linear manifests use built-in `vendor://` endpoints backed by real vendor API drivers instead of placeholder HTTP adapter URLs. GitLab, Azure DevOps, Microsoft Teams, Google Workspace, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog are planned connector contracts with manifest, OAuth/token, list, poll and writeback shapes, but no certified vendor driver yet. Custom manifests can be registered through the CLI or HTTP API:
 
 Connector authors can use `src/connectors/sdk.ts` to keep local integrations consistent before exposing an HTTP endpoint. The SDK provides `createConnectorManifest()`, `normalizeConnectorEvent()`, `runConnectorPoll()`, `connectorAuthHeaders()`, and `createWritebackPlan()` so adapters can share manifest validation, sourceRef provenance, auth-reference headers, poll normalization, and dry-run writeback planning with the built-in service lifecycle.
 
@@ -118,6 +132,22 @@ npx cognibrain connector add gmail --set account=engineering@example.com
 npx cognibrain connector add google-drive --set root=drive_root_id
 npx cognibrain connector add google-calendar --set calendarId=primary
 ```
+
+State-of-the-art connector contracts cover the systems teams already use for product, delivery and operations:
+
+```bash
+npx cognibrain connector add asana --set workspace=workspace_gid --set project=project_gid
+npx cognibrain connector add clickup --set workspace=workspace_id --set space=space_or_list_id
+npx cognibrain connector add sentry --set organization=my-org --set project=web
+npx cognibrain connector add datadog --set site=datadoghq.com --api-key-env MEMORY_DATADOG_API_KEY --app-key-env MEMORY_DATADOG_APP_KEY
+npx cognibrain connector add pagerduty --set account=my-team --set service=service_id
+npx cognibrain connector add posthog --set project=project_id --set baseUrl=https://app.posthog.com
+npx cognibrain connector list
+npx cognibrain connector show sentry
+npx cognibrain connector doctor sentry
+```
+
+These rows are intentionally labeled `planned-contract` until a native vendor driver and live-credential smoke exist. The value today is still practical: self-hosted teams can configure credential-safe stubs, build custom HTTP adapters against the same event/writeback contract, and keep future native drivers from changing their config shape.
 
 | Connector | Required environment | Reads | Writes |
 | --- | --- | --- | --- |
@@ -216,6 +246,12 @@ flowchart LR
 | Google Drive vendor | Yes | Planned | OAuth contract | Planned contract | Planned/custom | Tag/summary contract | Planned | Connector contract in this page | planned |
 | Google Calendar vendor | Yes | Planned | OAuth contract | Planned contract | Planned/custom | Summary/link contract | Planned | Connector contract in this page | planned |
 | Microsoft Teams vendor | Yes | Planned | OAuth contract | Planned contract | Planned/custom | Message contract | Planned | Connector contract in this page | planned |
+| Asana vendor | Yes | CLI contract, `connector add asana` | Token/OAuth contract | Planned contract | Planned/custom | Task/comment contract | Planned | Connector contract in this page | planned |
+| ClickUp vendor | Yes | CLI contract, `connector add clickup` | Token/OAuth contract | Planned contract | Planned/custom | Task/comment contract | Planned | Connector contract in this page | planned |
+| Sentry vendor | Yes | CLI contract, `connector add sentry` | Token/OAuth contract | Planned contract | Planned/custom | Issue/release contract | Planned | Connector contract in this page | planned |
+| Datadog vendor | Yes | CLI contract, `connector add datadog` | API/app key contract | Planned contract | Planned/custom | Monitor/incident contract | Planned | Connector contract in this page | planned |
+| PagerDuty vendor | Yes | CLI contract, `connector add pagerduty` | Token/OAuth contract | Planned contract | Planned/custom | Incident/postmortem contract | Planned | Connector contract in this page | planned |
+| PostHog vendor | Yes | CLI contract, `connector add posthog` | Token/OAuth contract | Planned contract | Planned/custom | Feature flag/experiment contract | Planned | Connector contract in this page | planned |
 
 Claim IDs: `CB-CLAIM-CONNECTORS`, `CB-CLAIM-CONNECTOR-MATURITY`.
 
@@ -224,6 +260,15 @@ Claim IDs: `CB-CLAIM-CONNECTORS`, `CB-CLAIM-CONNECTOR-MATURITY`.
 The JSON-command provider adapter supports `extract`, `translate`, `expand`, `rerank`, `verify`, `contradiction`, and `summarize` tasks with deterministic fallbacks. This keeps the one-click install local-first, while letting teams plug in OCR, ASR, vision, NLI, translation, or cross-encoder tools.
 
 ```bash
+./bin/cognibrain.mjs adapter list
+./bin/cognibrain.mjs adapter add intelligence-json-command --command-env MEMORY_INTELLIGENCE_COMMAND
+./bin/cognibrain.mjs adapter add embedding-openai-compatible --set baseUrl=http://localhost:11434/v1 --set model=text-embedding-3-small
+./bin/cognibrain.mjs adapter add media-json-command --command-env MEMORY_MEDIA_COMMAND
+./bin/cognibrain.mjs adapter add storage-sqlite --set path=.cognibrain/memory.sqlite
+./bin/cognibrain.mjs adapter add storage-postgres --url-env MEMORY_POSTGRES_URL
+./bin/cognibrain.mjs adapter add benchmark-arena
+./bin/cognibrain.mjs adapter add mcp-remote --set url=https://memory.example.com/mcp --token-env MEMORY_MCP_REMOTE_TOKEN
+./bin/cognibrain.mjs adapter doctor
 ./bin/cognibrain.mjs memory provider-status
 MEMORY_LANGUAGE=de ./bin/cognibrain.mjs memory translate "Speicher soll nicht fehler"
 MEMORY_MEDIA_TYPE=audio MEMORY_LANGUAGE=de ./bin/cognibrain.mjs memory media-ingest "Speicher soll release notes erfassen."

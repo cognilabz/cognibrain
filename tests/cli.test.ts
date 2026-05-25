@@ -18,6 +18,50 @@ describe("cognibrain CLI", () => {
     expect(output).toContain("cognibrain memory search");
     expect(output).toContain("React/Ink guided");
     expect(output).toContain("azure-devops");
+    expect(output).toContain("cognibrain adapter list");
+    expect(output).toContain("cognibrain skill install|status|doctor|path");
+  });
+
+  it("manages setup config, connector config, adapter config, and skill status through CLI commands", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-config-"));
+    const codexHome = join(dir, ".codex");
+    try {
+      const env = {
+        ...process.env,
+        CODEX_HOME: codexHome,
+        MEMORY_AUTO_DREAM: "false",
+        MEMORY_GITHUB_REPO: "cognilabz/cognibrain",
+        MEMORY_GITHUB_TOKEN: "test-token-should-not-be-written"
+      };
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "init", "--profile", "solo-dev", "--yes", "--dry-run", "--no-start", "--no-doctor", "--no-skill", "--no-demo"], { cwd: dir, env, encoding: "utf8" });
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "add", "sentry", "--set", "organization=cognilabz", "--set", "project=memory", "--token-env", "MEMORY_SENTRY_TOKEN"], { cwd: dir, env, encoding: "utf8" });
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "adapter", "add", "storage-sqlite", "--set", "path=.cognibrain/memory.sqlite"], { cwd: dir, env, encoding: "utf8" });
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "doctor", "--fix", "--no-start", "--no-skill"], { cwd: dir, env, encoding: "utf8" });
+
+      const connectorList = execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "list"], { cwd: dir, env, encoding: "utf8" });
+      const adapterList = execFileSync(process.execPath, [cli, "--runtime-root", dir, "adapter", "list"], { cwd: dir, env, encoding: "utf8" });
+      const config = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "config", "show", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      const skill = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "skill", "status", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      const adapterDoctor = execFileSync(process.execPath, [cli, "--runtime-root", dir, "adapter", "doctor", "storage-sqlite"], { cwd: dir, env, encoding: "utf8" });
+      const connectorDoctor = execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "doctor", "sentry"], { cwd: dir, env, encoding: "utf8" });
+
+      expect(connectorList).toContain("sentry");
+      expect(connectorList).toContain("posthog");
+      expect(adapterList).toContain("storage-sqlite");
+      expect(adapterList).toContain("mcp-remote");
+      expect(config.setupState.profile).toBe("solo-dev");
+      expect(config.connectors.some((item: { provider: string }) => item.provider === "sentry")).toBe(true);
+      expect(config.adapters.some((item: { adapter: string }) => item.adapter === "storage-sqlite")).toBe(true);
+      expect(skill.installed).toBe(false);
+      expect(skill.path).toContain(codexHome);
+      expect(adapterDoctor).toContain("storage-sqlite");
+      expect(connectorDoctor).toContain("sentry");
+      const sentryConfig = readFileSync(join(dir, ".cognibrain", "connectors", "sentry.json"), "utf8");
+      expect(sentryConfig).toContain("env:MEMORY_SENTRY_TOKEN");
+      expect(sentryConfig).not.toContain("test-token-should-not-be-written");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("adds and searches memories through the publishable bin entrypoint", () => {

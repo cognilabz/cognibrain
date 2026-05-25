@@ -7,6 +7,7 @@ Start here when evaluating cognibrain as a self-hosted Engineering Memory OS.
 - Product overview: [`getting-started/overview.md`](getting-started/overview.md)
 - Getting started: [`getting-started/quickstart.md`](getting-started/quickstart.md)
 - Setup CLI: [`getting-started/setup-cli.md`](getting-started/setup-cli.md)
+- Connectors and adapters: [`connectors.md`](connectors.md)
 - Concepts: [`concepts/engineering-memory.md`](concepts/engineering-memory.md)
 - Integrations: [`integrations/mcp.md`](integrations/mcp.md)
 - Planning/docs vendor integrations: [`integrations/jira-confluence-notion-linear.md`](integrations/jira-confluence-notion-linear.md)

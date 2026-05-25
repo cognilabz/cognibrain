@@ -7,6 +7,10 @@ Use this path when you want to see the product work before reading architecture 
 ```bash
 npm install
 npx cognibrain init
+npx cognibrain config show --json
+npx cognibrain connector list
+npx cognibrain adapter list
+npx cognibrain skill status
 ```
 
 For scripted local setup:
@@ -26,6 +30,9 @@ For scripted local setup:
 
 ```bash
 npx cognibrain doctor --fix
+npx cognibrain config doctor
+npx cognibrain connector doctor
+npx cognibrain adapter doctor
 npx cognibrain doctor --publish
 npm run benchmark:cognicode
 npm run benchmark:arena

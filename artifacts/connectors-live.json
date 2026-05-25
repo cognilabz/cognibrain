@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T17:05:48.504Z",
+  "generatedAt": "2026-05-25T17:46:18.829Z",
   "checks": {
     "connectorAuthSecretHash": true,
     "connectorRevoke": true,
@@ -65,8 +65,8 @@
         "userCorrectionCaptured": true,
         "patchEvidenceTrail": true
       },
-      "codingContextPackId": "code_ctx_ntqd8a",
-      "patchEvidenceTrailId": "patch_ev_1revp3a",
+      "codingContextPackId": "code_ctx_1vcfb57",
+      "patchEvidenceTrailId": "patch_ev_ujwgyz",
       "passed": true
     }
   ],

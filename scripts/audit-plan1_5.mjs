@@ -34,7 +34,7 @@ const files = {
 
 const vendorIds = ["official-github", "official-slack", "official-discord", "official-jira", "official-confluence", "official-notion", "official-linear"];
 const vendorProviders = ["github", "slack", "discord", "jira", "confluence", "notion", "linear"];
-const plannedConnectorIds = ["official-gitlab", "official-azure-devops", "official-microsoft-teams", "official-google-drive", "official-gmail", "official-google-calendar"];
+const plannedConnectorIds = ["official-gitlab", "official-azure-devops", "official-microsoft-teams", "official-google-drive", "official-gmail", "official-google-calendar", "official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"];
 const checks = [
   check("plan1_5 tracking issue list is present", [
     exists("plan1_5.md") && has(files.plan, "nächster Plan"),
@@ -55,6 +55,9 @@ const checks = [
     has(files.connectors, "| Gmail vendor |"),
     has(files.connectors, "| Google Drive vendor |"),
     has(files.connectors, "| Google Calendar vendor |"),
+    has(files.connectors, "| Sentry vendor |"),
+    has(files.connectors, "| Datadog vendor |"),
+    has(files.connectors, "| PagerDuty vendor |"),
     has(files.connectors, "| planned |")
   ]),
   check("vendor verification covers every provider", [
@@ -72,8 +75,12 @@ const checks = [
     has(files.cli, "renderCliPanel"),
     has(files.cli, "promptInitProfile"),
     has(files.cli, "connectorSettingsFromArgs"),
+    has(files.cli, "adapterCommand"),
+    has(files.cli, "configCommand"),
+    has(files.cli, "skillCommand"),
     has(files.cli, "writeSetupState"),
     has(files.cli, "writeConnectorConfig"),
+    has(files.cli, "writeAdapterConfig"),
     has(files.package, "\"demo:first-win\""),
     artifact("artifacts/demos/first-win.json", (report) => report.passed === true && report.install?.profile === "solo-dev")
   ]),
@@ -81,10 +88,14 @@ const checks = [
     has(files.setupCli, "React/Ink"),
     has(files.setupCli, "npx cognibrain init"),
     has(files.setupCli, "connector add jira --set"),
+    has(files.setupCli, "adapter add storage-sqlite"),
+    has(files.setupCli, "skill status"),
+    has(files.setupCli, "config show --json"),
     has(files.overview, "What You Get"),
     has(files.overview, "Fast Path"),
     has(files.readme, "docs/getting-started/setup-cli.md"),
-    has(files.connectors, "credential-safe connector setup")
+    has(files.connectors, "credential-safe connector setup"),
+    has(files.connectors, "State-of-the-art connector contracts")
   ]),
   check("benchmark arena is replayable and public", [
     has(files.package, "\"benchmark:arena\""),

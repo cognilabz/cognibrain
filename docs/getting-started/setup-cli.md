@@ -21,6 +21,7 @@ It writes:
 
 - `.cognibrain/setup-state.json`,
 - `.cognibrain/connectors/*.json`,
+- `.cognibrain/adapters/*.json`,
 - MCP or instruction files for selected harnesses,
 - `.cognibrain-harness-package.json`.
 
@@ -50,6 +51,9 @@ npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --
 npx cognibrain connector add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
 npx cognibrain connector add notion --set databaseId=notion_database_id
 npx cognibrain connector add linear --set teamId=linear_team_id
+npx cognibrain connector list
+npx cognibrain connector show github
+npx cognibrain connector doctor
 ```
 
 Planned connector contracts can also be configured as stubs:
@@ -61,6 +65,50 @@ npx cognibrain connector add teams --set tenantId=tenant --set channelId=channel
 npx cognibrain connector add gmail --set account=engineering@example.com
 npx cognibrain connector add google-drive --set root=drive_root_id
 npx cognibrain connector add google-calendar --set calendarId=primary
+npx cognibrain connector add sentry --set organization=my-org --set project=web
+npx cognibrain connector add datadog --set site=datadoghq.com --api-key-env MEMORY_DATADOG_API_KEY --app-key-env MEMORY_DATADOG_APP_KEY
+npx cognibrain connector add pagerduty --set account=my-team --set service=service_id
+npx cognibrain connector add asana --set workspace=workspace_gid --set project=project_gid
+npx cognibrain connector add clickup --set workspace=workspace_id --set space=space_or_list_id
+npx cognibrain connector add posthog --set project=project_id
+```
+
+## Adapter Setup
+
+Adapters are the runtime extension points behind storage, provider intelligence, media extraction, benchmark comparisons and remote MCP transport. They are also configured through the CLI and use the same no-secret-values policy.
+
+```bash
+npx cognibrain adapter list
+npx cognibrain adapter add storage-sqlite --set path=.cognibrain/memory.sqlite
+npx cognibrain adapter add storage-postgres --url-env MEMORY_POSTGRES_URL
+npx cognibrain adapter add intelligence-json-command --command-env MEMORY_INTELLIGENCE_COMMAND
+npx cognibrain adapter add embedding-openai-compatible --set baseUrl=http://localhost:11434/v1 --set model=text-embedding-3-small
+npx cognibrain adapter add media-json-command --command-env MEMORY_MEDIA_COMMAND
+npx cognibrain adapter add benchmark-arena
+npx cognibrain adapter add mcp-remote --set url=https://memory.example.com/mcp --token-env MEMORY_MCP_REMOTE_TOKEN
+npx cognibrain adapter doctor
+```
+
+## Config And Skill
+
+Use `config` when you want to inspect or regenerate generated setup files without reading the filesystem manually.
+
+```bash
+npx cognibrain config list
+npx cognibrain config show --json
+npx cognibrain config paths
+npx cognibrain config doctor
+npx cognibrain config codex
+npx cognibrain config all
+```
+
+The Codex Skill lifecycle is also CLI-controlled:
+
+```bash
+npx cognibrain skill status
+npx cognibrain skill install
+npx cognibrain skill doctor --fix
+npx cognibrain skill path
 ```
 
 ## Doctor And Proof
@@ -68,6 +116,9 @@ npx cognibrain connector add google-calendar --set calendarId=primary
 ```bash
 npx cognibrain doctor --fix
 npx cognibrain doctor --publish
+npx cognibrain config doctor
+npx cognibrain connector doctor
+npx cognibrain adapter doctor
 npm run verify:compatibility
 npm run verify:vendor-connectors
 ```

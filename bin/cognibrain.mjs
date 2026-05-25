@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -48,16 +48,19 @@ switch (command) {
     break;
 
   case "skill":
-    if (commandArgs[0] !== "install") usage(1);
-    runNodeAndExit("scripts/install-codex-skill.mjs", []);
+    await skillCommand(commandArgs);
     break;
 
   case "config":
-    writeHarnessConfig(commandArgs[0] ?? "all");
+    configCommand(commandArgs);
     break;
 
   case "connector":
     await connectorCommand(commandArgs);
+    break;
+
+  case "adapter":
+    await adapterCommand(commandArgs);
     break;
 
   case "memory":
@@ -119,6 +122,10 @@ async function doctor(doctorArgs) {
       mkdirSync(join(runtimeRoot, ".cognibrain", "connectors"), { recursive: true });
       fixed.push("connector-directory");
     }
+    if (!existsSync(join(runtimeRoot, ".cognibrain", "adapters"))) {
+      mkdirSync(join(runtimeRoot, ".cognibrain", "adapters"), { recursive: true });
+      fixed.push("adapter-directory");
+    }
     if (!existsSync(join(launchCwd, ".cognibrain-harness-package.json"))) {
       writeHarnessPackageManifest();
       fixed.push("harness-package");
@@ -156,6 +163,7 @@ async function doctor(doctorArgs) {
   add("Codex skill installed", skillInstalled, skillPath, skillInstalled ? "ok" : doctorArgs.includes("--no-skill") ? "warn" : "fail");
   add("guided setup state", existsSync(join(runtimeRoot, ".cognibrain", "setup-state.json")), join(runtimeRoot, ".cognibrain", "setup-state.json"), existsSync(join(runtimeRoot, ".cognibrain", "setup-state.json")) ? "ok" : "warn");
   add("connector config directory", existsSync(join(runtimeRoot, ".cognibrain", "connectors")), join(runtimeRoot, ".cognibrain", "connectors"), existsSync(join(runtimeRoot, ".cognibrain", "connectors")) ? "ok" : "warn");
+  add("adapter config directory", existsSync(join(runtimeRoot, ".cognibrain", "adapters")), join(runtimeRoot, ".cognibrain", "adapters"), existsSync(join(runtimeRoot, ".cognibrain", "adapters")) ? "ok" : "warn");
 
   const state = readRuntimeState();
   const apiAlive = state?.api?.pid ? isAlive(state.api.pid) : false;
@@ -237,6 +245,7 @@ async function init(initArgs) {
     dashboard: !initArgs.includes("--no-dashboard")
   });
   for (const connector of profile.connectors) writeConnectorConfig(connector, { dryRun: initArgs.includes("--dry-run"), suggestedByProfile: profile.name });
+  for (const adapter of profile.adapters ?? []) writeAdapterConfig(adapter, { dryRun: initArgs.includes("--dry-run"), suggestedByProfile: profile.name });
   if (!initArgs.includes("--dry-run")) await setup([...setupArgs]);
   if (profile.runDemo && !initArgs.includes("--no-demo") && !initArgs.includes("--dry-run")) {
     const demo = runCapture("npm", ["run", "demo:first-win"]);
@@ -245,8 +254,112 @@ async function init(initArgs) {
   printInitSummary(profile);
 }
 
+async function skillCommand(commandArgs) {
+  const subcommand = commandArgs[0] ?? "status";
+  const fix = commandArgs.includes("--fix");
+  const path = codexSkillPath();
+  if (subcommand === "install") {
+    runNodeAndExit("scripts/install-codex-skill.mjs", []);
+    return;
+  }
+  if (subcommand === "path") {
+    console.log(path);
+    return;
+  }
+  if (subcommand === "status" || subcommand === "doctor") {
+    if (!existsSync(path) && (subcommand === "doctor" || fix)) runNodeChecked("scripts/install-codex-skill.mjs", []);
+    const installed = existsSync(path);
+    const result = {
+      installed,
+      path,
+      installCommand: "cognibrain skill install",
+      doctorCommand: "cognibrain skill doctor --fix",
+      docs: "docs/getting-started/setup-cli.md"
+    };
+    if (commandArgs.includes("--json")) printJson(result);
+    else {
+      console.log(`${installed ? "ok" : "missing"}  Codex skill - ${path}`);
+      console.log(`next: ${installed ? "cognibrain memory coding-context <query>" : "cognibrain skill install"}`);
+    }
+    if (!installed && subcommand === "doctor") process.exit(1);
+    return;
+  }
+  skillUsage(1);
+}
+
+function configCommand(commandArgs) {
+  const subcommand = commandArgs[0] ?? "show";
+  if (subcommand === "help" || subcommand === "--help") configUsage(0);
+  if (subcommand === "list") {
+    const result = configCatalog();
+    if (commandArgs.includes("--json")) printJson(result);
+    else printConfigCatalog(result);
+    return;
+  }
+  if (subcommand === "show") {
+    const result = readConfigurationState();
+    if (commandArgs.includes("--json")) printJson(result);
+    else printConfigurationState(result);
+    return;
+  }
+  if (subcommand === "paths") {
+    const result = configPaths();
+    if (commandArgs.includes("--json")) printJson(result);
+    else Object.entries(result).forEach(([name, path]) => console.log(`${name}: ${path}`));
+    return;
+  }
+  if (subcommand === "doctor") {
+    const result = configurationDoctor();
+    if (commandArgs.includes("--json")) printJson(result);
+    else printConfigurationDoctor(result);
+    if (!result.ok) process.exit(1);
+    return;
+  }
+  if (subcommand === "write") {
+    writeHarnessConfig(commandArgs[1] ?? "all");
+    return;
+  }
+  if (harnessTargets().includes(subcommand) || subcommand === "all") {
+    writeHarnessConfig(subcommand);
+    return;
+  }
+  configUsage(1);
+}
+
 async function connectorCommand(commandArgs) {
-  const subcommand = commandArgs[0];
+  const subcommand = commandArgs[0] ?? "list";
+  if (subcommand === "help" || subcommand === "--help") connectorUsage(0);
+  if (subcommand === "list") {
+    const result = connectorCatalog();
+    if (commandArgs.includes("--json")) printJson(result);
+    else printConnectorCatalog(result);
+    return;
+  }
+  if (subcommand === "show") {
+    const provider = commandArgs[1];
+    if (!provider) connectorUsage(1);
+    const result = connectorShow(provider);
+    if (!result) connectorUsage(1);
+    if (commandArgs.includes("--json")) printJson(result);
+    else printConnectorShow(result);
+    return;
+  }
+  if (subcommand === "doctor") {
+    if (commandArgs[1] && !connectorDefinitions()[commandArgs[1]]) connectorUsage(1);
+    const result = connectorDoctor(commandArgs[1]);
+    if (commandArgs.includes("--json")) printJson(result);
+    else printConnectorDoctor(result);
+    if (!result.ok) process.exit(1);
+    return;
+  }
+  if (subcommand === "remove") {
+    const provider = commandArgs[1];
+    if (!provider || !connectorDefinitions()[provider]) connectorUsage(1);
+    const path = connectorConfigPath(provider);
+    if (existsSync(path)) unlinkSync(path);
+    console.log(`${existsSync(path) ? "failed" : "removed"} connector config: ${path}`);
+    return;
+  }
   if (subcommand !== "add") connectorUsage(1);
   let provider = commandArgs[1];
   if (!provider && canPrompt(commandArgs)) provider = await promptConnectorProvider();
@@ -259,6 +372,53 @@ async function connectorCommand(commandArgs) {
   });
   await renderCliPanel("connector", result.config, { title: `${provider} connector setup`, path: result.path, dryRun: result.dryRun });
   console.log(`${result.dryRun ? "would write" : "wrote"} connector config: ${result.path}`);
+  console.log(`${result.configured ? "configured" : "needs env"}: ${result.missing.length ? result.missing.join(", ") : "none"}`);
+  console.log(`next: ${result.config.healthCommand}`);
+}
+
+async function adapterCommand(commandArgs) {
+  const subcommand = commandArgs[0] ?? "list";
+  if (subcommand === "help" || subcommand === "--help") adapterUsage(0);
+  if (subcommand === "list") {
+    const result = adapterCatalog();
+    if (commandArgs.includes("--json")) printJson(result);
+    else printAdapterCatalog(result);
+    return;
+  }
+  if (subcommand === "show") {
+    const adapter = commandArgs[1];
+    if (!adapter) adapterUsage(1);
+    const result = adapterShow(adapter);
+    if (!result) adapterUsage(1);
+    if (commandArgs.includes("--json")) printJson(result);
+    else printAdapterShow(result);
+    return;
+  }
+  if (subcommand === "doctor") {
+    if (commandArgs[1] && !adapterDefinitions()[commandArgs[1]]) adapterUsage(1);
+    const result = adapterDoctor(commandArgs[1]);
+    if (commandArgs.includes("--json")) printJson(result);
+    else printAdapterDoctor(result);
+    if (!result.ok) process.exit(1);
+    return;
+  }
+  if (subcommand === "remove") {
+    const adapter = commandArgs[1];
+    if (!adapter || !adapterDefinitions()[adapter]) adapterUsage(1);
+    const path = adapterConfigPath(adapter);
+    if (existsSync(path)) unlinkSync(path);
+    console.log(`${existsSync(path) ? "failed" : "removed"} adapter config: ${path}`);
+    return;
+  }
+  if (subcommand !== "add") adapterUsage(1);
+  const adapter = commandArgs[1];
+  if (!adapter || !adapterDefinitions()[adapter]) adapterUsage(1);
+  const result = writeAdapterConfig(adapter, {
+    dryRun: commandArgs.includes("--dry-run"),
+    settings: settingsFromArgs(adapterDefinitions()[adapter], commandArgs)
+  });
+  await renderCliPanel("adapter", result.config, { title: `${adapter} adapter setup`, path: result.path, dryRun: result.dryRun });
+  console.log(`${result.dryRun ? "would write" : "wrote"} adapter config: ${result.path}`);
   console.log(`${result.configured ? "configured" : "needs env"}: ${result.missing.length ? result.missing.join(", ") : "none"}`);
   console.log(`next: ${result.config.healthCommand}`);
 }
@@ -322,6 +482,7 @@ async function promptInitProfile(defaultProfileName) {
     const storage = await ask(rl, "Storage [local-json, sqlite, postgres]", profile.storage);
     const auth = await ask(rl, "Auth [local-only, api-key, oidc-or-sso]", profile.auth);
     const connectors = splitList(await ask(rl, "Connectors", profile.connectors.join(",")), profile.connectors).filter((name) => connectorDefinitions()[name]);
+    const adapters = splitList(await ask(rl, "Adapters", (profile.adapters ?? []).join(",")), profile.adapters ?? []).filter((name) => adapterDefinitions()[name]);
     const runDemo = yesNo(await ask(rl, "Run the first-win demo? [Y/n]", profile.runDemo ? "y" : "n"));
     return {
       ...profile,
@@ -329,6 +490,7 @@ async function promptInitProfile(defaultProfileName) {
       storage,
       auth,
       connectors,
+      adapters,
       runDemo,
       setupFlags: setupFlagsForHarnesses(harnesses),
       nextSteps: nextStepsForProfile(profile.name, connectors)
@@ -412,6 +574,7 @@ function profileDefinition(name) {
       storage: "local-json",
       auth: "local-only",
       connectors: ["github"],
+      adapters: ["storage-sqlite"],
       runDemo: true,
       nextSteps: ["Open the dashboard", "Add GitHub credentials", "Run the first-win demo"]
     },
@@ -424,6 +587,7 @@ function profileDefinition(name) {
       storage: "local-json-or-postgres",
       auth: "reverse-proxy-or-oidc",
       connectors: ["github", "slack", "jira", "confluence", "notion", "linear"],
+      adapters: ["storage-postgres", "embedding-openai-compatible", "intelligence-json-command"],
       runDemo: true,
       nextSteps: ["Set connector env vars", "Run verify:compatibility", "Publish deployment docs"]
     },
@@ -436,6 +600,7 @@ function profileDefinition(name) {
       storage: "postgres",
       auth: "oidc-or-sso",
       connectors: ["github", "slack", "discord", "jira", "confluence", "notion", "linear"],
+      adapters: ["storage-postgres", "mcp-remote", "intelligence-json-command", "media-json-command"],
       runDemo: true,
       nextSteps: ["Enable TLS", "Run vendor-live smoke with tenant credentials", "Review SECURITY.md"]
     },
@@ -448,6 +613,7 @@ function profileDefinition(name) {
       storage: "local-json",
       auth: "local-only",
       connectors: ["github", "jira", "notion", "linear"],
+      adapters: ["benchmark-arena", "storage-sqlite"],
       runDemo: true,
       nextSteps: ["Run benchmark:arena", "Open artifacts/arena/run.json", "Publish same-benchmark proof"]
     }
@@ -475,6 +641,7 @@ function writeSetupState(profile, metadata = {}) {
     storage: profile.storage,
     auth: profile.auth,
     connectors: profile.connectors,
+    adapters: profile.adapters ?? [],
     runDemo: profile.runDemo,
     nextSteps: profile.nextSteps,
     metadata
@@ -646,8 +813,445 @@ function connectorDefinitions() {
         { name: "tokenEnv", label: "Google token", env: "MEMORY_GOOGLE_TOKEN", secret: true, default: "MEMORY_GOOGLE_TOKEN" }
       ],
       sampleEvents: ["release meeting", "incident review", "architecture council note"]
+    },
+    asana: {
+      connectorId: "official-asana",
+      requiredEnv: ["MEMORY_ASANA_WORKSPACE", "MEMORY_ASANA_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
+      status: "planned-contract",
+      fields: [
+        { name: "workspace", label: "Asana workspace", env: "MEMORY_ASANA_WORKSPACE", default: "workspace_gid" },
+        { name: "project", label: "Asana project", env: "MEMORY_ASANA_PROJECT", default: "project_gid" },
+        { name: "tokenEnv", label: "Asana token", env: "MEMORY_ASANA_TOKEN", secret: true, default: "MEMORY_ASANA_TOKEN" }
+      ],
+      sampleEvents: ["project task correction", "goal status update", "handoff comment"]
+    },
+    clickup: {
+      connectorId: "official-clickup",
+      requiredEnv: ["MEMORY_CLICKUP_WORKSPACE_ID", "MEMORY_CLICKUP_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
+      status: "planned-contract",
+      fields: [
+        { name: "workspace", label: "ClickUp workspace id", env: "MEMORY_CLICKUP_WORKSPACE_ID", default: "workspace_id" },
+        { name: "space", label: "ClickUp space/list id", env: "MEMORY_CLICKUP_SPACE_ID", default: "space_or_list_id" },
+        { name: "tokenEnv", label: "ClickUp token", env: "MEMORY_CLICKUP_TOKEN", secret: true, default: "MEMORY_CLICKUP_TOKEN" }
+      ],
+      sampleEvents: ["task correction", "sprint status", "implementation checklist"]
+    },
+    sentry: {
+      connectorId: "official-sentry",
+      requiredEnv: ["MEMORY_SENTRY_ORG", "MEMORY_SENTRY_PROJECT", "MEMORY_SENTRY_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
+      status: "planned-contract",
+      fields: [
+        { name: "organization", label: "Sentry organization", env: "MEMORY_SENTRY_ORG", default: "organization" },
+        { name: "project", label: "Sentry project", env: "MEMORY_SENTRY_PROJECT", default: "project" },
+        { name: "tokenEnv", label: "Sentry token", env: "MEMORY_SENTRY_TOKEN", secret: true, default: "MEMORY_SENTRY_TOKEN" }
+      ],
+      sampleEvents: ["release regression", "issue triage note", "root-cause correction"]
+    },
+    datadog: {
+      connectorId: "official-datadog",
+      requiredEnv: ["MEMORY_DATADOG_SITE", "MEMORY_DATADOG_API_KEY", "MEMORY_DATADOG_APP_KEY"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
+      status: "planned-contract",
+      fields: [
+        { name: "site", label: "Datadog site", env: "MEMORY_DATADOG_SITE", default: "datadoghq.com" },
+        { name: "apiKeyEnv", label: "Datadog API key", env: "MEMORY_DATADOG_API_KEY", secret: true, default: "MEMORY_DATADOG_API_KEY" },
+        { name: "appKeyEnv", label: "Datadog app key", env: "MEMORY_DATADOG_APP_KEY", secret: true, default: "MEMORY_DATADOG_APP_KEY" }
+      ],
+      sampleEvents: ["incident metric link", "monitor change", "runbook correction"]
+    },
+    pagerduty: {
+      connectorId: "official-pagerduty",
+      requiredEnv: ["MEMORY_PAGERDUTY_ACCOUNT", "MEMORY_PAGERDUTY_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
+      status: "planned-contract",
+      fields: [
+        { name: "account", label: "PagerDuty account/subdomain", env: "MEMORY_PAGERDUTY_ACCOUNT", default: "team" },
+        { name: "service", label: "PagerDuty service id", env: "MEMORY_PAGERDUTY_SERVICE_ID", default: "service_id" },
+        { name: "tokenEnv", label: "PagerDuty token", env: "MEMORY_PAGERDUTY_TOKEN", secret: true, default: "MEMORY_PAGERDUTY_TOKEN" }
+      ],
+      sampleEvents: ["incident postmortem", "escalation policy correction", "service ownership note"]
+    },
+    posthog: {
+      connectorId: "official-posthog",
+      requiredEnv: ["MEMORY_POSTHOG_PROJECT", "MEMORY_POSTHOG_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
+      status: "planned-contract",
+      fields: [
+        { name: "project", label: "PostHog project id", env: "MEMORY_POSTHOG_PROJECT", default: "project_id" },
+        { name: "baseUrl", label: "PostHog base URL", env: "MEMORY_POSTHOG_BASE_URL", default: "https://app.posthog.com" },
+        { name: "tokenEnv", label: "PostHog token", env: "MEMORY_POSTHOG_TOKEN", secret: true, default: "MEMORY_POSTHOG_TOKEN" }
+      ],
+      sampleEvents: ["feature flag decision", "product analytics finding", "experiment follow-up"]
     }
   };
+}
+
+function adapterDefinitions() {
+  return {
+    "intelligence-json-command": {
+      adapterId: "intelligence-json-command",
+      kind: "provider",
+      status: "available-contract",
+      requiredEnv: ["MEMORY_INTELLIGENCE_COMMAND"],
+      verification: "cognibrain adapter doctor intelligence-json-command",
+      docs: "docs/configuration.md#intelligence-provider-adapter",
+      fields: [
+        { name: "commandEnv", label: "JSON command env var", env: "MEMORY_INTELLIGENCE_COMMAND", secret: true, default: "MEMORY_INTELLIGENCE_COMMAND" },
+        { name: "tasks", label: "Tasks", env: "MEMORY_INTELLIGENCE_TASKS", default: "extract,translate,expand,rerank,verify,contradiction,summarize" }
+      ],
+      sampleEvents: ["rerank candidate memories", "verify contradiction warnings", "summarize timeline window"]
+    },
+    "embedding-openai-compatible": {
+      adapterId: "embedding-openai-compatible",
+      kind: "provider",
+      status: "available-contract",
+      requiredEnv: ["MEMORY_EMBEDDING_BASE_URL", "MEMORY_EMBEDDING_MODEL", "MEMORY_EMBEDDING_API_KEY"],
+      verification: "npm test -- tests/core.test.ts",
+      docs: "docs/configuration.md#embeddings-and-vector-search",
+      fields: [
+        { name: "baseUrl", label: "Embedding base URL", env: "MEMORY_EMBEDDING_BASE_URL", default: "http://localhost:11434/v1" },
+        { name: "model", label: "Embedding model", env: "MEMORY_EMBEDDING_MODEL", default: "text-embedding-3-small" },
+        { name: "apiKeyEnv", label: "Embedding API key", env: "MEMORY_EMBEDDING_API_KEY", secret: true, default: "MEMORY_EMBEDDING_API_KEY" }
+      ],
+      sampleEvents: ["semantic recall", "hybrid ranking", "privacy-disabled fallback"]
+    },
+    "media-json-command": {
+      adapterId: "media-json-command",
+      kind: "provider",
+      status: "available-contract",
+      requiredEnv: ["MEMORY_MEDIA_COMMAND"],
+      verification: "npm test -- tests/core.test.ts",
+      docs: "docs/advanced-features.md#media-and-multilingual-ingest",
+      fields: [
+        { name: "commandEnv", label: "Media command env var", env: "MEMORY_MEDIA_COMMAND", secret: true, default: "MEMORY_MEDIA_COMMAND" },
+        { name: "tasks", label: "Tasks", env: "MEMORY_MEDIA_TASKS", default: "asr,ocr,pdf,video-frames,translate" }
+      ],
+      sampleEvents: ["audio transcript memory", "image OCR decision", "video-frame evidence"]
+    },
+    "storage-sqlite": {
+      adapterId: "storage-sqlite",
+      kind: "storage",
+      status: "built-in",
+      requiredEnv: [],
+      verification: "npm test -- tests/core.test.ts",
+      docs: "docs/production/storage.md",
+      fields: [
+        { name: "backend", label: "Storage backend", env: "MEMORY_STORAGE_BACKEND", default: "sqlite" },
+        { name: "path", label: "SQLite path", env: "MEMORY_DB_PATH", default: ".cognibrain/memory.sqlite" }
+      ],
+      sampleEvents: ["transactional local memory", "FTS5 lexical search", "desktop self-hosted store"]
+    },
+    "storage-postgres": {
+      adapterId: "storage-postgres",
+      kind: "storage",
+      status: "remote-driver",
+      requiredEnv: ["MEMORY_POSTGRES_URL"],
+      verification: "npm run verify:postgres",
+      docs: "docs/production/storage.md",
+      fields: [
+        { name: "backend", label: "Storage backend", env: "MEMORY_STORAGE_BACKEND", default: "postgres-remote" },
+        { name: "urlEnv", label: "Postgres URL", env: "MEMORY_POSTGRES_URL", secret: true, default: "MEMORY_POSTGRES_URL" }
+      ],
+      sampleEvents: ["team shared memory", "remote tsvector search", "backup-ready production store"]
+    },
+    "storage-cassandra": {
+      adapterId: "storage-cassandra",
+      kind: "storage",
+      status: "remote-driver",
+      requiredEnv: [],
+      verification: "cognibrain adapter doctor storage-cassandra",
+      docs: "docs/production/storage.md",
+      fields: [
+        { name: "backend", label: "Storage backend", env: "MEMORY_STORAGE_BACKEND", default: "cassandra-remote" },
+        { name: "contactPoints", label: "Cassandra contact points", env: "MEMORY_CASSANDRA_CONTACT_POINTS", default: "127.0.0.1:9042" },
+        { name: "keyspace", label: "Cassandra keyspace", env: "MEMORY_CASSANDRA_KEYSPACE", default: "cognibrain" }
+      ],
+      sampleEvents: ["wide-column memory snapshot", "multi-region partition", "distributed audit log"]
+    },
+    "benchmark-arena": {
+      adapterId: "benchmark-arena",
+      kind: "benchmark",
+      status: "built-in",
+      requiredEnv: [],
+      verification: "npm run benchmark:arena",
+      docs: "docs/benchmarks/arena.md",
+      fields: [
+        { name: "systems", label: "Systems", env: "MEMORY_ARENA_SYSTEMS", default: "mem0,graphiti,zep,cognee,langmem,gbrain" },
+        { name: "proofLevel", label: "Proof level", env: "MEMORY_ARENA_PROOF_LEVEL", default: "same-run-api-shape" }
+      ],
+      sampleEvents: ["same-run adapter comparison", "declared gap row", "public proof artifact"]
+    },
+    "mcp-remote": {
+      adapterId: "mcp-remote",
+      kind: "transport",
+      status: "available-contract",
+      requiredEnv: ["MEMORY_MCP_REMOTE_URL"],
+      verification: "cognibrain adapter doctor mcp-remote",
+      docs: "docs/integrations/mcp.md",
+      fields: [
+        { name: "url", label: "Remote MCP URL", env: "MEMORY_MCP_REMOTE_URL", default: "https://memory.example.com/mcp" },
+        { name: "tokenEnv", label: "Remote MCP token", env: "MEMORY_MCP_REMOTE_TOKEN", secret: true, default: "MEMORY_MCP_REMOTE_TOKEN" }
+      ],
+      sampleEvents: ["remote agent context pack", "shared MCP tool call", "browser-client session"]
+    }
+  };
+}
+
+function harnessTargets() {
+  return ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai"];
+}
+
+function codexSkillPath() {
+  return join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills", "cognibrain", "SKILL.md");
+}
+
+function configPaths() {
+  return {
+    setupState: join(runtimeRoot, ".cognibrain", "setup-state.json"),
+    connectors: join(runtimeRoot, ".cognibrain", "connectors"),
+    adapters: join(runtimeRoot, ".cognibrain", "adapters"),
+    harnessManifest: join(launchCwd, ".cognibrain-harness-package.json"),
+    codexSkill: codexSkillPath(),
+    runtimeState: join(runtimeRoot, ".cognibrain", "local-runtime.json")
+  };
+}
+
+function configCatalog() {
+  const paths = configPaths();
+  return {
+    runtimeRoot,
+    packageRoot: root,
+    harnesses: harnessTargets().map((target) => ({ target, command: `cognibrain config ${target}` })),
+    connectors: Object.keys(connectorDefinitions()).map((provider) => ({ provider, status: connectorDefinitions()[provider].status, command: `cognibrain connector add ${provider}` })),
+    adapters: Object.keys(adapterDefinitions()).map((adapter) => ({ adapter, status: adapterDefinitions()[adapter].status, command: `cognibrain adapter add ${adapter}` })),
+    skill: { command: "cognibrain skill install", path: paths.codexSkill },
+    paths
+  };
+}
+
+function readConfigurationState() {
+  const paths = configPaths();
+  return {
+    runtimeRoot,
+    setupState: readJson(paths.setupState, null),
+    harnessManifest: readJson(paths.harnessManifest, null),
+    connectors: readConfigDirectory(paths.connectors),
+    adapters: readConfigDirectory(paths.adapters),
+    skill: { installed: existsSync(paths.codexSkill), path: paths.codexSkill }
+  };
+}
+
+function configurationDoctor() {
+  const paths = configPaths();
+  const checks = [
+    { name: "setup state", ok: existsSync(paths.setupState), path: paths.setupState, fix: "cognibrain init --profile solo-dev --yes" },
+    { name: "connector directory", ok: existsSync(paths.connectors), path: paths.connectors, fix: "cognibrain connector add github --set repo=owner/repo" },
+    { name: "adapter directory", ok: existsSync(paths.adapters), path: paths.adapters, fix: "cognibrain adapter add storage-sqlite" },
+    { name: "harness manifest", ok: existsSync(paths.harnessManifest), path: paths.harnessManifest, fix: "cognibrain config all" },
+    { name: "Codex skill", ok: existsSync(paths.codexSkill), path: paths.codexSkill, fix: "cognibrain skill install" }
+  ];
+  return { ok: checks.every((check) => check.ok), checks, paths };
+}
+
+function readConfigDirectory(directory) {
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory)
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => readJson(join(directory, name), null))
+    .filter(Boolean);
+}
+
+function printConfigCatalog(result) {
+  console.log(`runtime: ${result.runtimeRoot}`);
+  console.log(`harnesses: ${result.harnesses.map((item) => item.target).join(", ")}`);
+  console.log(`connectors: ${result.connectors.map((item) => item.provider).join(", ")}`);
+  console.log(`adapters: ${result.adapters.map((item) => item.adapter).join(", ")}`);
+  console.log(`skill: ${result.skill.path}`);
+}
+
+function printConfigurationState(result) {
+  console.log(`runtime: ${result.runtimeRoot}`);
+  console.log(`setup: ${result.setupState ? result.setupState.profile : "missing"}`);
+  console.log(`harness manifest: ${result.harnessManifest ? "present" : "missing"}`);
+  console.log(`connectors: ${result.connectors.map((item) => item.provider).join(", ") || "none"}`);
+  console.log(`adapters: ${result.adapters.map((item) => item.adapter).join(", ") || "none"}`);
+  console.log(`skill: ${result.skill.installed ? "installed" : "missing"} - ${result.skill.path}`);
+}
+
+function printConfigurationDoctor(result) {
+  for (const check of result.checks) {
+    console.log(`${check.ok ? "ok" : "warn"}  ${check.name} - ${check.path}`);
+    if (!check.ok) console.log(`next: ${check.fix}`);
+  }
+}
+
+function connectorConfigPath(provider) {
+  return join(runtimeRoot, ".cognibrain", "connectors", `${provider}.json`);
+}
+
+function connectorCatalog() {
+  const definitions = connectorDefinitions();
+  return Object.entries(definitions).map(([provider, definition]) => ({
+    provider,
+    connectorId: definition.connectorId,
+    status: definition.status,
+    docs: definition.docs,
+    configured: existsSync(connectorConfigPath(provider)),
+    addCommand: `cognibrain connector add ${provider}`
+  }));
+}
+
+function connectorShow(provider) {
+  const definition = connectorDefinitions()[provider];
+  if (!definition) return null;
+  const path = connectorConfigPath(provider);
+  return {
+    provider,
+    path,
+    definition,
+    config: readJson(path, null)
+  };
+}
+
+function connectorDoctor(provider) {
+  const targets = provider ? [provider] : Object.keys(connectorDefinitions()).filter((name) => existsSync(connectorConfigPath(name)));
+  const checks = targets.map((name) => {
+    const definition = connectorDefinitions()[name];
+    const path = connectorConfigPath(name);
+    const config = readJson(path, null);
+    const missingEnv = definition.requiredEnv.filter((key) => !process.env[key]);
+    const missingSettings = (definition.fields ?? []).filter((field) => !field.secret && !(config?.settings?.[field.name] ?? process.env[field.env] ?? field.default)).map((field) => field.name);
+    return {
+      provider: name,
+      connectorId: definition.connectorId,
+      status: definition.status,
+      configPresent: existsSync(path),
+      path,
+      missingEnv,
+      missingSettings,
+      ok: existsSync(path) && missingSettings.length === 0 && (definition.status !== "vendor-driver" || missingEnv.length === 0),
+      healthCommand: `cognibrain memory connector-health ${definition.connectorId}`,
+      docs: definition.docs
+    };
+  });
+  return { ok: checks.length > 0 && checks.every((check) => check.ok || check.status === "planned-contract"), checks };
+}
+
+function printConnectorCatalog(items) {
+  for (const item of items) console.log(`${item.configured ? "ok" : "available"}  ${item.provider} - ${item.connectorId} (${item.status})`);
+  console.log("next: cognibrain connector add <provider> --set key=value");
+}
+
+function printConnectorShow(result) {
+  console.log(`${result.provider}: ${result.definition.connectorId} (${result.definition.status})`);
+  console.log(`config: ${result.config ? result.path : "missing"}`);
+  console.log(`docs: ${result.definition.docs}`);
+  console.log(`required env: ${result.definition.requiredEnv.join(", ") || "none"}`);
+}
+
+function printConnectorDoctor(result) {
+  if (!result.checks.length) {
+    console.log("warn  no connector configs found");
+    console.log("next: cognibrain connector add github --set repo=owner/repo");
+    return;
+  }
+  for (const check of result.checks) {
+    const ok = check.ok || check.status === "planned-contract";
+    console.log(`${ok ? "ok" : "fail"}  ${check.provider} - ${check.configPresent ? check.path : "missing config"}`);
+    if (check.missingSettings.length) console.log(`missing settings: ${check.missingSettings.join(", ")}`);
+    if (check.missingEnv.length) console.log(`missing env: ${check.missingEnv.join(", ")}`);
+    console.log(`next: ${check.healthCommand}`);
+  }
+}
+
+function adapterConfigPath(adapter) {
+  return join(runtimeRoot, ".cognibrain", "adapters", `${adapter}.json`);
+}
+
+function adapterCatalog() {
+  const definitions = adapterDefinitions();
+  return Object.entries(definitions).map(([adapter, definition]) => ({
+    adapter,
+    adapterId: definition.adapterId,
+    kind: definition.kind,
+    status: definition.status,
+    docs: definition.docs,
+    configured: existsSync(adapterConfigPath(adapter)),
+    addCommand: `cognibrain adapter add ${adapter}`
+  }));
+}
+
+function adapterShow(adapter) {
+  const definition = adapterDefinitions()[adapter];
+  if (!definition) return null;
+  const path = adapterConfigPath(adapter);
+  return {
+    adapter,
+    path,
+    definition,
+    config: readJson(path, null)
+  };
+}
+
+function adapterDoctor(adapter) {
+  const targets = adapter ? [adapter] : Object.keys(adapterDefinitions()).filter((name) => existsSync(adapterConfigPath(name)));
+  const checks = targets.map((name) => {
+    const definition = adapterDefinitions()[name];
+    const path = adapterConfigPath(name);
+    const config = readJson(path, null);
+    const missingEnv = definition.requiredEnv.filter((key) => !process.env[key]);
+    const missingSettings = (definition.fields ?? []).filter((field) => !field.secret && !(config?.settings?.[field.name] ?? process.env[field.env] ?? field.default)).map((field) => field.name);
+    return {
+      adapter: name,
+      adapterId: definition.adapterId,
+      kind: definition.kind,
+      status: definition.status,
+      configPresent: existsSync(path),
+      path,
+      missingEnv,
+      missingSettings,
+      ok: existsSync(path) && missingSettings.length === 0 && missingEnv.length === 0,
+      healthCommand: `cognibrain adapter doctor ${name}`,
+      docs: definition.docs
+    };
+  });
+  return { ok: checks.length > 0 && checks.every((check) => check.ok || check.status === "available-contract"), checks };
+}
+
+function printAdapterCatalog(items) {
+  for (const item of items) console.log(`${item.configured ? "ok" : "available"}  ${item.adapter} - ${item.adapterId} (${item.kind}, ${item.status})`);
+  console.log("next: cognibrain adapter add <adapter> --set key=value");
+}
+
+function printAdapterShow(result) {
+  console.log(`${result.adapter}: ${result.definition.adapterId} (${result.definition.kind}, ${result.definition.status})`);
+  console.log(`config: ${result.config ? result.path : "missing"}`);
+  console.log(`docs: ${result.definition.docs}`);
+  console.log(`required env: ${result.definition.requiredEnv.join(", ") || "none"}`);
+}
+
+function printAdapterDoctor(result) {
+  if (!result.checks.length) {
+    console.log("warn  no adapter configs found");
+    console.log("next: cognibrain adapter add storage-sqlite");
+    return;
+  }
+  for (const check of result.checks) {
+    const ok = check.ok || check.status === "available-contract";
+    console.log(`${ok ? "ok" : "fail"}  ${check.adapter} - ${check.configPresent ? check.path : "missing config"}`);
+    if (check.missingSettings.length) console.log(`missing settings: ${check.missingSettings.join(", ")}`);
+    if (check.missingEnv.length) console.log(`missing env: ${check.missingEnv.join(", ")}`);
+    console.log(`next: ${check.healthCommand}`);
+  }
 }
 
 function writeConnectorConfig(provider, metadata = {}) {
@@ -656,7 +1260,7 @@ function writeConnectorConfig(provider, metadata = {}) {
   const { settings: _settings, ...safeMetadata } = metadata;
   const missing = definition.requiredEnv.filter((key) => !process.env[key]);
   const missingSettings = (definition.fields ?? []).filter((field) => !field.secret && !settings[field.name]).map((field) => field.name);
-  const path = join(runtimeRoot, ".cognibrain", "connectors", `${provider}.json`);
+  const path = connectorConfigPath(provider);
   const config = {
     schemaVersion: "1.0",
     provider,
@@ -682,34 +1286,92 @@ function writeConnectorConfig(provider, metadata = {}) {
   return { path, configured: config.configured, missing, dryRun: Boolean(metadata.dryRun), config };
 }
 
-function sanitizeConnectorSettings(definition, inputSettings) {
+function writeAdapterConfig(adapter, metadata = {}) {
+  const definition = adapterDefinitions()[adapter];
+  const settings = sanitizeSettings(definition, metadata.settings ?? {});
+  const { settings: _settings, ...safeMetadata } = metadata;
+  const missing = definition.requiredEnv.filter((key) => !process.env[key]);
+  const missingSettings = (definition.fields ?? []).filter((field) => !field.secret && !settings[field.name]).map((field) => field.name);
+  const path = adapterConfigPath(adapter);
+  const config = {
+    schemaVersion: "1.0",
+    adapter,
+    adapterId: definition.adapterId,
+    kind: definition.kind,
+    status: definition.status,
+    configured: missing.length === 0 && missingSettings.length === 0,
+    requiredEnv: definition.requiredEnv.map((key) => ({ name: key, present: Boolean(process.env[key]), valueRef: `env:${key}` })),
+    settings,
+    missingSettings,
+    missingEnv: missing,
+    storagePolicy: "never store credential values; read from environment at runtime",
+    verification: definition.verification,
+    docs: definition.docs,
+    preview: {
+      sampleMemoryEvents: definition.sampleEvents ?? []
+    },
+    healthCommand: `cognibrain adapter doctor ${adapter}`,
+    nextSteps: adapterNextSteps(definition, missing, missingSettings),
+    metadata: { writtenAt: new Date().toISOString(), ...safeMetadata }
+  };
+  if (!metadata.dryRun) writeJson(path, config);
+  return { path, configured: config.configured, missing, dryRun: Boolean(metadata.dryRun), config };
+}
+
+function sanitizeSettings(definition, inputSettings) {
   const sanitized = {};
   for (const field of definition.fields ?? []) {
     const value = inputSettings[field.name] ?? (field.secret ? field.default : inputSettings[field.env] ?? process.env[field.env] ?? field.default);
     if (!value) continue;
-    const secretRef = field.secret && value === process.env[field.env] ? field.env : value;
-    sanitized[field.name] = field.secret ? `env:${String(secretRef).replace(/^env:/, "")}` : String(value);
+    sanitized[field.name] = field.secret ? normalizeSecretEnvRef(value, field.env) : String(value);
   }
   return sanitized;
 }
 
+function sanitizeConnectorSettings(definition, inputSettings) {
+  return sanitizeSettings(definition, inputSettings);
+}
+
+function normalizeSecretEnvRef(value, fallbackEnv) {
+  const raw = String(value).replace(/^env:/, "");
+  if (raw === process.env[fallbackEnv]) return `env:${fallbackEnv}`;
+  return /^[A-Z][A-Z0-9_]*$/.test(raw) ? `env:${raw}` : `env:${fallbackEnv}`;
+}
+
 function connectorSettingsFromArgs(provider, argv) {
+  const definition = connectorDefinitions()[provider];
+  const settings = settingsFromArgs(definition, argv);
+  for (const field of definition.fields ?? []) {
+    if (field.env && process.env[field.env] && !settings[field.name] && !field.secret) settings[field.name] = process.env[field.env];
+  }
+  return settings;
+}
+
+function settingsFromArgs(definition, argv) {
   const settings = {};
   const aliases = {
     "--repo": "repo",
     "--channel": "channelId",
     "--project": "project",
+    "--service": "service",
     "--space": "space",
     "--database": "databaseId",
     "--team": "teamId",
     "--tenant": "tenantId",
     "--base-url": "baseUrl",
     "--org": "organization",
+    "--workspace": "workspace",
+    "--site": "site",
+    "--model": "model",
+    "--command-env": "commandEnv",
     "--root": "root",
     "--account": "account",
     "--calendar": "calendarId",
     "--email-env": "emailEnv",
-    "--token-env": "tokenEnv"
+    "--token-env": "tokenEnv",
+    "--api-key-env": "apiKeyEnv",
+    "--app-key-env": "appKeyEnv",
+    "--url-env": "urlEnv"
   };
   for (const [flag, key] of Object.entries(aliases)) {
     const value = optionValue(argv, flag);
@@ -718,10 +1380,6 @@ function connectorSettingsFromArgs(provider, argv) {
   for (const value of optionValues(argv, "--set")) {
     const [key, ...rest] = value.split("=");
     if (key && rest.length) settings[key] = rest.join("=");
-  }
-  const definition = connectorDefinitions()[provider];
-  for (const field of definition.fields ?? []) {
-    if (field.env && process.env[field.env] && !settings[field.name] && !field.secret) settings[field.name] = process.env[field.env];
   }
   return settings;
 }
@@ -732,6 +1390,14 @@ function connectorNextSteps(definition, missingEnv, missingSettings) {
   if (missingEnv.length) steps.push(`Export ${missingEnv.join(", ")}`);
   steps.push(definition.status === "vendor-driver" ? definition.verification : "Use custom connector HTTP contract until native driver lands");
   if (definition.status === "vendor-driver") steps.push("MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live");
+  return steps;
+}
+
+function adapterNextSteps(definition, missingEnv, missingSettings) {
+  const steps = [];
+  if (missingSettings.length) steps.push(`Choose ${missingSettings.join(", ")} with adapter add --set key=value`);
+  if (missingEnv.length) steps.push(`Export ${missingEnv.join(", ")}`);
+  steps.push(definition.verification);
   return steps;
 }
 
@@ -1152,6 +1818,17 @@ async function renderCliPanel(kind, payload, options = {}) {
         muted("next"),
         ...list(payload.nextSteps)
       ];
+    } else if (kind === "adapter") {
+      body = [
+        line("adapter", `${payload.adapterId} (${payload.kind}, ${payload.status})`, payload.status === "built-in" ? "green" : "yellow"),
+        line("config", options.path ?? ""),
+        line("credentials", payload.missingEnv?.length ? `missing ${payload.missingEnv.join(", ")}` : "env refs ready", payload.missingEnv?.length ? "yellow" : "green"),
+        line("docs", payload.docs),
+        muted("sample memory events"),
+        ...list(payload.preview?.sampleMemoryEvents),
+        muted("next"),
+        ...list(payload.nextSteps)
+      ];
     } else {
       body = [
         line("profile", `${payload.name} - ${payload.label}`, "cyan"),
@@ -1160,6 +1837,7 @@ async function renderCliPanel(kind, payload, options = {}) {
         line("auth", payload.auth),
         line("harnesses", payload.harnesses.join(", ")),
         line("connectors", payload.connectors.join(", ") || "none"),
+        line("adapters", (payload.adapters ?? []).join(", ") || "none"),
         muted("next"),
         ...list(payload.nextSteps)
       ];
@@ -1185,15 +1863,21 @@ function renderPlainPanel(kind, payload, options = {}) {
     if (payload.preview?.sampleMemoryEvents?.length) console.log(`preview: ${payload.preview.sampleMemoryEvents.join(", ")}`);
     return;
   }
+  if (kind === "adapter") {
+    console.log(`${options.title ?? "adapter"}: ${payload.adapterId} (${payload.kind}, ${payload.status})`);
+    console.log(`docs: ${payload.docs}`);
+    if (payload.preview?.sampleMemoryEvents?.length) console.log(`preview: ${payload.preview.sampleMemoryEvents.join(", ")}`);
+    return;
+  }
   console.log(`${options.title ?? "cognibrain init"}: ${payload.label}`);
   console.log(`runtime root: ${options.runtimeRoot ?? runtimeRoot}`);
   console.log(`profile: ${payload.name}`);
 }
 
 function printInitSummary(profile) {
-  console.log("ready: setup state, connector stubs, and harness config are in place");
+  console.log("ready: setup state, connector stubs, adapter stubs, skill path, and harness config are in place");
   console.log(`next: ${profile.nextSteps.join(" -> ")}`);
-  console.log("proof: npm run demo:first-win, npm run verify:compatibility, npm run benchmark:arena");
+  console.log("proof: cognibrain config doctor, cognibrain connector doctor, cognibrain adapter doctor, npm run demo:first-win");
 }
 
 function readRuntimeState() {
@@ -1254,12 +1938,21 @@ Usage:
       Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
   cognibrain start | dev | status | stop
       Manage the local API + dashboard runtime
+  cognibrain config list|show|paths|doctor
+      Inspect setup state, harness packages, connector configs, adapter configs, and skill paths
   cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>
-      Write MCP config for supported harnesses
-  cognibrain connector add <github|slack|discord|jira|confluence|notion|linear|gitlab|azure-devops|teams|gmail|google-drive|google-calendar> [--dry-run] [--set key=value]
+      Write MCP config for supported harnesses; "config write <target>" works too
+  cognibrain connector list|show <provider>|doctor [provider]|remove <provider>
+      Inspect and maintain source-system connector configs
+  cognibrain connector add <provider> [--dry-run] [--set key=value]
       React/Ink guided, credential-safe connector setup under .cognibrain/connectors/
-  cognibrain skill install
-      Install the Codex skill
+      Providers include github, jira, linear, gitlab, azure-devops, teams, google-drive, sentry, datadog, pagerduty, asana, clickup, posthog
+  cognibrain adapter list|show <adapter>|doctor [adapter]|remove <adapter>
+      Inspect and maintain provider, storage, benchmark, media and MCP transport adapter configs
+  cognibrain adapter add <adapter> [--dry-run] [--set key=value]
+      Credential-safe adapter setup under .cognibrain/adapters/
+  cognibrain skill install|status|doctor|path
+      Install and inspect the Codex skill
   cognibrain memory add <text>
   cognibrain memory search <query>
   cognibrain memory coding-context <query>
@@ -1283,8 +1976,43 @@ function initUsage(exitCode) {
   process.exit(exitCode);
 }
 
+function configUsage(exitCode) {
+  console.log(`Usage:
+  cognibrain config list [--json]
+  cognibrain config show [--json]
+  cognibrain config paths [--json]
+  cognibrain config doctor [--json]
+  cognibrain config write <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>
+  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>`);
+  process.exit(exitCode);
+}
+
 function connectorUsage(exitCode) {
-  console.log("Usage: cognibrain connector add <github|slack|discord|jira|confluence|notion|linear|gitlab|azure-devops|teams|gmail|google-drive|google-calendar> [--dry-run] [--set key=value]");
+  console.log(`Usage:
+  cognibrain connector list [--json]
+  cognibrain connector show <provider> [--json]
+  cognibrain connector doctor [provider] [--json]
+  cognibrain connector add <${Object.keys(connectorDefinitions()).join("|")}> [--dry-run] [--set key=value]
+  cognibrain connector remove <provider>`);
+  process.exit(exitCode);
+}
+
+function adapterUsage(exitCode) {
+  console.log(`Usage:
+  cognibrain adapter list [--json]
+  cognibrain adapter show <adapter> [--json]
+  cognibrain adapter doctor [adapter] [--json]
+  cognibrain adapter add <${Object.keys(adapterDefinitions()).join("|")}> [--dry-run] [--set key=value]
+  cognibrain adapter remove <adapter>`);
+  process.exit(exitCode);
+}
+
+function skillUsage(exitCode) {
+  console.log(`Usage:
+  cognibrain skill install
+  cognibrain skill status [--json]
+  cognibrain skill doctor [--fix] [--json]
+  cognibrain skill path`);
   process.exit(exitCode);
 }
 
@@ -1312,4 +2040,8 @@ function runtimeEnv() {
     COGNIBRAIN_RUNTIME_ROOT: runtimeRoot,
     MEMORY_DB_PATH: process.env.MEMORY_DB_PATH ?? join(runtimeRoot, ".memory-harness.json")
   };
+}
+
+function printJson(value) {
+  console.log(JSON.stringify(value, null, 2));
 }

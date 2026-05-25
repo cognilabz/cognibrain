@@ -389,7 +389,7 @@ Available MCP tools:
 - `memory_action_record`
 - `memory_action_outcome`
 
-Connector templates are included for Claude Code, Codex, GitHub Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI under `templates/`.
+Connector templates are included for Claude Code, Codex, GitHub Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI under `templates/`. The direct TypeScript harness hook now covers the full connector loop: session-start context, pre-tool procedure recall and action guard, post-tool outcome memory, user correction capture, and patch evidence trail.
 
 ## Proof
 

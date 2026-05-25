@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { MemoryService } from "../api/service";
+import { HarnessMemoryHook } from "../connectors/harnessHook";
 
 interface ConnectorLiveReport {
   schemaVersion: "1.0";
@@ -11,6 +12,16 @@ interface ConnectorLiveReport {
   checks: Record<string, boolean>;
   calls: Array<{ url?: string; body: string }>;
   harnesses: string[];
+  harnessRuns: HarnessGoldenPathRun[];
+  passed: boolean;
+}
+
+interface HarnessGoldenPathRun {
+  harness: string;
+  repo: string;
+  checks: Record<string, boolean>;
+  codingContextPackId?: string;
+  patchEvidenceTrailId?: string;
   passed: boolean;
 }
 
@@ -81,6 +92,7 @@ export async function runConnectorLiveVerification(out?: string): Promise<Connec
     const discordDecision = memories.find((memory) => memory.metadata.externalId === "discord-msg-1");
     const graph = service.graphExport({ userId: "u1", relationTypes: ["depends_on"] }) as { edges?: Array<{ type: string; targetEntity?: string }> };
     const harness = verifyHarnessPackages();
+    const harnessRun = verifyHarnessGoldenPath();
 
     const checks = {
       connectorAuthSecretHash: authorized.status === "authorized" && Boolean(authorized.tokenHash) && !String(authorized.tokenHash).includes("gh-code"),
@@ -94,7 +106,8 @@ export async function runConnectorLiveVerification(out?: string): Promise<Connec
       slackWriteback: slackWriteback.status === "applied",
       discordDecisionReviewQueue: Boolean(discordDecision?.beliefState === "needs_verification" && service.verificationQueue("u1").items.some((item) => item.memoryId === discordDecision.id)),
       syncStatusVisible: service.connectorHealth().filter((item) => ["official-github", "official-slack", "official-discord"].includes(item.connectorId)).every((item) => item.records > 0),
-      harnessPackages: harness.passed
+      harnessPackages: harness.passed,
+      claudeGoldenPathRun: harnessRun.passed
     };
     const report: ConnectorLiveReport = {
       schemaVersion: "1.0",
@@ -102,6 +115,7 @@ export async function runConnectorLiveVerification(out?: string): Promise<Connec
       checks,
       calls,
       harnesses: harness.harnesses,
+      harnessRuns: [harnessRun],
       passed: Object.values(checks).every(Boolean)
     };
     if (out) {
@@ -114,6 +128,79 @@ export async function runConnectorLiveVerification(out?: string): Promise<Connec
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+}
+
+function verifyHarnessGoldenPath(): HarnessGoldenPathRun {
+  const repo = "demo-claude-code";
+  const service = new MemoryService({ autoDream: { enabled: false } });
+  const codebaseScope = { repo, branch: "main", harness: "claude" };
+  service.recordCodeCorrection({
+    userId: "harness-demo",
+    appId: "claude",
+    projectId: repo,
+    content: "Do not use pnpm in demo-claude-code; use npm test before release and do not edit generated files.",
+    kind: "repo_policy",
+    correctAction: "npm test",
+    codebase: codebaseScope
+  });
+  service.recordCodeCorrection({
+    userId: "harness-demo",
+    appId: "claude",
+    projectId: repo,
+    content: "Before tool calls in demo-claude-code, recall repo policy, inspect the validation folder, then run npm test after the patch.",
+    kind: "procedure",
+    correctAction: "inspect validation and run npm test",
+    codebase: codebaseScope
+  });
+  const hook = new HarnessMemoryHook(service, { maxMemories: 8, tokenBudget: 700 });
+  const context = {
+    userId: "harness-demo",
+    agentId: "claude-code",
+    appId: "claude",
+    projectId: repo,
+    sessionId: "claude-demo-run",
+    prompt: "Fix validation in the demo repo without repeating the package-manager mistake.",
+    codebaseScope
+  };
+
+  const session = hook.startSession(context);
+  const preTool = hook.beforeToolCall(context, { command: "pnpm test", cwd: `/tmp/${repo}` });
+  const action = hook.afterToolCall(context, {
+    command: "npm test",
+    cwd: `/tmp/${repo}`,
+    exitCode: 0,
+    filesChanged: ["src/validation/userValidation.ts"],
+    tests: [{ name: "npm test", status: "passed", output: "ok" }]
+  });
+  const correction = hook.captureCorrection(context, {
+    content: "Reviewer correction: the Claude Code connector must store package-manager corrections and cite patch evidence.",
+    previousWrongAction: "pnpm test",
+    correctAction: "npm test",
+    kind: "review_correction",
+    evidenceIds: action ? [action.id] : []
+  });
+  const trail = hook.finishPatch(context, {
+    task: "fix demo validation",
+    filesChanged: ["src/validation/userValidation.ts"],
+    commandsRun: ["npm test"],
+    memoryIds: [action?.id, correction?.id].filter((id): id is string => Boolean(id))
+  });
+  const checks = {
+    sessionStartContext: Boolean(session.codingContextPack?.sections.some((section) => section.evidence.length > 0) && session.memoryContext.includes("npm test")),
+    preToolProcedureRecall: preTool.procedures.some((result) => result.memory.content.includes("Before tool calls")),
+    actionGuardWarns: preTool.guard?.severity === "warn" && preTool.guard.alternatives.includes("npm test"),
+    postToolOutcomeMemory: Boolean(action?.tags.includes("harness-action") && action.tags.includes("success-pattern")),
+    userCorrectionCaptured: Boolean(correction?.tags.includes("engineering-correction") && correction.tags.includes("engineering:review_correction")),
+    patchEvidenceTrail: Boolean(trail && action && correction && trail.toolOutcomeIds.includes(action.id) && trail.correctionIds.includes(correction.id))
+  };
+  return {
+    harness: "claude",
+    repo,
+    checks,
+    codingContextPackId: session.codingContextPack?.id,
+    patchEvidenceTrailId: trail?.id,
+    passed: Object.values(checks).every(Boolean)
+  };
 }
 
 function installConnector(service: MemoryService, id: string, name: string, kind: "code" | "chat", baseUrl: string): void {

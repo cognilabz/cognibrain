@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T10:44:51.898Z",
+  "generatedAt": "2026-05-25T10:56:43.221Z",
   "container": {
     "runtime": "apple-container",
     "name": "cognibrain-planv1-postgres",
@@ -23,17 +23,17 @@
   "benchmark": {
     "writes": {
       "count": 25,
-      "p50": 73.18,
-      "p95": 102.63,
-      "max": 110.78,
-      "mean": 76.14
+      "p50": 56.72,
+      "p95": 61.19,
+      "max": 61.22,
+      "mean": 57.06
     },
     "searches": {
       "count": 10,
-      "p50": 132.28,
-      "p95": 149.43,
-      "max": 149.43,
-      "mean": 130.86
+      "p50": 108.34,
+      "p95": 112.97,
+      "max": 112.97,
+      "mean": 108.16
     },
     "failures": 0
   },

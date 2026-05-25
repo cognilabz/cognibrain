@@ -27,6 +27,7 @@ const files = {
   service: read("src/api/service.ts"),
   server: read("src/api/server.ts"),
   sdk: read("src/sdk/client.ts"),
+  harnessHook: read("src/connectors/harnessHook.ts"),
   mcpHandlers: read("src/connectors/mcpHandlers.ts"),
   mcpServer: read("src/connectors/mcpServer.ts"),
   vendorConnectors: exists("src/connectors/vendorConnectors.ts") ? read("src/connectors/vendorConnectors.ts") : "",
@@ -157,6 +158,7 @@ const workpackageChecks = [
   check("WP 0.2 Current Implementation Audit Script", [
     has(files.package, "audit:plan1_2"),
     has(files.ci, "npm run verify:nextgen"),
+    has(files.package, "npm run verify:connectors"),
     has(files.ci, "actions/upload-artifact"),
     has(files.ci, "artifacts/plan1_2-audit.json"),
     has(files.status, "Plan1_2 implementation issues")
@@ -291,18 +293,28 @@ const workpackageChecks = [
     has(files.readme, "Claude Code"),
     has(files.connectorDocs, "Claude Code"),
     has(files.readme, "setup --all-harnesses"),
-    has(files.dashboard, "Harness Packages")
+    has(files.harnessHook, "startSession"),
+    has(files.harnessHook, "beforeToolCall"),
+    has(files.harnessHook, "afterToolCall"),
+    has(files.harnessHook, "captureCorrection"),
+    has(files.harnessHook, "finishPatch"),
+    has(files.dashboard, "Harness Runs"),
+    artifact("artifacts/connectors-live.json", (report) => report.passed === true && report.checks?.claudeGoldenPathRun === true && report.harnessRuns?.some((run) => run.harness === "claude" && run.passed === true && run.checks?.patchEvidenceTrail === true))
   ]),
   check("WP 6.2 Codex Connector", [
     has(files.readme, "Codex"),
     has(files.connectorDocs, "OpenAI Codex"),
     has(files.mcpServer, "memory_coding_context_pack"),
+    has(files.harnessHook, "codingContextPack"),
+    has(files.harnessHook, "recordHarnessAction"),
     exists("templates/codex/AGENTS.md")
   ]),
   check("WP 6.3 Cursor / VS Code Connector", [
     has(files.readme, "Cursor"),
     has(files.connectorDocs, "Cursor"),
     has(files.connectorDocs, "VS Code"),
+    has(files.service, "recordConnectorTelemetry"),
+    has(files.dashboard, "Harness Runs"),
     exists("templates/cursor/open-memory.mdc")
   ]),
   check("WP 6.4 GitHub Connector", [

@@ -65,7 +65,7 @@
     "audit:plan1_1": "node scripts/audit-plan1_1.mjs",
     "audit:plan1_2": "node scripts/audit-plan1_2.mjs",
     "verify": "npm run test && npm run eval && npm run build",
-    "verify:nextgen": "npm run test && npm run eval && npm run eval:nextgen && npm run benchmark:nextgen && npm run benchmark:cognicode && npm run benchmark:answer-generation -- --reports artifacts/nextgen-benchmarks.json,artifacts/cognicodebench/run.json && npm run leaderboard && npm run verify:vendor-connectors && npm run audit:nextplan && npm run audit:planv1 && npm run audit:plan1_1 && npm run audit:plan1_2 && npm run build",
+    "verify:nextgen": "npm run test && npm run eval && npm run eval:nextgen && npm run benchmark:nextgen && npm run benchmark:cognicode && npm run benchmark:answer-generation -- --reports artifacts/nextgen-benchmarks.json,artifacts/cognicodebench/run.json && npm run leaderboard && npm run verify:connectors && npm run verify:vendor-connectors && npm run audit:nextplan && npm run audit:planv1 && npm run audit:plan1_1 && npm run audit:plan1_2 && npm run build",
     "cli": "tsx src/cli/memctl.ts",
     "mcp": "tsx src/connectors/mcpServer.ts",
     "doctor": "node bin/cognibrain.mjs doctor",

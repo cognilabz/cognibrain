@@ -298,6 +298,13 @@ const harnessProof = [
   ["GitHub", "review + CI memory"]
 ];
 
+const harnessRunProof = [
+  ["Claude Code", "context -> guard -> outcome -> evidence"],
+  ["Codex", "context pack + MCP tools"],
+  ["Cursor / VS Code", "telemetry-ready workspace"],
+  ["GitHub", "review and CI writeback"]
+];
+
 const platformSignals = [
   { label: "CLI", value: "setup installs skill + runtime", icon: Terminal },
   { label: "API", value: "scoped HTTP and MCP store", icon: Network },
@@ -1701,6 +1708,17 @@ function ProofView({
           </div>
         </div>
         <div className="panel">
+          <h2><Activity size={17} /> Harness Runs</h2>
+          <div className="ability-list">
+            {harnessRunProof.map(([label, value]) => (
+              <div key={label} className="ability-row">
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="panel">
           <h2><BarChart3 size={17} /> Proof Trend</h2>
           <div className="trend-list">
             {certifiedBenchmarks.map((benchmark) => (
@@ -1845,7 +1863,19 @@ function summarizeArtifact(value: string): string[] {
         wrongMemorySuppression?: number;
       };
       ablation?: Record<string, { score?: number }>;
+      harnessRuns?: Array<{ harness?: string; repo?: string; passed?: boolean; checks?: Record<string, boolean> }>;
+      checks?: Record<string, boolean>;
     };
+    if (parsed.harnessRuns?.length) {
+      return [
+        `connectorProof passed=${String(parsed.passed)} checks=${Object.values(parsed.checks ?? {}).filter(Boolean).length}/${Object.keys(parsed.checks ?? {}).length}`,
+        ...parsed.harnessRuns.map((run) => {
+          const passed = Object.values(run.checks ?? {}).filter(Boolean).length;
+          const total = Object.keys(run.checks ?? {}).length;
+          return `${run.harness ?? "harness"} repo=${run.repo ?? "n/a"} passed=${String(run.passed)} ${passed}/${total}`;
+        })
+      ];
+    }
     if (parsed.benchmark === "CogniCodeBench") {
       const full = parsed.ablation?.cognibrain_full?.score ?? 0;
       const bestBaseline = Math.max(...Object.entries(parsed.ablation ?? {}).filter(([name]) => name !== "cognibrain_full").map(([, value]) => value.score ?? 0), 0);

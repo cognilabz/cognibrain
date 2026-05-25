@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T10:44:47.423Z",
+  "generatedAt": "2026-05-25T10:58:30.755Z",
   "checks": {
     "connectorAuthSecretHash": true,
     "connectorRevoke": true,
@@ -13,7 +13,8 @@
     "slackWriteback": true,
     "discordDecisionReviewQueue": true,
     "syncStatusVisible": true,
-    "harnessPackages": true
+    "harnessPackages": true,
+    "claudeGoldenPathRun": true
   },
   "calls": [
     {
@@ -51,6 +52,23 @@
     "openclaw",
     "langgraph",
     "crewai"
+  ],
+  "harnessRuns": [
+    {
+      "harness": "claude",
+      "repo": "demo-claude-code",
+      "checks": {
+        "sessionStartContext": true,
+        "preToolProcedureRecall": true,
+        "actionGuardWarns": true,
+        "postToolOutcomeMemory": true,
+        "userCorrectionCaptured": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_jlb9a7",
+      "patchEvidenceTrailId": "patch_ev_10uvl3o",
+      "passed": true
+    }
   ],
   "passed": true
 }

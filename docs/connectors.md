@@ -322,7 +322,7 @@ Source: https://docs.cursor.com/context/model-context-protocol
 
 | Harness | Current repo surface | Best next enhancement | Verification |
 | --- | --- | --- | --- |
-| Claude Code | stdio MCP plus hook template | `setup --all-harnesses` writes `.mcp.json`, `.claude/settings.json`, runtime auto-start, and `PostToolUse` maintenance feedback | Generated settings contain the package path and MCP config |
+| Claude Code | stdio MCP plus hook template and TypeScript golden-path hook | `setup --all-harnesses` writes `.mcp.json`, `.claude/settings.json`, runtime auto-start, and `PostToolUse` maintenance feedback; `HarnessMemoryHook` covers session-start context, pre-tool procedure/action guard, post-tool outcome memory, correction capture and patch evidence | Generated settings contain the package path and MCP config; `npm run verify:connectors` runs a Claude Code demo repo through the full connector loop |
 | GitHub Copilot | instruction templates plus MCP-compatible server | `setup --all-harnesses` writes repository and scoped instruction files with feedback commands | Generated files match templates plus scoped feedback adapter |
 | OpenAI Codex | stdio MCP plus `AGENTS.md` and Skill template | Installs Skill, starts backend/dashboard with one command, and generates compact project memory policy | `memory_maintenance_status` works and `memory_search` returns project memories |
 | Cursor | stdio MCP plus project rule template | `setup --all-harnesses` writes `.cursor/mcp.json` and `.cursor/rules/open-memory.mdc` | Cursor MCP config and rule file are generated deterministically |
@@ -332,7 +332,7 @@ Source: https://docs.cursor.com/context/model-context-protocol
 | LangGraph | HTTP helper package for graph state | `setup --all-harnesses` writes `langgraph.cognibrain.json` and `langgraph-cognibrain.ts` | Helper fetches evidence packs and records tool telemetry |
 | CrewAI | HTTP helper package for crew tasks | `setup --all-harnesses` writes `crewai.cognibrain.json` and `crewai_cognibrain.py` | Helper fetches evidence packs and records tool telemetry |
 
-The implemented package surface is instruction-file generation, MCP config, and HTTP helper code. Native or scripted harness telemetry uses `connector-telemetry` or `POST /connectors/telemetry` for accepted/rejected suggestions, tool outcomes, and context-pack feedback without requiring a custom schema per harness.
+The implemented package surface is instruction-file generation, MCP config, HTTP helper code, and the shared TypeScript `HarnessMemoryHook` golden path. Native or scripted harness telemetry uses `connector-telemetry` or `POST /connectors/telemetry` for accepted/rejected suggestions, tool outcomes, and context-pack feedback without requiring a custom schema per harness. Direct harness runtimes can use `startSession`, `beforeToolCall`, `afterToolCall`, `captureCorrection`, and `finishPatch` to run the same memory loop without shelling out to MCP.
 
 ## Connector Proof Surface
 

@@ -467,6 +467,68 @@ describe("TypeScript memory core", () => {
     expect(store.list("u1").length).toBe(2);
   });
 
+  it("runs the harness golden path from context to patch evidence", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    const codebaseScope = { repo: "demo-claude-code", branch: "main", harness: "claude" };
+    service.recordCodeCorrection({
+      userId: "dev",
+      projectId: "demo-claude-code",
+      content: "Do not use pnpm in demo-claude-code; use npm test before release.",
+      kind: "repo_policy",
+      correctAction: "npm test",
+      codebase: codebaseScope
+    });
+    service.recordCodeCorrection({
+      userId: "dev",
+      projectId: "demo-claude-code",
+      content: "Before editing validation in demo-claude-code, inspect the validation folder and run npm test.",
+      kind: "procedure",
+      correctAction: "inspect validation and run npm test",
+      codebase: codebaseScope
+    });
+
+    const hook = new HarnessMemoryHook(service, { maxMemories: 8, tokenBudget: 700 });
+    const context = {
+      userId: "dev",
+      agentId: "claude-code",
+      appId: "claude",
+      projectId: "demo-claude-code",
+      prompt: "Fix validation without repeating old command mistakes.",
+      codebaseScope
+    };
+    const session = hook.startSession(context);
+    const preTool = hook.beforeToolCall(context, { command: "pnpm test", cwd: "/repo/demo-claude-code" });
+    const action = hook.afterToolCall(context, {
+      command: "npm test",
+      cwd: "/repo/demo-claude-code",
+      exitCode: 0,
+      filesChanged: ["src/validation/userValidation.ts"],
+      tests: [{ name: "npm test", status: "passed", output: "ok" }]
+    });
+    const correction = hook.captureCorrection(context, {
+      content: "Reviewer correction: store Claude Code package-manager corrections and attach patch evidence.",
+      previousWrongAction: "pnpm test",
+      correctAction: "npm test",
+      kind: "review_correction",
+      evidenceIds: action ? [action.id] : []
+    });
+    const trail = hook.finishPatch(context, {
+      task: "fix validation",
+      filesChanged: ["src/validation/userValidation.ts"],
+      commandsRun: ["npm test"],
+      memoryIds: [action?.id, correction?.id].filter((id): id is string => Boolean(id))
+    });
+
+    expect(session.codingContextPack?.sections.some((section) => section.evidence.length > 0)).toBe(true);
+    expect(preTool.procedures.some((result) => result.memory.content.includes("Before editing validation"))).toBe(true);
+    expect(preTool.guard?.severity).toBe("warn");
+    expect(preTool.guard?.alternatives).toContain("npm test");
+    expect(action?.tags).toEqual(expect.arrayContaining(["harness-action", "success-pattern"]));
+    expect(correction?.tags).toEqual(expect.arrayContaining(["engineering-correction", "engineering:review_correction"]));
+    expect(trail?.toolOutcomeIds).toContain(action?.id);
+    expect(trail?.correctionIds).toContain(correction?.id);
+  });
+
   it("keeps harness memory context inside the configured token budget", () => {
     const store = new MemoryStore();
     const retrieval = new RetrievalEngine(store);

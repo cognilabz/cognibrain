@@ -967,10 +967,18 @@ textarea {
   border-top: 0;
 }
 
-.slider-grid label,
-.trend-row {
+.slider-grid label {
   display: grid;
   grid-template-columns: 100px minmax(0, 1fr) 48px;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.trend-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.9fr) minmax(110px, 1.1fr) minmax(54px, auto);
   gap: 10px;
   align-items: center;
   margin: 0;
@@ -990,6 +998,8 @@ textarea {
 
 .trend-row span {
   font-weight: 760;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .timeline-row,

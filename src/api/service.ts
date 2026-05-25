@@ -67,7 +67,10 @@ import type {
   ConnectorManifest,
   ConnectorAuthSession,
   ConnectorSyncRecord,
+  ContextEnrichmentReport,
+  ContextReference,
   EnrichmentCandidate,
+  ExternalContextEvidence,
   ActionGuardReport,
   EpisodeInput,
   EpisodeRecord,
@@ -201,6 +204,18 @@ interface ConnectorListResult {
   items: Array<Record<string, unknown>>;
   responseStatusCode?: number;
   error?: string;
+}
+
+interface ContextEnrichmentInput extends SearchOptions {
+  tokenBudget?: number;
+  primaryIssueStore?: string;
+  primaryKnowledgeStore?: string;
+  defaultSearchConnectors?: string[];
+  fetchReferenced?: boolean;
+  searchPrimaryStores?: boolean;
+  persistFetched?: boolean;
+  maxExternalFetches?: number;
+  maxExternalResults?: number;
 }
 
 export interface MemoryMaintenanceStatus {
@@ -773,6 +788,126 @@ export class MemoryService {
     const pack = this.evidencePacks.get(id);
     if (!pack) throw new Error(`Evidence pack not found: ${id}`);
     return pack;
+  }
+
+  async enrichContext(
+    input: ContextEnrichmentInput,
+    fetchImpl: typeof fetch = fetch,
+    timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000)
+  ): Promise<ContextEnrichmentReport> {
+    const tokenBudget = input.tokenBudget ?? 1200;
+    const localEvidence = this.evidencePack({ ...input, limit: input.limit ?? 8, tokenBudget: Math.max(300, Math.floor(tokenBudget * 0.55)) });
+    const references = detectContextReferences(input.query);
+    const connectorPlan = contextConnectorPlan(input, references);
+    const maxFetches = Math.max(0, input.maxExternalFetches ?? Number(process.env.MEMORY_CONTEXT_MAX_FETCHES ?? 6));
+    const maxExternalResults = Math.max(1, input.maxExternalResults ?? Number(process.env.MEMORY_CONTEXT_MAX_RESULTS ?? 8));
+    const warnings: string[] = [];
+    const searchedConnectors: ContextEnrichmentReport["searchedConnectors"] = [];
+    const externalEvidence: ExternalContextEvidence[] = [];
+    const plans = connectorPlan.slice(0, maxFetches);
+
+    for (const plan of plans) {
+      const manifest = this.connectorManifests.get(plan.connectorId);
+      if (!manifest?.list?.endpoint) {
+        searchedConnectors.push({ connectorId: plan.connectorId, reason: plan.reason, status: "skipped", error: "connector has no list endpoint" });
+        continue;
+      }
+      try {
+        const listed = await this.listConnectorItems(plan.connectorId, fetchImpl, timeoutMs);
+        searchedConnectors.push({ connectorId: plan.connectorId, reason: plan.reason, status: listed.status, items: listed.items.length, error: listed.error });
+        if (listed.status === "failed") {
+          warnings.push(`${plan.connectorId}: ${listed.error ?? "list failed"}`);
+          continue;
+        }
+        externalEvidence.push(...rankContextItems({
+          query: input.query,
+          connectorId: plan.connectorId,
+          source: plan.source,
+          reference: plan.reference,
+          items: listed.items,
+          maxResults: maxExternalResults
+        }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "context connector search failed";
+        searchedConnectors.push({ connectorId: plan.connectorId, reason: plan.reason, status: "failed", error: message });
+        warnings.push(`${plan.connectorId}: ${message}`);
+      }
+    }
+
+    const dedupedExternal = dedupeExternalEvidence(externalEvidence)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxExternalResults);
+    let persistedExternalItems = 0;
+    if (input.persistFetched) {
+      for (const item of dedupedExternal) {
+        this.add({
+          userId: input.userId,
+          brainId: input.brainId,
+          sourceId: input.sourceId,
+          agentId: input.agentId,
+          sessionId: input.sessionId,
+          appId: input.appId,
+          orgId: input.orgId,
+          projectId: input.projectId,
+          content: `${item.title}: ${item.content}`,
+          type: "reference",
+          layer: "working",
+          tags: ["context-enrichment", item.connectorId],
+          source: { kind: "import", uri: item.uri, confidence: 0.82 },
+          metadata: {
+            connectorId: item.connectorId,
+            externalId: item.externalId,
+            reference: item.reference,
+            contextEnrichment: true,
+            evidenceId: item.id
+          }
+        });
+        persistedExternalItems += 1;
+      }
+    }
+
+    const context = buildEnrichedContext(localEvidence.context, dedupedExternal, tokenBudget);
+    const id = `ctx_enrich_${contentHash(JSON.stringify({
+      userId: input.userId,
+      query: input.query,
+      local: localEvidence.id,
+      external: dedupedExternal.map((item) => item.id)
+    })).slice(2, 14)}`;
+    const report: ContextEnrichmentReport = {
+      schemaVersion: "1.0",
+      id,
+      generatedAt: new Date().toISOString(),
+      query: input.query,
+      userId: input.userId,
+      references,
+      localEvidence,
+      externalEvidence: dedupedExternal,
+      searchedConnectors,
+      context,
+      warnings,
+      summary: {
+        localMemories: localEvidence.results.length,
+        externalItems: dedupedExternal.length,
+        referencesDetected: references.length,
+        persistedExternalItems
+      }
+    };
+    this.recordAudit("search.run", {
+      userId: input.userId,
+      brainId: input.brainId,
+      sourceId: input.sourceId,
+      metadata: {
+        resource: "context-enrichment",
+        contextPackId: id,
+        query: input.query,
+        localMemories: report.summary.localMemories,
+        externalItems: report.summary.externalItems,
+        references: report.summary.referencesDetected,
+        searchedConnectors: searchedConnectors.map((item) => item.connectorId)
+      }
+    });
+    this.persist();
+    return report;
   }
 
   recordCodeCorrection(input: {
@@ -2589,6 +2724,7 @@ export class MemoryService {
       "/route": ["POST"],
       "/intent": ["POST"],
       "/evidence-pack": ["POST"],
+      "/context/enrich": ["POST"],
       "/coding-context-pack": ["POST"],
       "/coding-context-packs/{id}": ["GET"],
       "/patch-evidence": ["POST"],
@@ -4795,6 +4931,213 @@ function safeGet(store: MemoryStore, id: string): Memory | undefined {
   }
 }
 
+function detectContextReferences(query: string): ContextReference[] {
+  const references: ContextReference[] = [];
+  const seen = new Set<string>();
+  const add = (reference: ContextReference) => {
+    const key = `${reference.type}:${reference.value}:${reference.url ?? ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    references.push(reference);
+  };
+  for (const match of query.matchAll(/https?:\/\/[^\s),\]]+/g)) {
+    const raw = match[0].replace(/[).,]+$/, "");
+    const parsed = parseReferenceUrl(raw);
+    add(parsed ?? { type: "url", raw, value: raw, url: raw, confidence: 0.72 });
+  }
+  for (const match of query.matchAll(/\b([A-Z][A-Z0-9]{1,12}-\d+)\b/g)) {
+    add({ type: "jira_issue", raw: match[0], value: match[1], connectorHint: "official-jira", confidence: 0.9 });
+  }
+  for (const match of query.matchAll(/\b(?:gh|github)\s*(?:issue|#)?\s*#?(\d+)\b/gi)) {
+    add({ type: "github_issue", raw: match[0], value: match[1], connectorHint: "official-github", confidence: 0.84 });
+  }
+  for (const match of query.matchAll(/\b(?:pr|pull request|merge)\s*#?(\d+)\b/gi)) {
+    add({ type: "github_pull_request", raw: match[0], value: match[1], connectorHint: "official-github", confidence: 0.82 });
+  }
+  for (const match of query.matchAll(/(?<![\w/-])#(\d+)\b/g)) {
+    add({ type: "issue_or_pr", raw: match[0], value: match[1], confidence: 0.68 });
+  }
+  return references;
+}
+
+function parseReferenceUrl(raw: string): ContextReference | undefined {
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    const github = url.pathname.match(/\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)/i);
+    if (host.includes("github.com") && github) {
+      return {
+        type: github[3].toLowerCase() === "pull" ? "github_pull_request" : "github_issue",
+        raw,
+        value: github[4],
+        url: raw,
+        connectorHint: "official-github",
+        confidence: 0.96
+      };
+    }
+    const gitlab = url.pathname.match(/\/-\/merge_requests\/(\d+)/i);
+    if (host.includes("gitlab") && gitlab) {
+      return { type: "gitlab_merge_request", raw, value: gitlab[1], url: raw, connectorHint: "official-gitlab", confidence: 0.93 };
+    }
+    if (host.includes("atlassian.net") && /\/wiki\//i.test(url.pathname)) {
+      return { type: "confluence_page", raw, value: raw, url: raw, connectorHint: "official-confluence", confidence: 0.88 };
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function contextConnectorPlan(input: ContextEnrichmentInput, references: ContextReference[]): Array<{ connectorId: string; reason: string; source: ExternalContextEvidence["source"]; reference?: ContextReference }> {
+  const planned: Array<{ connectorId: string; reason: string; source: ExternalContextEvidence["source"]; reference?: ContextReference }> = [];
+  const issueStore = input.primaryIssueStore ?? process.env.MEMORY_PRIMARY_ISSUE_CONNECTOR;
+  const knowledgeStore = input.primaryKnowledgeStore ?? process.env.MEMORY_PRIMARY_KNOWLEDGE_CONNECTOR;
+  const defaultConnectors = [
+    ...(input.defaultSearchConnectors ?? []),
+    ...csv(process.env.MEMORY_DEFAULT_CONTEXT_CONNECTORS)
+  ];
+  const push = (connectorId: string | undefined, reason: string, source: ExternalContextEvidence["source"], reference?: ContextReference) => {
+    if (!connectorId) return;
+    planned.push({ connectorId, reason, source, reference });
+  };
+  if (input.fetchReferenced !== false) {
+    for (const reference of references) {
+      if (reference.connectorHint) push(reference.connectorHint, `explicit reference ${reference.raw}`, "reference", reference);
+      else if (reference.type === "issue_or_pr") push(issueStore ?? "official-github", `generic issue/PR reference ${reference.raw}`, "reference", reference);
+      else if (reference.type === "url") push(knowledgeStore, `referenced URL ${reference.raw}`, "reference", reference);
+    }
+  }
+  if (input.searchPrimaryStores !== false) {
+    push(issueStore, "primary issue store default search", "primary_issue_store");
+    push(knowledgeStore, "primary knowledge store default search", "primary_knowledge_store");
+    for (const connectorId of defaultConnectors) push(connectorId, "default context connector search", "default_search");
+  }
+  const seen = new Set<string>();
+  return planned.filter((item) => {
+    const key = `${item.connectorId}:${item.source}:${item.reference?.type ?? ""}:${item.reference?.value ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function rankContextItems(input: {
+  query: string;
+  connectorId: string;
+  source: ExternalContextEvidence["source"];
+  reference?: ContextReference;
+  items: Array<Record<string, unknown>>;
+  maxResults: number;
+}): ExternalContextEvidence[] {
+  const queryTokens = tokenSet(input.query);
+  return input.items
+    .map((item) => contextEvidenceForItem(input.connectorId, item, input.source, input.reference, queryTokens))
+    .filter((item): item is ExternalContextEvidence => item !== undefined && item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, input.maxResults);
+}
+
+function contextEvidenceForItem(
+  connectorId: string,
+  item: Record<string, unknown>,
+  source: ExternalContextEvidence["source"],
+  reference: ContextReference | undefined,
+  queryTokens: Set<string>
+): ExternalContextEvidence | undefined {
+  const externalId = firstString(item.externalId, item.id, item.key, item.issueKey, item.identifier);
+  const title = firstString(item.title, item.name, item.summary, item.key, externalId, "External context item") ?? "External context item";
+  const uri = firstString(item.url, item.uri, item.webUrl, item.web_url, item.html_url, item.permalink_url);
+  const content = compactContextItemText(item, title);
+  const haystack = `${externalId ?? ""} ${title} ${uri ?? ""} ${content}`.toLowerCase();
+  const exact = reference ? referenceMatchesItem(reference, haystack, externalId, uri) : false;
+  const overlap = [...queryTokens].filter((token) => token.length > 2 && haystack.includes(token)).length;
+  const score = (exact ? 2.5 : 0) + Math.min(1.5, overlap * 0.18) + (source === "primary_issue_store" || source === "primary_knowledge_store" ? 0.25 : 0);
+  if (score <= 0.1) return undefined;
+  const fetchedAt = new Date().toISOString();
+  return {
+    id: `ext_${contentHash(`${connectorId}:${externalId ?? uri ?? title}:${reference?.raw ?? ""}`).slice(2, 14)}`,
+    connectorId,
+    source,
+    reference: reference?.raw,
+    externalId,
+    title,
+    content,
+    uri,
+    score: roundMetric(score),
+    fetchedAt,
+    provenance: {
+      connectorId,
+      reference: reference?.raw,
+      sourceUri: uri,
+      fetchMode: reference ? "list-filter" : "search"
+    }
+  };
+}
+
+function referenceMatchesItem(reference: ContextReference, haystack: string, externalId?: string, uri?: string): boolean {
+  const value = reference.value.toLowerCase();
+  if (reference.url && uri && normalizeUrl(uri) === normalizeUrl(reference.url)) return true;
+  if (reference.type === "jira_issue") return haystack.includes(value);
+  if (reference.type === "github_issue" || reference.type === "github_pull_request" || reference.type === "issue_or_pr") {
+    return [value, `#${value}`, `pr-${value}`, `issue-${value}`].some((needle) => haystack.includes(needle)) || externalId === value;
+  }
+  if (reference.type === "gitlab_merge_request") return [value, `mr-${value}`].some((needle) => haystack.includes(needle));
+  if (reference.type === "confluence_page" || reference.type === "url") return reference.url ? haystack.includes(reference.url.toLowerCase()) : haystack.includes(value);
+  return false;
+}
+
+function compactContextItemText(item: Record<string, unknown>, title: string): string {
+  const values = [
+    firstString(item.content, item.body, item.description, item.notes, item.text, item.markdown_description),
+    firstString(item.status, item.state, item.assignee, item.author),
+    firstString(item.updatedAt, item.modifiedAt, item.updated_at)
+  ].filter((value): value is string => Boolean(value));
+  return truncateText([title, ...values].join(" | "), 1200);
+}
+
+function buildEnrichedContext(localContext: string, external: ExternalContextEvidence[], tokenBudget: number): string {
+  const externalContext = external.length
+    ? [
+        "## External context fetched just in time",
+        ...external.map((item) => `- [${item.id}] ${item.connectorId}${item.reference ? ` via ${item.reference}` : ""}: ${item.title}. ${truncateText(item.content, 420)}${item.uri ? ` (${item.uri})` : ""}`)
+      ].join("\n")
+    : "";
+  return truncateText([localContext, externalContext].filter(Boolean).join("\n\n"), Math.max(600, tokenBudget * 4));
+}
+
+function dedupeExternalEvidence(items: ExternalContextEvidence[]): ExternalContextEvidence[] {
+  const byKey = new Map<string, ExternalContextEvidence>();
+  for (const item of items) {
+    const key = `${item.connectorId}:${item.externalId ?? item.uri ?? item.title}`;
+    const previous = byKey.get(key);
+    if (!previous || item.score > previous.score) byKey.set(key, item);
+  }
+  return [...byKey.values()];
+}
+
+function csv(value: string | undefined): string[] {
+  return value ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
+}
+
+function tokenSet(value: string): Set<string> {
+  return new Set(value.toLowerCase().split(/[^a-z0-9_-]+/).filter((token) => token.length > 1));
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) if (typeof value === "string" && value.trim()) return value.trim();
+  for (const value of values) if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return undefined;
+}
+
+function truncateText(value: string, max: number): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length <= max ? normalized : `${normalized.slice(0, Math.max(0, max - 3)).trim()}...`;
+}
+
+function normalizeUrl(value: string): string {
+  return value.replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
+}
+
 function connectorReviewRequired(manifest: ConnectorManifest, event: MemoryExtractionEvent & { externalId?: string }): boolean {
   if (event.metadata?.reviewRequired === true) return true;
   if (manifest.kind === "chat" && /\b(decision|decided|approved|must|should)\b/i.test(event.content)) return true;
@@ -4811,7 +5154,7 @@ function connectorEventVisibility(event: MemoryExtractionEvent & { externalId?: 
 function connectorEventTags(manifest: ConnectorManifest, event: MemoryExtractionEvent & { externalId?: string }): string[] {
   const eventType = typeof event.metadata?.eventType === "string" ? event.metadata.eventType : "";
   const tags = [manifest.id, manifest.kind];
-  for (const provider of ["github", "slack", "discord", "jira", "confluence", "notion", "linear"]) {
+  for (const provider of ["github", "slack", "discord", "jira", "confluence", "notion", "linear", "gitlab", "azure-devops", "teams", "gmail", "google-drive", "google-calendar", "asana", "clickup", "sentry", "datadog", "pagerduty", "posthog"]) {
     if (manifest.id.includes(provider)) tags.push(provider);
   }
   if (/pr[_-]?decision/i.test(eventType) || /\bPR\b.*\b(decision|approved|merged)\b/i.test(event.content)) tags.push("pr-decision", "connector-decision");
@@ -5084,21 +5427,23 @@ function officialConnectorManifests(): ConnectorManifest[] {
     poll: capabilities.includes("poll") ? { endpoint: `connector://${id}/poll`, method: "POST" } : undefined,
     writeback: capabilities.includes("writeback") ? { operations: connectorWritebackOperations(kind), endpoint: `connector://${id}/writeback`, method: "POST" } : undefined
   });
+  type VendorProvider = NonNullable<ConnectorManifest["vendor"]>["provider"];
   const vendor = (
-    id: "official-github" | "official-slack" | "official-discord" | "official-jira" | "official-confluence" | "official-notion" | "official-linear",
+    id: string,
     name: string,
     kind: ConnectorManifest["kind"],
     capabilities: ConnectorManifest["capabilities"],
     metadataMapping: Record<string, string>,
     defaultSourceKind: ConnectorManifest["defaultSourceKind"],
     oauthScopes: string[],
-    provider: "github" | "slack" | "discord" | "jira" | "confluence" | "notion" | "linear",
+    provider: VendorProvider,
     docsUrl: string,
     requiredEnv: string[]
   ): ConnectorManifest => {
-    const vendorEndpoint = { github: "vendor://github", slack: "vendor://slack", discord: "vendor://discord", jira: "vendor://jira", confluence: "vendor://confluence", notion: "vendor://notion", linear: "vendor://linear" }[provider];
+    const vendorEndpoint = `vendor://${provider}`;
     return {
       ...service(id, name, kind, capabilities, metadataMapping, defaultSourceKind, oauthScopes),
+      auth: provider === "datadog" ? "api_key" : "token",
       list: { endpoint: `${vendorEndpoint}/list`, method: "GET" },
       poll: capabilities.includes("poll") ? { endpoint: `${vendorEndpoint}/poll`, method: "GET" } : undefined,
       writeback: capabilities.includes("writeback") ? { operations: connectorWritebackOperations(kind), endpoint: `${vendorEndpoint}/writeback`, method: "POST" } : undefined,
@@ -5114,24 +5459,24 @@ function officialConnectorManifests(): ConnectorManifest[] {
     base("calendar", "Calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", attendees: "entities.attendees", start: "temporal.eventAt" }, "human"),
     base("cloud_storage", "Cloud Storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title" }, "import"),
     vendor("official-github", "GitHub", "code", ["ingest", "export", "webhook", "poll", "writeback"], { repo: "metadata.repo", issueNumber: "externalId", pullRequest: "metadata.pullRequest", commit: "source.commit", actor: "source.author", url: "source.uri" }, "reviewed_code", ["repo:read", "issues:read", "pull_requests:read", "contents:read"], "github", "https://docs.github.com/en/rest/pulls/pulls", ["MEMORY_GITHUB_REPO", "MEMORY_GITHUB_TOKEN"]),
-    service("official-gitlab", "GitLab", "code", ["ingest", "export", "webhook", "poll", "writeback"], { project: "metadata.project", mergeRequest: "metadata.mergeRequest", issueIid: "externalId", pipeline: "metadata.pipeline", commit: "source.commit", actor: "source.author", url: "source.uri" }, "reviewed_code", ["read_api", "read_repository", "read_user"]),
-    service("official-azure-devops", "Azure DevOps", "code", ["ingest", "export", "webhook", "poll", "writeback"], { organization: "metadata.organization", project: "metadata.project", workItemId: "externalId", pullRequest: "metadata.pullRequest", pipeline: "metadata.pipeline", url: "source.uri" }, "reviewed_code", ["vso.code", "vso.work", "vso.build"]),
+    vendor("official-gitlab", "GitLab", "code", ["ingest", "export", "webhook", "poll", "writeback"], { project: "metadata.project", mergeRequest: "metadata.mergeRequest", issueIid: "externalId", pipeline: "metadata.pipeline", commit: "source.commit", actor: "source.author", url: "source.uri" }, "reviewed_code", ["read_api", "read_repository", "read_user"], "gitlab", "https://docs.gitlab.com/api/merge_requests/", ["MEMORY_GITLAB_PROJECT", "MEMORY_GITLAB_TOKEN"]),
+    vendor("official-azure-devops", "Azure DevOps", "code", ["ingest", "export", "webhook", "poll", "writeback"], { organization: "metadata.organization", project: "metadata.project", workItemId: "externalId", pullRequest: "metadata.pullRequest", pipeline: "metadata.pipeline", url: "source.uri" }, "reviewed_code", ["vso.code", "vso.work", "vso.build"], "azure-devops", "https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests", ["MEMORY_AZURE_DEVOPS_ORG", "MEMORY_AZURE_DEVOPS_PROJECT", "MEMORY_AZURE_DEVOPS_TOKEN"]),
     vendor("official-jira", "Jira", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueKey: "externalId", status: "metadata.status", assignee: "entities.assignee", sprint: "metadata.sprint", project: "metadata.project", url: "source.uri" }, "import", ["read:jira-work", "write:jira-work"], "jira", "https://developer.atlassian.com/cloud/jira/platform/rest/v3/", ["MEMORY_JIRA_BASE_URL", "MEMORY_JIRA_EMAIL", "MEMORY_JIRA_API_TOKEN", "MEMORY_JIRA_PROJECT"]),
     vendor("official-confluence", "Confluence", "docs", ["ingest", "export", "webhook", "poll", "writeback"], { pageId: "externalId", space: "metadata.space", version: "metadata.version", title: "content.title", url: "source.uri" }, "import", ["read:confluence-content.all", "write:confluence-content"], "confluence", "https://developer.atlassian.com/cloud/confluence/rest/v2/", ["MEMORY_CONFLUENCE_BASE_URL", "MEMORY_CONFLUENCE_EMAIL", "MEMORY_CONFLUENCE_API_TOKEN", "MEMORY_CONFLUENCE_SPACE"]),
     vendor("official-linear", "Linear", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueId: "externalId", team: "metadata.team", status: "metadata.status", assignee: "entities.assignee", label: "tags", url: "source.uri" }, "import", ["read", "write"], "linear", "https://developers.linear.app/docs/graphql/working-with-the-graphql-api", ["MEMORY_LINEAR_API_KEY", "MEMORY_LINEAR_TEAM_ID"]),
     vendor("official-slack", "Slack", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageTs: "externalId", threadTs: "metadata.threadId", permalink: "source.uri" }, "transcript", ["channels:history", "groups:history", "chat:write"], "slack", "https://docs.slack.dev/reference/methods/conversations.history/", ["MEMORY_SLACK_TOKEN", "MEMORY_SLACK_CHANNEL_ID"]),
     vendor("official-discord", "Discord", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageId: "externalId", threadId: "metadata.threadId", jumpUrl: "source.uri" }, "transcript", ["messages.read", "messages.write"], "discord", "https://docs.discord.com/developers/resources/message", ["MEMORY_DISCORD_BOT_TOKEN", "MEMORY_DISCORD_CHANNEL_ID"]),
-    service("official-microsoft-teams", "Microsoft Teams", "chat", ["ingest", "webhook", "poll", "writeback"], { team: "metadata.team", channel: "metadata.channel", sender: "source.author", messageId: "externalId", threadId: "metadata.threadId", url: "source.uri" }, "transcript", ["ChannelMessage.Read.All", "ChannelMessage.Send"]),
+    vendor("official-microsoft-teams", "Microsoft Teams", "chat", ["ingest", "webhook", "poll", "writeback"], { team: "metadata.team", channel: "metadata.channel", sender: "source.author", messageId: "externalId", threadId: "metadata.threadId", url: "source.uri" }, "transcript", ["ChannelMessage.Read.All", "ChannelMessage.Send"], "teams", "https://learn.microsoft.com/en-us/graph/api/channel-list-messages", ["MEMORY_TEAMS_TEAM_ID", "MEMORY_TEAMS_CHANNEL_ID", "MEMORY_TEAMS_TOKEN"]),
     vendor("official-notion", "Notion", "docs", ["ingest", "webhook", "poll", "writeback"], { pageId: "externalId", workspace: "metadata.workspace", title: "content.title", url: "source.uri", lastEditedBy: "source.author" }, "import", ["read_content", "update_content"], "notion", "https://developers.notion.com/reference/intro", ["MEMORY_NOTION_TOKEN", "MEMORY_NOTION_DATABASE_ID"]),
-    service("official-google-drive", "Google Drive", "cloud_storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title", owner: "source.author" }, "import", ["drive.readonly"]),
-    service("official-gmail", "Gmail", "email", ["ingest", "export", "webhook", "poll", "writeback"], { messageId: "externalId", threadId: "metadata.threadId", subject: "content.title", from: "source.author", labelIds: "tags" }, "human", ["gmail.readonly", "gmail.modify"]),
-    service("official-google-calendar", "Google Calendar", "calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", calendarId: "metadata.calendarId", attendees: "entities.attendees", start: "temporal.eventAt", url: "source.uri" }, "human", ["calendar.readonly", "calendar.events"]),
-    service("official-asana", "Asana", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { taskId: "externalId", workspace: "metadata.workspace", project: "metadata.project", status: "metadata.status", assignee: "entities.assignee", url: "source.uri" }, "import", ["default"]),
-    service("official-clickup", "ClickUp", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { taskId: "externalId", workspace: "metadata.workspace", space: "metadata.space", status: "metadata.status", assignee: "entities.assignee", url: "source.uri" }, "import", ["task:read", "task:write"]),
-    service("official-sentry", "Sentry", "code", ["ingest", "export", "webhook", "poll", "writeback"], { issueId: "externalId", organization: "metadata.organization", project: "metadata.project", release: "metadata.release", actor: "source.author", url: "source.uri" }, "reviewed_code", ["event:read", "project:read", "org:read"]),
-    service("official-datadog", "Datadog", "code", ["ingest", "export", "webhook", "poll", "writeback"], { monitorId: "externalId", service: "metadata.service", site: "metadata.site", status: "metadata.status", url: "source.uri" }, "import", ["monitors_read", "events_read", "incident_read"]),
-    service("official-pagerduty", "PagerDuty", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { incidentId: "externalId", service: "metadata.service", urgency: "metadata.urgency", status: "metadata.status", url: "source.uri" }, "import", ["incidents.read", "services.read"]),
-    service("official-posthog", "PostHog", "docs", ["ingest", "export", "webhook", "poll", "writeback"], { featureFlag: "externalId", project: "metadata.project", experiment: "metadata.experiment", actor: "source.author", url: "source.uri" }, "import", ["feature_flags:read", "insights:read"])
+    vendor("official-google-drive", "Google Drive", "cloud_storage", ["ingest", "poll", "media", "writeback"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title", owner: "source.author" }, "import", ["drive.metadata.readonly", "drive.file"], "google-drive", "https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list", ["MEMORY_GOOGLE_DRIVE_ROOT", "MEMORY_GOOGLE_TOKEN"]),
+    vendor("official-gmail", "Gmail", "email", ["ingest", "export", "webhook", "poll", "writeback"], { messageId: "externalId", threadId: "metadata.threadId", subject: "content.title", from: "source.author", labelIds: "tags" }, "human", ["gmail.readonly", "gmail.modify"], "gmail", "https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/list", ["MEMORY_GMAIL_ACCOUNT", "MEMORY_GOOGLE_TOKEN"]),
+    vendor("official-google-calendar", "Google Calendar", "calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", calendarId: "metadata.calendarId", attendees: "entities.attendees", start: "temporal.eventAt", url: "source.uri" }, "human", ["calendar.readonly", "calendar.events"], "google-calendar", "https://developers.google.com/workspace/calendar/api/v3/reference/events/list", ["MEMORY_GOOGLE_CALENDAR_ID", "MEMORY_GOOGLE_TOKEN"]),
+    vendor("official-asana", "Asana", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { taskId: "externalId", workspace: "metadata.workspace", project: "metadata.project", status: "metadata.status", assignee: "entities.assignee", url: "source.uri" }, "import", ["tasks:read", "tasks:write"], "asana", "https://developers.asana.com/reference/gettasks", ["MEMORY_ASANA_WORKSPACE", "MEMORY_ASANA_TOKEN"]),
+    vendor("official-clickup", "ClickUp", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { taskId: "externalId", workspace: "metadata.workspace", list: "metadata.list", status: "metadata.status", assignee: "entities.assignee", url: "source.uri" }, "import", ["task:read", "task:write"], "clickup", "https://developer.clickup.com/reference/gettasks", ["MEMORY_CLICKUP_LIST_ID", "MEMORY_CLICKUP_TOKEN"]),
+    vendor("official-sentry", "Sentry", "code", ["ingest", "export", "webhook", "poll", "writeback"], { issueId: "externalId", organization: "metadata.organization", project: "metadata.project", release: "metadata.release", actor: "source.author", url: "source.uri" }, "reviewed_code", ["event:read", "project:read", "org:read"], "sentry", "https://docs.sentry.io/api/events/list-a-projects-issues/", ["MEMORY_SENTRY_ORG", "MEMORY_SENTRY_PROJECT", "MEMORY_SENTRY_TOKEN"]),
+    vendor("official-datadog", "Datadog", "code", ["ingest", "export", "webhook", "poll", "writeback"], { monitorId: "externalId", service: "metadata.service", site: "metadata.site", status: "metadata.status", url: "source.uri" }, "import", ["monitors_read", "events_read", "incident_read"], "datadog", "https://docs.datadoghq.com/api/latest/monitors/", ["MEMORY_DATADOG_SITE", "MEMORY_DATADOG_API_KEY", "MEMORY_DATADOG_APP_KEY"]),
+    vendor("official-pagerduty", "PagerDuty", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { incidentId: "externalId", service: "metadata.service", urgency: "metadata.urgency", status: "metadata.status", url: "source.uri" }, "import", ["incidents.read", "services.read"], "pagerduty", "https://developer.pagerduty.com/api-reference/", ["MEMORY_PAGERDUTY_ACCOUNT", "MEMORY_PAGERDUTY_TOKEN"]),
+    vendor("official-posthog", "PostHog", "docs", ["ingest", "export", "webhook", "poll", "writeback"], { featureFlag: "externalId", project: "metadata.project", experiment: "metadata.experiment", actor: "source.author", url: "source.uri" }, "import", ["feature_flags:read", "insights:read"], "posthog", "https://posthog.com/docs/api/feature-flags", ["MEMORY_POSTHOG_PROJECT", "MEMORY_POSTHOG_TOKEN"])
   ];
 }
 

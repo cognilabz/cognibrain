@@ -2,7 +2,26 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { MemoryService } from "../api/service";
 
-type Provider = "github" | "slack" | "discord" | "jira" | "confluence" | "notion" | "linear";
+type Provider =
+  | "github"
+  | "slack"
+  | "discord"
+  | "jira"
+  | "confluence"
+  | "notion"
+  | "linear"
+  | "gitlab"
+  | "azure-devops"
+  | "teams"
+  | "gmail"
+  | "google-drive"
+  | "google-calendar"
+  | "asana"
+  | "clickup"
+  | "sentry"
+  | "datadog"
+  | "pagerduty"
+  | "posthog";
 
 interface ProviderSmoke {
   provider: Provider;
@@ -30,7 +49,19 @@ const providers: Array<{ provider: Provider; connectorId: string; requiredEnv: s
   { provider: "jira", connectorId: "official-jira", requiredEnv: ["MEMORY_JIRA_BASE_URL", "MEMORY_JIRA_EMAIL", "MEMORY_JIRA_API_TOKEN", "MEMORY_JIRA_PROJECT"] },
   { provider: "confluence", connectorId: "official-confluence", requiredEnv: ["MEMORY_CONFLUENCE_BASE_URL", "MEMORY_CONFLUENCE_EMAIL", "MEMORY_CONFLUENCE_API_TOKEN", "MEMORY_CONFLUENCE_SPACE"] },
   { provider: "notion", connectorId: "official-notion", requiredEnv: ["MEMORY_NOTION_TOKEN", "MEMORY_NOTION_DATABASE_ID"] },
-  { provider: "linear", connectorId: "official-linear", requiredEnv: ["MEMORY_LINEAR_API_KEY", "MEMORY_LINEAR_TEAM_ID"] }
+  { provider: "linear", connectorId: "official-linear", requiredEnv: ["MEMORY_LINEAR_API_KEY", "MEMORY_LINEAR_TEAM_ID"] },
+  { provider: "gitlab", connectorId: "official-gitlab", requiredEnv: ["MEMORY_GITLAB_PROJECT", "MEMORY_GITLAB_TOKEN"] },
+  { provider: "azure-devops", connectorId: "official-azure-devops", requiredEnv: ["MEMORY_AZURE_DEVOPS_ORG", "MEMORY_AZURE_DEVOPS_PROJECT", "MEMORY_AZURE_DEVOPS_TOKEN"] },
+  { provider: "teams", connectorId: "official-microsoft-teams", requiredEnv: ["MEMORY_TEAMS_TEAM_ID", "MEMORY_TEAMS_CHANNEL_ID", "MEMORY_TEAMS_TOKEN"] },
+  { provider: "gmail", connectorId: "official-gmail", requiredEnv: ["MEMORY_GMAIL_ACCOUNT", "MEMORY_GOOGLE_TOKEN"] },
+  { provider: "google-drive", connectorId: "official-google-drive", requiredEnv: ["MEMORY_GOOGLE_DRIVE_ROOT", "MEMORY_GOOGLE_TOKEN"] },
+  { provider: "google-calendar", connectorId: "official-google-calendar", requiredEnv: ["MEMORY_GOOGLE_CALENDAR_ID", "MEMORY_GOOGLE_TOKEN"] },
+  { provider: "asana", connectorId: "official-asana", requiredEnv: ["MEMORY_ASANA_WORKSPACE", "MEMORY_ASANA_TOKEN"] },
+  { provider: "clickup", connectorId: "official-clickup", requiredEnv: ["MEMORY_CLICKUP_LIST_ID", "MEMORY_CLICKUP_TOKEN"] },
+  { provider: "sentry", connectorId: "official-sentry", requiredEnv: ["MEMORY_SENTRY_ORG", "MEMORY_SENTRY_PROJECT", "MEMORY_SENTRY_TOKEN"] },
+  { provider: "datadog", connectorId: "official-datadog", requiredEnv: ["MEMORY_DATADOG_SITE", "MEMORY_DATADOG_API_KEY", "MEMORY_DATADOG_APP_KEY"] },
+  { provider: "pagerduty", connectorId: "official-pagerduty", requiredEnv: ["MEMORY_PAGERDUTY_ACCOUNT", "MEMORY_PAGERDUTY_TOKEN"] },
+  { provider: "posthog", connectorId: "official-posthog", requiredEnv: ["MEMORY_POSTHOG_PROJECT", "MEMORY_POSTHOG_TOKEN"] }
 ];
 
 export async function runVendorCredentialSmoke(options: { out?: string; live?: boolean; writeback?: boolean } = {}): Promise<VendorCredentialSmokeReport> {
@@ -65,7 +96,7 @@ export async function runVendorCredentialSmoke(options: { out?: string; live?: b
       });
       const beforeWriteback = service.listConnectorSyncRecords().length;
       const writeback = await service.writebackConnector(item.connectorId, {
-        operation: ["github", "jira", "confluence", "notion", "linear"].includes(item.provider) ? "comment" : "summary",
+        operation: ["github", "jira", "confluence", "notion", "linear", "gitlab", "azure-devops", "asana", "clickup", "sentry", "pagerduty"].includes(item.provider) ? "comment" : "summary",
         content: "cognibrain self-hosted connector smoke: dry-run memory-linked writeback.",
         target: liveTarget(item.provider),
         dryRun: !writebackEnabled
@@ -135,7 +166,19 @@ function liveTarget(provider: Provider): Record<string, unknown> {
   if (provider === "jira") return { issueKey: process.env.MEMORY_JIRA_ISSUE_KEY ?? process.env.MEMORY_JIRA_ISSUE ?? "DRY-RUN" };
   if (provider === "confluence") return { pageId: process.env.MEMORY_CONFLUENCE_PAGE_ID ?? "DRY-RUN" };
   if (provider === "notion") return { blockId: process.env.MEMORY_NOTION_BLOCK_ID ?? process.env.MEMORY_NOTION_PAGE_ID ?? "DRY-RUN" };
-  return { issueId: process.env.MEMORY_LINEAR_ISSUE_ID ?? "DRY-RUN" };
+  if (provider === "linear") return { issueId: process.env.MEMORY_LINEAR_ISSUE_ID ?? "DRY-RUN" };
+  if (provider === "gitlab") return { mergeRequestIid: process.env.MEMORY_GITLAB_MR_IID ?? "DRY-RUN" };
+  if (provider === "azure-devops") return { repositoryId: process.env.MEMORY_AZURE_DEVOPS_REPOSITORY_ID ?? "DRY-RUN", pullRequestId: process.env.MEMORY_AZURE_DEVOPS_PR_ID ?? "DRY-RUN" };
+  if (provider === "teams") return { channel: process.env.MEMORY_TEAMS_CHANNEL_ID };
+  if (provider === "gmail") return { messageId: process.env.MEMORY_GMAIL_MESSAGE_ID ?? "DRY-RUN" };
+  if (provider === "google-drive") return { fileId: process.env.MEMORY_GOOGLE_DRIVE_FILE_ID ?? "DRY-RUN" };
+  if (provider === "google-calendar") return { eventId: process.env.MEMORY_GOOGLE_CALENDAR_EVENT_ID ?? "DRY-RUN" };
+  if (provider === "asana") return { taskId: process.env.MEMORY_ASANA_TASK_ID ?? "DRY-RUN" };
+  if (provider === "clickup") return { taskId: process.env.MEMORY_CLICKUP_TASK_ID ?? "DRY-RUN" };
+  if (provider === "sentry") return { issueId: process.env.MEMORY_SENTRY_ISSUE_ID ?? "DRY-RUN" };
+  if (provider === "datadog") return { tags: ["cognibrain:dry-run"] };
+  if (provider === "pagerduty") return { incidentId: process.env.MEMORY_PAGERDUTY_INCIDENT_ID ?? "DRY-RUN" };
+  return { flagId: process.env.MEMORY_POSTHOG_FLAG_ID ?? "DRY-RUN" };
 }
 
 function cliOptions(argv: string[]): { out?: string; live?: boolean; writeback?: boolean } {

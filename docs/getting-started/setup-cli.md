@@ -43,7 +43,7 @@ npx cognibrain setup --profile production --yes
 
 ## Connector Setup
 
-Connector configs are credential-safe. They store connector IDs, selected non-secret settings, `env:` references and next commands. They do not store token values.
+Connector configs are credential-safe. They point the built-in native drivers at the right workspace, project, channel or account, store `env:` references for secrets, and never store token values.
 
 ```bash
 npx cognibrain connector add github --set repo=cognilabz/cognibrain
@@ -51,27 +51,31 @@ npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --
 npx cognibrain connector add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
 npx cognibrain connector add notion --set databaseId=notion_database_id
 npx cognibrain connector add linear --set teamId=linear_team_id
+npx cognibrain connector add slack --set channelId=C123
+npx cognibrain connector add discord --set channelId=D123
 npx cognibrain connector list
 npx cognibrain connector show github
 npx cognibrain connector doctor
 ```
 
-Planned connector contracts can also be configured as stubs:
+The same CLI configures the rest of the native vendor drivers:
 
 ```bash
 npx cognibrain connector add gitlab --set project=group/project
 npx cognibrain connector add azure-devops --set organization=my-org --set project=my-project
-npx cognibrain connector add teams --set tenantId=tenant --set channelId=channel
+npx cognibrain connector add teams --set teamId=team --set channelId=channel
 npx cognibrain connector add gmail --set account=engineering@example.com
 npx cognibrain connector add google-drive --set root=drive_root_id
 npx cognibrain connector add google-calendar --set calendarId=primary
 npx cognibrain connector add sentry --set organization=my-org --set project=web
-npx cognibrain connector add datadog --set site=datadoghq.com --api-key-env MEMORY_DATADOG_API_KEY --app-key-env MEMORY_DATADOG_APP_KEY
+npx cognibrain connector add datadog --set site=datadoghq.com --set apiKeyEnv=MEMORY_DATADOG_API_KEY --set appKeyEnv=MEMORY_DATADOG_APP_KEY
 npx cognibrain connector add pagerduty --set account=my-team --set service=service_id
 npx cognibrain connector add asana --set workspace=workspace_gid --set project=project_gid
-npx cognibrain connector add clickup --set workspace=workspace_id --set space=space_or_list_id
+npx cognibrain connector add clickup --set listId=list_id
 npx cognibrain connector add posthog --set project=project_id
 ```
+
+Run `npm run verify:vendor-connectors` for hermetic proof that these drivers call the expected vendor APIs. Run `npm run verify:vendor-live -- --live` only in a real deployment with your tenant credentials.
 
 ## Platform SDK Scaffold
 

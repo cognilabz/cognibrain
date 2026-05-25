@@ -2093,6 +2093,58 @@ describe("TypeScript memory core", () => {
     ).toThrow(/writeback/i);
   });
 
+  it("enriches context from referenced and primary connector stores without persisting by default", async () => {
+    const service = new MemoryService();
+    service.add({ userId: "u1", content: "Atlas local memory says connector context should cite external evidence.", source: { kind: "human", confidence: 0.95 } });
+    service.registerConnectorManifest({
+      id: "issue-store",
+      name: "Issue Store",
+      kind: "project_management",
+      version: "1.0.0",
+      direction: "ingest",
+      capabilities: ["ingest", "poll"],
+      auth: "none",
+      defaultSourceKind: "import",
+      metadataMapping: { issueKey: "externalId", title: "content.title" },
+      privacyPolicy: "project",
+      list: { endpoint: "https://issues.example/list", method: "GET" },
+      poll: { endpoint: "https://issues.example/poll", method: "GET" }
+    });
+    const fetchImpl = async () => new Response(JSON.stringify({
+      items: [
+        {
+          externalId: "42",
+          title: "Issue #42 / CB-9: fetch Confluence and GitHub context just in time",
+          description: "Primary issue store says the agent should resolve explicit references before acting.",
+          url: "https://issues.example/browse/CB-9"
+        }
+      ]
+    }), { status: 200, headers: { "content-type": "application/json" } });
+
+    const report = await service.enrichContext({
+      userId: "u1",
+      query: "Fix #42 and CB-9 with the primary issue context",
+      primaryIssueStore: "issue-store",
+      defaultSearchConnectors: ["issue-store"],
+      tokenBudget: 700
+    }, fetchImpl as typeof fetch);
+
+    expect(report.references.map((item) => item.raw)).toEqual(expect.arrayContaining(["#42", "CB-9"]));
+    expect(report.externalEvidence[0]).toMatchObject({ connectorId: "issue-store", externalId: "42" });
+    expect(report.context).toContain("External context fetched just in time");
+    expect(report.context).toContain("Issue #42 / CB-9");
+    expect(service.search({ userId: "u1", query: "Primary issue store says", limit: 5 }).some((result) => result.memory.metadata.contextEnrichment)).toBe(false);
+
+    const persisted = await service.enrichContext({
+      userId: "u1",
+      query: "Recheck #42",
+      primaryIssueStore: "issue-store",
+      persistFetched: true
+    }, fetchImpl as typeof fetch);
+    expect(persisted.summary.persistedExternalItems).toBe(1);
+    expect(service.search({ userId: "u1", query: "Primary issue store says", limit: 5 })[0].memory.metadata.contextEnrichment).toBe(true);
+  });
+
   it("packages a platform integration SDK for custom source systems", async () => {
     const integration = createPlatformIntegration(
       {
@@ -2159,6 +2211,12 @@ describe("TypeScript memory core", () => {
     expect(github?.metadataMapping.issueNumber).toBe("externalId");
     expect(github?.writeback?.operations).toEqual(expect.arrayContaining(["comment", "memory_link"]));
     expect(github?.oauth?.scopes).toEqual(expect.arrayContaining(["repo:read", "pull_requests:read"]));
+    const gitlab = official.find((manifest) => manifest.id === "official-gitlab");
+    const teams = official.find((manifest) => manifest.id === "official-microsoft-teams");
+    const posthog = official.find((manifest) => manifest.id === "official-posthog");
+    expect(gitlab?.vendor?.provider).toBe("gitlab");
+    expect(teams?.poll?.endpoint).toBe("vendor://teams/poll");
+    expect(posthog?.writeback?.endpoint).toBe("vendor://posthog/writeback");
     expect(() =>
       service.registerConnectorManifest({
         id: "bad-writeback",
@@ -2884,16 +2942,16 @@ describe("TypeScript memory core", () => {
 
   it("seeds expanded first-class vendor connectors", () => {
     const service = new MemoryService({ autoDream: { enabled: false } });
-    const vendors = ["official-github", "official-slack", "official-discord", "official-jira", "official-confluence", "official-notion", "official-linear"];
+    const vendors = ["official-github", "official-slack", "official-discord", "official-jira", "official-confluence", "official-notion", "official-linear", "official-gitlab", "official-azure-devops", "official-microsoft-teams", "official-google-drive", "official-gmail", "official-google-calendar", "official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"];
     const health = service.connectorHealth().filter((item) => vendors.includes(item.connectorId));
     expect(health.map((item) => item.connectorId)).toEqual(expect.arrayContaining(vendors));
     expect(health.every((item) => item.supports.externalVendor)).toBe(true);
     expect(health.find((item) => item.connectorId === "official-jira")?.externalVendor?.missingEnv).toContain("MEMORY_JIRA_PROJECT");
     expect(health.find((item) => item.connectorId === "official-confluence")?.kind).toBe("docs");
     expect(health.find((item) => item.connectorId === "official-linear")?.kind).toBe("project_management");
-    const planned = service.connectorHealth().filter((item) => ["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"].includes(item.connectorId));
-    expect(planned.map((item) => item.connectorId)).toEqual(expect.arrayContaining(["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"]));
-    expect(planned.every((item) => item.supports.poll && item.supports.writeback)).toBe(true);
+    const stateOfArt = health.filter((item) => ["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"].includes(item.connectorId));
+    expect(stateOfArt.map((item) => item.connectorId)).toEqual(expect.arrayContaining(["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"]));
+    expect(stateOfArt.every((item) => item.supports.poll && item.supports.writeback && item.supports.externalVendor)).toBe(true);
   });
 
   it("writes guided init and connector setup state without storing credential values", () => {
@@ -2927,7 +2985,7 @@ describe("TypeScript memory core", () => {
       const setup = JSON.parse(readFileSync(setupPath, "utf8"));
       const connector = JSON.parse(readFileSync(connectorPath, "utf8"));
       const jira = JSON.parse(readFileSync(jiraPath, "utf8"));
-      const gitlab = JSON.parse(readFileSync(gitlabPath, "utf8"));
+      const gitlabConfig = JSON.parse(readFileSync(gitlabPath, "utf8"));
       const sqlite = JSON.parse(readFileSync(sqlitePath, "utf8"));
       const mcpRemote = JSON.parse(readFileSync(mcpRemotePath, "utf8"));
       expect(setup.profile).toBe("solo-dev");
@@ -2938,13 +2996,13 @@ describe("TypeScript memory core", () => {
       expect(jira.settings.baseUrl).toBe("https://example.atlassian.net");
       expect(jira.settings.project).toBe("CB");
       expect(jira.settings.tokenEnv).toBe("env:MEMORY_JIRA_API_TOKEN");
-      expect(gitlab.status).toBe("planned-contract");
-      expect(gitlab.nextSteps.some((step: string) => step.includes("custom connector"))).toBe(true);
+      expect(gitlabConfig.status).toBe("vendor-driver");
+      expect(gitlabConfig.nextSteps.some((step: string) => step.includes("verify:vendor-connectors"))).toBe(true);
       expect(sqlite.kind).toBe("storage");
       expect(sqlite.configured).toBe(true);
       expect(mcpRemote.kind).toBe("transport");
       expect(mcpRemote.settings.tokenEnv).toBe("env:MEMORY_MCP_REMOTE_TOKEN");
-      expect(JSON.stringify({ setup, connector, jira, gitlab, sqlite, mcpRemote })).not.toContain("test-token-should-not-be-written");
+      expect(JSON.stringify({ setup, connector, jira, gitlabConfig, sqlite, mcpRemote })).not.toContain("test-token-should-not-be-written");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -15,10 +15,10 @@ The product is useful when a team keeps seeing the same agent mistake:
 
 | Surface | What it does |
 | --- | --- |
-| Setup CLI | React/Ink guided setup, self-hosted profiles, connector stubs, adapter stubs, harness config, skill lifecycle and `doctor --fix`. |
+| Setup CLI | React/Ink guided setup, self-hosted profiles, connector config, adapter config, harness config, skill lifecycle and `doctor --fix`. |
 | Memory runtime | Local API, dashboard, MCP tools and durable storage options. |
 | Agent integrations | Codex, Claude Code, Cursor, Copilot, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI config generation. |
-| Connectors | First-class GitHub, Slack, Discord, Jira, Confluence, Notion and Linear drivers; planned contracts for GitLab, Azure DevOps, Teams, Google apps, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog. |
+| Connectors | Native drivers for GitHub, Slack, Discord, Jira, Confluence, Notion, Linear, GitLab, Azure DevOps, Teams, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog. |
 | Adapters | CLI-configured storage, provider intelligence, embedding, media, benchmark and remote MCP adapter contracts. |
 | Proof | Evidence packs, patch evidence trails, CogniCodeBench, Benchmark Arena and release checks. |
 
@@ -29,6 +29,7 @@ npm install
 npx cognibrain init
 npx cognibrain config show --json
 npx cognibrain connector add github
+npx cognibrain connector add gitlab --set project=group/project
 npx cognibrain adapter add storage-sqlite
 npx cognibrain skill status
 npx cognibrain doctor --fix

@@ -137,6 +137,17 @@ const evidencePackSchema = searchSchema.extend({
   tokenBudget: z.number().int().positive().max(8000).optional()
 });
 
+const contextEnrichmentSchema = evidencePackSchema.extend({
+  primaryIssueStore: z.string().optional(),
+  primaryKnowledgeStore: z.string().optional(),
+  defaultSearchConnectors: z.array(z.string()).optional(),
+  fetchReferenced: z.boolean().optional(),
+  searchPrimaryStores: z.boolean().optional(),
+  persistFetched: z.boolean().optional(),
+  maxExternalFetches: z.number().int().nonnegative().max(20).optional(),
+  maxExternalResults: z.number().int().positive().max(30).optional()
+});
+
 const harnessActionSchema = z.object({
   userId: z.string().min(1),
   agentId: z.string().optional(),
@@ -1417,6 +1428,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "POST" && url.pathname === "/evidence-pack") {
     send(response, 200, defaultService.evidencePack(evidencePackSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/context/enrich") {
+    send(response, 200, await defaultService.enrichContext(contextEnrichmentSchema.parse(await json(request))));
     return;
   }
 

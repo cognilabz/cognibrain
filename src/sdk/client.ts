@@ -1,4 +1,4 @@
-import type { ActionGuardReport, CodebaseScope, CodingContextPack, ConnectorManifest, ConnectorSyncRecord, EngineeringMemoryKind, EpisodeRecord, EvidencePack, FeedbackKind, GraphExplainReport, HarnessActionInput, MarketplaceModule, Memory, MemoryInput, MemoryPolicyOperation, MemoryPolicyRule, MemoryRouteReport, MemoryScope, PatchEvidenceTrail, PolicyDecision, QueryIntentReport, SearchOptions, SearchResult } from "../core";
+import type { ActionGuardReport, CodebaseScope, CodingContextPack, ConnectorManifest, ConnectorSyncRecord, ContextEnrichmentReport, EngineeringMemoryKind, EpisodeRecord, EvidencePack, FeedbackKind, GraphExplainReport, HarnessActionInput, MarketplaceModule, Memory, MemoryInput, MemoryPolicyOperation, MemoryPolicyRule, MemoryRouteReport, MemoryScope, PatchEvidenceTrail, PolicyDecision, QueryIntentReport, SearchOptions, SearchResult } from "../core";
 
 export interface CognibrainClientOptions {
   baseUrl?: string;
@@ -81,6 +81,10 @@ export class CognibrainClient {
 
   evidencePack(options: SearchOptions & { tokenBudget?: number }): Promise<EvidencePack> {
     return this.request("/evidence-pack", { method: "POST", body: options });
+  }
+
+  enrichContext(options: SearchOptions & { tokenBudget?: number; primaryIssueStore?: string; primaryKnowledgeStore?: string; defaultSearchConnectors?: string[]; fetchReferenced?: boolean; searchPrimaryStores?: boolean; persistFetched?: boolean; maxExternalFetches?: number; maxExternalResults?: number }): Promise<ContextEnrichmentReport> {
+    return this.request("/context/enrich", { method: "POST", body: options });
   }
 
   codingContextPack(options: SearchOptions & { tokenBudget?: number }): Promise<CodingContextPack> {

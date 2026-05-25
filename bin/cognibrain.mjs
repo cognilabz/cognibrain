@@ -777,9 +777,9 @@ function connectorDefinitions() {
     gitlab: {
       connectorId: "official-gitlab",
       requiredEnv: ["MEMORY_GITLAB_PROJECT", "MEMORY_GITLAB_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#connector-maturity-matrix",
-      status: "planned-contract",
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
         { name: "project", label: "GitLab project path", env: "MEMORY_GITLAB_PROJECT", default: "group/project" },
         { name: "tokenEnv", label: "GitLab token", env: "MEMORY_GITLAB_TOKEN", secret: true, default: "MEMORY_GITLAB_TOKEN" }
@@ -789,9 +789,9 @@ function connectorDefinitions() {
     "azure-devops": {
       connectorId: "official-azure-devops",
       requiredEnv: ["MEMORY_AZURE_DEVOPS_ORG", "MEMORY_AZURE_DEVOPS_PROJECT", "MEMORY_AZURE_DEVOPS_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#connector-maturity-matrix",
-      status: "planned-contract",
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
         { name: "organization", label: "Azure DevOps org", env: "MEMORY_AZURE_DEVOPS_ORG", default: "organization" },
         { name: "project", label: "Azure DevOps project", env: "MEMORY_AZURE_DEVOPS_PROJECT", default: "project" },
@@ -801,12 +801,12 @@ function connectorDefinitions() {
     },
     teams: {
       connectorId: "official-microsoft-teams",
-      requiredEnv: ["MEMORY_TEAMS_TENANT_ID", "MEMORY_TEAMS_CHANNEL_ID", "MEMORY_TEAMS_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#connector-maturity-matrix",
-      status: "planned-contract",
+      requiredEnv: ["MEMORY_TEAMS_TEAM_ID", "MEMORY_TEAMS_CHANNEL_ID", "MEMORY_TEAMS_TOKEN"],
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
-        { name: "tenantId", label: "Microsoft tenant id", env: "MEMORY_TEAMS_TENANT_ID", default: "tenant_id" },
+        { name: "teamId", label: "Microsoft Teams team id", env: "MEMORY_TEAMS_TEAM_ID", default: "team_id" },
         { name: "channelId", label: "Teams channel id", env: "MEMORY_TEAMS_CHANNEL_ID", default: "channel_id" },
         { name: "tokenEnv", label: "Teams token", env: "MEMORY_TEAMS_TOKEN", secret: true, default: "MEMORY_TEAMS_TOKEN" }
       ],
@@ -815,9 +815,9 @@ function connectorDefinitions() {
     gmail: {
       connectorId: "official-gmail",
       requiredEnv: ["MEMORY_GMAIL_ACCOUNT", "MEMORY_GOOGLE_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#connector-maturity-matrix",
-      status: "planned-contract",
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
         { name: "account", label: "Gmail account", env: "MEMORY_GMAIL_ACCOUNT", default: "engineering@example.com" },
         { name: "tokenEnv", label: "Google token", env: "MEMORY_GOOGLE_TOKEN", secret: true, default: "MEMORY_GOOGLE_TOKEN" }
@@ -827,9 +827,9 @@ function connectorDefinitions() {
     "google-drive": {
       connectorId: "official-google-drive",
       requiredEnv: ["MEMORY_GOOGLE_DRIVE_ROOT", "MEMORY_GOOGLE_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#connector-maturity-matrix",
-      status: "planned-contract",
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
         { name: "root", label: "Drive folder/root id", env: "MEMORY_GOOGLE_DRIVE_ROOT", default: "drive_root_id" },
         { name: "tokenEnv", label: "Google token", env: "MEMORY_GOOGLE_TOKEN", secret: true, default: "MEMORY_GOOGLE_TOKEN" }
@@ -839,9 +839,9 @@ function connectorDefinitions() {
     "google-calendar": {
       connectorId: "official-google-calendar",
       requiredEnv: ["MEMORY_GOOGLE_CALENDAR_ID", "MEMORY_GOOGLE_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#connector-maturity-matrix",
-      status: "planned-contract",
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
         { name: "calendarId", label: "Calendar id", env: "MEMORY_GOOGLE_CALENDAR_ID", default: "primary" },
         { name: "tokenEnv", label: "Google token", env: "MEMORY_GOOGLE_TOKEN", secret: true, default: "MEMORY_GOOGLE_TOKEN" }
@@ -851,9 +851,9 @@ function connectorDefinitions() {
     asana: {
       connectorId: "official-asana",
       requiredEnv: ["MEMORY_ASANA_WORKSPACE", "MEMORY_ASANA_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
-      status: "planned-contract",
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
         { name: "workspace", label: "Asana workspace", env: "MEMORY_ASANA_WORKSPACE", default: "workspace_gid" },
         { name: "project", label: "Asana project", env: "MEMORY_ASANA_PROJECT", default: "project_gid" },
@@ -863,13 +863,12 @@ function connectorDefinitions() {
     },
     clickup: {
       connectorId: "official-clickup",
-      requiredEnv: ["MEMORY_CLICKUP_WORKSPACE_ID", "MEMORY_CLICKUP_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
-      status: "planned-contract",
+      requiredEnv: ["MEMORY_CLICKUP_LIST_ID", "MEMORY_CLICKUP_TOKEN"],
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
-        { name: "workspace", label: "ClickUp workspace id", env: "MEMORY_CLICKUP_WORKSPACE_ID", default: "workspace_id" },
-        { name: "space", label: "ClickUp space/list id", env: "MEMORY_CLICKUP_SPACE_ID", default: "space_or_list_id" },
+        { name: "listId", label: "ClickUp list id", env: "MEMORY_CLICKUP_LIST_ID", default: "list_id" },
         { name: "tokenEnv", label: "ClickUp token", env: "MEMORY_CLICKUP_TOKEN", secret: true, default: "MEMORY_CLICKUP_TOKEN" }
       ],
       sampleEvents: ["task correction", "sprint status", "implementation checklist"]
@@ -877,9 +876,9 @@ function connectorDefinitions() {
     sentry: {
       connectorId: "official-sentry",
       requiredEnv: ["MEMORY_SENTRY_ORG", "MEMORY_SENTRY_PROJECT", "MEMORY_SENTRY_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
-      status: "planned-contract",
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
         { name: "organization", label: "Sentry organization", env: "MEMORY_SENTRY_ORG", default: "organization" },
         { name: "project", label: "Sentry project", env: "MEMORY_SENTRY_PROJECT", default: "project" },
@@ -890,9 +889,9 @@ function connectorDefinitions() {
     datadog: {
       connectorId: "official-datadog",
       requiredEnv: ["MEMORY_DATADOG_SITE", "MEMORY_DATADOG_API_KEY", "MEMORY_DATADOG_APP_KEY"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
-      status: "planned-contract",
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
         { name: "site", label: "Datadog site", env: "MEMORY_DATADOG_SITE", default: "datadoghq.com" },
         { name: "apiKeyEnv", label: "Datadog API key", env: "MEMORY_DATADOG_API_KEY", secret: true, default: "MEMORY_DATADOG_API_KEY" },
@@ -903,9 +902,9 @@ function connectorDefinitions() {
     pagerduty: {
       connectorId: "official-pagerduty",
       requiredEnv: ["MEMORY_PAGERDUTY_ACCOUNT", "MEMORY_PAGERDUTY_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
-      status: "planned-contract",
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
         { name: "account", label: "PagerDuty account/subdomain", env: "MEMORY_PAGERDUTY_ACCOUNT", default: "team" },
         { name: "service", label: "PagerDuty service id", env: "MEMORY_PAGERDUTY_SERVICE_ID", default: "service_id" },
@@ -916,9 +915,9 @@ function connectorDefinitions() {
     posthog: {
       connectorId: "official-posthog",
       requiredEnv: ["MEMORY_POSTHOG_PROJECT", "MEMORY_POSTHOG_TOKEN"],
-      verification: "planned vendor driver; custom connector contract available now",
-      docs: "docs/connectors.md#state-of-the-art-connector-contracts",
-      status: "planned-contract",
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md#native-vendor-drivers",
+      status: "vendor-driver",
       fields: [
         { name: "project", label: "PostHog project id", env: "MEMORY_POSTHOG_PROJECT", default: "project_id" },
         { name: "baseUrl", label: "PostHog base URL", env: "MEMORY_POSTHOG_BASE_URL", default: "https://app.posthog.com" },
@@ -1162,7 +1161,10 @@ function connectorDoctor(provider) {
     const definition = connectorDefinitions()[name];
     const path = connectorConfigPath(name);
     const config = readJson(path, null);
-    const missingEnv = definition.requiredEnv.filter((key) => !process.env[key]);
+    const configuredEnv = new Set((definition.fields ?? [])
+      .filter((field) => !field.secret && (config?.settings?.[field.name] ?? process.env[field.env] ?? field.default))
+      .map((field) => field.env));
+    const missingEnv = definition.requiredEnv.filter((key) => !process.env[key] && !configuredEnv.has(key));
     const missingSettings = (definition.fields ?? []).filter((field) => !field.secret && !(config?.settings?.[field.name] ?? process.env[field.env] ?? field.default)).map((field) => field.name);
     return {
       provider: name,
@@ -1177,7 +1179,7 @@ function connectorDoctor(provider) {
       docs: definition.docs
     };
   });
-  return { ok: checks.length > 0 && checks.every((check) => check.ok || check.status === "planned-contract"), checks };
+  return { ok: checks.length > 0 && checks.every((check) => check.ok), checks };
 }
 
 function printConnectorCatalog(items) {
@@ -1199,8 +1201,7 @@ function printConnectorDoctor(result) {
     return;
   }
   for (const check of result.checks) {
-    const ok = check.ok || check.status === "planned-contract";
-    console.log(`${ok ? "ok" : "fail"}  ${check.provider} - ${check.configPresent ? check.path : "missing config"}`);
+    console.log(`${check.ok ? "ok" : "fail"}  ${check.provider} - ${check.configPresent ? check.path : "missing config"}`);
     if (check.missingSettings.length) console.log(`missing settings: ${check.missingSettings.join(", ")}`);
     if (check.missingEnv.length) console.log(`missing env: ${check.missingEnv.join(", ")}`);
     console.log(`next: ${check.healthCommand}`);
@@ -1690,7 +1691,7 @@ function connectorNextSteps(definition, missingEnv, missingSettings) {
   const steps = [];
   if (missingSettings.length) steps.push(`Choose ${missingSettings.join(", ")} with connector add --set key=value`);
   if (missingEnv.length) steps.push(`Export ${missingEnv.join(", ")}`);
-  steps.push(definition.status === "vendor-driver" ? definition.verification : "Use custom connector HTTP contract until native driver lands");
+  steps.push(definition.status === "vendor-driver" ? definition.verification : "Use the Platform SDK custom connector contract for systems outside the native driver list");
   if (definition.status === "vendor-driver") steps.push("MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live");
   return steps;
 }
@@ -2196,7 +2197,7 @@ function renderPlainPanel(kind, payload, options = {}) {
 }
 
 function printInitSummary(profile) {
-  console.log("ready: setup state, connector stubs, adapter stubs, skill path, and harness config are in place");
+  console.log("ready: setup state, native connector configs, adapter configs, skill path, and harness config are in place");
   console.log(`next: ${profile.nextSteps.join(" -> ")}`);
   console.log("proof: cognibrain config doctor, cognibrain connector doctor, cognibrain adapter doctor, npm run demo:first-win");
 }
@@ -2250,7 +2251,7 @@ function usage(exitCode) {
 Usage:
   cognibrain [--runtime-root <path>] <command>
   cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--no-start] [--no-doctor] [--no-skill]
-      React/Ink guided self-hosted install that writes setup state, connector stubs, harness config, starts runtime, and runs doctor
+      React/Ink guided self-hosted install that writes setup state, native connector configs, harness config, starts runtime, and runs doctor
   cognibrain setup [--profile local|team|production|benchmark] [--yes]
       Starts the same guided wizard; legacy flags below still work for scripted installs
   cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--all-harnesses]
@@ -2267,7 +2268,7 @@ Usage:
       Inspect and maintain source-system connector configs
   cognibrain connector add <provider> [--dry-run] [--set key=value]
       React/Ink guided, credential-safe connector setup under .cognibrain/connectors/
-      Providers include github, jira, linear, gitlab, azure-devops, teams, google-drive, sentry, datadog, pagerduty, asana, clickup, posthog
+      Providers include github, gitlab, azure-devops, slack, discord, teams, jira, confluence, notion, linear, gmail, google-drive, google-calendar, asana, clickup, sentry, datadog, pagerduty, posthog
   cognibrain adapter list|show <adapter>|doctor [adapter]|remove <adapter>
       Inspect and maintain provider, storage, benchmark, media and MCP transport adapter configs
   cognibrain adapter add <adapter> [--dry-run] [--set key=value]

@@ -646,6 +646,61 @@ export interface EvidencePack {
   };
 }
 
+export interface ContextReference {
+  type:
+    | "github_issue"
+    | "github_pull_request"
+    | "gitlab_merge_request"
+    | "jira_issue"
+    | "confluence_page"
+    | "url"
+    | "issue_or_pr";
+  raw: string;
+  value: string;
+  url?: string;
+  connectorHint?: string;
+  confidence: number;
+}
+
+export interface ExternalContextEvidence {
+  id: string;
+  connectorId: string;
+  source: "reference" | "primary_issue_store" | "primary_knowledge_store" | "default_search";
+  reference?: string;
+  externalId?: string;
+  title: string;
+  content: string;
+  uri?: string;
+  score: number;
+  fetchedAt: string;
+  provenance: {
+    connectorId: string;
+    reference?: string;
+    sourceUri?: string;
+    fetchMode: "list-filter" | "search";
+  };
+}
+
+export interface ContextEnrichmentReport {
+  schemaVersion: "1.0";
+  id: string;
+  generatedAt: string;
+  query: string;
+  userId: string;
+  references: ContextReference[];
+  localEvidence: EvidencePack;
+  externalEvidence: ExternalContextEvidence[];
+  searchedConnectors: Array<{ connectorId: string; reason: string; status: "applied" | "failed" | "skipped"; items?: number; error?: string }>;
+  context: string;
+  warnings: string[];
+  summary: {
+    localMemories: number;
+    externalItems: number;
+    referencesDetected: number;
+    persistedExternalItems: number;
+  };
+}
+
 export interface RetrievalWeights {
   semantic: number;
   keyword: number;
@@ -962,7 +1017,26 @@ export interface ConnectorManifest {
     redirectUri?: string;
   };
   vendor?: {
-    provider: "github" | "slack" | "discord" | "jira" | "confluence" | "notion" | "linear";
+    provider:
+      | "github"
+      | "slack"
+      | "discord"
+      | "jira"
+      | "confluence"
+      | "notion"
+      | "linear"
+      | "gitlab"
+      | "azure-devops"
+      | "teams"
+      | "gmail"
+      | "google-drive"
+      | "google-calendar"
+      | "asana"
+      | "clickup"
+      | "sentry"
+      | "datadog"
+      | "pagerduty"
+      | "posthog";
     docsUrl: string;
     requiredEnv: string[];
     realSmokeEnv?: string[];

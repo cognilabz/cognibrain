@@ -19,7 +19,7 @@ npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --
 npx cognibrain doctor --fix
 ```
 
-`init` renders a React/Ink terminal flow in an interactive terminal and writes `.cognibrain/setup-state.json`, connector stubs under `.cognibrain/connectors/`, harness configs, and first-run next steps. Connector stubs store selected non-secret settings plus `env:` references, never credential values.
+`init` renders a React/Ink terminal flow in an interactive terminal and writes `.cognibrain/setup-state.json`, native connector configs under `.cognibrain/connectors/`, harness configs, and first-run next steps. Connector configs store selected non-secret settings plus `env:` references, never credential values.
 
 ## Required Environment
 

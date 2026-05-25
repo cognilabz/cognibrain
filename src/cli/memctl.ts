@@ -98,6 +98,31 @@ switch (command) {
     }), null, 2));
     break;
   }
+  case "context-enrich": {
+    const query = args.join(" ");
+    if (!query) fail("Usage: memctl context-enrich <query>");
+    console.log(JSON.stringify(await service.enrichContext({
+      userId,
+      query,
+      limit: process.env.MEMORY_LIMIT ? Number(process.env.MEMORY_LIMIT) : 8,
+      tokenBudget: process.env.MEMORY_TOKEN_BUDGET ? Number(process.env.MEMORY_TOKEN_BUDGET) : undefined,
+      primaryIssueStore: process.env.MEMORY_PRIMARY_ISSUE_CONNECTOR,
+      primaryKnowledgeStore: process.env.MEMORY_PRIMARY_KNOWLEDGE_CONNECTOR,
+      defaultSearchConnectors: csvList(process.env.MEMORY_DEFAULT_CONTEXT_CONNECTORS),
+      fetchReferenced: process.env.MEMORY_CONTEXT_FETCH_REFERENCES !== "false",
+      searchPrimaryStores: process.env.MEMORY_CONTEXT_SEARCH_PRIMARY !== "false",
+      persistFetched: process.env.MEMORY_CONTEXT_PERSIST_FETCHED === "true",
+      maxExternalFetches: process.env.MEMORY_CONTEXT_MAX_FETCHES ? Number(process.env.MEMORY_CONTEXT_MAX_FETCHES) : undefined,
+      maxExternalResults: process.env.MEMORY_CONTEXT_MAX_RESULTS ? Number(process.env.MEMORY_CONTEXT_MAX_RESULTS) : undefined,
+      agentId: process.env.MEMORY_AGENT_ID,
+      sessionId: process.env.MEMORY_SESSION_ID,
+      appId: process.env.MEMORY_APP_ID,
+      orgId: process.env.MEMORY_ORG_ID,
+      projectId: process.env.MEMORY_PROJECT_ID,
+      codebaseScope: codebaseScopeFromEnv()
+    }), null, 2));
+    break;
+  }
   case "code-correction": {
     const content = args.join(" ");
     if (!content) fail("Usage: memctl code-correction <correction>");
@@ -1087,7 +1112,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|action|coding-context|code-correction|action-guard|patch-evidence|search|inspect|route|intent|evidence|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-enrich|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|audit-chain|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-review|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|connector-telemetry|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|action|coding-context|context-enrich|code-correction|action-guard|patch-evidence|search|inspect|route|intent|evidence|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-enrich|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|audit-chain|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-review|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|connector-telemetry|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {

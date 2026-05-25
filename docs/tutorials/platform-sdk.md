@@ -74,8 +74,8 @@ export const integration = createPlatformIntegration(
 - `health()`: a credential-safe health envelope,
 - `adapter`: a `ConnectorAdapter` compatible with the lower-level connector SDK.
 
-## Choosing Built-In, Planned, Or SDK
+## Choosing Built-In Or SDK
 
-Use `connector add github`, `connector add slack`, `connector add jira`, `connector add confluence`, `connector add notion` or `connector add linear` when your platform is already a native vendor driver. Use planned connector contracts for GitLab, Azure DevOps, Teams, Google Workspace, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog when their config shape already fits. Use `sdk platform` for everything else: internal tools, customer portals, CRMs, support systems, incident tools, data catalogs, feature flag systems and domain-specific platforms.
+Use `connector add <provider>` when your system is already a native vendor driver: GitHub, GitLab, Azure DevOps, Slack, Discord, Teams, Jira, Confluence, Notion, Linear, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty or PostHog. Use `sdk platform` for everything else: internal tools, customer portals, CRMs, support systems, incident tools, data catalogs, feature flag systems and domain-specific platforms.
 
 The Platform SDK is local-first. It works for self-hosted installs today and keeps the manifest, event shape and writeback contract compatible with a future managed SaaS control plane.

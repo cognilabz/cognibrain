@@ -241,7 +241,8 @@ const checks = [
   ]),
   check("WP 9.2 GitHub connector", [
     has(files.service, "official-github"),
-    has(files.service, "vendor://github"),
+    has(files.service, "const vendorEndpoint = `vendor://${provider}`"),
+    has(files.vendorConnectors, "\"official-github\": \"github\""),
     has(files.vendorConnectors, "https://api.github.com"),
     has(files.vendorConnectors, "/repos/${owner}/${repo}/pulls"),
     has(files.vendorConnectors, "/issues/${issueNumber}/comments"),
@@ -255,8 +256,9 @@ const checks = [
   check("WP 9.3 Slack/Discord connector", [
     has(files.service, "official-slack"),
     has(files.service, "official-discord"),
-    has(files.service, "vendor://slack"),
-    has(files.service, "vendor://discord"),
+    has(files.service, "const vendorEndpoint = `vendor://${provider}`"),
+    has(files.vendorConnectors, "\"official-slack\": \"slack\""),
+    has(files.vendorConnectors, "\"official-discord\": \"discord\""),
     has(files.vendorConnectors, "https://slack.com/api"),
     has(files.vendorConnectors, "conversations.history"),
     has(files.vendorConnectors, "chat.postMessage"),

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T18:18:10.054Z",
+  "generatedAt": "2026-05-25T19:16:36.135Z",
   "mode": "credential_smoke",
   "liveRequested": false,
   "writebackEnabled": false,
@@ -74,6 +74,138 @@
     {
       "provider": "linear",
       "connectorId": "official-linear",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "gitlab",
+      "connectorId": "official-gitlab",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "azure-devops",
+      "connectorId": "official-azure-devops",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "teams",
+      "connectorId": "official-microsoft-teams",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "gmail",
+      "connectorId": "official-gmail",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "google-drive",
+      "connectorId": "official-google-drive",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "google-calendar",
+      "connectorId": "official-google-calendar",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "asana",
+      "connectorId": "official-asana",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "clickup",
+      "connectorId": "official-clickup",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "sentry",
+      "connectorId": "official-sentry",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "datadog",
+      "connectorId": "official-datadog",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "pagerduty",
+      "connectorId": "official-pagerduty",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "posthog",
+      "connectorId": "official-posthog",
       "configured": false,
       "skipped": true,
       "checks": {

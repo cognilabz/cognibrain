@@ -10,7 +10,7 @@ cognibrain is ready to present as an open-source, self-hosted Engineering Memory
 | Team API | API-key auth, actor ids, policy rules, scoped retrieval, audit events | `MEMORY_REQUIRE_AUTH=true` and `MEMORY_API_KEYS` set before exposing the server |
 | Durable storage | JSON/JSONL, SQLite FTS5, Postgres-compatible CI mode, psql-backed Postgres/Cockroach remote driver | `npm run verify:postgres` against the target Postgres path |
 | Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, Engineering Memory types, coding context packs, action guards, patch evidence trails, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen`, `npm run benchmark:cognicode`, `npm run verify:status`, and `npm run audit:plan1_3` |
-| Connectors and adapters | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, real GitHub/Slack/Discord/Jira/Confluence/Notion/Linear vendor drivers, CLI contracts for current product/ops systems, HTTP adapter verifier, vendor driver verifier, provider/storage/media/benchmark/MCP adapter configs | `npm run verify:connectors`, `npm run verify:vendor-connectors`, `npx cognibrain connector doctor`, `npx cognibrain adapter doctor`, and deployment-specific vendor credential smoke tests |
+| Connectors and adapters | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, 19 native vendor drivers, Platform SDK scaffold for private systems, HTTP adapter verifier, vendor driver verifier, provider/storage/media/benchmark/MCP adapter configs | `npm run verify:connectors`, `npm run verify:vendor-connectors`, `npx cognibrain connector doctor`, `npx cognibrain adapter doctor`, and deployment-specific vendor credential smoke tests |
 | Benchmarks | CogniCodeBench, LoCoMo, LongMemEval, BEAM, nextgen, answer-generation, market gate, load artifacts | `npm run benchmark:cognicode`, `npm run benchmark:certified`, `npm run benchmark:market`, and the selected `benchmark:load` profile |
 | Open-source packaging | MIT license, contribution guide, security policy, Docker, Kubernetes, npm package dry-run, Python PyPI-style SDK package | `./bin/cognibrain.mjs doctor --publish`, `npm pack --dry-run`, and Python SDK tests |
 
@@ -20,13 +20,13 @@ You can honestly say:
 
 - "cognibrain is a local-first, self-hostable Engineering Memory OS with inspectable evidence packs, policy-aware retrieval, durable storage options, connectors, MCP tools, dashboard operations, and reproducible verification gates."
 - "CogniCodeBench proves the synthetic coding-agent loop where corrections, review feedback, commands, tool outcomes and codebase changes carry into the next patch."
-- "A team can run it behind its own API key, Postgres/Cockroach storage, TLS ingress, backup process, and connector credentials for built-in GitHub, Slack, Discord, Jira, Confluence, Notion, and Linear vendor drivers."
+- "A team can run it behind its own API key, Postgres/Cockroach storage, TLS ingress, backup process, and connector credentials for built-in GitHub, GitLab, Azure DevOps, Slack, Discord, Teams, Jira, Confluence, Notion, Linear, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog drivers."
 - "The public benchmark claims are generated from repo-local artifacts and distinguish synthetic/public gates from vendor-signed external reruns."
 
 Do not claim:
 
 - managed SaaS uptime, autoscaling, SSO, billing, or hosted support without a deployment-specific control-plane run;
-- vendor connector certification without running the connector against real GitHub, Slack, Discord, Jira, Linear, Notion, Google, or other tenant credentials;
+- vendor connector certification without running the connector against real deployment credentials for that tenant;
 - benchmark leadership against a competitor unless the comparison imports comparable artifacts with the same dataset, top-K, metric, and budget.
 
 ## Production Docs
@@ -98,9 +98,7 @@ Set these before exposing a networked deployment:
 | `MEMORY_ENCRYPTION_KEY`, `MEMORY_ENCRYPTION_KEY_ID`, `MEMORY_ENCRYPTION_KEY_VERSION` | Encrypts secret-shaped memories and documents key rotation |
 | `MEMORY_BACKUP_REF` | Gives `migration-export` and `backup-verify` a recovery anchor |
 | `MEMORY_SECRET_MANAGER` | Records where deploy secrets are owned |
-| `MEMORY_GITHUB_REPO`, `MEMORY_GITHUB_TOKEN` | Enables the built-in GitHub connector to list PRs, poll failed workflow runs, and write PR/issue comments |
-| `MEMORY_SLACK_TOKEN`, `MEMORY_SLACK_CHANNEL_ID` | Enables the built-in Slack connector to read channel history and post summaries or replies |
-| `MEMORY_DISCORD_BOT_TOKEN`, `MEMORY_DISCORD_CHANNEL_ID` | Enables the built-in Discord connector to read and write channel messages |
+| Provider credentials for enabled connectors | Set only the `MEMORY_*` variables for providers you enable through `npx cognibrain connector add <provider>`; the CLI stores non-secret IDs and env-var references, while tokens stay in your deployment secret manager |
 
 For high-concurrency Postgres deployments, point `MEMORY_POSTGRES_URL` at the deployment pooler such as PgBouncer or a managed Postgres pool endpoint. `npm run verify:postgres` proves the schema, transaction rollback, tenant indexes, and indexed `tsvector` retrieval through the configured URL.
 
@@ -129,7 +127,7 @@ python3 -m unittest discover -s sdk/python/tests
 
 `npm run release:check` is the single command release gate. It writes `artifacts/release-check.json` and then calls the same underlying checks with actionable step names.
 
-`npm run verify:vendor-live` is safe by default: it writes `artifacts/vendor-live-smoke.json` and skips network calls unless `MEMORY_VENDOR_LIVE_SMOKE=true` or `--live` is supplied. Self-hosted teams can opt into live GitHub, Slack, or Discord checks by setting the corresponding `MEMORY_*` credentials. Real writeback remains dry-run unless `MEMORY_VENDOR_LIVE_WRITE=true` or `--writeback` is supplied.
+`npm run verify:vendor-live` is safe by default: it writes `artifacts/vendor-live-smoke.json` and skips network calls unless `MEMORY_VENDOR_LIVE_SMOKE=true` or `--live` is supplied. Self-hosted teams can opt into live checks for any built-in driver by setting the corresponding `MEMORY_*` credentials from [`connectors.md`](connectors.md). Real writeback remains dry-run unless `MEMORY_VENDOR_LIVE_WRITE=true` or `--writeback` is supplied.
 
 For larger deployments, repeat the load benchmark at 100k or 1M memories using the commands in `docs/benchmarking.md`, then keep the generated artifacts with the release notes.
 

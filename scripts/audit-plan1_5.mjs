@@ -34,9 +34,8 @@ const files = {
   publicHtml: read("public/benchmark-arena/index.html")
 };
 
-const vendorIds = ["official-github", "official-slack", "official-discord", "official-jira", "official-confluence", "official-notion", "official-linear"];
-const vendorProviders = ["github", "slack", "discord", "jira", "confluence", "notion", "linear"];
-const plannedConnectorIds = ["official-gitlab", "official-azure-devops", "official-microsoft-teams", "official-google-drive", "official-gmail", "official-google-calendar", "official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"];
+const vendorIds = ["official-github", "official-slack", "official-discord", "official-jira", "official-confluence", "official-notion", "official-linear", "official-gitlab", "official-azure-devops", "official-microsoft-teams", "official-google-drive", "official-gmail", "official-google-calendar", "official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"];
+const vendorProviders = ["github", "slack", "discord", "jira", "confluence", "notion", "linear", "gitlab", "azure-devops", "teams", "google-drive", "gmail", "google-calendar", "asana", "clickup", "sentry", "datadog", "pagerduty", "posthog"];
 const checks = [
   check("plan1_5 tracking issue list is present", [
     exists("plan1_5.md") && has(files.plan, "nächster Plan"),
@@ -46,28 +45,30 @@ const checks = [
   check("first-class vendor drivers are implemented", [
     vendorIds.every((id) => has(files.service, id)),
     vendorProviders.every((provider) => has(files.types, `"${provider}"`)),
-    ["listJira", "writeJira", "listConfluence", "writeConfluence", "listNotion", "writeNotion", "listLinear", "writeLinear"].every((symbol) => has(files.vendorConnectors, symbol)),
-    ["MEMORY_JIRA_BASE_URL", "MEMORY_CONFLUENCE_BASE_URL", "MEMORY_NOTION_DATABASE_ID", "MEMORY_LINEAR_TEAM_ID"].every((env) => has(files.vendorConnectors, env))
+    ["listJira", "writeJira", "listConfluence", "writeConfluence", "listNotion", "writeNotion", "listLinear", "writeLinear", "listGitLab", "writeGitLab", "listAzureDevOps", "writeAzureDevOps", "listTeams", "writeTeams", "listGmail", "writeGmail", "listGoogleDrive", "writeGoogleDrive", "listGoogleCalendar", "writeGoogleCalendar", "listAsana", "writeAsana", "listClickUp", "writeClickUp", "listSentry", "writeSentry", "listDatadog", "writeDatadog", "listPagerDuty", "writePagerDuty", "listPostHog", "writePostHog"].every((symbol) => has(files.vendorConnectors, symbol)),
+    ["MEMORY_JIRA_BASE_URL", "MEMORY_CONFLUENCE_BASE_URL", "MEMORY_NOTION_DATABASE_ID", "MEMORY_LINEAR_TEAM_ID", "MEMORY_GITLAB_PROJECT", "MEMORY_AZURE_DEVOPS_ORG", "MEMORY_TEAMS_TEAM_ID", "MEMORY_GOOGLE_TOKEN", "MEMORY_ASANA_WORKSPACE", "MEMORY_CLICKUP_LIST_ID", "MEMORY_SENTRY_ORG", "MEMORY_DATADOG_API_KEY", "MEMORY_PAGERDUTY_TOKEN", "MEMORY_POSTHOG_PROJECT"].every((env) => has(files.vendorConnectors, env))
   ]),
-  check("planned connector contracts are explicit", [
-    plannedConnectorIds.every((id) => has(files.service, id)),
-    has(files.connectors, "GitLab vendor"),
-    has(files.connectors, "Azure DevOps vendor"),
-    has(files.connectors, "Microsoft Teams vendor"),
-    has(files.connectors, "| Gmail vendor |"),
-    has(files.connectors, "| Google Drive vendor |"),
-    has(files.connectors, "| Google Calendar vendor |"),
-    has(files.connectors, "| Sentry vendor |"),
-    has(files.connectors, "| Datadog vendor |"),
-    has(files.connectors, "| PagerDuty vendor |"),
-    has(files.connectors, "| planned |")
+  check("state-of-the-art vendor drivers replaced planned contracts", [
+    vendorIds.every((id) => has(files.service, id)),
+    has(files.connectors, "Native vendor drivers"),
+    has(files.connectors, "GitLab"),
+    has(files.connectors, "Azure DevOps"),
+    has(files.connectors, "Microsoft Teams"),
+    has(files.connectors, "Gmail"),
+    has(files.connectors, "Google Drive"),
+    has(files.connectors, "Google Calendar"),
+    has(files.connectors, "Sentry"),
+    has(files.connectors, "Datadog"),
+    has(files.connectors, "PagerDuty"),
+    !has(files.cli, "planned vendor driver; custom connector contract available now"),
+    !has(files.cli, "planned-contract")
   ]),
   check("vendor verification covers every provider", [
     vendorIds.every((id) => has(files.vendorLive, id)),
-    ["jiraUsesSearch", "confluenceUsesContent", "notionQueriesDatabase", "linearUsesGraphQL"].every((checkName) => has(files.vendorLive, checkName)),
-    ["jiraCorrectionTagged", "confluenceArchitectureTagged", "notionDecisionTagged", "linearCorrectionTagged"].every((checkName) => has(files.vendorLive, checkName)),
+    ["jiraUsesSearch", "confluenceUsesContent", "notionQueriesDatabase", "linearUsesGraphQL", "gitlabUsesMergeRequests", "azureDevOpsUsesPullRequests", "teamsUsesChannelMessages", "gmailUsesMessageList", "googleDriveUsesFilesList", "googleCalendarUsesEventsList", "asanaUsesTasks", "clickupUsesTasks", "sentryUsesProjectIssues", "datadogUsesMonitors", "pagerDutyUsesIncidents", "posthogUsesFeatureFlags"].every((checkName) => has(files.vendorLive, checkName)),
+    has(files.vendorLive, "memoryTagsCoverProviders"),
     vendorProviders.every((provider) => has(files.vendorSmoke, provider)),
-    artifact("artifacts/vendor-connectors-live.json", (report) => report.passed === true && ["jiraUsesSearch", "confluenceUsesContent", "notionQueriesDatabase", "linearUsesGraphQL"].every((name) => report.checks?.[name] === true))
+    artifact("artifacts/vendor-connectors-live.json", (report) => report.passed === true && ["jiraUsesSearch", "confluenceUsesContent", "notionQueriesDatabase", "linearUsesGraphQL", "gitlabUsesMergeRequests", "azureDevOpsUsesPullRequests", "teamsUsesChannelMessages", "gmailUsesMessageList", "googleDriveUsesFilesList", "googleCalendarUsesEventsList", "asanaUsesTasks", "clickupUsesTasks", "sentryUsesProjectIssues", "datadogUsesMonitors", "pagerDutyUsesIncidents", "posthogUsesFeatureFlags"].every((name) => report.checks?.[name] === true))
   ]),
   check("guided self-hosted install is wired", [
     has(files.cli, "case \"init\""),
@@ -98,7 +99,7 @@ const checks = [
     has(files.overview, "Fast Path"),
     has(files.readme, "docs/getting-started/setup-cli.md"),
     has(files.connectors, "credential-safe connector setup"),
-    has(files.connectors, "State-of-the-art connector contracts")
+    has(files.connectors, "Native vendor drivers")
   ]),
   check("platform SDK scaffold is productized", [
     has(files.connectorSdk, "createPlatformIntegration"),

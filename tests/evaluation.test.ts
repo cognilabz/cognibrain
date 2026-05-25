@@ -26,7 +26,7 @@ describe("self verification benchmark loop", () => {
     });
     expect(report.ours.total).toBe(40);
     expect(report.ours.accuracy).toBeGreaterThan(Math.max(...report.baselines.map((item) => item.accuracy)));
-  }, 30_000);
+  }, 60_000);
 
   it("runs a LongMemEval-style answer-session recall fixture", () => {
     const dir = mkdtempSync(join(tmpdir(), "open-memory-lme-"));

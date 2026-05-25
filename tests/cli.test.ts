@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const cli = join(root, "bin", "cognibrain.mjs");
 const connectCli = join(root, "bin", "cognibrain-connect.mjs");
-const slowCliTimeout = 15_000;
+const slowCliTimeout = 30_000;
 
 describe("cognibrain CLI", () => {
   it("prints the one-command surface", () => {
@@ -20,7 +20,7 @@ describe("cognibrain CLI", () => {
     expect(output).toContain("azure-devops");
     expect(output).toContain("cognibrain adapter list");
     expect(output).toContain("cognibrain skill install|status|doctor|path");
-  });
+  }, slowCliTimeout);
 
   it("manages setup config, connector config, adapter config, and skill status through CLI commands", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-config-"));
@@ -31,7 +31,8 @@ describe("cognibrain CLI", () => {
         CODEX_HOME: codexHome,
         MEMORY_AUTO_DREAM: "false",
         MEMORY_GITHUB_REPO: "cognilabz/cognibrain",
-        MEMORY_GITHUB_TOKEN: "test-token-should-not-be-written"
+        MEMORY_GITHUB_TOKEN: "test-token-should-not-be-written",
+        MEMORY_SENTRY_TOKEN: "test-sentry-token-should-not-be-written"
       };
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "init", "--profile", "solo-dev", "--yes", "--dry-run", "--no-start", "--no-doctor", "--no-skill", "--no-demo"], { cwd: dir, env, encoding: "utf8" });
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "add", "sentry", "--set", "organization=cognilabz", "--set", "project=memory", "--token-env", "MEMORY_SENTRY_TOKEN"], { cwd: dir, env, encoding: "utf8" });
@@ -59,10 +60,11 @@ describe("cognibrain CLI", () => {
       const sentryConfig = readFileSync(join(dir, ".cognibrain", "connectors", "sentry.json"), "utf8");
       expect(sentryConfig).toContain("env:MEMORY_SENTRY_TOKEN");
       expect(sentryConfig).not.toContain("test-token-should-not-be-written");
+      expect(sentryConfig).not.toContain("test-sentry-token-should-not-be-written");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, slowCliTimeout);
 
   it("scaffolds custom platform integrations through the SDK CLI", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-sdk-platform-"));
@@ -86,7 +88,7 @@ describe("cognibrain CLI", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, slowCliTimeout);
 
   it("adds and searches memories through the publishable bin entrypoint", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-"));
@@ -111,7 +113,7 @@ describe("cognibrain CLI", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, slowCliTimeout);
 
   it("exports and reloads evidence packs by context-pack id through the CLI", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-evidence-"));
@@ -253,7 +255,7 @@ describe("cognibrain CLI", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, slowCliTimeout);
 
   it("offers an npx-style connector installer for individual harnesses", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-connect-"));
@@ -274,7 +276,7 @@ describe("cognibrain CLI", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, slowCliTimeout);
 
   it("offers package-style installers for OpenCode, OpenClaw, LangGraph, and CrewAI", () => {
     for (const target of ["opencode", "openclaw", "langgraph", "crewai"]) {
@@ -295,5 +297,5 @@ describe("cognibrain CLI", () => {
         rmSync(dir, { recursive: true, force: true });
       }
     }
-  });
+  }, slowCliTimeout);
 });

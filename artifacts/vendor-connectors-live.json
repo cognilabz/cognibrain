@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T18:18:09.642Z",
+  "generatedAt": "2026-05-25T19:16:35.684Z",
   "mode": "contract",
   "checks": {
     "officialManifestsUseVendorEndpoints": true,
@@ -20,18 +20,35 @@
     "notionWritesBlock": true,
     "linearUsesGraphQL": true,
     "linearWritesComment": true,
+    "gitlabUsesMergeRequests": true,
+    "gitlabWritesNote": true,
+    "azureDevOpsUsesPullRequests": true,
+    "azureDevOpsWritesThread": true,
+    "teamsUsesChannelMessages": true,
+    "teamsWritesChannelMessage": true,
+    "gmailUsesMessageList": true,
+    "gmailWritesMessageModify": true,
+    "googleDriveUsesFilesList": true,
+    "googleDriveWritesFileMetadata": true,
+    "googleCalendarUsesEventsList": true,
+    "googleCalendarWritesEvent": true,
+    "asanaUsesTasks": true,
+    "asanaWritesStory": true,
+    "clickupUsesTasks": true,
+    "clickupWritesComment": true,
+    "sentryUsesProjectIssues": true,
+    "sentryWritesComment": true,
+    "datadogUsesMonitors": true,
+    "datadogWritesEvent": true,
+    "pagerDutyUsesIncidents": true,
+    "pagerDutyWritesNote": true,
+    "posthogUsesFeatureFlags": true,
+    "posthogWritesFeatureFlag": true,
     "listPollWritebackApplied": true,
     "dryRunDoesNotPost": true,
     "authorizationHeadersRedactedInSyncRecords": true,
     "secretsNotRetained": true,
-    "githubPrDecisionTagged": true,
-    "githubActionsFailureTagged": true,
-    "slackDecisionNeedsReview": true,
-    "discordDecisionNeedsReview": true,
-    "jiraCorrectionTagged": true,
-    "confluenceArchitectureTagged": true,
-    "notionDecisionTagged": true,
-    "linearCorrectionTagged": true,
+    "memoryTagsCoverProviders": true,
     "externalHealthRecordsVisible": true
   },
   "calls": [
@@ -70,7 +87,7 @@
       "hasAuthorization": true,
       "authorizationScheme": "Bearer",
       "contentType": "application/json",
-      "body": "{\"body\":\"Memory-linked release decision.\"}"
+      "body": "{\"body\":\"Decision captured for github.\"}"
     },
     {
       "provider": "slack",
@@ -100,7 +117,7 @@
       "hasAuthorization": true,
       "authorizationScheme": "Bearer",
       "contentType": "application/json; charset=utf-8",
-      "body": "{\"channel\":\"C123\",\"text\":\"Decision captured for review.\",\"thread_ts\":\"1710000000.000100\"}"
+      "body": "{\"channel\":\"C123\",\"text\":\"Decision captured for slack.\",\"thread_ts\":\"1710000000.000100\"}"
     },
     {
       "provider": "discord",
@@ -130,7 +147,7 @@
       "hasAuthorization": true,
       "authorizationScheme": "Bot",
       "contentType": "application/json",
-      "body": "{\"content\":\"Decision captured for review.\",\"allowed_mentions\":{\"parse\":[]}}"
+      "body": "{\"content\":\"Decision captured for discord.\",\"allowed_mentions\":{\"parse\":[]}}"
     },
     {
       "provider": "jira",
@@ -160,7 +177,7 @@
       "hasAuthorization": true,
       "authorizationScheme": "Basic",
       "contentType": "application/json",
-      "body": "{\"body\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Decision captured for review.\"}]}]}}"
+      "body": "{\"body\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Decision captured for jira.\"}]}]}}"
     },
     {
       "provider": "confluence",
@@ -190,7 +207,7 @@
       "hasAuthorization": true,
       "authorizationScheme": "Basic",
       "contentType": "application/json",
-      "body": "{\"type\":\"comment\",\"container\":{\"id\":\"123\",\"type\":\"page\"},\"body\":{\"storage\":{\"value\":\"<p>Decision captured for review.</p>\",\"representation\":\"storage\"}}}"
+      "body": "{\"type\":\"comment\",\"container\":{\"id\":\"123\",\"type\":\"page\"},\"body\":{\"storage\":{\"value\":\"<p>Decision captured for confluence.</p>\",\"representation\":\"storage\"}}}"
     },
     {
       "provider": "notion",
@@ -220,7 +237,7 @@
       "hasAuthorization": true,
       "authorizationScheme": "Bearer",
       "contentType": "application/json",
-      "body": "{\"children\":[{\"object\":\"block\",\"type\":\"paragraph\",\"paragraph\":{\"rich_text\":[{\"type\":\"text\",\"text\":{\"content\":\"Decision captured for review.\"}}]}}]}"
+      "body": "{\"children\":[{\"object\":\"block\",\"type\":\"paragraph\",\"paragraph\":{\"rich_text\":[{\"type\":\"text\",\"text\":{\"content\":\"Decision captured for notion.\"}}]}}]}"
     },
     {
       "provider": "linear",
@@ -250,10 +267,370 @@
       "hasAuthorization": true,
       "authorizationScheme": "Raw",
       "contentType": "application/json",
-      "body": "{\"query\":\"mutation CognibrainComment($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success comment { id url } } }\",\"variables\":{\"issueId\":\"lin_123\",\"body\":\"Decision captured for review.\"}}"
+      "body": "{\"query\":\"mutation CognibrainComment($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success comment { id url } } }\",\"variables\":{\"issueId\":\"lin_123\",\"body\":\"Decision captured for linear.\"}}"
+    },
+    {
+      "provider": "gitlab",
+      "method": "GET",
+      "path": "/gitlab/api/v4/projects/cognilabz%2Fcognibrain/merge_requests",
+      "search": "?state=opened&order_by=updated_at&sort=desc&per_page=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Token",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "gitlab",
+      "method": "GET",
+      "path": "/gitlab/api/v4/projects/cognilabz%2Fcognibrain/merge_requests",
+      "search": "?state=opened&order_by=updated_at&sort=desc&per_page=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Token",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "gitlab",
+      "method": "POST",
+      "path": "/gitlab/api/v4/projects/cognilabz%2Fcognibrain/merge_requests/42/notes",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Token",
+      "contentType": "application/json",
+      "body": "{\"body\":\"Decision captured for gitlab.\"}"
+    },
+    {
+      "provider": "azure-devops",
+      "method": "GET",
+      "path": "/azure/org/project/_apis/git/pullrequests",
+      "search": "?searchCriteria.status=active&%24top=20&api-version=7.1",
+      "hasAuthorization": true,
+      "authorizationScheme": "Basic",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "azure-devops",
+      "method": "GET",
+      "path": "/azure/org/project/_apis/git/pullrequests",
+      "search": "?searchCriteria.status=active&%24top=20&api-version=7.1",
+      "hasAuthorization": true,
+      "authorizationScheme": "Basic",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "azure-devops",
+      "method": "POST",
+      "path": "/azure/org/project/_apis/git/repositories/repo123/pullRequests/42/threads",
+      "search": "?api-version=7.1",
+      "hasAuthorization": true,
+      "authorizationScheme": "Basic",
+      "contentType": "application/json",
+      "body": "{\"comments\":[{\"parentCommentId\":0,\"content\":\"Decision captured for azure-devops.\",\"commentType\":\"text\"}],\"status\":\"active\"}"
+    },
+    {
+      "provider": "teams",
+      "method": "GET",
+      "path": "/teams/v1.0/teams/team123/channels/channel123/messages",
+      "search": "?%24top=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "teams",
+      "method": "GET",
+      "path": "/teams/v1.0/teams/team123/channels/channel123/messages",
+      "search": "?%24top=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "teams",
+      "method": "POST",
+      "path": "/teams/v1.0/teams/team123/channels/channel123/messages",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"body\":{\"contentType\":\"text\",\"content\":\"Decision captured for teams.\"}}"
+    },
+    {
+      "provider": "gmail",
+      "method": "GET",
+      "path": "/google/gmail/v1/users/me/messages",
+      "search": "?maxResults=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "gmail",
+      "method": "GET",
+      "path": "/google/gmail/v1/users/me/messages",
+      "search": "?maxResults=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "gmail",
+      "method": "POST",
+      "path": "/google/gmail/v1/users/me/messages/msg123/modify",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"addLabelIds\":[\"IMPORTANT\"]}"
+    },
+    {
+      "provider": "google-drive",
+      "method": "GET",
+      "path": "/google/drive/v3/files",
+      "search": "?q=%27root%27+in+parents&pageSize=20&fields=files%28id%2Cname%2CmimeType%2CwebViewLink%2CmodifiedTime%2Cowners%28displayName%2CemailAddress%29%2Cdescription%29",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "google-drive",
+      "method": "GET",
+      "path": "/google/drive/v3/files",
+      "search": "?q=%27root%27+in+parents&pageSize=20&fields=files%28id%2Cname%2CmimeType%2CwebViewLink%2CmodifiedTime%2Cowners%28displayName%2CemailAddress%29%2Cdescription%29",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "google-drive",
+      "method": "PATCH",
+      "path": "/google/drive/v3/files/file123",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"description\":\"Decision captured for google-drive.\"}"
+    },
+    {
+      "provider": "google-calendar",
+      "method": "GET",
+      "path": "/google/calendar/v3/calendars/primary/events",
+      "search": "?maxResults=20&singleEvents=true&orderBy=startTime&timeMin=2026-05-18T19%3A16%3A35.660Z",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "google-calendar",
+      "method": "GET",
+      "path": "/google/calendar/v3/calendars/primary/events",
+      "search": "?maxResults=20&singleEvents=true&orderBy=startTime&timeMin=2026-05-18T19%3A16%3A35.661Z",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "google-calendar",
+      "method": "PATCH",
+      "path": "/google/calendar/v3/calendars/primary/events/event123",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"description\":\"Decision captured for google-calendar.\"}"
+    },
+    {
+      "provider": "asana",
+      "method": "GET",
+      "path": "/asana/api/1.0/tasks",
+      "search": "?workspace=workspace123&project=project123&limit=20&opt_fields=gid%2Cname%2Ccompleted%2Cpermalink_url%2Cassignee.name%2Cmodified_at%2Cnotes%2Cmemberships.project.name",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "asana",
+      "method": "GET",
+      "path": "/asana/api/1.0/tasks",
+      "search": "?workspace=workspace123&project=project123&limit=20&opt_fields=gid%2Cname%2Ccompleted%2Cpermalink_url%2Cassignee.name%2Cmodified_at%2Cnotes%2Cmemberships.project.name",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "asana",
+      "method": "POST",
+      "path": "/asana/api/1.0/tasks/task123/stories",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"data\":{\"text\":\"Decision captured for asana.\"}}"
+    },
+    {
+      "provider": "clickup",
+      "method": "GET",
+      "path": "/clickup/api/v2/list/list123/task",
+      "search": "?page=0&order_by=updated&reverse=true&include_closed=false",
+      "hasAuthorization": true,
+      "authorizationScheme": "Raw",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "clickup",
+      "method": "GET",
+      "path": "/clickup/api/v2/list/list123/task",
+      "search": "?page=0&order_by=updated&reverse=true&include_closed=false",
+      "hasAuthorization": true,
+      "authorizationScheme": "Raw",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "clickup",
+      "method": "POST",
+      "path": "/clickup/api/v2/task/click123/comment",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Raw",
+      "contentType": "application/json",
+      "body": "{\"comment_text\":\"Decision captured for clickup.\",\"notify_all\":false}"
+    },
+    {
+      "provider": "sentry",
+      "method": "GET",
+      "path": "/sentry/api/0/projects/org/project/issues/",
+      "search": "?limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "sentry",
+      "method": "GET",
+      "path": "/sentry/api/0/projects/org/project/issues/",
+      "search": "?limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "sentry",
+      "method": "POST",
+      "path": "/sentry/api/0/issues/sentry123/comments/",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"text\":\"Decision captured for sentry.\"}"
+    },
+    {
+      "provider": "datadog",
+      "method": "GET",
+      "path": "/datadog/api/v1/monitor",
+      "search": "?group_states=all&page_size=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "DD",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "datadog",
+      "method": "GET",
+      "path": "/datadog/api/v1/monitor",
+      "search": "?group_states=all&page_size=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "DD",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "datadog",
+      "method": "POST",
+      "path": "/datadog/api/v1/events",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "DD",
+      "contentType": "application/json",
+      "body": "{\"title\":\"Cognibrain memory update\",\"text\":\"Decision captured for datadog.\",\"tags\":[\"source:cognibrain\",\"memory:true\",\"env:test\"]}"
+    },
+    {
+      "provider": "pagerduty",
+      "method": "GET",
+      "path": "/pagerduty/incidents",
+      "search": "?service_ids%5B%5D=service123&limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "pagerduty",
+      "method": "GET",
+      "path": "/pagerduty/incidents",
+      "search": "?service_ids%5B%5D=service123&limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "pagerduty",
+      "method": "POST",
+      "path": "/pagerduty/incidents/pd123/notes",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"note\":{\"content\":\"Decision captured for pagerduty.\"}}"
+    },
+    {
+      "provider": "posthog",
+      "method": "GET",
+      "path": "/posthog/api/projects/1/feature_flags/",
+      "search": "?limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "posthog",
+      "method": "GET",
+      "path": "/posthog/api/projects/1/feature_flags/",
+      "search": "?limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "posthog",
+      "method": "PATCH",
+      "path": "/posthog/api/projects/1/feature_flags/flag123/",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"description\":\"Decision captured for posthog.\"}"
     }
   ],
-  "memoryCount": 12,
-  "syncRecordCount": 21,
+  "memoryCount": 24,
+  "syncRecordCount": 57,
   "passed": true
 }

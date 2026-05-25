@@ -114,12 +114,13 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@vitejs/plugin-react": "^6.0.2",
+    "ink": "^5.2.1",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tsx": "^4.20.6",
     "vite": "^8.0.14",
-    "zod": "^3.25.76",
-    "tsx": "^4.20.6"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20.19.25",

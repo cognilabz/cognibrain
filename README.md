@@ -168,9 +168,11 @@ Guided install:
 
 ```bash
 npx cognibrain init
-./bin/cognibrain.mjs connector add github
-./bin/cognibrain.mjs doctor --fix
+npx cognibrain connector add github --set repo=cognilabz/cognibrain
+npx cognibrain doctor --fix
 ```
+
+The setup CLI uses a React/Ink terminal flow when a real terminal is available and a deterministic text path for CI. See [`docs/getting-started/setup-cli.md`](docs/getting-started/setup-cli.md).
 
 Five-minute Memory OS demo:
 
@@ -497,6 +499,8 @@ docker/            Container and compose files
 - [Docs Home](docs/README.md)
 - [Quickstart](docs/getting-started/quickstart.md)
 - [First Engineering Memory](docs/getting-started/first-engineering-memory.md)
+- [Product Overview](docs/getting-started/overview.md)
+- [Setup CLI](docs/getting-started/setup-cli.md)
 - [Canonical Messaging](docs/marketing/messaging.md)
 - [Launch Narrative](docs/marketing/launch-narrative.md)
 - [API Reference](docs/api-reference.md)

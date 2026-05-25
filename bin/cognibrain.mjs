@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import http from "node:http";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -77,6 +78,10 @@ switch (command) {
 }
 
 async function setup(setupArgs) {
+  if (shouldRouteSetupToWizard(setupArgs)) {
+    await init(setupArgs);
+    return;
+  }
   const flags = new Set(setupArgs);
   const selfHosted = flags.has("--self-hosted");
   if (!flags.has("--no-skill")) runNodeChecked("scripts/install-codex-skill.mjs", []);
@@ -209,20 +214,25 @@ async function doctor(doctorArgs) {
 
 async function init(initArgs) {
   if (initArgs.includes("--help")) initUsage(0);
-  const profileName = optionValue(initArgs, "--profile") ?? (initArgs.includes("--benchmark") ? "benchmark" : initArgs.includes("--enterprise") ? "enterprise" : initArgs.includes("--team") ? "team" : "solo-dev");
-  const profile = profileDefinition(profileName);
+  const interactive = shouldPrompt(initArgs);
+  const profileName = normalizeProfileName(optionValue(initArgs, "--profile") ?? (initArgs.includes("--benchmark") ? "benchmark" : initArgs.includes("--enterprise") ? "enterprise" : initArgs.includes("--team") ? "team" : "solo-dev"));
+  const profile = interactive ? await promptInitProfile(profileName) : profileDefinition(profileName);
   const setupArgs = new Set(profile.setupFlags);
   if (initArgs.includes("--no-start")) setupArgs.add("--no-start");
   if (initArgs.includes("--no-skill")) setupArgs.add("--no-skill");
   if (initArgs.includes("--no-doctor")) setupArgs.add("--no-doctor");
   if (initArgs.includes("--all-harnesses")) setupArgs.add("--all-harnesses");
 
-  console.log(`cognibrain init: ${profile.label}`);
-  console.log(`runtime root: ${runtimeRoot}`);
-  console.log(`profile: ${profile.name}`);
+  await renderCliPanel("init", profile, {
+    title: "cognibrain self-hosted setup",
+    runtimeRoot,
+    dryRun: initArgs.includes("--dry-run"),
+    mode: interactive ? "interactive" : "non-interactive"
+  });
   writeSetupState(profile, {
     selectedAt: new Date().toISOString(),
     installCommand: "npx cognibrain init",
+    uiFramework: "ink-react",
     dryRun: initArgs.includes("--dry-run"),
     dashboard: !initArgs.includes("--no-dashboard")
   });
@@ -232,20 +242,25 @@ async function init(initArgs) {
     const demo = runCapture("npm", ["run", "demo:first-win"]);
     if (demo.status !== 0) console.log(`warn  first-win demo skipped - ${demo.stderr.trim() || demo.stdout.trim()}`);
   }
-  console.log("next: cognibrain status, cognibrain doctor --fix, cognibrain connector add github");
+  printInitSummary(profile);
 }
 
 async function connectorCommand(commandArgs) {
   const subcommand = commandArgs[0];
   if (subcommand !== "add") connectorUsage(1);
-  const provider = commandArgs[1];
+  let provider = commandArgs[1];
+  if (!provider && canPrompt(commandArgs)) provider = await promptConnectorProvider();
   if (!provider || !connectorDefinitions()[provider]) connectorUsage(1);
+  const settings = canPrompt(commandArgs) && !commandArgs.includes("--yes") ? await promptConnectorSettings(provider, commandArgs) : connectorSettingsFromArgs(provider, commandArgs);
   const result = writeConnectorConfig(provider, {
     dryRun: commandArgs.includes("--dry-run"),
-    suggestedByProfile: optionValue(commandArgs, "--profile")
+    suggestedByProfile: optionValue(commandArgs, "--profile"),
+    settings
   });
+  await renderCliPanel("connector", result.config, { title: `${provider} connector setup`, path: result.path, dryRun: result.dryRun });
   console.log(`${result.dryRun ? "would write" : "wrote"} connector config: ${result.path}`);
-  console.log(`${result.configured ? "configured" : "missing env"}: ${result.missing.length ? result.missing.join(", ") : "none"}`);
+  console.log(`${result.configured ? "configured" : "needs env"}: ${result.missing.length ? result.missing.join(", ") : "none"}`);
+  console.log(`next: ${result.config.healthCommand}`);
 }
 
 function transportSecurityCheck(localUrl) {
@@ -272,6 +287,118 @@ function inferDeploymentMode(url) {
   } catch {
     return "production";
   }
+}
+
+function shouldRouteSetupToWizard(setupArgs) {
+  const flags = new Set(setupArgs);
+  const hasLegacySetupFlag = ["--self-hosted", "--codex", "--claude", "--copilot", "--cursor", "--vscode", "--opencode", "--openclaw", "--langgraph", "--crewai", "--all-harnesses"].some((flag) => flags.has(flag));
+  return !hasLegacySetupFlag && (setupArgs.length === 0 || flags.has("--yes") || setupArgs.includes("--profile") || canPrompt(setupArgs));
+}
+
+function shouldPrompt(argv) {
+  return canPrompt(argv) && !argv.includes("--yes") && !argv.includes("--dry-run") && !optionValue(argv, "--profile") && !argv.includes("--benchmark") && !argv.includes("--enterprise") && !argv.includes("--team");
+}
+
+function canPrompt(argv = []) {
+  return process.stdin.isTTY === true && process.stdout.isTTY === true && process.env.CI !== "true" && !argv.includes("--no-interactive");
+}
+
+function normalizeProfileName(name) {
+  const aliases = { local: "solo-dev", production: "enterprise", prod: "enterprise" };
+  return aliases[name] ?? name;
+}
+
+async function promptInitProfile(defaultProfileName) {
+  await renderCliPanel("intro", profileDefinition(defaultProfileName), {
+    title: "Welcome to cognibrain",
+    runtimeRoot,
+    mode: "interactive"
+  });
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const profileChoice = await ask(rl, "Profile [1 solo-dev, 2 team, 3 enterprise, 4 benchmark]", defaultProfileName);
+    const profile = profileDefinition(choiceToProfile(profileChoice, defaultProfileName));
+    const harnesses = splitList(await ask(rl, "Harnesses", profile.harnesses.join(",")), profile.harnesses);
+    const storage = await ask(rl, "Storage [local-json, sqlite, postgres]", profile.storage);
+    const auth = await ask(rl, "Auth [local-only, api-key, oidc-or-sso]", profile.auth);
+    const connectors = splitList(await ask(rl, "Connectors", profile.connectors.join(",")), profile.connectors).filter((name) => connectorDefinitions()[name]);
+    const runDemo = yesNo(await ask(rl, "Run the first-win demo? [Y/n]", profile.runDemo ? "y" : "n"));
+    return {
+      ...profile,
+      harnesses,
+      storage,
+      auth,
+      connectors,
+      runDemo,
+      setupFlags: setupFlagsForHarnesses(harnesses),
+      nextSteps: nextStepsForProfile(profile.name, connectors)
+    };
+  } finally {
+    rl.close();
+  }
+}
+
+async function promptConnectorProvider() {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const providers = Object.keys(connectorDefinitions());
+    const answer = await ask(rl, `Connector [${providers.join(", ")}]`, "github");
+    return answer.trim();
+  } finally {
+    rl.close();
+  }
+}
+
+async function promptConnectorSettings(provider, commandArgs) {
+  const initial = connectorSettingsFromArgs(provider, commandArgs);
+  const definition = connectorDefinitions()[provider];
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const settings = { ...initial };
+    for (const field of definition.fields ?? []) {
+      const current = settings[field.name] ?? field.default ?? "";
+      const answer = await ask(rl, field.secret ? `${field.label} env var` : field.label, current);
+      if (answer) settings[field.name] = answer;
+    }
+    return settings;
+  } finally {
+    rl.close();
+  }
+}
+
+function ask(rl, question, defaultValue = "") {
+  const suffix = defaultValue ? ` (${defaultValue})` : "";
+  return rl.question(`${question}${suffix}: `).then((answer) => answer.trim() || defaultValue);
+}
+
+function choiceToProfile(value, fallback) {
+  const normalized = normalizeProfileName(value.trim().toLowerCase());
+  const choices = { "1": "solo-dev", "2": "team", "3": "enterprise", "4": "benchmark" };
+  return choices[normalized] ?? (normalized || fallback);
+}
+
+function splitList(value, fallback) {
+  const items = String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+  return items.length ? items : fallback;
+}
+
+function yesNo(value) {
+  return !/^n(o)?$/i.test(String(value ?? ""));
+}
+
+function setupFlagsForHarnesses(harnesses) {
+  if (harnesses.includes("all")) return ["--all-harnesses"];
+  const supported = new Set(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai"]);
+  const selected = harnesses.filter((harness) => supported.has(harness));
+  return selected.length ? selected.map((harness) => `--${harness}`) : ["--codex", "--cursor"];
+}
+
+function nextStepsForProfile(profileName, connectors) {
+  const steps = ["Run cognibrain doctor --fix", "Open the dashboard", "Run npm run demo:first-win"];
+  if (connectors.length) steps.splice(1, 0, `Configure connector env: ${connectors.join(", ")}`);
+  if (profileName === "benchmark") steps.push("Run npm run benchmark:arena");
+  if (profileName === "enterprise") steps.push("Run npm run verify:vendor-live with tenant credentials");
+  return steps;
 }
 
 function profileDefinition(name) {
@@ -362,66 +489,250 @@ function connectorDefinitions() {
       connectorId: "official-github",
       requiredEnv: ["MEMORY_GITHUB_REPO", "MEMORY_GITHUB_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations/github.md"
+      docs: "docs/integrations/github.md",
+      status: "vendor-driver",
+      fields: [
+        { name: "repo", label: "GitHub repo owner/name", env: "MEMORY_GITHUB_REPO", default: process.env.MEMORY_GITHUB_REPO ?? "cognilabz/cognibrain" },
+        { name: "tokenEnv", label: "GitHub token", env: "MEMORY_GITHUB_TOKEN", secret: true, default: "MEMORY_GITHUB_TOKEN" }
+      ],
+      sampleEvents: ["pull-request review correction", "failed GitHub Actions run", "issue or PR memory comment"]
     },
     slack: {
       connectorId: "official-slack",
       requiredEnv: ["MEMORY_SLACK_TOKEN", "MEMORY_SLACK_CHANNEL_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations/slack-discord.md"
+      docs: "docs/integrations/slack-discord.md",
+      status: "vendor-driver",
+      fields: [
+        { name: "channelId", label: "Slack channel id", env: "MEMORY_SLACK_CHANNEL_ID", default: process.env.MEMORY_SLACK_CHANNEL_ID ?? "C123" },
+        { name: "tokenEnv", label: "Slack token", env: "MEMORY_SLACK_TOKEN", secret: true, default: "MEMORY_SLACK_TOKEN" }
+      ],
+      sampleEvents: ["decision thread", "channel runbook correction", "summary writeback"]
     },
     discord: {
       connectorId: "official-discord",
       requiredEnv: ["MEMORY_DISCORD_BOT_TOKEN", "MEMORY_DISCORD_CHANNEL_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations/slack-discord.md"
+      docs: "docs/integrations/slack-discord.md",
+      status: "vendor-driver",
+      fields: [
+        { name: "channelId", label: "Discord channel id", env: "MEMORY_DISCORD_CHANNEL_ID", default: process.env.MEMORY_DISCORD_CHANNEL_ID ?? "D123" },
+        { name: "tokenEnv", label: "Discord bot token", env: "MEMORY_DISCORD_BOT_TOKEN", secret: true, default: "MEMORY_DISCORD_BOT_TOKEN" }
+      ],
+      sampleEvents: ["support decision", "channel correction", "safe mention-free writeback"]
     },
     jira: {
       connectorId: "official-jira",
       requiredEnv: ["MEMORY_JIRA_BASE_URL", "MEMORY_JIRA_EMAIL", "MEMORY_JIRA_API_TOKEN", "MEMORY_JIRA_PROJECT"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md"
+      docs: "docs/integrations/jira-confluence-notion-linear.md",
+      status: "vendor-driver",
+      fields: [
+        { name: "baseUrl", label: "Jira base URL", env: "MEMORY_JIRA_BASE_URL", default: process.env.MEMORY_JIRA_BASE_URL ?? "https://example.atlassian.net" },
+        { name: "project", label: "Jira project key", env: "MEMORY_JIRA_PROJECT", default: process.env.MEMORY_JIRA_PROJECT ?? "ENG" },
+        { name: "emailEnv", label: "Jira email", env: "MEMORY_JIRA_EMAIL", secret: true, default: "MEMORY_JIRA_EMAIL" },
+        { name: "tokenEnv", label: "Jira API token", env: "MEMORY_JIRA_API_TOKEN", secret: true, default: "MEMORY_JIRA_API_TOKEN" }
+      ],
+      sampleEvents: ["issue correction", "status/label metadata", "memory summary comment"]
     },
     confluence: {
       connectorId: "official-confluence",
       requiredEnv: ["MEMORY_CONFLUENCE_BASE_URL", "MEMORY_CONFLUENCE_EMAIL", "MEMORY_CONFLUENCE_API_TOKEN", "MEMORY_CONFLUENCE_SPACE"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md"
+      docs: "docs/integrations/jira-confluence-notion-linear.md",
+      status: "vendor-driver",
+      fields: [
+        { name: "baseUrl", label: "Confluence base URL", env: "MEMORY_CONFLUENCE_BASE_URL", default: process.env.MEMORY_CONFLUENCE_BASE_URL ?? "https://example.atlassian.net" },
+        { name: "space", label: "Confluence space key", env: "MEMORY_CONFLUENCE_SPACE", default: process.env.MEMORY_CONFLUENCE_SPACE ?? "ENG" },
+        { name: "emailEnv", label: "Confluence email", env: "MEMORY_CONFLUENCE_EMAIL", secret: true, default: "MEMORY_CONFLUENCE_EMAIL" },
+        { name: "tokenEnv", label: "Confluence API token", env: "MEMORY_CONFLUENCE_API_TOKEN", secret: true, default: "MEMORY_CONFLUENCE_API_TOKEN" }
+      ],
+      sampleEvents: ["architecture decision page", "runbook page", "versioned page comment"]
     },
     notion: {
       connectorId: "official-notion",
       requiredEnv: ["MEMORY_NOTION_TOKEN", "MEMORY_NOTION_DATABASE_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md"
+      docs: "docs/integrations/jira-confluence-notion-linear.md",
+      status: "vendor-driver",
+      fields: [
+        { name: "databaseId", label: "Notion database id", env: "MEMORY_NOTION_DATABASE_ID", default: process.env.MEMORY_NOTION_DATABASE_ID ?? "notion_database_id" },
+        { name: "tokenEnv", label: "Notion token", env: "MEMORY_NOTION_TOKEN", secret: true, default: "MEMORY_NOTION_TOKEN" }
+      ],
+      sampleEvents: ["decision row", "product spec", "meeting note block"]
     },
     linear: {
       connectorId: "official-linear",
       requiredEnv: ["MEMORY_LINEAR_API_KEY", "MEMORY_LINEAR_TEAM_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md"
+      docs: "docs/integrations/jira-confluence-notion-linear.md",
+      status: "vendor-driver",
+      fields: [
+        { name: "teamId", label: "Linear team id", env: "MEMORY_LINEAR_TEAM_ID", default: process.env.MEMORY_LINEAR_TEAM_ID ?? "team_id" },
+        { name: "tokenEnv", label: "Linear API key", env: "MEMORY_LINEAR_API_KEY", secret: true, default: "MEMORY_LINEAR_API_KEY" }
+      ],
+      sampleEvents: ["issue correction", "cycle/project metadata", "commentCreate writeback"]
+    },
+    gitlab: {
+      connectorId: "official-gitlab",
+      requiredEnv: ["MEMORY_GITLAB_PROJECT", "MEMORY_GITLAB_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#connector-maturity-matrix",
+      status: "planned-contract",
+      fields: [
+        { name: "project", label: "GitLab project path", env: "MEMORY_GITLAB_PROJECT", default: "group/project" },
+        { name: "tokenEnv", label: "GitLab token", env: "MEMORY_GITLAB_TOKEN", secret: true, default: "MEMORY_GITLAB_TOKEN" }
+      ],
+      sampleEvents: ["merge request correction", "pipeline failure", "issue comment"]
+    },
+    "azure-devops": {
+      connectorId: "official-azure-devops",
+      requiredEnv: ["MEMORY_AZURE_DEVOPS_ORG", "MEMORY_AZURE_DEVOPS_PROJECT", "MEMORY_AZURE_DEVOPS_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#connector-maturity-matrix",
+      status: "planned-contract",
+      fields: [
+        { name: "organization", label: "Azure DevOps org", env: "MEMORY_AZURE_DEVOPS_ORG", default: "organization" },
+        { name: "project", label: "Azure DevOps project", env: "MEMORY_AZURE_DEVOPS_PROJECT", default: "project" },
+        { name: "tokenEnv", label: "Azure DevOps PAT", env: "MEMORY_AZURE_DEVOPS_TOKEN", secret: true, default: "MEMORY_AZURE_DEVOPS_TOKEN" }
+      ],
+      sampleEvents: ["work item correction", "pull request review", "pipeline failure"]
+    },
+    teams: {
+      connectorId: "official-microsoft-teams",
+      requiredEnv: ["MEMORY_TEAMS_TENANT_ID", "MEMORY_TEAMS_CHANNEL_ID", "MEMORY_TEAMS_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#connector-maturity-matrix",
+      status: "planned-contract",
+      fields: [
+        { name: "tenantId", label: "Microsoft tenant id", env: "MEMORY_TEAMS_TENANT_ID", default: "tenant_id" },
+        { name: "channelId", label: "Teams channel id", env: "MEMORY_TEAMS_CHANNEL_ID", default: "channel_id" },
+        { name: "tokenEnv", label: "Teams token", env: "MEMORY_TEAMS_TOKEN", secret: true, default: "MEMORY_TEAMS_TOKEN" }
+      ],
+      sampleEvents: ["channel decision", "incident learning", "message writeback"]
+    },
+    gmail: {
+      connectorId: "official-gmail",
+      requiredEnv: ["MEMORY_GMAIL_ACCOUNT", "MEMORY_GOOGLE_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#connector-maturity-matrix",
+      status: "planned-contract",
+      fields: [
+        { name: "account", label: "Gmail account", env: "MEMORY_GMAIL_ACCOUNT", default: "engineering@example.com" },
+        { name: "tokenEnv", label: "Google token", env: "MEMORY_GOOGLE_TOKEN", secret: true, default: "MEMORY_GOOGLE_TOKEN" }
+      ],
+      sampleEvents: ["email thread decision", "support correction", "label summary"]
+    },
+    "google-drive": {
+      connectorId: "official-google-drive",
+      requiredEnv: ["MEMORY_GOOGLE_DRIVE_ROOT", "MEMORY_GOOGLE_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#connector-maturity-matrix",
+      status: "planned-contract",
+      fields: [
+        { name: "root", label: "Drive folder/root id", env: "MEMORY_GOOGLE_DRIVE_ROOT", default: "drive_root_id" },
+        { name: "tokenEnv", label: "Google token", env: "MEMORY_GOOGLE_TOKEN", secret: true, default: "MEMORY_GOOGLE_TOKEN" }
+      ],
+      sampleEvents: ["design doc", "runbook file", "policy document"]
+    },
+    "google-calendar": {
+      connectorId: "official-google-calendar",
+      requiredEnv: ["MEMORY_GOOGLE_CALENDAR_ID", "MEMORY_GOOGLE_TOKEN"],
+      verification: "planned vendor driver; custom connector contract available now",
+      docs: "docs/connectors.md#connector-maturity-matrix",
+      status: "planned-contract",
+      fields: [
+        { name: "calendarId", label: "Calendar id", env: "MEMORY_GOOGLE_CALENDAR_ID", default: "primary" },
+        { name: "tokenEnv", label: "Google token", env: "MEMORY_GOOGLE_TOKEN", secret: true, default: "MEMORY_GOOGLE_TOKEN" }
+      ],
+      sampleEvents: ["release meeting", "incident review", "architecture council note"]
     }
   };
 }
 
 function writeConnectorConfig(provider, metadata = {}) {
   const definition = connectorDefinitions()[provider];
+  const settings = sanitizeConnectorSettings(definition, metadata.settings ?? {});
+  const { settings: _settings, ...safeMetadata } = metadata;
   const missing = definition.requiredEnv.filter((key) => !process.env[key]);
+  const missingSettings = (definition.fields ?? []).filter((field) => !field.secret && !settings[field.name]).map((field) => field.name);
   const path = join(runtimeRoot, ".cognibrain", "connectors", `${provider}.json`);
   const config = {
     schemaVersion: "1.0",
     provider,
     connectorId: definition.connectorId,
-    configured: missing.length === 0,
+    status: definition.status,
+    configured: missing.length === 0 && missingSettings.length === 0,
     requiredEnv: definition.requiredEnv.map((key) => ({ name: key, present: Boolean(process.env[key]), valueRef: `env:${key}` })),
+    settings,
+    missingSettings,
     missingEnv: missing,
     storagePolicy: "never store credential values; read from environment at runtime",
     verification: definition.verification,
     docs: definition.docs,
-    nextSteps: missing.length ? [`Set ${missing.join(", ")}`, definition.verification] : [definition.verification, "npm run verify:vendor-live -- --live"],
-    metadata: { writtenAt: new Date().toISOString(), ...metadata }
+    preview: {
+      dryRunPoll: `cognibrain memory connector-poll ${definition.connectorId}`,
+      sampleMemoryEvents: definition.sampleEvents ?? []
+    },
+    healthCommand: `cognibrain memory connector-health ${definition.connectorId}`,
+    nextSteps: connectorNextSteps(definition, missing, missingSettings),
+    metadata: { writtenAt: new Date().toISOString(), ...safeMetadata }
   };
   if (!metadata.dryRun) writeJson(path, config);
-  return { path, configured: missing.length === 0, missing, dryRun: Boolean(metadata.dryRun), config };
+  return { path, configured: config.configured, missing, dryRun: Boolean(metadata.dryRun), config };
+}
+
+function sanitizeConnectorSettings(definition, inputSettings) {
+  const sanitized = {};
+  for (const field of definition.fields ?? []) {
+    const value = inputSettings[field.name] ?? (field.secret ? field.default : inputSettings[field.env] ?? process.env[field.env] ?? field.default);
+    if (!value) continue;
+    const secretRef = field.secret && value === process.env[field.env] ? field.env : value;
+    sanitized[field.name] = field.secret ? `env:${String(secretRef).replace(/^env:/, "")}` : String(value);
+  }
+  return sanitized;
+}
+
+function connectorSettingsFromArgs(provider, argv) {
+  const settings = {};
+  const aliases = {
+    "--repo": "repo",
+    "--channel": "channelId",
+    "--project": "project",
+    "--space": "space",
+    "--database": "databaseId",
+    "--team": "teamId",
+    "--tenant": "tenantId",
+    "--base-url": "baseUrl",
+    "--org": "organization",
+    "--root": "root",
+    "--account": "account",
+    "--calendar": "calendarId",
+    "--email-env": "emailEnv",
+    "--token-env": "tokenEnv"
+  };
+  for (const [flag, key] of Object.entries(aliases)) {
+    const value = optionValue(argv, flag);
+    if (value) settings[key] = value;
+  }
+  for (const value of optionValues(argv, "--set")) {
+    const [key, ...rest] = value.split("=");
+    if (key && rest.length) settings[key] = rest.join("=");
+  }
+  const definition = connectorDefinitions()[provider];
+  for (const field of definition.fields ?? []) {
+    if (field.env && process.env[field.env] && !settings[field.name] && !field.secret) settings[field.name] = process.env[field.env];
+  }
+  return settings;
+}
+
+function connectorNextSteps(definition, missingEnv, missingSettings) {
+  const steps = [];
+  if (missingSettings.length) steps.push(`Choose ${missingSettings.join(", ")} with connector add --set key=value`);
+  if (missingEnv.length) steps.push(`Export ${missingEnv.join(", ")}`);
+  steps.push(definition.status === "vendor-driver" ? definition.verification : "Use custom connector HTTP contract until native driver lands");
+  if (definition.status === "vendor-driver") steps.push("MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live");
+  return steps;
 }
 
 function writeHarnessConfig(target) {
@@ -807,6 +1118,84 @@ function optionValue(argv, name) {
   return index >= 0 ? argv[index + 1] : undefined;
 }
 
+function optionValues(argv, name) {
+  const values = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] === name && argv[index + 1]) values.push(argv[index + 1]);
+  }
+  return values;
+}
+
+async function renderCliPanel(kind, payload, options = {}) {
+  if (process.stdout.isTTY !== true && process.env.COGNIBRAIN_FORCE_INK !== "true") {
+    renderPlainPanel(kind, payload, options);
+    return;
+  }
+  try {
+    const React = await import("react");
+    const ink = await import("ink");
+    const h = React.createElement;
+    const Text = ink.Text;
+    const Box = ink.Box;
+    const muted = (text) => h(Text, { color: "gray" }, text);
+    const line = (label, value, color = "white") => h(Box, { gap: 1 }, h(Text, { color: "gray" }, `${label}:`), h(Text, { color }, String(value)));
+    const list = (items) => (items ?? []).map((item, index) => h(Text, { key: `${item}-${index}` }, `  ${index + 1}. ${item}`));
+    let body;
+    if (kind === "connector") {
+      body = [
+        line("connector", `${payload.connectorId} (${payload.status})`, payload.status === "vendor-driver" ? "green" : "yellow"),
+        line("config", options.path ?? ""),
+        line("credentials", payload.missingEnv?.length ? `missing ${payload.missingEnv.join(", ")}` : "env refs ready", payload.missingEnv?.length ? "yellow" : "green"),
+        line("docs", payload.docs),
+        muted("sample memory events"),
+        ...list(payload.preview?.sampleMemoryEvents),
+        muted("next"),
+        ...list(payload.nextSteps)
+      ];
+    } else {
+      body = [
+        line("profile", `${payload.name} - ${payload.label}`, "cyan"),
+        line("runtime", options.runtimeRoot ?? runtimeRoot),
+        line("storage", payload.storage),
+        line("auth", payload.auth),
+        line("harnesses", payload.harnesses.join(", ")),
+        line("connectors", payload.connectors.join(", ") || "none"),
+        muted("next"),
+        ...list(payload.nextSteps)
+      ];
+    }
+    const element = h(
+      Box,
+      { flexDirection: "column", borderStyle: "round", borderColor: "cyan", paddingX: 1, paddingY: 0 },
+      h(Text, { bold: true, color: "cyan" }, options.title ?? "cognibrain"),
+      ...body
+    );
+    const instance = ink.render(element, { exitOnCtrlC: false });
+    await new Promise((resolveTimeout) => setTimeout(resolveTimeout, 20));
+    instance.unmount();
+  } catch {
+    renderPlainPanel(kind, payload, options);
+  }
+}
+
+function renderPlainPanel(kind, payload, options = {}) {
+  if (kind === "connector") {
+    console.log(`${options.title ?? "connector"}: ${payload.connectorId} (${payload.status})`);
+    console.log(`docs: ${payload.docs}`);
+    if (payload.preview?.sampleMemoryEvents?.length) console.log(`preview: ${payload.preview.sampleMemoryEvents.join(", ")}`);
+    return;
+  }
+  console.log(`${options.title ?? "cognibrain init"}: ${payload.label}`);
+  console.log(`runtime root: ${options.runtimeRoot ?? runtimeRoot}`);
+  console.log(`profile: ${payload.name}`);
+}
+
+function printInitSummary(profile) {
+  console.log("ready: setup state, connector stubs, and harness config are in place");
+  console.log(`next: ${profile.nextSteps.join(" -> ")}`);
+  console.log("proof: npm run demo:first-win, npm run verify:compatibility, npm run benchmark:arena");
+}
+
 function readRuntimeState() {
   const statePath = join(runtimeRoot, ".cognibrain", "local-runtime.json");
   if (!existsSync(statePath)) return null;
@@ -856,17 +1245,19 @@ function usage(exitCode) {
 Usage:
   cognibrain [--runtime-root <path>] <command>
   cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--no-start] [--no-doctor] [--no-skill]
-      Guided self-hosted install that writes setup state, connector stubs, harness config, starts runtime, and runs doctor
+      React/Ink guided self-hosted install that writes setup state, connector stubs, harness config, starts runtime, and runs doctor
+  cognibrain setup [--profile local|team|production|benchmark] [--yes]
+      Starts the same guided wizard; legacy flags below still work for scripted installs
   cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--all-harnesses]
-      Install the Codex skill, optionally write harness configs, start API + dashboard, run doctor
+      Scripted install path for CI and package smoke tests
   cognibrain doctor [--publish] [--fix] [--no-start]
       Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
   cognibrain start | dev | status | stop
       Manage the local API + dashboard runtime
   cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>
       Write MCP config for supported harnesses
-  cognibrain connector add <github|slack|discord|jira|confluence|notion|linear> [--dry-run]
-      Write a credential-safe connector setup stub under .cognibrain/connectors/
+  cognibrain connector add <github|slack|discord|jira|confluence|notion|linear|gitlab|azure-devops|teams|gmail|google-drive|google-calendar> [--dry-run] [--set key=value]
+      React/Ink guided, credential-safe connector setup under .cognibrain/connectors/
   cognibrain skill install
       Install the Codex skill
   cognibrain memory add <text>
@@ -893,7 +1284,7 @@ function initUsage(exitCode) {
 }
 
 function connectorUsage(exitCode) {
-  console.log("Usage: cognibrain connector add <github|slack|discord|jira|confluence|notion|linear> [--dry-run]");
+  console.log("Usage: cognibrain connector add <github|slack|discord|jira|confluence|notion|linear|gitlab|azure-devops|teams|gmail|google-drive|google-calendar> [--dry-run] [--set key=value]");
   process.exit(exitCode);
 }
 

@@ -2859,17 +2859,31 @@ describe("TypeScript memory core", () => {
     try {
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "init", "--profile", "solo-dev", "--yes", "--dry-run", "--no-start", "--no-doctor", "--no-skill", "--no-demo"], { cwd: dir, env, encoding: "utf8" });
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "add", "github"], { cwd: dir, env, encoding: "utf8" });
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "add", "jira", "--set", "baseUrl=https://example.atlassian.net", "--set", "project=CB", "--email-env", "MEMORY_JIRA_EMAIL", "--token-env", "MEMORY_JIRA_API_TOKEN"], { cwd: dir, env, encoding: "utf8" });
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "add", "gitlab", "--set", "project=cognilabz/cognibrain"], { cwd: dir, env, encoding: "utf8" });
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "doctor", "--fix", "--no-start", "--no-skill"], { cwd: dir, env, encoding: "utf8" });
       const setupPath = join(dir, ".cognibrain", "setup-state.json");
       const connectorPath = join(dir, ".cognibrain", "connectors", "github.json");
+      const jiraPath = join(dir, ".cognibrain", "connectors", "jira.json");
+      const gitlabPath = join(dir, ".cognibrain", "connectors", "gitlab.json");
       expect(existsSync(setupPath)).toBe(true);
       expect(existsSync(connectorPath)).toBe(true);
+      expect(existsSync(jiraPath)).toBe(true);
+      expect(existsSync(gitlabPath)).toBe(true);
       const setup = JSON.parse(readFileSync(setupPath, "utf8"));
       const connector = JSON.parse(readFileSync(connectorPath, "utf8"));
+      const jira = JSON.parse(readFileSync(jiraPath, "utf8"));
+      const gitlab = JSON.parse(readFileSync(gitlabPath, "utf8"));
       expect(setup.profile).toBe("solo-dev");
+      expect(setup.metadata.uiFramework).toBe("ink-react");
       expect(connector.configured).toBe(true);
       expect(connector.requiredEnv.every((item: { valueRef?: string }) => item.valueRef?.startsWith("env:"))).toBe(true);
-      expect(JSON.stringify({ setup, connector })).not.toContain("test-token-should-not-be-written");
+      expect(jira.settings.baseUrl).toBe("https://example.atlassian.net");
+      expect(jira.settings.project).toBe("CB");
+      expect(jira.settings.tokenEnv).toBe("env:MEMORY_JIRA_API_TOKEN");
+      expect(gitlab.status).toBe("planned-contract");
+      expect(gitlab.nextSteps.some((step: string) => step.includes("custom connector"))).toBe(true);
+      expect(JSON.stringify({ setup, connector, jira, gitlab })).not.toContain("test-token-should-not-be-written");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

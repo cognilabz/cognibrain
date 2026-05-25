@@ -5,12 +5,14 @@ cognibrain ships first-class self-hosted vendor drivers for engineering planning
 ## Setup
 
 ```bash
-npx cognibrain connector add jira
-npx cognibrain connector add confluence
-npx cognibrain connector add notion
-npx cognibrain connector add linear
+npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --set project=ENG
+npx cognibrain connector add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
+npx cognibrain connector add notion --set databaseId=notion_database_id
+npx cognibrain connector add linear --set teamId=linear_team_id
 npm run verify:vendor-connectors
 ```
+
+The CLI writes `.cognibrain/connectors/<provider>.json` with non-secret settings, `env:` references, sample memory events and next verification commands. Tokens stay in environment variables.
 
 ## Environment
 

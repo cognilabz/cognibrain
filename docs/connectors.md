@@ -5,7 +5,15 @@ cognibrain is CLI-first and MCP-compatible.
 The CLI is the human and automation surface: install, start, stop, status, health checks, memory commands, and CI-friendly scripting. MCP is the agent tool surface: let compatible harnesses retrieve, write, and inspect memory without shell parsing.
 
 ```bash
-./bin/cognibrain.mjs setup --self-hosted
+npx cognibrain init --profile team
+npx cognibrain connector add github --set repo=cognilabz/cognibrain
+npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --set project=ENG
+npx cognibrain doctor --fix
+```
+
+For package-style harness install:
+
+```bash
 npx cognibrain-connect claude-code
 npx cognibrain-connect all --no-start
 ./bin/cognibrain.mjs status
@@ -15,6 +23,7 @@ npx cognibrain-connect all --no-start
 ```
 
 This mirrors the current AI-tooling direction: make the install path a small memorable command, then let each harness opt into deeper integration.
+The setup path uses a React/Ink terminal UI in interactive shells and writes deterministic JSON in CI. This is credential-safe connector setup: connector files keep non-secret choices and `env:` references only; token values stay in the environment.
 `cognibrain-connect` is the npm-bin surface for that path. It accepts `codex`, `claude-code`, `cursor`, `github-copilot`, `vscode`, `opencode`, `openclaw`, `langgraph`, `crewai`, or `all`, delegates to the same setup engine, writes `.cognibrain-harness-package.json`, and prints a `doctor --publish` health command after installation.
 `cognibrain-connect` also ships package-style setup for OpenCode, OpenClaw, LangGraph, and CrewAI. Those targets install MCP configs or helper files that fetch evidence packs and send tool-outcome telemetry through the same HTTP API.
 
@@ -88,6 +97,27 @@ Connector authors can use `src/connectors/sdk.ts` to keep local integrations con
 ## External Vendor Connectors
 
 GitHub, Slack, Discord, Jira, Confluence, Notion and Linear are first-class external connectors:
+
+```bash
+npx cognibrain connector add github --set repo=owner/repo
+npx cognibrain connector add slack --set channelId=C123
+npx cognibrain connector add discord --set channelId=D123
+npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --set project=ENG
+npx cognibrain connector add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
+npx cognibrain connector add notion --set databaseId=notion_database_id
+npx cognibrain connector add linear --set teamId=linear_team_id
+```
+
+Planned connector contracts can be configured the same way for early custom adapters:
+
+```bash
+npx cognibrain connector add gitlab --set project=group/project
+npx cognibrain connector add azure-devops --set organization=my-org --set project=my-project
+npx cognibrain connector add teams --set tenantId=tenant --set channelId=channel
+npx cognibrain connector add gmail --set account=engineering@example.com
+npx cognibrain connector add google-drive --set root=drive_root_id
+npx cognibrain connector add google-calendar --set calendarId=primary
+```
 
 | Connector | Required environment | Reads | Writes |
 | --- | --- | --- | --- |

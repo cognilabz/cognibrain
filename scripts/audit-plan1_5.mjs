@@ -20,6 +20,8 @@ const files = {
   cli: read("bin/cognibrain.mjs"),
   dashboard: read("src/dashboard/main.tsx"),
   connectors: read("docs/connectors.md"),
+  overview: read("docs/getting-started/overview.md"),
+  setupCli: read("docs/getting-started/setup-cli.md"),
   claims: read("docs/claims.md"),
   messaging: read("docs/marketing/messaging.md"),
   sameBenchmark: read("docs/market/same-benchmark.md"),
@@ -66,10 +68,23 @@ const checks = [
     has(files.cli, "case \"init\""),
     has(files.cli, "connector add"),
     has(files.cli, "doctor --fix"),
+    has(files.package, "\"ink\""),
+    has(files.cli, "renderCliPanel"),
+    has(files.cli, "promptInitProfile"),
+    has(files.cli, "connectorSettingsFromArgs"),
     has(files.cli, "writeSetupState"),
     has(files.cli, "writeConnectorConfig"),
     has(files.package, "\"demo:first-win\""),
     artifact("artifacts/demos/first-win.json", (report) => report.passed === true && report.install?.profile === "solo-dev")
+  ]),
+  check("setup UX and docs are product-ready", [
+    has(files.setupCli, "React/Ink"),
+    has(files.setupCli, "npx cognibrain init"),
+    has(files.setupCli, "connector add jira --set"),
+    has(files.overview, "What You Get"),
+    has(files.overview, "Fast Path"),
+    has(files.readme, "docs/getting-started/setup-cli.md"),
+    has(files.connectors, "credential-safe connector setup")
   ]),
   check("benchmark arena is replayable and public", [
     has(files.package, "\"benchmark:arena\""),

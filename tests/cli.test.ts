@@ -16,6 +16,8 @@ describe("cognibrain CLI", () => {
     expect(output).toContain("cognibrain setup");
     expect(output).toContain("cognibrain doctor");
     expect(output).toContain("cognibrain memory search");
+    expect(output).toContain("React/Ink guided");
+    expect(output).toContain("azure-devops");
   });
 
   it("adds and searches memories through the publishable bin entrypoint", () => {

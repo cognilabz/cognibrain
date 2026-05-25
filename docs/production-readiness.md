@@ -6,7 +6,7 @@ cognibrain is ready to present as an open-source, self-hosted Engineering Memory
 
 | Area | Ready today | Required gate |
 | --- | --- | --- |
-| Local install | One-command setup, CLI, API, dashboard, MCP, harness package generation | `./bootstrap.sh --self-hosted` or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
+| Local install | React/Ink guided setup, CLI, API, dashboard, MCP, harness package generation | `npx cognibrain init`, `./bootstrap.sh --self-hosted`, or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
 | Team API | API-key auth, actor ids, policy rules, scoped retrieval, audit events | `MEMORY_REQUIRE_AUTH=true` and `MEMORY_API_KEYS` set before exposing the server |
 | Durable storage | JSON/JSONL, SQLite FTS5, Postgres-compatible CI mode, psql-backed Postgres/Cockroach remote driver | `npm run verify:postgres` against the target Postgres path |
 | Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, Engineering Memory types, coding context packs, action guards, patch evidence trails, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen`, `npm run benchmark:cognicode`, `npm run verify:status`, and `npm run audit:plan1_3` |
@@ -52,13 +52,13 @@ Detailed production pages:
 
 ```bash
 npm install
-./bin/cognibrain.mjs setup --self-hosted
+npx cognibrain init --profile solo-dev --yes
 ./bin/cognibrain.mjs memory add "Atlas releases require npm test before publish."
 ./bin/cognibrain.mjs memory evidence-pack "What should Atlas do before release?"
 ./bin/cognibrain.mjs doctor
 ```
 
-This proves setup, memory write, evidence export, API/dashboard startup, Codex Skill generation, and local health.
+This proves setup, memory write, evidence export, API/dashboard startup, Codex Skill generation, and local health. Use [`getting-started/setup-cli.md`](getting-started/setup-cli.md) for the interactive setup flow and connector examples.
 
 ### Self-Hosted Compose
 

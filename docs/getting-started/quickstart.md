@@ -1,16 +1,18 @@
 # Quickstart
 
-## Install
+Use this path when you want to see the product work before reading architecture docs.
+
+## Install And Open The Guided Setup
 
 ```bash
 npm install
-./bin/cognibrain.mjs setup --self-hosted
+npx cognibrain init
 ```
 
-For the published package path:
+For scripted local setup:
 
 ```bash
-npx cognibrain init
+./bin/cognibrain.mjs setup --profile local --yes
 ```
 
 ## First Memory
@@ -23,9 +25,12 @@ npx cognibrain init
 ## Verify
 
 ```bash
-./bin/cognibrain.mjs doctor --publish
+npx cognibrain doctor --fix
+npx cognibrain doctor --publish
 npm run benchmark:cognicode
 npm run benchmark:arena
 ```
+
+Next: [`setup-cli.md`](setup-cli.md) for profiles and connector setup, or [`overview.md`](overview.md) for the product map.
 
 Claim IDs: `CB-CLAIM-EVIDENCE`, `CB-CLAIM-COGNICODE`, `CB-CLAIM-BENCHMARK-ARENA`, `CB-CLAIM-PRODUCTION`.

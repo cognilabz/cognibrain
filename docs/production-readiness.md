@@ -10,7 +10,7 @@ cognibrain is ready to present as an open-source, self-hosted Agent Memory OS wh
 | Team API | API-key auth, actor ids, policy rules, scoped retrieval, audit events | `MEMORY_REQUIRE_AUTH=true` and `MEMORY_API_KEYS` set before exposing the server |
 | Durable storage | JSON/JSONL, SQLite FTS5, Postgres-compatible CI mode, psql-backed Postgres/Cockroach remote driver | `npm run verify:postgres` against the target Postgres path |
 | Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen` and `npm run audit:plan1_1` |
-| Connectors | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, GitHub/Slack/Discord live verifier | `npm run verify:connectors` and deployment-specific vendor credential smoke tests |
+| Connectors | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, real GitHub/Slack/Discord vendor drivers, HTTP adapter verifier, vendor driver verifier | `npm run verify:connectors`, `npm run verify:vendor-connectors`, and deployment-specific vendor credential smoke tests |
 | Benchmarks | LoCoMo, LongMemEval, BEAM, nextgen, answer-generation, market gate, load artifacts | `npm run benchmark:certified`, `npm run benchmark:market`, and the selected `benchmark:load` profile |
 | Open-source packaging | MIT license, contribution guide, security policy, Docker, Kubernetes, npm package dry-run, Python PyPI-style SDK package | `./bin/cognibrain.mjs doctor --publish`, `npm pack --dry-run`, and Python SDK tests |
 
@@ -19,7 +19,7 @@ cognibrain is ready to present as an open-source, self-hosted Agent Memory OS wh
 You can honestly say:
 
 - "cognibrain is a local-first, self-hostable Agent Memory OS with inspectable evidence packs, policy-aware retrieval, durable storage options, connectors, MCP tools, dashboard operations, and reproducible verification gates."
-- "A team can run it behind its own API key, Postgres/Cockroach storage, TLS ingress, backup process, and connector credentials."
+- "A team can run it behind its own API key, Postgres/Cockroach storage, TLS ingress, backup process, and connector credentials for built-in GitHub, Slack, and Discord vendor drivers."
 - "The public benchmark claims are generated from repo-local artifacts and distinguish synthetic/public gates from vendor-signed external reruns."
 
 Do not claim:
@@ -70,6 +70,9 @@ Set these before exposing a networked deployment:
 | `MEMORY_ENCRYPTION_KEY`, `MEMORY_ENCRYPTION_KEY_ID`, `MEMORY_ENCRYPTION_KEY_VERSION` | Encrypts secret-shaped memories and documents key rotation |
 | `MEMORY_BACKUP_REF` | Gives `migration-export` and `backup-verify` a recovery anchor |
 | `MEMORY_SECRET_MANAGER` | Records where deploy secrets are owned |
+| `MEMORY_GITHUB_REPO`, `MEMORY_GITHUB_TOKEN` | Enables the built-in GitHub connector to list PRs, poll failed workflow runs, and write PR/issue comments |
+| `MEMORY_SLACK_TOKEN`, `MEMORY_SLACK_CHANNEL_ID` | Enables the built-in Slack connector to read channel history and post summaries or replies |
+| `MEMORY_DISCORD_BOT_TOKEN`, `MEMORY_DISCORD_CHANNEL_ID` | Enables the built-in Discord connector to read and write channel messages |
 
 For high-concurrency Postgres deployments, point `MEMORY_POSTGRES_URL` at the deployment pooler such as PgBouncer or a managed Postgres pool endpoint. `npm run verify:postgres` proves the schema, transaction rollback, tenant indexes, and indexed `tsvector` retrieval through the configured URL.
 
@@ -81,6 +84,7 @@ Run these before tagging a release or calling a deployment production-ready:
 npm run verify:nextgen
 npm run verify:postgres
 npm run verify:connectors
+npm run verify:vendor-connectors
 npm run benchmark:load -- --memories 10000 --concurrent-writes 50 --concurrent-searches 20 --connector-events 20 --out artifacts/load-benchmark-10k-dream.json
 ./bin/cognibrain.mjs doctor --publish
 npm pack --dry-run

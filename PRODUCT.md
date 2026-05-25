@@ -25,8 +25,8 @@ Evidence-grade Agent Memory OS: every injected memory should be explainable by s
 - Reduces repeated agent onboarding by preserving durable project and user context across harnesses.
 - Makes recall inspectable through evidence packs instead of opaque vector hits.
 - Lets teams enforce memory boundaries with scopes, consent, policy rules, auth, and audit logs.
-- Gives operators reproducible proof through local benchmarks, connector verifiers, Postgres gates, and dashboard artifacts.
-- Keeps deployment ownership local-first while still supporting self-hosted team storage and connector integrations.
+- Gives operators reproducible proof through local benchmarks, HTTP and vendor connector verifiers, Postgres gates, and dashboard artifacts.
+- Keeps deployment ownership local-first while still supporting self-hosted team storage and real GitHub, Slack, and Discord connector integrations.
 
 ## Users
 

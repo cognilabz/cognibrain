@@ -77,9 +77,21 @@ The runtime seeds official manifests for common work systems:
 - `official-gmail`
 - `official-google-calendar`
 
-Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, OAuth scope references, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, list/poll endpoints, and writeback configuration when supported. Service-specific manifests map GitHub issues and pull requests, Jira and Linear work items, Slack and Discord decisions, Notion pages, Google Drive files, Gmail threads, and Google Calendar events into auditable memory events. Custom manifests can be registered through the CLI or HTTP API:
+Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, OAuth scope references, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, list/poll endpoints, and writeback configuration when supported. Service-specific manifests map GitHub issues and pull requests, Jira and Linear work items, Slack and Discord decisions, Notion pages, Google Drive files, Gmail threads, and Google Calendar events into auditable memory events. The official GitHub, Slack, and Discord manifests use built-in `vendor://` endpoints backed by real vendor API drivers instead of placeholder HTTP adapter URLs. Custom manifests can be registered through the CLI or HTTP API:
 
 Connector authors can use `src/connectors/sdk.ts` to keep local integrations consistent before exposing an HTTP endpoint. The SDK provides `createConnectorManifest()`, `normalizeConnectorEvent()`, `runConnectorPoll()`, `connectorAuthHeaders()`, and `createWritebackPlan()` so adapters can share manifest validation, sourceRef provenance, auth-reference headers, poll normalization, and dry-run writeback planning with the built-in service lifecycle.
+
+## External Vendor Connectors
+
+GitHub, Slack, and Discord are first-class external connectors:
+
+| Connector | Required environment | Reads | Writes |
+| --- | --- | --- | --- |
+| `official-github` | `MEMORY_GITHUB_REPO`, `MEMORY_GITHUB_TOKEN` | Pull requests and failed workflow runs through the GitHub REST API | Issue or pull-request comments |
+| `official-slack` | `MEMORY_SLACK_TOKEN`, `MEMORY_SLACK_CHANNEL_ID` | Channel list and channel history through Slack Web API methods | `chat.postMessage` replies or summaries |
+| `official-discord` | `MEMORY_DISCORD_BOT_TOKEN`, `MEMORY_DISCORD_CHANNEL_ID` | Channel messages through Discord REST | Channel messages with mentions disabled by default |
+
+Optional base URL variables (`MEMORY_GITHUB_API_BASE`, `MEMORY_SLACK_API_BASE`, `MEMORY_DISCORD_API_BASE`) make the same drivers testable against hermetic fixtures. Runtime sync records redact `authorization` headers before persistence, and `connector-writeback` dry-runs build the exact request plan without posting to the vendor.
 
 ```bash
 ./bin/cognibrain.mjs memory connector-register '{"id":"support-chat","name":"Support Chat","kind":"chat","version":"1.0.0","direction":"two_way","capabilities":["ingest","webhook","writeback"],"auth":"token","defaultSourceKind":"transcript","metadataMapping":{"channel":"metadata.channel","messageId":"externalId"}}'
@@ -107,15 +119,16 @@ OAuth connectors can declare an `oauth` block. The runtime then manages a statef
 
 `connector-auth-begin` emits an authorization URL with state, redirect URI and scopes. `connector-auth-callback` stores only a token reference plus hash, then attaches that `authRef` to list/poll/writeback blocks that need it. `connector-auth-revoke` marks matching sessions revoked and clears endpoint auth references without exposing the prior token.
 
-List/poll-capable manifests can include endpoint blocks. `connector-list` returns external items without writing memory. `connector-poll` expects a JSON body with `events`, then routes those events through the same add-only extraction path as `connector-sync`. GitHub PR decisions and Actions failures are tagged as decision/action memories; chat decisions from Slack or Discord are kept as `needs_verification` memory candidates when a channel or event requires review, and channel visibility metadata is mapped to consent visibility before reuse. Set `privacyPolicy:"never_store"` for connectors that should prove polling without storing any event content. Writeback-capable manifests can include a `writeback` block with an endpoint, method, auth reference, and allowed operations. Without an endpoint, `connector-writeback` and `/connectors/writeback` create a queued dry-run plan for review. With an endpoint and `dryRun:false`, Cognibrain sends the source-specific payload as HTTP using `x-cognibrain-connector`, `x-cognibrain-operation`, and optional HMAC `x-cognibrain-signature` headers. `connector-feedback` and `/connectors/feedback` convert accepted changes, rejected suggestions, failing tests, and user corrections into trust/importance updates plus a durable feedback memory.
+List/poll-capable manifests can include endpoint blocks. `connector-list` returns external items without writing memory. `connector-poll` routes normalized events through the same add-only extraction path as `connector-sync`; custom HTTP connectors provide a JSON body with `events`, while built-in vendor connectors call the GitHub, Slack, or Discord APIs directly and normalize their responses in-process. GitHub PR decisions and Actions failures are tagged as decision/action memories; chat decisions from Slack or Discord are kept as `needs_verification` memory candidates when a channel or event requires review, and channel visibility metadata is mapped to consent visibility before reuse. Set `privacyPolicy:"never_store"` for connectors that should prove polling without storing any event content. Writeback-capable manifests can include a `writeback` block with an endpoint, method, auth reference, and allowed operations. Without an endpoint, `connector-writeback` and `/connectors/writeback` create a queued dry-run plan for review. With an endpoint and `dryRun:false`, Cognibrain sends the source-specific payload as HTTP using `x-cognibrain-connector`, `x-cognibrain-operation`, and optional HMAC `x-cognibrain-signature` headers for custom connectors, or uses the native vendor driver for GitHub comments, Slack `chat.postMessage`, and Discord channel messages. `connector-feedback` and `/connectors/feedback` convert accepted changes, rejected suggestions, failing tests, and user corrections into trust/importance updates plus a durable feedback memory.
 
 Run the live connector gate with:
 
 ```bash
 npm run verify:connectors
+npm run verify:vendor-connectors
 ```
 
-The gate starts a local HTTP connector target, verifies OAuth hash/revoke, pulls GitHub/Slack/Discord events, sends writebacks, checks connector health, and runs the harness package installer in a temporary project.
+`verify:connectors` starts a local HTTP connector target, verifies OAuth hash/revoke, pulls GitHub/Slack/Discord-shaped events, sends writebacks, checks connector health, and runs the harness package installer in a temporary project. `verify:vendor-connectors` keeps the seeded official manifests intact, points their vendor API bases at hermetic fixtures, verifies real GitHub/Slack/Discord REST paths, auth schemes, writeback endpoints, dry-run no-post behavior, source provenance, review queues, connector health, and secret redaction.
 
 Native harness packages should prefer `connector-telemetry` or `POST /connectors/telemetry` over asking users to run manual feedback commands. The telemetry endpoint accepts `accepted_suggestion`, `rejected_suggestion`, `context_pack_feedback`, and `tool_outcome` events. Accepted/rejected suggestion events become connector feedback memories and update linked memory trust. Context-pack feedback creates retrieval training samples and learned profile updates. Tool outcomes become first-class harness action memories, so retrieval can answer what command, test, or fix worked last time.
 

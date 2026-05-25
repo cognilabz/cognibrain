@@ -810,6 +810,12 @@ export interface ConnectorManifest {
     scopes?: string[];
     redirectUri?: string;
   };
+  vendor?: {
+    provider: "github" | "slack" | "discord";
+    docsUrl: string;
+    requiredEnv: string[];
+    realSmokeEnv?: string[];
+  };
   createdAt: Date | string;
   updatedAt: Date | string;
 }

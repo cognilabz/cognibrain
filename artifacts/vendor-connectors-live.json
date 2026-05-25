@@ -1,0 +1,127 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-25T07:15:33.993Z",
+  "mode": "contract",
+  "checks": {
+    "officialManifestsUseVendorEndpoints": true,
+    "githubUsesRestPulls": true,
+    "githubUsesRestActions": true,
+    "githubWritesIssueComment": true,
+    "slackUsesConversationsList": true,
+    "slackUsesConversationsHistory": true,
+    "slackWritesChatPostMessage": true,
+    "discordUsesChannelMessages": true,
+    "discordWritesChannelMessage": true,
+    "listPollWritebackApplied": true,
+    "dryRunDoesNotPost": true,
+    "authorizationHeadersRedactedInSyncRecords": true,
+    "secretsNotRetained": true,
+    "githubPrDecisionTagged": true,
+    "githubActionsFailureTagged": true,
+    "slackDecisionNeedsReview": true,
+    "discordDecisionNeedsReview": true,
+    "externalHealthRecordsVisible": true
+  },
+  "calls": [
+    {
+      "provider": "github",
+      "method": "GET",
+      "path": "/github/repos/cognilabz/cognibrain/pulls",
+      "search": "?state=open&per_page=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "body": ""
+    },
+    {
+      "provider": "github",
+      "method": "GET",
+      "path": "/github/repos/cognilabz/cognibrain/pulls",
+      "search": "?state=open&per_page=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "body": ""
+    },
+    {
+      "provider": "github",
+      "method": "GET",
+      "path": "/github/repos/cognilabz/cognibrain/actions/runs",
+      "search": "?status=failure&per_page=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "body": ""
+    },
+    {
+      "provider": "github",
+      "method": "POST",
+      "path": "/github/repos/cognilabz/cognibrain/issues/42/comments",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"body\":\"Memory-linked release decision.\"}"
+    },
+    {
+      "provider": "slack",
+      "method": "GET",
+      "path": "/slack/api/conversations.list",
+      "search": "?limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json; charset=utf-8",
+      "body": ""
+    },
+    {
+      "provider": "slack",
+      "method": "GET",
+      "path": "/slack/api/conversations.history",
+      "search": "?channel=C123&limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json; charset=utf-8",
+      "body": ""
+    },
+    {
+      "provider": "slack",
+      "method": "POST",
+      "path": "/slack/api/chat.postMessage",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json; charset=utf-8",
+      "body": "{\"channel\":\"C123\",\"text\":\"Decision captured for review.\",\"thread_ts\":\"1710000000.000100\"}"
+    },
+    {
+      "provider": "discord",
+      "method": "GET",
+      "path": "/discord/api/v10/channels/D123/messages",
+      "search": "?limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bot",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "discord",
+      "method": "GET",
+      "path": "/discord/api/v10/channels/D123/messages",
+      "search": "?limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bot",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "discord",
+      "method": "POST",
+      "path": "/discord/api/v10/channels/D123/messages",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bot",
+      "contentType": "application/json",
+      "body": "{\"content\":\"Decision captured for review.\",\"allowed_mentions\":{\"parse\":[]}}"
+    }
+  ],
+  "memoryCount": 4,
+  "syncRecordCount": 9,
+  "passed": true
+}

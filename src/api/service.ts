@@ -1,4 +1,12 @@
 import { createHmac } from "node:crypto";
+import {
+  externalVendorConfigured,
+  externalVendorProvider,
+  listExternalVendorItems,
+  pollExternalVendorConnector,
+  shouldUseExternalVendor,
+  writebackExternalVendorConnector
+} from "../connectors/vendorConnectors";
 import { applyRedactionPolicy, decryptMemoryContent, type DecryptionKeyMaterial, type RedactionPolicy } from "../core/privacy";
 import { createJsonCommandIntelligenceFromEnv } from "../core/providers";
 import { loadRuntimeConfig } from "../core/runtimeConfig";
@@ -1350,6 +1358,10 @@ export class MemoryService {
     const manifest = this.connectorManifests.get(connectorId);
     if (!manifest) throw new Error(`Connector manifest not found: ${connectorId}`);
     if (!manifest.list?.endpoint) return { connectorId, status: "failed", items: [], error: `Connector ${connectorId} has no list endpoint` };
+    if (shouldUseExternalVendor(manifest, manifest.list.endpoint)) {
+      const result = await listExternalVendorItems(manifest, fetchImpl, timeoutMs);
+      return { connectorId, status: result.status, items: result.items, responseStatusCode: result.responseStatusCode, error: result.error };
+    }
     try {
       const request = connectorAdapterRequest(manifest, "list", manifest.list.endpoint, manifest.list.method ?? "GET", undefined, manifest.list.authRef);
       const response = await fetchImpl(request.url, request.method === "GET"
@@ -1379,6 +1391,18 @@ export class MemoryService {
     if (!manifest.capabilities.includes("poll")) throw new Error(`Connector ${connectorId} does not support poll`);
     if (!manifest.poll?.endpoint) throw new Error(`Connector ${connectorId} has no poll endpoint`);
     try {
+      if (shouldUseExternalVendor(manifest, manifest.poll.endpoint)) {
+        const vendor = await pollExternalVendorConnector(manifest, fetchImpl, timeoutMs);
+        const record = this.syncConnectorEvents(connectorId, vendor.events, scope);
+        record.responseStatusCode = vendor.responseStatusCode;
+        if (vendor.request) record.request = vendor.request;
+        if (vendor.status === "failed") {
+          record.status = "failed";
+          record.error = vendor.error;
+        }
+        this.persist();
+        return record;
+      }
       const request = connectorAdapterRequest(manifest, "poll", manifest.poll.endpoint, manifest.poll.method ?? "GET", undefined, manifest.poll.authRef);
       const response = await fetchImpl(request.url, request.method === "GET"
         ? { method: request.method, headers: request.headers, signal: AbortSignal.timeout(Math.max(1, timeoutMs)) }
@@ -1420,6 +1444,8 @@ export class MemoryService {
         const last = records.at(-1);
         const lastIngest = [...records].reverse().find((record) => record.direction === "ingest");
         const lastWriteback = [...records].reverse().find((record) => record.direction === "export");
+        const vendorProvider = externalVendorProvider(manifest);
+        const vendorStatus = vendorProvider ? externalVendorConfigured(vendorProvider) : undefined;
         return {
           connectorId: manifest.id,
           kind: manifest.kind,
@@ -1430,8 +1456,12 @@ export class MemoryService {
             list: Boolean(manifest.list?.endpoint),
             poll: Boolean(manifest.poll?.endpoint),
             ingest: manifest.capabilities.includes("ingest"),
-            writeback: manifest.capabilities.includes("writeback") || manifest.capabilities.includes("export")
+            writeback: manifest.capabilities.includes("writeback") || manifest.capabilities.includes("export"),
+            externalVendor: shouldUseExternalVendor(manifest, manifest.poll?.endpoint ?? manifest.list?.endpoint ?? manifest.writeback?.endpoint)
           },
+          externalVendor: vendorProvider
+            ? { provider: vendorProvider, configured: vendorStatus?.configured ?? false, missingEnv: vendorStatus?.missing ?? [] }
+            : undefined,
           lastStatus: last?.status ?? "never_run",
           lastError: last?.error,
           lastSyncAt: lastIngest?.timestamp,
@@ -1469,8 +1499,18 @@ export class MemoryService {
       adapter: `${manifest.kind}:${operation}`
     };
     const request = connectorWritebackRequest(manifest, record);
-    if (request) record.request = request;
-    if (request && input.dryRun === false) {
+    if (shouldUseExternalVendor(manifest, manifest.writeback?.endpoint)) {
+      const vendor = await writebackExternalVendorConnector(manifest, record, fetchImpl, timeoutMs, input.dryRun !== false);
+      record.request = vendor.request;
+      if (input.dryRun === false) {
+        record.responseStatusCode = vendor.responseStatusCode;
+        record.status = vendor.status;
+        record.error = vendor.error;
+      }
+    } else if (request) {
+      record.request = request;
+    }
+    if (request && input.dryRun === false && !shouldUseExternalVendor(manifest, manifest.writeback?.endpoint)) {
       try {
         const response = await fetchImpl(request.url, { method: request.method, headers: request.headers, body: request.body, signal: AbortSignal.timeout(Math.max(1, timeoutMs)) });
         record.responseStatusCode = response.status;
@@ -4600,6 +4640,27 @@ function officialConnectorManifests(): ConnectorManifest[] {
     poll: capabilities.includes("poll") ? { endpoint: `connector://${id}/poll`, method: "POST" } : undefined,
     writeback: capabilities.includes("writeback") ? { operations: connectorWritebackOperations(kind), endpoint: `connector://${id}/writeback`, method: "POST" } : undefined
   });
+  const vendor = (
+    id: "official-github" | "official-slack" | "official-discord",
+    name: string,
+    kind: ConnectorManifest["kind"],
+    capabilities: ConnectorManifest["capabilities"],
+    metadataMapping: Record<string, string>,
+    defaultSourceKind: ConnectorManifest["defaultSourceKind"],
+    oauthScopes: string[],
+    provider: "github" | "slack" | "discord",
+    docsUrl: string,
+    requiredEnv: string[]
+  ): ConnectorManifest => {
+    const vendorEndpoint = { github: "vendor://github", slack: "vendor://slack", discord: "vendor://discord" }[provider];
+    return {
+      ...service(id, name, kind, capabilities, metadataMapping, defaultSourceKind, oauthScopes),
+      list: { endpoint: `${vendorEndpoint}/list`, method: "GET" },
+      poll: capabilities.includes("poll") ? { endpoint: `${vendorEndpoint}/poll`, method: "GET" } : undefined,
+      writeback: capabilities.includes("writeback") ? { operations: connectorWritebackOperations(kind), endpoint: `${vendorEndpoint}/writeback`, method: "POST" } : undefined,
+      vendor: { provider, docsUrl, requiredEnv, realSmokeEnv: requiredEnv }
+    };
+  };
   return [
     base("email", "Email", ["ingest", "export", "webhook", "poll", "writeback"], { subject: "content.title", from: "source.author", messageId: "externalId", threadId: "metadata.threadId" }, "human"),
     base("chat", "Chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageId: "externalId", text: "content" }, "transcript"),
@@ -4608,11 +4669,11 @@ function officialConnectorManifests(): ConnectorManifest[] {
     base("code", "Code", ["ingest", "webhook", "poll", "writeback"], { repo: "metadata.repo", path: "source.uri", commit: "source.commit", symbol: "entities.symbol" }, "reviewed_code"),
     base("calendar", "Calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", attendees: "entities.attendees", start: "temporal.eventAt" }, "human"),
     base("cloud_storage", "Cloud Storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title" }, "import"),
-    service("official-github", "GitHub", "code", ["ingest", "export", "webhook", "poll", "writeback"], { repo: "metadata.repo", issueNumber: "externalId", pullRequest: "metadata.pullRequest", commit: "source.commit", actor: "source.author", url: "source.uri" }, "reviewed_code", ["repo:read", "issues:read", "pull_requests:read", "contents:read"]),
+    vendor("official-github", "GitHub", "code", ["ingest", "export", "webhook", "poll", "writeback"], { repo: "metadata.repo", issueNumber: "externalId", pullRequest: "metadata.pullRequest", commit: "source.commit", actor: "source.author", url: "source.uri" }, "reviewed_code", ["repo:read", "issues:read", "pull_requests:read", "contents:read"], "github", "https://docs.github.com/en/rest/pulls/pulls", ["MEMORY_GITHUB_REPO", "MEMORY_GITHUB_TOKEN"]),
     service("official-jira", "Jira", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueKey: "externalId", status: "metadata.status", assignee: "entities.assignee", sprint: "metadata.sprint", project: "metadata.project", url: "source.uri" }, "import", ["read:jira-work", "write:jira-work"]),
     service("official-linear", "Linear", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueId: "externalId", team: "metadata.team", status: "metadata.status", assignee: "entities.assignee", label: "tags", url: "source.uri" }, "import", ["read", "write"]),
-    service("official-slack", "Slack", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageTs: "externalId", threadTs: "metadata.threadId", permalink: "source.uri" }, "transcript", ["channels:history", "groups:history", "chat:write"]),
-    service("official-discord", "Discord", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageId: "externalId", threadId: "metadata.threadId", jumpUrl: "source.uri" }, "transcript", ["messages.read", "messages.write"]),
+    vendor("official-slack", "Slack", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageTs: "externalId", threadTs: "metadata.threadId", permalink: "source.uri" }, "transcript", ["channels:history", "groups:history", "chat:write"], "slack", "https://docs.slack.dev/reference/methods/conversations.history/", ["MEMORY_SLACK_TOKEN", "MEMORY_SLACK_CHANNEL_ID"]),
+    vendor("official-discord", "Discord", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageId: "externalId", threadId: "metadata.threadId", jumpUrl: "source.uri" }, "transcript", ["messages.read", "messages.write"], "discord", "https://docs.discord.com/developers/resources/message", ["MEMORY_DISCORD_BOT_TOKEN", "MEMORY_DISCORD_CHANNEL_ID"]),
     service("official-notion", "Notion", "docs", ["ingest", "webhook", "poll", "writeback"], { pageId: "externalId", workspace: "metadata.workspace", title: "content.title", url: "source.uri", lastEditedBy: "source.author" }, "import", ["read_content", "update_content"]),
     service("official-google-drive", "Google Drive", "cloud_storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title", owner: "source.author" }, "import", ["drive.readonly"]),
     service("official-gmail", "Gmail", "email", ["ingest", "export", "webhook", "poll", "writeback"], { messageId: "externalId", threadId: "metadata.threadId", subject: "content.title", from: "source.author", labelIds: "tags" }, "human", ["gmail.readonly", "gmail.modify"]),

@@ -45,7 +45,9 @@ const files = {
   dashboard: read("src/dashboard/main.tsx"),
   tests: all(read("tests/core.test.ts"), read("tests/api.test.ts"), read("tests/evaluation.test.ts")),
   nextgen: read("src/eval/nextgenBenchmarks.ts"),
+  vendorConnectors: exists("src/connectors/vendorConnectors.ts") ? read("src/connectors/vendorConnectors.ts") : "",
   connectorsLive: exists("src/eval/connectorsLive.ts") ? read("src/eval/connectorsLive.ts") : "",
+  vendorConnectorsLive: exists("src/eval/vendorConnectorsLive.ts") ? read("src/eval/vendorConnectorsLive.ts") : "",
   load: exists("src/eval/load.ts") ? read("src/eval/load.ts") : "",
   postgresLive: exists("src/eval/postgresLive.ts") ? read("src/eval/postgresLive.ts") : ""
 };
@@ -239,15 +241,32 @@ const checks = [
   ]),
   check("WP 9.2 GitHub connector", [
     has(files.service, "official-github"),
+    has(files.service, "vendor://github"),
+    has(files.vendorConnectors, "https://api.github.com"),
+    has(files.vendorConnectors, "/repos/${owner}/${repo}/pulls"),
+    has(files.vendorConnectors, "/issues/${issueNumber}/comments"),
+    has(files.vendorConnectorsLive, "githubUsesRestPulls"),
+    has(files.vendorConnectorsLive, "githubWritesIssueComment"),
     has(files.connectorsLive, "pr_decision"),
     has(files.connectorsLive, "test_failure"),
-    has(files.connectorsLive, "githubRepoGraphEdges")
+    has(files.connectorsLive, "githubRepoGraphEdges"),
+    artifact("artifacts/vendor-connectors-live.json", (report) => report.passed === true && report.checks?.githubUsesRestPulls === true && report.checks?.githubWritesIssueComment === true)
   ]),
   check("WP 9.3 Slack/Discord connector", [
     has(files.service, "official-slack"),
     has(files.service, "official-discord"),
+    has(files.service, "vendor://slack"),
+    has(files.service, "vendor://discord"),
+    has(files.vendorConnectors, "https://slack.com/api"),
+    has(files.vendorConnectors, "conversations.history"),
+    has(files.vendorConnectors, "chat.postMessage"),
+    has(files.vendorConnectors, "https://discord.com/api/v10"),
+    has(files.vendorConnectors, "/channels/${channel}/messages"),
+    has(files.vendorConnectorsLive, "slackUsesConversationsHistory"),
+    has(files.vendorConnectorsLive, "discordUsesChannelMessages"),
     has(files.connectorsLive, "slackDecisionReviewQueue"),
-    has(files.connectorsLive, "discordDecisionReviewQueue")
+    has(files.connectorsLive, "discordDecisionReviewQueue"),
+    artifact("artifacts/vendor-connectors-live.json", (report) => report.passed === true && report.checks?.slackWritesChatPostMessage === true && report.checks?.discordWritesChannelMessage === true)
   ]),
   check("WP 9.4 Official harness packages", [
     has(read("bin/cognibrain-connect.mjs"), "claude-code"),
@@ -292,6 +311,7 @@ const checks = [
     has(files.productionDocs, "MEMORY_STORAGE_BACKEND=postgres-remote"),
     has(files.productionDocs, "npm run verify:postgres"),
     has(files.productionDocs, "npm run verify:connectors"),
+    has(files.productionDocs, "npm run verify:vendor-connectors"),
     has(files.productionDocs, "benchmark:load"),
     has(files.envExample, "MEMORY_API_KEYS"),
     !has(files.envExample, "Future storage"),

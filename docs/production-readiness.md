@@ -109,3 +109,11 @@ For larger deployments, repeat the load benchmark at 100k or 1M memories using t
 - `npm run audit:plan1_1` and `npm run audit:plan1_2` pass after checking product and production readiness text.
 - GitHub issues for the plan pass are closed only after the related verifier output is fresh.
 - Python SDK remains PyPI-style packageable from `sdk/python`; publish to PyPI only from a release workflow with a real token.
+
+## Troubleshooting
+
+- If Compose fails during config interpolation, export `MEMORY_API_KEYS` and `POSTGRES_PASSWORD` first; the file intentionally fails closed without them.
+- If `docker compose` is unavailable but `docker-compose` exists, use the standalone binary with the same flags.
+- If `/health` is reachable but non-health routes return `401`, confirm that callers send `x-api-key` when `MEMORY_REQUIRE_AUTH=true`.
+- If vendor connector checks pass locally but production sync fails, rerun `npm run verify:vendor-connectors` with tenant credentials and inspect `/connectors/health` before claiming vendor certification.
+- If `npm run audit:plan1_2` fails, open `artifacts/plan1_2-audit.json`; it reports the exact Epic/WP check and failed assertion index.

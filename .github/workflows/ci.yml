@@ -30,6 +30,8 @@ jobs:
             artifacts/nextgen-eval.json
             artifacts/nextgen-benchmarks.json
             artifacts/answer-generation.json
+            artifacts/cognicodebench/*.json
+            artifacts/plan1_2-audit.json
             artifacts/benchmark-trend.json
             artifacts/leaderboard.json
             public/leaderboard/**

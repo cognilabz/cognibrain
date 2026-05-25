@@ -22,6 +22,7 @@ Default artifacts:
 
 - `artifacts/cognicodebench/scenarios.json`
 - `artifacts/cognicodebench/run.json`
+- `artifacts/plan1_2-audit.json` after `npm run audit:plan1_2`
 - `artifacts/leaderboard.json` after `npm run leaderboard`
 
 ## Scenario Format

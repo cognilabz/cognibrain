@@ -291,6 +291,13 @@ const nextgenProof = [
   ["marketplace", "persona install"]
 ];
 
+const harnessProof = [
+  ["Claude Code", "setup package"],
+  ["OpenAI Codex", "skill + MCP"],
+  ["Cursor / VS Code", "workspace scope"],
+  ["GitHub", "review + CI memory"]
+];
+
 const platformSignals = [
   { label: "CLI", value: "setup installs skill + runtime", icon: Terminal },
   { label: "API", value: "scoped HTTP and MCP store", icon: Network },
@@ -1683,6 +1690,17 @@ function ProofView({
           </div>
         </div>
         <div className="panel">
+          <h2><Network size={17} /> Harness Packages</h2>
+          <div className="ability-list">
+            {harnessProof.map(([label, value]) => (
+              <div key={label} className="ability-row">
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="panel">
           <h2><BarChart3 size={17} /> Proof Trend</h2>
           <div className="trend-list">
             {certifiedBenchmarks.map((benchmark) => (
@@ -1707,6 +1725,7 @@ function ProofView({
               <span key={line}>{line}</span>
             ))}
           </div>
+          <CogniCodeBenchAblation artifactText={artifactText} />
         </div>
       </div>
     </section>
@@ -1756,6 +1775,40 @@ function OutputGroup({ title, items }: { title: string; items: string[] }) {
       <strong>{title}</strong>
       {(items.length ? items : ["None"]).map((item) => (
         <span key={item}>{item}</span>
+      ))}
+    </div>
+  );
+}
+
+function CogniCodeBenchAblation({ artifactText }: { artifactText: string }) {
+  const rows = useMemo(() => {
+    if (!artifactText.trim()) return [];
+    try {
+      const parsed = JSON.parse(artifactText) as {
+        benchmark?: string;
+        ablation?: Record<string, { score?: number; deltaFromFull?: number }>;
+      };
+      if (parsed.benchmark !== "CogniCodeBench" || !parsed.ablation) return [];
+      return Object.entries(parsed.ablation)
+        .map(([name, value]) => ({
+          name,
+          score: Number(value.score ?? 0),
+          delta: Number(value.deltaFromFull ?? 0)
+        }))
+        .sort((a, b) => b.score - a.score);
+    } catch {
+      return [];
+    }
+  }, [artifactText]);
+  if (!rows.length) return null;
+  return (
+    <div className="trend-list" aria-label="CogniCodeBench ablation chart">
+      {rows.map((row) => (
+        <div key={row.name} className="trend-row">
+          <span>{row.name}</span>
+          <meter min={0} max={100} value={Math.round(row.score * 100)} />
+          <strong>{(row.score * 100).toFixed(1)}%</strong>
+        </div>
       ))}
     </div>
   );

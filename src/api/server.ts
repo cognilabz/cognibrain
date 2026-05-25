@@ -995,7 +995,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
-  if (method === "GET" && (url.pathname === "/sdk/openapi" || url.pathname === "/openapi.json")) {
+  if (method === "GET" && (url.pathname === "/sdk/openapi" || url.pathname === "/openapi.json" || url.pathname === "/v1/openapi.json")) {
     send(response, 200, defaultService.apiDescription(auth.statusReport));
     return;
   }

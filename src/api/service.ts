@@ -2529,7 +2529,8 @@ export class MemoryService {
       "/translate": ["POST"],
       "/ingest/media": ["POST"],
       "/sdk/openapi": ["GET"],
-      "/openapi.json": ["GET"]
+      "/openapi.json": ["GET"],
+      "/v1/openapi.json": ["GET"]
     };
     return {
       openapi: "3.1.0",

@@ -1,0 +1,227 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-25T10:46:58.068Z",
+  "plan": "plan1_2",
+  "planHeadings": {
+    "epics": 9,
+    "workpackages": 33,
+    "total": 42
+  },
+  "summary": {
+    "total": 42,
+    "passed": 42,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "name": "EPIC 0 repo-state verification and audit gate",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "EPIC 1 CogniCodeBench",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "EPIC 2 Engineering Memory object model",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "EPIC 3 coding-agent retrieval",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "EPIC 4 temporal and belief revision for codebases",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "EPIC 5 evidence-grade coding context",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "EPIC 6 harness integrations",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "EPIC 7 production hardening remains covered",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "EPIC 8 documentation and product proof",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 0.1 Code-vs-Docs Feature Matrix",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 0.2 Current Implementation Audit Script",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 1.1 Benchmark Specification",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 1.2 Synthetic Repo Generator",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 1.3 Correction & Review Simulator",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 1.4 Next-Change Evaluator",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 1.5 Memory Ablation Tests",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 1.6 Public Leaderboard",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 2.1 EngineeringMemory Types",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 2.2 Codebase Scope Model",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 2.3 Correction Memory Pipeline",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 2.4 Action Outcome Memory",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 3.1 Code Query Planner",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 3.2 Procedure Recall Before Action",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 3.3 Forbidden Action Guard",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 3.4 Architecture Decision Retrieval",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 4.1 Repo-State Timeline",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 4.2 Supersession Engine for Corrections",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 4.3 Revalidation of High-Impact Memories",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 5.1 Coding Context Pack Template",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 5.2 Evidence Trail for Patch",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 5.3 Wrong-Memory Suppression",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 6.1 Claude Code Connector",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 6.2 Codex Connector",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 6.3 Cursor / VS Code Connector",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 6.4 GitHub Connector",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 7.1 Real Storage Backends",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 7.2 Auth & Policy Enforcement",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 7.3 Observability",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 7.4 OpenAPI & SDKs",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 8.1 Production Docs",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 8.2 Benchmark Docs",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "WP 8.3 Market Positioning Docs",
+      "passed": true,
+      "failed": []
+    }
+  ]
+}

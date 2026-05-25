@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -16,6 +16,7 @@ const files = {
   product: read("PRODUCT.md"),
   status: read("docs/implementation-status.md"),
   benchmarking: read("docs/benchmarking.md"),
+  benchDocs: exists("docs/benchmarks/cognicodebench.md") ? read("docs/benchmarks/cognicodebench.md") : "",
   production: read("docs/production-readiness.md"),
   apiDocs: read("docs/api-reference.md"),
   connectorDocs: read("docs/connectors.md"),
@@ -28,13 +29,17 @@ const files = {
   sdk: read("src/sdk/client.ts"),
   mcpHandlers: read("src/connectors/mcpHandlers.ts"),
   mcpServer: read("src/connectors/mcpServer.ts"),
+  vendorConnectors: exists("src/connectors/vendorConnectors.ts") ? read("src/connectors/vendorConnectors.ts") : "",
   dashboard: read("src/dashboard/main.tsx"),
   leaderboard: read("src/eval/leaderboard.ts"),
   cognicode: read("src/eval/cognicodeBench.ts"),
+  ci: exists(".github/workflows/ci.yml") ? read(".github/workflows/ci.yml") : "",
   tests: all(read("tests/core.test.ts"), read("tests/evaluation.test.ts")),
   scenarioSchema: exists("docs/schemas/cognicodebench-scenario.schema.json") ? read("docs/schemas/cognicodebench-scenario.schema.json") : "",
   scenarioExamples: exists("fixtures/cognicodebench/scenarios.example.json") ? read("fixtures/cognicodebench/scenarios.example.json") : ""
 };
+
+const planHeadings = extractPlanHeadings(files.plan);
 
 const checks = [
   check("EPIC 0 repo-state verification and audit gate", [
@@ -142,13 +147,225 @@ const checks = [
   ])
 ];
 
-const failed = checks.filter((item) => !item.passed);
-for (const item of checks) console.log(`${item.passed ? "ok" : "FAIL"} ${item.name}${item.failed.length ? ` -> ${item.failed.join(", ")}` : ""}`);
+const workpackageChecks = [
+  check("WP 0.1 Code-vs-Docs Feature Matrix", [
+    planHeadings.workpackages === 33,
+    has(files.status, "| Feature | Code implemented | API exposed | CLI exposed | MCP exposed | Dashboard exposed | Tests | Docs | Production ready? |"),
+    has(files.readme, "docs/implementation-status.md"),
+    has(files.package, "audit:plan1_2")
+  ]),
+  check("WP 0.2 Current Implementation Audit Script", [
+    has(files.package, "audit:plan1_2"),
+    has(files.ci, "npm run verify:nextgen"),
+    has(files.ci, "actions/upload-artifact"),
+    has(files.ci, "artifacts/plan1_2-audit.json"),
+    has(files.status, "Plan1_2 implementation issues")
+  ]),
+  check("WP 1.1 Benchmark Specification", [
+    exists("docs/benchmarks/cognicodebench.md"),
+    has(files.scenarioSchema, "CogniCodeBench Scenario"),
+    (JSON.parse(files.scenarioExamples).scenarios ?? []).length === 3,
+    has(files.benchDocs, "Scenario Format")
+  ]),
+  check("WP 1.2 Synthetic Repo Generator", [
+    has(files.package, "benchmark:cognicode:generate"),
+    has(files.cognicode, "generateCogniCodeScenarios"),
+    ["typescript", "python", "go", "react", "monorepo"].every((item) => has(files.cognicode, item)),
+    ["easy", "medium", "hard", "evil"].every((item) => has(files.cognicode, item)),
+    artifact("artifacts/cognicodebench/scenarios.json", (report) => (report.scenarios ?? []).length >= 100)
+  ]),
+  check("WP 1.3 Correction & Review Simulator", [
+    ["command_correction", "library_correction", "architecture_correction", "style_correction", "test_correction", "forbidden_file_correction", "temporal_migration_correction"].every((item) => has(files.cognicode, item)),
+    has(files.cognicode, "recordCodeCorrection"),
+    has(files.cognicode, "recordHarnessAction"),
+    has(files.cognicode, "wrongAction")
+  ]),
+  check("WP 1.4 Next-Change Evaluator", [
+    has(files.cognicode, "patchCorrect"),
+    has(files.cognicode, "commandsRun"),
+    has(files.cognicode, "wrongActionSuppressed"),
+    has(files.cognicode, "evidenceComplete"),
+    artifact("artifacts/cognicodebench/run.json", (report) => (report.scenarios ?? []).every((item) => item.passed === true))
+  ]),
+  check("WP 1.5 Memory Ablation Tests", [
+    ["no_memory", "raw_chat_history", "vector_only", "keyword_only", "graph_only", "cognibrain_without_temporal", "cognibrain_without_corrections"].every((item) => has(files.cognicode, item)),
+    has(files.dashboard, "CogniCodeBenchAblation"),
+    artifact("artifacts/cognicodebench/run.json", (report) => report.ablation?.cognibrain_full?.score > Math.max(...Object.entries(report.ablation ?? {}).filter(([name]) => name !== "cognibrain_full").map(([, value]) => Number(value.score ?? 0))))
+  ]),
+  check("WP 1.6 Public Leaderboard", [
+    has(files.leaderboard, "engineering_memory"),
+    has(files.leaderboard, "artifacts/cognicodebench/run.json"),
+    exists("docs/benchmarks/cognicodebench.md"),
+    artifact("artifacts/leaderboard.json", (report) => (report.entries ?? []).some((entry) => entry.suite === "cognicodebench"))
+  ]),
+  check("WP 2.1 EngineeringMemory Types", [
+    has(files.types, "EngineeringMemoryKind"),
+    ["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "forbidden_action", "migration_note", "test_strategy", "dependency_rule", "generated_file_rule"].every((kind) => has(files.types, kind)),
+    has(files.engineering, "classifyEngineeringMemory"),
+    has(files.dashboard, "engineeringKindLabel")
+  ]),
+  check("WP 2.2 Codebase Scope Model", [
+    has(files.types, "CodebaseScope"),
+    ["repo", "branch", "commitRange", "packageName", "workspace", "directory", "filePattern", "language", "framework", "harness"].every((key) => has(files.types, key)),
+    has(files.engineering, "codebaseScopeMatches"),
+    has(files.engineering, "branch mismatch")
+  ]),
+  check("WP 2.3 Correction Memory Pipeline", [
+    has(files.service, "recordCodeCorrection"),
+    has(files.service, "applySupersession"),
+    has(files.service, "previousWrongAction"),
+    has(files.tests, "beliefState).toBe(\"superseded\")"),
+    has(files.tests, "pnpm test")
+  ]),
+  check("WP 2.4 Action Outcome Memory", [
+    has(files.types, "HarnessActionInput"),
+    ["cwd", "envRequirements", "exitCode", "failureReason", "filesChanged"].every((key) => has(files.types, key)),
+    has(files.service, "recordHarnessAction"),
+    has(files.service, "tool_outcome"),
+    has(files.cognicode, "failureReason")
+  ]),
+  check("WP 3.1 Code Query Planner", [
+    ["command_selection", "change_location", "reviewer_correction", "dangerous_file", "architecture_decision", "failed_last_time", "repo_change"].every((queryType) => has(files.service, queryType)),
+    has(files.types, "repo_policy"),
+    has(files.types, "tool_outcome"),
+    has(files.service, "queryPlan")
+  ]),
+  check("WP 3.2 Procedure Recall Before Action", [
+    has(files.mcpServer, "memory_procedure_recall"),
+    has(files.service, "codingContextPack"),
+    has(files.service, "recordHarnessAction"),
+    has(files.connectorDocs, "memory_procedure_recall")
+  ]),
+  check("WP 3.3 Forbidden Action Guard", [
+    has(files.service, "guardAction"),
+    has(files.engineering, "evaluateForbiddenAction"),
+    has(files.server, "/code/action-guard"),
+    has(files.mcpServer, "memory_action_guard"),
+    has(files.cognicode, "repeatedMistakeRate")
+  ]),
+  check("WP 3.4 Architecture Decision Retrieval", [
+    has(files.types, "architecture_decision"),
+    has(files.service, "architecture_decision"),
+    has(files.cognicode, "app/validation/invoices.py"),
+    has(files.cognicode, "architecture_correction")
+  ]),
+  check("WP 4.1 Repo-State Timeline", [
+    has(files.cognicode, "temporal_migration_correction"),
+    has(files.cognicode, "yarn jest packages/api"),
+    has(files.types, "validUntil"),
+    has(files.service, "repo_change"),
+    has(files.engineering, "branch mismatch")
+  ]),
+  check("WP 4.2 Supersession Engine for Corrections", [
+    has(files.service, "applySupersession"),
+    has(files.types, "superseded"),
+    has(files.service, "supersededBy"),
+    has(files.apiDocs, "Evidence")
+  ]),
+  check("WP 4.3 Revalidation of High-Impact Memories", [
+    has(files.types, "verificationDueAt"),
+    has(files.engineering, "HIGH_IMPACT_KINDS"),
+    has(files.service, "verificationQueue"),
+    has(files.service, "confirmMemory"),
+    has(files.cognicode, "staleRuleSuppressed")
+  ]),
+  check("WP 5.1 Coding Context Pack Template", [
+    has(files.types, "CodingContextPack"),
+    has(files.engineering, "buildCodingContextPackFromResults"),
+    ["repo_policies", "procedures_before_action", "previous_corrections", "known_pitfalls", "architecture_decisions", "tool_commands", "forbidden_actions", "temporal_notes"].every((section) => has(files.engineering, section)),
+    has(files.engineering, "tokenBudget")
+  ]),
+  check("WP 5.2 Evidence Trail for Patch", [
+    has(files.types, "PatchEvidenceTrail"),
+    has(files.engineering, "buildPatchEvidenceTrail"),
+    ["memoryIds", "correctionIds", "procedureIds", "toolOutcomeIds", "excludedStaleRules"].every((key) => has(files.types, key)),
+    has(files.service, "patchEvidenceTrail")
+  ]),
+  check("WP 5.3 Wrong-Memory Suppression", [
+    has(files.engineering, "excludedStaleRules"),
+    has(files.engineering, "beliefState === \"superseded\""),
+    has(files.cognicode, "wrongMemorySuppression"),
+    has(files.cognicode, "staleSuppressed")
+  ]),
+  check("WP 6.1 Claude Code Connector", [
+    has(files.readme, "Claude Code"),
+    has(files.connectorDocs, "Claude Code"),
+    has(files.readme, "setup --all-harnesses"),
+    has(files.dashboard, "Harness Packages")
+  ]),
+  check("WP 6.2 Codex Connector", [
+    has(files.readme, "Codex"),
+    has(files.connectorDocs, "OpenAI Codex"),
+    has(files.mcpServer, "memory_coding_context_pack"),
+    exists("templates/codex/AGENTS.md")
+  ]),
+  check("WP 6.3 Cursor / VS Code Connector", [
+    has(files.readme, "Cursor"),
+    has(files.connectorDocs, "Cursor"),
+    has(files.connectorDocs, "VS Code"),
+    exists("templates/cursor/open-memory.mdc")
+  ]),
+  check("WP 6.4 GitHub Connector", [
+    has(files.service, "official-github"),
+    has(files.types, "review_correction"),
+    has(files.vendorConnectors, "https://api.github.com"),
+    artifact("artifacts/vendor-connectors-live.json", (report) => report.passed === true && report.checks?.githubWritesIssueComment === true)
+  ]),
+  check("WP 7.1 Real Storage Backends", [
+    has(files.status, "SQLite"),
+    has(files.status, "Postgres"),
+    artifact("artifacts/postgres-live.json", (report) => report.passed === true && report.acceptance?.idempotentMigrations === true && report.acceptance?.transactionRollback === true),
+    has(files.production, "backup")
+  ]),
+  check("WP 7.2 Auth & Policy Enforcement", [
+    has(files.production, "MEMORY_API_KEYS"),
+    has(files.server, "authenticate"),
+    has(files.service, "evaluatePolicy"),
+    has(files.service, "policy.denied"),
+    has(files.tests, "tenant isolation")
+  ]),
+  check("WP 7.3 Observability", [
+    has(files.server, "/metrics"),
+    has(files.service, "metricsReport"),
+    has(files.dashboard, "Runtime Analytics"),
+    has(files.status, "Connector proof")
+  ]),
+  check("WP 7.4 OpenAPI & SDKs", [
+    has(files.service, "openapiCodegen"),
+    has(files.server, "/v1/openapi.json") && has(files.service, "/v1/openapi.json"),
+    has(files.sdk, "codingContextPack"),
+    has(files.status, "Python SDK")
+  ]),
+  check("WP 8.1 Production Docs", [
+    has(files.production, "Self-Hosted Compose"),
+    has(files.production, "Required Production Environment"),
+    has(files.production, "Troubleshooting"),
+    has(files.readme, "self-hosted production candidate")
+  ]),
+  check("WP 8.2 Benchmark Docs", [
+    has(files.benchmarking, "CogniCodeBench"),
+    has(files.benchmarking, "Baselines"),
+    has(files.benchDocs, "Interpreting Results"),
+    has(files.benchDocs, "Run")
+  ]),
+  check("WP 8.3 Market Positioning Docs", [
+    has(files.marketDocs, "Mem0"),
+    has(files.marketDocs, "GBrain"),
+    has(files.marketDocs, "Hindsight"),
+    has(files.marketDocs, "Zep"),
+    has(files.marketDocs, "Engineering Memory OS")
+  ])
+];
+
+const allChecks = [...checks, ...workpackageChecks];
+const failed = allChecks.filter((item) => !item.passed);
+for (const item of allChecks) console.log(`${item.passed ? "ok" : "FAIL"} ${item.name}${item.failed.length ? ` -> ${item.failed.join(", ")}` : ""}`);
+writeReport(allChecks, planHeadings);
 if (failed.length) {
-  console.error(`plan1_2 audit failed: ${failed.length}/${checks.length} checks failed`);
+  console.error(`plan1_2 audit failed: ${failed.length}/${allChecks.length} checks failed`);
   process.exit(1);
 }
-console.log(`plan1_2 audit passed: ${checks.length}/${checks.length} checks`);
+console.log(`plan1_2 audit passed: ${allChecks.length}/${allChecks.length} checks`);
 
 function check(name, assertions) {
   const failed = assertions.map((value, index) => ({ value, index })).filter((item) => !item.value).map((item) => `assertion ${item.index + 1}`);
@@ -162,4 +379,39 @@ function artifact(path, predicate) {
   } catch {
     return false;
   }
+}
+
+function extractPlanHeadings(content) {
+  const lines = content.split(/\r?\n/);
+  const headings = lines
+    .map((line, index) => ({ line: index + 1, text: line }))
+    .filter((item) => /^(EPIC|WP)\s+\d/.test(item.text));
+  return {
+    total: headings.length,
+    epics: headings.filter((item) => item.text.startsWith("EPIC")).length,
+    workpackages: headings.filter((item) => item.text.startsWith("WP")).length,
+    headings
+  };
+}
+
+function writeReport(items, headings) {
+  const path = join(root, "artifacts/plan1_2-audit.json");
+  mkdirSync(join(root, "artifacts"), { recursive: true });
+  const report = {
+    schemaVersion: "1.0",
+    generatedAt: new Date().toISOString(),
+    plan: "plan1_2",
+    planHeadings: {
+      epics: headings.epics,
+      workpackages: headings.workpackages,
+      total: headings.total
+    },
+    summary: {
+      total: items.length,
+      passed: items.filter((item) => item.passed).length,
+      failed: items.filter((item) => !item.passed).length
+    },
+    checks: items
+  };
+  writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`);
 }

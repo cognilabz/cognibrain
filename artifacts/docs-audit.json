@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-25T20:49:10.199Z",
+  "summary": {
+    "total": 9,
+    "passed": 9,
+    "failed": 0
+  },
+  "markdownDocs": [
+    "docs/README.md",
+    "docs/benchmarks.md",
+    "docs/claims.md",
+    "docs/install.md",
+    "docs/integrations.md",
+    "docs/operations.md",
+    "docs/reference.md"
+  ],
+  "checks": [
+    {
+      "name": "documentation is compact and canonical",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "README represents the product clearly",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "screenshots are real checked assets",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "benchmark claims are bounded by artifacts",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "install and service docs cover self-hosting",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "connectors, adapters and SDK are discoverable",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "claim map keeps marketing honest",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "legacy plan-era wording is gone from product docs and scripts",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "local markdown links resolve",
+      "passed": true,
+      "failed": []
+    }
+  ]
+}

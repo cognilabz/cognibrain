@@ -361,13 +361,13 @@ async function doctor(doctorArgs) {
     const harnessGenerated = harnessGeneratedHealth();
     add("harness generated configs", harnessGenerated.ok, harnessGenerated.detail, harnessGenerated.ok ? "ok" : "warn");
     const productionDocs = [
-      "docs/production-readiness.md",
-      "docs/production/overview.md",
-      "docs/production/release-checklist.md",
-      "docs/production/observability.md",
+      "docs/README.md",
+      "docs/install.md",
+      "docs/operations.md",
+      "docs/reference.md",
       "docs/claims.md"
     ].filter((path) => existsSync(join(root, path)));
-    add("production docs", productionDocs.length === 5, productionDocs.length === 5 ? "docs/production/overview.md and docs/claims.md" : "missing production docs");
+    add("production docs", productionDocs.length === 5, productionDocs.length === 5 ? "docs/operations.md and docs/claims.md" : "missing production docs");
   }
 
   const result = {
@@ -452,7 +452,7 @@ async function skillCommand(commandArgs) {
       path,
       installCommand: "cognibrain skill install",
       doctorCommand: "cognibrain skill doctor --fix",
-      docs: "docs/getting-started/setup-cli.md",
+      docs: "docs/install.md",
       commands: [
         "cognibrain skill status",
         "cognibrain skill install",
@@ -867,7 +867,7 @@ function connectorDefinitions() {
       connectorId: "official-github",
       requiredEnv: ["MEMORY_GITHUB_REPO", "MEMORY_GITHUB_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations/github.md",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "repo", label: "GitHub repo owner/name", env: "MEMORY_GITHUB_REPO", default: process.env.MEMORY_GITHUB_REPO ?? "cognilabz/cognibrain" },
@@ -879,7 +879,7 @@ function connectorDefinitions() {
       connectorId: "official-slack",
       requiredEnv: ["MEMORY_SLACK_TOKEN", "MEMORY_SLACK_CHANNEL_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations/slack-discord.md",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "channelId", label: "Slack channel id", env: "MEMORY_SLACK_CHANNEL_ID", default: process.env.MEMORY_SLACK_CHANNEL_ID ?? "C123" },
@@ -891,7 +891,7 @@ function connectorDefinitions() {
       connectorId: "official-discord",
       requiredEnv: ["MEMORY_DISCORD_BOT_TOKEN", "MEMORY_DISCORD_CHANNEL_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations/slack-discord.md",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "channelId", label: "Discord channel id", env: "MEMORY_DISCORD_CHANNEL_ID", default: process.env.MEMORY_DISCORD_CHANNEL_ID ?? "D123" },
@@ -903,7 +903,7 @@ function connectorDefinitions() {
       connectorId: "official-jira",
       requiredEnv: ["MEMORY_JIRA_BASE_URL", "MEMORY_JIRA_EMAIL", "MEMORY_JIRA_API_TOKEN", "MEMORY_JIRA_PROJECT"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations/jira-confluence-notion-linear.md",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "baseUrl", label: "Jira base URL", env: "MEMORY_JIRA_BASE_URL", default: process.env.MEMORY_JIRA_BASE_URL ?? "https://example.atlassian.net" },
@@ -917,7 +917,7 @@ function connectorDefinitions() {
       connectorId: "official-confluence",
       requiredEnv: ["MEMORY_CONFLUENCE_BASE_URL", "MEMORY_CONFLUENCE_EMAIL", "MEMORY_CONFLUENCE_API_TOKEN", "MEMORY_CONFLUENCE_SPACE"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations/jira-confluence-notion-linear.md",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "baseUrl", label: "Confluence base URL", env: "MEMORY_CONFLUENCE_BASE_URL", default: process.env.MEMORY_CONFLUENCE_BASE_URL ?? "https://example.atlassian.net" },
@@ -931,7 +931,7 @@ function connectorDefinitions() {
       connectorId: "official-notion",
       requiredEnv: ["MEMORY_NOTION_TOKEN", "MEMORY_NOTION_DATABASE_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations/jira-confluence-notion-linear.md",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "databaseId", label: "Notion database id", env: "MEMORY_NOTION_DATABASE_ID", default: process.env.MEMORY_NOTION_DATABASE_ID ?? "notion_database_id" },
@@ -943,7 +943,7 @@ function connectorDefinitions() {
       connectorId: "official-linear",
       requiredEnv: ["MEMORY_LINEAR_API_KEY", "MEMORY_LINEAR_TEAM_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations/jira-confluence-notion-linear.md",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "teamId", label: "Linear team id", env: "MEMORY_LINEAR_TEAM_ID", default: process.env.MEMORY_LINEAR_TEAM_ID ?? "team_id" },
@@ -955,7 +955,7 @@ function connectorDefinitions() {
       connectorId: "official-gitlab",
       requiredEnv: ["MEMORY_GITLAB_PROJECT", "MEMORY_GITLAB_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "project", label: "GitLab project path", env: "MEMORY_GITLAB_PROJECT", default: "group/project" },
@@ -967,7 +967,7 @@ function connectorDefinitions() {
       connectorId: "official-azure-devops",
       requiredEnv: ["MEMORY_AZURE_DEVOPS_ORG", "MEMORY_AZURE_DEVOPS_PROJECT", "MEMORY_AZURE_DEVOPS_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "organization", label: "Azure DevOps org", env: "MEMORY_AZURE_DEVOPS_ORG", default: "organization" },
@@ -980,7 +980,7 @@ function connectorDefinitions() {
       connectorId: "official-microsoft-teams",
       requiredEnv: ["MEMORY_TEAMS_TEAM_ID", "MEMORY_TEAMS_CHANNEL_ID", "MEMORY_TEAMS_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "teamId", label: "Microsoft Teams team id", env: "MEMORY_TEAMS_TEAM_ID", default: "team_id" },
@@ -993,7 +993,7 @@ function connectorDefinitions() {
       connectorId: "official-gmail",
       requiredEnv: ["MEMORY_GMAIL_ACCOUNT", "MEMORY_GOOGLE_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "account", label: "Gmail account", env: "MEMORY_GMAIL_ACCOUNT", default: "engineering@example.com" },
@@ -1005,7 +1005,7 @@ function connectorDefinitions() {
       connectorId: "official-google-drive",
       requiredEnv: ["MEMORY_GOOGLE_DRIVE_ROOT", "MEMORY_GOOGLE_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "root", label: "Drive folder/root id", env: "MEMORY_GOOGLE_DRIVE_ROOT", default: "drive_root_id" },
@@ -1017,7 +1017,7 @@ function connectorDefinitions() {
       connectorId: "official-google-calendar",
       requiredEnv: ["MEMORY_GOOGLE_CALENDAR_ID", "MEMORY_GOOGLE_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "calendarId", label: "Calendar id", env: "MEMORY_GOOGLE_CALENDAR_ID", default: "primary" },
@@ -1029,7 +1029,7 @@ function connectorDefinitions() {
       connectorId: "official-asana",
       requiredEnv: ["MEMORY_ASANA_WORKSPACE", "MEMORY_ASANA_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "workspace", label: "Asana workspace", env: "MEMORY_ASANA_WORKSPACE", default: "workspace_gid" },
@@ -1042,7 +1042,7 @@ function connectorDefinitions() {
       connectorId: "official-clickup",
       requiredEnv: ["MEMORY_CLICKUP_LIST_ID", "MEMORY_CLICKUP_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "listId", label: "ClickUp list id", env: "MEMORY_CLICKUP_LIST_ID", default: "list_id" },
@@ -1054,7 +1054,7 @@ function connectorDefinitions() {
       connectorId: "official-sentry",
       requiredEnv: ["MEMORY_SENTRY_ORG", "MEMORY_SENTRY_PROJECT", "MEMORY_SENTRY_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "organization", label: "Sentry organization", env: "MEMORY_SENTRY_ORG", default: "organization" },
@@ -1067,7 +1067,7 @@ function connectorDefinitions() {
       connectorId: "official-datadog",
       requiredEnv: ["MEMORY_DATADOG_SITE", "MEMORY_DATADOG_API_KEY", "MEMORY_DATADOG_APP_KEY"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "site", label: "Datadog site", env: "MEMORY_DATADOG_SITE", default: "datadoghq.com" },
@@ -1080,7 +1080,7 @@ function connectorDefinitions() {
       connectorId: "official-pagerduty",
       requiredEnv: ["MEMORY_PAGERDUTY_ACCOUNT", "MEMORY_PAGERDUTY_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "account", label: "PagerDuty account/subdomain", env: "MEMORY_PAGERDUTY_ACCOUNT", default: "team" },
@@ -1093,7 +1093,7 @@ function connectorDefinitions() {
       connectorId: "official-posthog",
       requiredEnv: ["MEMORY_POSTHOG_PROJECT", "MEMORY_POSTHOG_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/connectors.md#native-vendor-drivers",
+      docs: "docs/integrations.md#native-connectors",
       status: "vendor-driver",
       fields: [
         { name: "project", label: "PostHog project id", env: "MEMORY_POSTHOG_PROJECT", default: "project_id" },
@@ -1113,7 +1113,7 @@ function adapterDefinitions() {
       status: "available-contract",
       requiredEnv: ["MEMORY_INTELLIGENCE_COMMAND"],
       verification: "cognibrain connections adapters doctor intelligence-json-command",
-      docs: "docs/configuration.md#intelligence-provider-adapter",
+      docs: "docs/integrations.md#adapters",
       fields: [
         { name: "commandEnv", label: "JSON command env var", env: "MEMORY_INTELLIGENCE_COMMAND", secret: true, default: "MEMORY_INTELLIGENCE_COMMAND" },
         { name: "tasks", label: "Tasks", env: "MEMORY_INTELLIGENCE_TASKS", default: "extract,translate,expand,rerank,verify,contradiction,summarize" }
@@ -1126,7 +1126,7 @@ function adapterDefinitions() {
       status: "available-contract",
       requiredEnv: ["MEMORY_EMBEDDING_BASE_URL", "MEMORY_EMBEDDING_MODEL", "MEMORY_EMBEDDING_API_KEY"],
       verification: "npm test -- tests/core.test.ts",
-      docs: "docs/configuration.md#embeddings-and-vector-search",
+      docs: "docs/integrations.md#adapters",
       fields: [
         { name: "baseUrl", label: "Embedding base URL", env: "MEMORY_EMBEDDING_BASE_URL", default: "http://localhost:11434/v1" },
         { name: "model", label: "Embedding model", env: "MEMORY_EMBEDDING_MODEL", default: "text-embedding-3-small" },
@@ -1140,7 +1140,7 @@ function adapterDefinitions() {
       status: "available-contract",
       requiredEnv: ["MEMORY_MEDIA_COMMAND"],
       verification: "npm test -- tests/core.test.ts",
-      docs: "docs/advanced-features.md#media-and-multilingual-ingest",
+      docs: "docs/integrations.md#adapters",
       fields: [
         { name: "commandEnv", label: "Media command env var", env: "MEMORY_MEDIA_COMMAND", secret: true, default: "MEMORY_MEDIA_COMMAND" },
         { name: "tasks", label: "Tasks", env: "MEMORY_MEDIA_TASKS", default: "asr,ocr,pdf,video-frames,translate" }
@@ -1153,7 +1153,7 @@ function adapterDefinitions() {
       status: "built-in",
       requiredEnv: [],
       verification: "npm test -- tests/core.test.ts",
-      docs: "docs/production/storage.md",
+      docs: "docs/operations.md#storage",
       fields: [
         { name: "backend", label: "Storage backend", env: "MEMORY_STORAGE_BACKEND", default: "sqlite" },
         { name: "path", label: "SQLite path", env: "MEMORY_DB_PATH", default: ".cognibrain/memory.sqlite" }
@@ -1166,7 +1166,7 @@ function adapterDefinitions() {
       status: "remote-driver",
       requiredEnv: ["MEMORY_POSTGRES_URL"],
       verification: "npm run verify:postgres",
-      docs: "docs/production/storage.md",
+      docs: "docs/operations.md#storage",
       fields: [
         { name: "backend", label: "Storage backend", env: "MEMORY_STORAGE_BACKEND", default: "postgres-remote" },
         { name: "urlEnv", label: "Postgres URL", env: "MEMORY_POSTGRES_URL", secret: true, default: "MEMORY_POSTGRES_URL" }
@@ -1179,7 +1179,7 @@ function adapterDefinitions() {
       status: "remote-driver",
       requiredEnv: [],
       verification: "cognibrain connections adapters doctor storage-cassandra",
-      docs: "docs/production/storage.md",
+      docs: "docs/operations.md#storage",
       fields: [
         { name: "backend", label: "Storage backend", env: "MEMORY_STORAGE_BACKEND", default: "cassandra-remote" },
         { name: "contactPoints", label: "Cassandra contact points", env: "MEMORY_CASSANDRA_CONTACT_POINTS", default: "127.0.0.1:9042" },
@@ -1193,7 +1193,7 @@ function adapterDefinitions() {
       status: "built-in",
       requiredEnv: [],
       verification: "npm run benchmark:arena",
-      docs: "docs/benchmarks/arena.md",
+      docs: "docs/benchmarks.md#benchmark-arena",
       fields: [
         { name: "systems", label: "Systems", env: "MEMORY_ARENA_SYSTEMS", default: "mem0,graphiti,zep,cognee,langmem,gbrain" },
         { name: "proofLevel", label: "Proof level", env: "MEMORY_ARENA_PROOF_LEVEL", default: "same-run-api-shape" }
@@ -1206,7 +1206,7 @@ function adapterDefinitions() {
       status: "available-contract",
       requiredEnv: ["MEMORY_MCP_REMOTE_URL"],
       verification: "cognibrain connections adapters doctor mcp-remote",
-      docs: "docs/integrations/mcp.md",
+      docs: "docs/integrations.md#agent-harnesses",
       fields: [
         { name: "url", label: "Remote MCP URL", env: "MEMORY_MCP_REMOTE_URL", default: "https://memory.example.com/mcp" },
         { name: "tokenEnv", label: "Remote MCP token", env: "MEMORY_MCP_REMOTE_TOKEN", secret: true, default: "MEMORY_MCP_REMOTE_TOKEN" }
@@ -1933,14 +1933,14 @@ function sdkCatalog() {
       sdk: "platform",
       status: "available",
       command: "cognibrain sdk platform <name> --kind project_management --out integrations/<name>",
-      docs: "docs/tutorials/platform-sdk.md",
+      docs: "docs/integrations.md#platform-sdk",
       includes: ["TypeScript integration", "connector manifest", ".env.example", "README"]
     },
     {
       sdk: "connector-author",
       status: "available",
       command: "import { createPlatformIntegration } from 'cognibrain/src/connectors/sdk'",
-      docs: "docs/connectors.md#platform-sdk",
+      docs: "docs/integrations.md#platform-sdk",
       includes: ["manifest validation", "event normalization", "writeback dry-run plans", "health envelope"]
     }
   ];
@@ -1965,8 +1965,8 @@ function sdkDoctor() {
     },
     {
       name: "platform SDK docs",
-      ok: existsSync(join(root, "docs", "tutorials", "platform-sdk.md")),
-      detail: "docs/tutorials/platform-sdk.md"
+      ok: existsSync(join(root, "docs", "integrations.md")),
+      detail: "docs/integrations.md"
     },
     {
       name: "publish package includes src and docs",
@@ -2025,7 +2025,7 @@ function platformSdkScaffold(name, options) {
       `npx tsx ${join(outputDir, `${slug}.integration.ts`)}`,
       `npx cognibrain memory connector-health ${slug}`
     ],
-    docs: "docs/tutorials/platform-sdk.md"
+    docs: "docs/integrations.md#platform-sdk"
   };
 }
 

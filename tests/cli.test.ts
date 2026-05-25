@@ -297,7 +297,7 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 
-  it("generates reviewable harness packages for all nextplan connector targets", () => {
+  it("generates reviewable harness packages for all supported connector targets", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-"));
     const codexHome = join(dir, ".codex");
     try {

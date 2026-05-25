@@ -1,26 +1,32 @@
-# cognibrain Docs
+# Cognibrain Documentation
 
-Start here when evaluating cognibrain as a self-hosted Engineering Memory OS.
+Cognibrain is a self-hosted Engineering Memory OS for coding agents. The CLI is the primary product surface; the dashboard is optional.
 
-## Paths
+## Read First
 
-- Product overview: [`getting-started/overview.md`](getting-started/overview.md)
-- Getting started: [`getting-started/quickstart.md`](getting-started/quickstart.md)
-- Setup CLI: [`getting-started/setup-cli.md`](getting-started/setup-cli.md)
-- Ink CLI screenshots: [`getting-started/setup-cli.md#ink-cli-screenshots`](getting-started/setup-cli.md#ink-cli-screenshots)
-- Connectors and adapters: [`connectors.md`](connectors.md)
-- Platform SDK: [`tutorials/platform-sdk.md`](tutorials/platform-sdk.md)
-- Concepts: [`concepts/engineering-memory.md`](concepts/engineering-memory.md)
-- Integrations: [`integrations/mcp.md`](integrations/mcp.md)
-- Planning/docs vendor integrations: [`integrations/jira-confluence-notion-linear.md`](integrations/jira-confluence-notion-linear.md)
-- Benchmarks: [`benchmarks/cognicodebench.md`](benchmarks/cognicodebench.md), [`benchmarks/arena.md`](benchmarks/arena.md), [`benchmarks/proof-levels.md`](benchmarks/proof-levels.md)
-- Same-benchmark market proof: [`market/same-benchmark.md`](market/same-benchmark.md)
-- Production: [`production/overview.md`](production/overview.md)
-- Comparisons: [`compare/mem0.md`](compare/mem0.md)
-- Marketing source of truth: [`marketing/messaging.md`](marketing/messaging.md)
-- Status matrix: [`implementation-status.md`](implementation-status.md)
-- Claim map: [`claims.md`](claims.md)
+- [Install and self-hosting](install.md)
+- [Benchmarks and competitor proof](benchmarks.md)
+- [Connectors, adapters and SDK](integrations.md)
+- [Operations and production boundary](operations.md)
+- [CLI, API and SDK reference](reference.md)
+- [Claims and evidence map](claims.md)
+
+## Product Snapshot
+
+![Cognibrain CLI home](assets/cli-home.svg)
+
+Cognibrain stores durable engineering memory and returns cited context before the next agent action. It is built for repo rules, review corrections, commands, connector events, timelines, graph links, evidence packs and release proof.
+
+## Current Evidence
+
+| Gate | Command | Artifact |
+| --- | --- | --- |
+| Release check | `npm run release:check` | `artifacts/release-check.json` |
+| Coding-agent memory | `npm run benchmark:cognicode` | `artifacts/cognicodebench/run.json` |
+| Competitor arena | `npm run benchmark:arena` | `artifacts/arena/run.json` |
+| Connector compatibility | `npm run verify:compatibility` | `artifacts/connectors-live.json`, `artifacts/vendor-connectors-live.json` |
+| Self-hosted storage | `npm run verify:postgres` | `artifacts/postgres-live.json` |
 
 ## Claim Boundary
 
-cognibrain is documented as a local-first, self-hosted production candidate after target-environment gates pass. Managed SaaS uptime, billing, SSO, autoscaling and hosted support are future/deployment-specific claims.
+Cognibrain is documented as a local-first, self-hosted production candidate after target-environment gates pass. Managed SaaS uptime, billing, hosted support, autoscaling and deployment-specific SSO readiness are not claimed by this repository.

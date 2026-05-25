@@ -45,7 +45,8 @@ npm run benchmark:locomo -- --top-k 20
 npm run benchmark:longmemeval -- --top-k 20
 npm run benchmark:beam -- --split 100K --top-k 20
 npm run benchmark:beam:500k
-npm run benchmark:market
+npm run benchmark:arena
+npm run audit:docs
 ```
 
 Update benchmark docs only from generated artifacts.
@@ -56,4 +57,5 @@ Update benchmark docs only from generated artifacts.
 - Docs explain any user-visible behavior change.
 - New memories, summaries, or benchmark claims include provenance.
 - Connector changes have an opt-out or clear local scope.
-- Screenshots are refreshed when the dashboard changes.
+- CLI screenshots are refreshed with `npm run docs:cli-screenshots` when terminal UI changes.
+- Dashboard screenshots are refreshed when the optional dashboard changes.

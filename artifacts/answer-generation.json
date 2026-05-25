@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T19:40:03.938Z",
+  "generatedAt": "2026-05-25T20:45:00.069Z",
   "mode": "answer-generation",
   "privacy": {
     "benchmarkQuestionsOnly": true,
@@ -182,7 +182,7 @@
         "answererConfigurable": true,
         "judgeConfigurable": true
       },
-      "score": 0.9398860533328159,
+      "score": 0.9398860533333333,
       "total": 3,
       "questions": [
         {
@@ -190,7 +190,7 @@
           "dataset": "nextgen:retrieval-calibration",
           "prompt": "confidence-field",
           "promptHash": "7edab43956caed24",
-          "generatedAnswer": "0.8196581599984479",
+          "generatedAnswer": "0.81965816",
           "expected": [
             "confidence>0.5"
           ],
@@ -198,7 +198,7 @@
           "retrievedEvidence": [],
           "judge": {
             "name": "deterministic-coverage-v1",
-            "score": 0.8196581599984479,
+            "score": 0.81965816,
             "passed": true,
             "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
           }
@@ -226,7 +226,7 @@
           "dataset": "nextgen:retrieval-calibration",
           "prompt": "context-exclusion",
           "promptHash": "8a061a8c1bbacb95",
-          "generatedAnswer": "[0a61c214-b9f9-4bf4-96be-e41956e04301] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release.",
+          "generatedAnswer": "[29e4305f-b3a2-42b4-bb87-c7f53bd0cc65] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release.",
           "expected": [
             "weak memory excluded"
           ],
@@ -336,6 +336,6 @@
   ],
   "summary": {
     "totalQuestions": 13,
-    "meanScore": 0.9622813969229576
+    "meanScore": 0.9622813969230768
   }
 }

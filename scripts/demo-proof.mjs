@@ -25,11 +25,11 @@ try {
       passed: Object.values(reports).every((report) => report.passed),
       reports
     };
-    writeJson("plan1_4-demos.json", summary);
+    writeJson("proof-demos.json", summary);
   }
   const failed = Object.values(reports).filter((report) => !report.passed);
   if (failed.length) {
-    console.error(`plan1_4 demo failed: ${failed.map((report) => report.id).join(", ")}`);
+    console.error(`proof demo failed: ${failed.map((report) => report.id).join(", ")}`);
     process.exit(1);
   }
   console.log(JSON.stringify({ passed: true, generated: Object.keys(reports) }, null, 2));

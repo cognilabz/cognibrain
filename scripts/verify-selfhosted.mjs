@@ -12,10 +12,10 @@ const files = {
   package: read("package.json"),
   bootstrap: read("bootstrap.sh"),
   readme: read("README.md"),
-  production: read("docs/production-readiness.md"),
-  connectors: read("docs/connectors.md"),
-  status: read("docs/implementation-status.md"),
-  claims: exists("docs/claims.md") ? read("docs/claims.md") : ""
+  install: read("docs/install.md"),
+  operations: read("docs/operations.md"),
+  integrations: read("docs/integrations.md"),
+  claims: read("docs/claims.md")
 };
 
 const checks = [
@@ -23,14 +23,14 @@ const checks = [
     has(files.package, "setup:selfhosted"),
     has(files.package, "verify:selfhosted"),
     has(files.bootstrap, "--self-hosted"),
-    has(files.readme, "npx cognibrain setup --self-hosted"),
-    has(files.production, "setup --self-hosted")
+    has(files.readme, "npx cognibrain init"),
+    has(files.install, "npx cognibrain service install --activate")
   ]),
   check("connector compatibility gates are present", [
     has(files.package, "verify:compatibility"),
     has(files.package, "verify:vendor-live"),
-    has(files.connectors, "Connector Compatibility"),
-    has(files.connectors, "vendor-live-smoke"),
+    has(files.integrations, "Native Connectors"),
+    has(files.integrations, "verify:vendor-connectors"),
     artifact("artifacts/connectors-live.json", (report) => report.passed === true && (report.harnesses ?? []).length >= 8),
     artifact("artifacts/vendor-connectors-live.json", (report) => report.passed === true),
     artifact("artifacts/vendor-live-smoke.json", (report) => report.passed === true && report.mode === "credential_smoke")
@@ -46,12 +46,12 @@ const checks = [
       report.acceptance?.encryptionKeyConfigured === true &&
       report.acceptance?.backupRecovery === true
     ),
-    has(files.claims, "Postgres proof must be rerun for target deployments")
+    has(files.claims, "Rerun on the target database before production claims")
   ]),
   check("SaaS is future track, not current self-hosted claim", [
-    has(files.status, "SaaS remains a future track"),
-    has(files.claims, "Managed SaaS readiness"),
-    has(files.production, "not a managed SaaS certification")
+    has(files.operations, "Managed SaaS is a future product track"),
+    has(files.claims, "Managed SaaS"),
+    has(files.readme, "does not claim managed SaaS uptime")
   ])
 ];
 
@@ -79,7 +79,7 @@ function artifact(path, predicate) {
 }
 
 function writeReport(items) {
-  const path = join(root, "artifacts/selfhosted-verification.json");
+  const path = join(root, "artifacts", "selfhosted-verification.json");
   mkdirSync(join(root, "artifacts"), { recursive: true });
   const report = {
     schemaVersion: "1.0",

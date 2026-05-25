@@ -57,7 +57,8 @@ interface LatencyStats {
   mean: number;
 }
 
-const containerName = process.env.MEMORY_POSTGRES_CONTAINER_NAME ?? "cognibrain-planv1-postgres";
+const containerName = process.env.MEMORY_POSTGRES_CONTAINER_NAME ?? "cognibrain-postgres";
+const legacyContainerNames = ["cognibrain-planv1-postgres"];
 const image = process.env.MEMORY_POSTGRES_IMAGE ?? "docker.io/library/postgres:16-alpine";
 let url = process.env.MEMORY_POSTGRES_URL ?? "postgresql://cognibrain:cognibrain@127.0.0.1:55432/cognibrain";
 const outPath = process.argv.includes("--out") ? process.argv[process.argv.indexOf("--out") + 1] : "artifacts/postgres-live.json";
@@ -245,11 +246,12 @@ if (!artifact.passed) process.exit(1);
 function ensurePostgresContainer(): { runtime: "apple-container" | "docker"; reused: boolean } {
   if (commandExists("container")) {
     run("container", ["system", "start"], { allowFailure: true });
-    const inspected = run("container", ["inspect", containerName], { allowFailure: true });
-    if (inspected.status === 0) {
-      if (!inspected.stdout.includes('"status":"running"')) run("container", ["start", containerName]);
+    const inspected = inspectAppleContainer(containerName);
+    if (inspected.exists) {
+      if (!inspected.running) run("container", ["start", containerName]);
       return { runtime: "apple-container", reused: true };
     }
+    cleanupLegacyPostgresContainers("apple-container");
     run("container", [
       "run",
       "-d",
@@ -273,6 +275,7 @@ function ensurePostgresContainer(): { runtime: "apple-container" | "docker"; reu
       run("docker", ["start", containerName], { allowFailure: true });
       return { runtime: "docker", reused: true };
     }
+    cleanupLegacyPostgresContainers("docker");
     run("docker", [
       "run",
       "-d",
@@ -291,6 +294,35 @@ function ensurePostgresContainer(): { runtime: "apple-container" | "docker"; reu
     return { runtime: "docker", reused: false };
   }
   throw new Error("No supported local container runtime found for Postgres live verification.");
+}
+
+function cleanupLegacyPostgresContainers(runtime: "apple-container" | "docker"): void {
+  if (process.env.MEMORY_POSTGRES_CONTAINER_NAME) return;
+  for (const legacyName of legacyContainerNames) {
+    if (runtime === "apple-container") {
+      if (!inspectAppleContainer(legacyName).exists) continue;
+      run("container", ["stop", legacyName], { allowFailure: true });
+      run("container", ["rm", legacyName], { allowFailure: true });
+      continue;
+    }
+    if (run("docker", ["inspect", legacyName], { allowFailure: true }).status !== 0) continue;
+    run("docker", ["rm", "-f", legacyName], { allowFailure: true });
+  }
+}
+
+function inspectAppleContainer(name: string): { exists: boolean; running: boolean } {
+  const inspected = run("container", ["inspect", name], { allowFailure: true });
+  if (inspected.status !== 0) return { exists: false, running: false };
+  try {
+    const parsed = JSON.parse(inspected.stdout) as Array<{ status?: string; state?: string }>;
+    const first = parsed[0];
+    if (!first) return { exists: false, running: false };
+    const state = String(first.status ?? first.state ?? "").toLowerCase();
+    return { exists: true, running: state === "running" };
+  } catch {
+    const output = inspected.stdout.trim();
+    return { exists: output.length > 0 && output !== "[]", running: output.includes('"status":"running"') };
+  }
 }
 
 function waitForPostgres(): void {

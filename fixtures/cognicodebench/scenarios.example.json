@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "description": "Three complete CogniCodeBench scenario examples. The full generator creates 100 deterministic variants with npm run benchmark:cognicode:generate.",
+  "description": "Five complete CogniCodeBench scenario examples. The full generator creates 100 deterministic variants with npm run benchmark:cognicode:generate.",
   "scenarios": [
     {
       "id": "cognicode-001",
@@ -117,6 +117,85 @@
         "filesChanged": ["packages/api/src/routes/users.ts"],
         "referencedKinds": ["migration_note", "tool_outcome"],
         "staleRuleSuppressed": "yarn jest packages/api"
+      }
+    },
+    {
+      "id": "cognicode-004",
+      "difficulty": "hard",
+      "correctionType": "forbidden_file_correction",
+      "repoSeed": {
+        "name": "meridian-react",
+        "language": "react",
+        "framework": "react",
+        "branch": "ui/settings",
+        "packageManager": "npm",
+        "testCommand": "npm run test -- SettingsPanel",
+        "generatedFiles": ["src/graphql/types.generated.ts"],
+        "rules": ["Do not edit generated GraphQL types.", "UI copy lives with components."],
+        "hiddenTrap": "The generated GraphQL type looks like the easiest place to add a field.",
+        "files": [
+          { "path": "src/components/settings/SettingsPanel.tsx", "purpose": "settings UI" },
+          { "path": "src/graphql/types.generated.ts", "purpose": "generated GraphQL types", "generated": true }
+        ]
+      },
+      "initialTask": "Add a settings flag to the panel.",
+      "wrongAction": {
+        "command": "npm run test -- SettingsPanel",
+        "filesChanged": ["src/graphql/types.generated.ts"],
+        "reason": "The agent edited generated GraphQL types."
+      },
+      "correction": {
+        "content": "Do not edit generated files like src/graphql/types.generated.ts; update src/components/settings/SettingsPanel.tsx and regenerate types separately.",
+        "type": "forbidden_file_correction",
+        "memoryKind": "generated_file_rule",
+        "correctAction": "Edit src/components/settings/SettingsPanel.tsx and run npm run test -- SettingsPanel"
+      },
+      "nextTask": "Add the billing-settings flag to the panel.",
+      "expected": {
+        "command": "npm run test -- SettingsPanel",
+        "filesChanged": ["src/components/settings/SettingsPanel.tsx"],
+        "referencedKinds": ["generated_file_rule"],
+        "blockedAction": "edit src/graphql/types.generated.ts"
+      }
+    },
+    {
+      "id": "cognicode-005",
+      "difficulty": "medium",
+      "correctionType": "style_correction",
+      "repoSeed": {
+        "name": "legacy-billing-app",
+        "language": "legacy",
+        "framework": "express-legacy",
+        "branch": "support/billing-audit",
+        "packageManager": "npm",
+        "testCommand": "npm run test:legacy -- billing",
+        "generatedFiles": ["legacy/billing/generated/client.js"],
+        "rules": ["Do not change legacy billing controllers directly.", "Legacy audit logic belongs in legacy/billing/service.js."],
+        "hiddenTrap": "The controller is the obvious file, but production support forbids direct controller edits.",
+        "files": [
+          { "path": "legacy/billing/controller.js", "purpose": "legacy HTTP controller" },
+          { "path": "legacy/billing/service.js", "purpose": "billing business logic" },
+          { "path": "legacy/billing/generated/client.js", "purpose": "generated legacy client", "generated": true }
+        ]
+      },
+      "initialTask": "Add an audit marker for a legacy billing event.",
+      "wrongAction": {
+        "command": "npm test",
+        "filesChanged": ["legacy/billing/controller.js"],
+        "reason": "The agent edited the legacy controller and used the generic test command."
+      },
+      "correction": {
+        "content": "Forbidden action: do not change legacy billing controllers directly; add audit logic in legacy/billing/service.js and run npm run test:legacy -- billing.",
+        "type": "style_correction",
+        "memoryKind": "forbidden_action",
+        "correctAction": "Edit legacy/billing/service.js and run npm run test:legacy -- billing"
+      },
+      "nextTask": "Add the settlement audit marker to legacy billing.",
+      "expected": {
+        "command": "npm run test:legacy -- billing",
+        "filesChanged": ["legacy/billing/service.js"],
+        "referencedKinds": ["forbidden_action", "tool_outcome"],
+        "blockedAction": "change legacy/billing/controller.js"
       }
     }
   ]

@@ -8,9 +8,15 @@ command -v npm >/dev/null 2>&1 || { echo "Error: npm is required"; exit 1; }
 INSTALL_CODEX_SKILL=0
 START_LOCAL=0
 RUN_VERIFY=1
+SELF_HOSTED=0
 
 for arg in "$@"; do
   case "$arg" in
+    --self-hosted)
+      SELF_HOSTED=1
+      INSTALL_CODEX_SKILL=1
+      START_LOCAL=1
+      ;;
     --all)
       INSTALL_CODEX_SKILL=1
       START_LOCAL=1
@@ -25,12 +31,12 @@ for arg in "$@"; do
       RUN_VERIFY=0
       ;;
     --help|-h)
-      echo "Usage: ./bootstrap.sh [--all] [--install-codex-skill] [--start] [--no-verify]"
+      echo "Usage: ./bootstrap.sh [--self-hosted] [--all] [--install-codex-skill] [--start] [--no-verify]"
       exit 0
       ;;
     *)
       echo "Unknown option: $arg"
-      echo "Usage: ./bootstrap.sh [--all] [--install-codex-skill] [--start] [--no-verify]"
+      echo "Usage: ./bootstrap.sh [--self-hosted] [--all] [--install-codex-skill] [--start] [--no-verify]"
       exit 1
       ;;
   esac
@@ -47,11 +53,16 @@ if [[ "$INSTALL_CODEX_SKILL" == "1" ]]; then
 fi
 
 if [[ "$START_LOCAL" == "1" ]]; then
-  node bin/cognibrain.mjs start
+  if [[ "$SELF_HOSTED" == "1" ]]; then
+    node bin/cognibrain.mjs setup --self-hosted --no-skill
+  else
+    node bin/cognibrain.mjs start
+  fi
 fi
 
 echo ""
 echo "Bootstrap complete."
+echo "Self-hosted: ./bootstrap.sh --self-hosted"
 echo "One command: ./bootstrap.sh --all"
 echo "Status:      ./bin/cognibrain.mjs status"
 echo "Stop:        ./bin/cognibrain.mjs stop"

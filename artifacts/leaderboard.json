@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T10:58:30.439Z",
+  "generatedAt": "2026-05-25T12:44:48.107Z",
   "project": "cognibrain",
   "privacy": {
     "anonymized": true,
@@ -212,10 +212,11 @@
           "no_memory",
           "raw_chat_history",
           "vector_only",
+          "semantic_only",
           "keyword_only",
           "graph_only",
-          "cognibrain_without_temporal",
-          "cognibrain_without_corrections"
+          "temporal_only",
+          "procedure_only"
         ]
       },
       "notes": [

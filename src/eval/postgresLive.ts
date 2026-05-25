@@ -21,6 +21,8 @@ interface PostgresLiveArtifact {
     benchmarkAgainstPostgres: boolean;
     indexedLexicalSearch: boolean;
     transactionRollback: boolean;
+    encryptionKeyConfigured: boolean;
+    backupRecovery: boolean;
   };
   migration: {
     countBefore: number;
@@ -33,6 +35,11 @@ interface PostgresLiveArtifact {
     failures: number;
   };
   storage: ReturnType<MemoryService["storageStatus"]>;
+  security: {
+    encryptedMemories: number;
+    keyProvider: string;
+    backupVerified: boolean;
+  };
   isolation: {
     aliceAtlasRows: number;
     bobAtlasRows: number;
@@ -68,6 +75,12 @@ process.env.MEMORY_POSTGRES_CONTAINER_NAME = containerName;
 process.env.MEMORY_PSQL_COMMAND = psqlCommand;
 process.env.MEMORY_STORAGE_BACKEND = "postgres-remote";
 process.env.MEMORY_POSTGRES_URL = url;
+process.env.MEMORY_REDACTION_MODE ??= "encrypt";
+process.env.MEMORY_ENCRYPTION_KEY ??= "postgres-live-test-key-with-enough-length";
+process.env.MEMORY_ENCRYPTION_KEY_ID ??= "postgres-live";
+process.env.MEMORY_ENCRYPTION_KEY_VERSION ??= "1";
+process.env.MEMORY_BACKUP_REF ??= "local-backup://postgres-live";
+process.env.MEMORY_SECRET_MANAGER ??= "local-env";
 
 waitForPostgres();
 resetSchema();
@@ -79,6 +92,9 @@ const startsWithPostgresBackend = storage.active === "postgres-remote";
 const writeLatencies: number[] = [];
 const searchLatencies: number[] = [];
 let failures = 0;
+let encryptedMemories = 0;
+let backupVerified = false;
+let keyProvider = "unconfigured";
 
 try {
   const builder = new MemoryService();
@@ -98,6 +114,20 @@ try {
     consent: { visibility: "org", allowTraining: false, deleteOnRequest: true },
     source: { kind: "human", confidence: 0.96 }
   });
+  builder.add({
+    userId: "security",
+    orgId: "org-sec",
+    projectId: "postgres-live",
+    content: "Postgres encrypted vault token ghp_postgreslive1234567890abcdef belongs only in backup recovery proof.",
+    consent: { visibility: "private", allowTraining: false, deleteOnRequest: true },
+    source: { kind: "tool", confidence: 0.98 }
+  });
+  const bundle = builder.managedMigrationBundle({ target: "self_hosted", backupRef: process.env.MEMORY_BACKUP_REF, secretManager: process.env.MEMORY_SECRET_MANAGER });
+  const recovery = builder.verifyBackupRecovery(bundle);
+  const keyReport = builder.keyProviderReport();
+  encryptedMemories = recovery.encryptedMemories;
+  backupVerified = recovery.verified && recovery.encryptedMemories > 0;
+  keyProvider = keyReport.provider;
 
   for (let index = 0; index < 25; index += 1) {
     builder.add({
@@ -148,6 +178,9 @@ const idempotentMigrations = migrationBefore.count === migrationAfter.count && m
 
 const lexical = adapter.lexicalSearch("tsvector proof", { limit: 5 });
 const indexedLexicalSearch = lexical.length > 0 && lexical[0].explanation === "postgres tsvector";
+const encryptionKeyConfigured = storage.adapters.some((item) => item.kind === "postgres-remote" && item.encryptedAtRest === true) &&
+  keyProvider !== "unconfigured" &&
+  encryptedMemories > 0;
 const rollbackProbeBefore = psqlNumber("select count(*) from cognibrain_memories where memory_id = 'rollback_probe'");
 run(psqlCommand, [
   url,
@@ -174,7 +207,9 @@ const artifact: PostgresLiveArtifact = {
     idempotentMigrations,
     benchmarkAgainstPostgres: writeLatencies.length === 25 && searchLatencies.length === 10 && failures === 0,
     indexedLexicalSearch,
-    transactionRollback
+    transactionRollback,
+    encryptionKeyConfigured,
+    backupRecovery: backupVerified
   },
   migration: {
     countBefore: migrationBefore.count,
@@ -187,6 +222,11 @@ const artifact: PostgresLiveArtifact = {
     failures
   },
   storage,
+  security: {
+    encryptedMemories,
+    keyProvider,
+    backupVerified
+  },
   isolation: {
     aliceAtlasRows,
     bobAtlasRows,

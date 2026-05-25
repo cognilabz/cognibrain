@@ -23,12 +23,13 @@ Default artifacts:
 - `artifacts/cognicodebench/scenarios.json`
 - `artifacts/cognicodebench/run.json`
 - `artifacts/plan1_2-audit.json` after `npm run audit:plan1_2`
+- `artifacts/plan1_3-audit.json` after `npm run audit:plan1_3`
 - `artifacts/leaderboard.json` after `npm run leaderboard`
 
 ## Scenario Format
 
 The scenario schema is published at [`docs/schemas/cognicodebench-scenario.schema.json`](../schemas/cognicodebench-scenario.schema.json).
-Three complete examples live in [`fixtures/cognicodebench/scenarios.example.json`](../../fixtures/cognicodebench/scenarios.example.json).
+Five complete examples live in [`fixtures/cognicodebench/scenarios.example.json`](../../fixtures/cognicodebench/scenarios.example.json).
 
 Each scenario contains:
 
@@ -51,13 +52,16 @@ For every scenario the runner:
 
 ## Baselines
 
-The artifact includes deterministic baselines:
+The artifact includes measured synthetic ablation baselines. Each mode is replayed across the same scenario set with the named memory signal removed or isolated, then scored with the same correction, procedure, patch, evidence and stale-memory checks:
 
 - `no_memory`
 - `raw_chat_history`
-- `vector_only`
 - `keyword_only`
+- `semantic_only`
+- `vector_only`
 - `graph_only`
+- `temporal_only`
+- `procedure_only`
 - `cognibrain_without_temporal`
 - `cognibrain_without_corrections`
 - `cognibrain_full`
@@ -70,6 +74,8 @@ The default gate requires:
 
 - at least 100 generated scenarios,
 - all scenario checks passing for `cognibrain_full`,
+- at least five complete fixture examples,
+- all plan1_3 ablation modes present,
 - correction carryover at or above 0.90,
 - repeated mistake rate at or below 0.05,
 - procedure recall at or above 0.90,

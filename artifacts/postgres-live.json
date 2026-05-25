@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T10:56:43.221Z",
+  "generatedAt": "2026-05-25T12:44:55.673Z",
   "container": {
     "runtime": "apple-container",
     "name": "cognibrain-planv1-postgres",
@@ -13,7 +13,9 @@
     "idempotentMigrations": true,
     "benchmarkAgainstPostgres": true,
     "indexedLexicalSearch": true,
-    "transactionRollback": true
+    "transactionRollback": true,
+    "encryptionKeyConfigured": true,
+    "backupRecovery": true
   },
   "migration": {
     "countBefore": 3,
@@ -23,17 +25,17 @@
   "benchmark": {
     "writes": {
       "count": 25,
-      "p50": 56.72,
-      "p95": 61.19,
-      "max": 61.22,
-      "mean": 57.06
+      "p50": 55.78,
+      "p95": 59.53,
+      "max": 59.61,
+      "mean": 56.02
     },
     "searches": {
       "count": 10,
-      "p50": 108.34,
-      "p95": 112.97,
-      "max": 112.97,
-      "mean": 108.16
+      "p50": 113.36,
+      "p95": 122.4,
+      "max": 122.4,
+      "mean": 114.04
     },
     "failures": 0
   },
@@ -92,7 +94,7 @@
         "notes": [
           "JSONL snapshots can be tailed, replicated, compacted, or replayed by SQL/cloud adapters."
         ],
-        "encryptedAppendLog": false
+        "encryptedAppendLog": true
       },
       {
         "kind": "sqlite",
@@ -124,7 +126,7 @@
         "transactional": true,
         "appendOnly": true,
         "sql": true,
-        "encryptedAtRest": false,
+        "encryptedAtRest": true,
         "migrationSafe": true,
         "replication": "logical",
         "sharding": "external",
@@ -148,7 +150,7 @@
         "transactional": true,
         "appendOnly": true,
         "sql": true,
-        "encryptedAtRest": false,
+        "encryptedAtRest": true,
         "migrationSafe": true,
         "replication": "logical",
         "sharding": "external",
@@ -171,7 +173,7 @@
         "transactional": false,
         "appendOnly": true,
         "sql": false,
-        "encryptedAtRest": false,
+        "encryptedAtRest": true,
         "migrationSafe": true,
         "replication": "quorum",
         "sharding": "range",
@@ -188,7 +190,7 @@
         "transactional": true,
         "appendOnly": true,
         "sql": true,
-        "encryptedAtRest": false,
+        "encryptedAtRest": true,
         "migrationSafe": true,
         "replication": "logical",
         "sharding": "hash",
@@ -219,7 +221,7 @@
         "transactional": true,
         "appendOnly": true,
         "sql": true,
-        "encryptedAtRest": false,
+        "encryptedAtRest": true,
         "migrationSafe": true,
         "replication": "logical",
         "sharding": "external",
@@ -250,7 +252,7 @@
         "transactional": false,
         "appendOnly": true,
         "sql": false,
-        "encryptedAtRest": false,
+        "encryptedAtRest": true,
         "migrationSafe": true,
         "replication": "quorum",
         "sharding": "range",
@@ -261,6 +263,11 @@
         ]
       }
     ]
+  },
+  "security": {
+    "encryptedMemories": 1,
+    "keyProvider": "local-env",
+    "backupVerified": true
   },
   "isolation": {
     "aliceAtlasRows": 1,

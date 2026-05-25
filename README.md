@@ -14,7 +14,8 @@
   <a href="#proof">Proof</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#documentation">Documentation</a> ·
-  <a href="docs/implementation-status.md">Status Matrix</a>
+  <a href="docs/implementation-status.md">Status Matrix</a> ·
+  <a href="docs/claims.md">Claims</a>
 </p>
 
 cognibrain is a local-first TypeScript Engineering Memory OS for teams that need coding agents to stop repeating the same mistake. It is still an Inspectable Agent Memory OS at the platform layer: every memory can be routed, governed, cited and audited before injection. It captures corrections, repo policies, architecture decisions, review feedback and tool outcomes as evidence-grade memory, then injects the right context before the next change. It remembers across agent harnesses, proves every memory with source and retrieval evidence, explains why context was selected, respects scope and consent boundaries, and keeps memory valid over time through graph, temporal, contradiction and dream-maintenance surfaces.
@@ -26,6 +27,7 @@ The project includes the memory engine, HTTP API, CLI, official connector manife
 **USP:** Stop fixing the same agent mistake twice.
 
 Implementation status is tracked in [`docs/implementation-status.md`](docs/implementation-status.md), which separates local-ready surfaces from roadmap items so market claims stay tied to code, tests and exposed APIs.
+Claim evidence is mapped in [`docs/claims.md`](docs/claims.md), so README, product, benchmark, and market statements stay tied to verifier output instead of aspirational copy.
 Production setup and the exact claim boundary are documented in [`docs/production-readiness.md`](docs/production-readiness.md).
 
 ![cognibrain desktop dashboard](docs/assets/dashboard-desktop.png)
@@ -89,6 +91,8 @@ Production gates:
 
 ```bash
 npm run verify:nextgen
+npm run verify:status
+npm run audit:plan1_3
 npm run benchmark:cognicode
 npm run verify:postgres
 npm run verify:connectors
@@ -128,7 +132,7 @@ Requirements:
 One command from this checkout:
 
 ```bash
-./bootstrap.sh --all
+./bootstrap.sh --self-hosted
 ```
 
 Five-minute Memory OS demo:
@@ -145,13 +149,13 @@ Or use the CLI directly:
 
 ```bash
 npm install
-./bin/cognibrain.mjs setup --all-harnesses
+./bin/cognibrain.mjs setup --self-hosted
 ```
 
 When installed from the npm package, the same one-click path is:
 
 ```bash
-npx cognibrain setup --all-harnesses
+npx cognibrain setup --self-hosted
 npx cognibrain-connect claude-code
 npx cognibrain-connect codex --no-start
 npx cognibrain-connect opencode --no-start
@@ -170,7 +174,7 @@ pack = client.evidence_pack({"userId": "dev", "query": "release checklist"})
 print(pack["context"])
 ```
 
-`setup` installs the Codex Skill, optionally writes MCP/config/helper packages for Codex, Claude Code, Cursor, GitHub Copilot, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI, starts the API plus dashboard, and runs `doctor`.
+`setup --self-hosted` installs the Codex Skill, writes MCP/config/helper packages for Codex, Claude Code, Cursor, GitHub Copilot, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI, starts the API plus dashboard, and runs the publish doctor.
 `cognibrain-connect` is the dedicated package-style connector installer: it writes the same reviewable harness package manifest, starts the local API/dashboard unless disabled, and prints the publish doctor command so teams can verify connector health after installation.
 
 Then open the printed dashboard URL. Runtime and publish helpers:

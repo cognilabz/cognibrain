@@ -19,6 +19,7 @@ import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
 import { runMarketGate } from "../src/eval/marketGate";
 import { runProductionLoadBenchmark } from "../src/eval/load";
 import { OpenAICompatibleEmbeddingProvider } from "../src/core/openaiEmbeddings";
+import { CODING_QUERY_INTENT_CASES } from "../src/eval/codingIntentCases";
 
 describe("TypeScript memory core", () => {
   it("retrieves with trust-aware multi-signal ranking", () => {
@@ -1289,6 +1290,23 @@ describe("TypeScript memory core", () => {
     expect(new Set(planned.map((plan) => plan.queryType)).size).toBeGreaterThanOrEqual(18);
     examples.forEach(([, expected], index) => expect(planned[index].queryType).toBe(expected));
     expect(planned.every((plan) => plan.strategies.length > 0 && plan.explanation.length > 0)).toBe(true);
+  });
+
+  it("plans at least fifty coding-agent query intent cases", () => {
+    const service = new MemoryService();
+    const planned = CODING_QUERY_INTENT_CASES.map((item) => ({
+      item,
+      plan: service.classifyQueryIntent(item.query).plan
+    }));
+    expect(planned).toHaveLength(50);
+    for (const { item, plan } of planned) {
+      expect(plan.queryType, item.query).toBe(item.expectedQueryType);
+      expect(plan.strategies).toEqual(expect.arrayContaining(["semantic"]));
+      expect(plan.explanation.length, item.query).toBeGreaterThan(0);
+    }
+    expect(new Set(planned.map(({ plan }) => plan.queryType))).toEqual(
+      new Set(["command_selection", "change_location", "reviewer_correction", "dangerous_file", "architecture_decision", "failed_last_time", "repo_change"])
+    );
   });
 
   it("loads retrieval profiles and aliases from runtime config", () => {

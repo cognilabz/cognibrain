@@ -6,10 +6,10 @@ cognibrain is ready to present as an open-source, self-hosted Engineering Memory
 
 | Area | Ready today | Required gate |
 | --- | --- | --- |
-| Local install | One-command setup, CLI, API, dashboard, MCP, harness package generation | `./bootstrap.sh --all` or `./bin/cognibrain.mjs setup --all-harnesses` plus `./bin/cognibrain.mjs doctor` |
+| Local install | One-command setup, CLI, API, dashboard, MCP, harness package generation | `./bootstrap.sh --self-hosted` or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
 | Team API | API-key auth, actor ids, policy rules, scoped retrieval, audit events | `MEMORY_REQUIRE_AUTH=true` and `MEMORY_API_KEYS` set before exposing the server |
 | Durable storage | JSON/JSONL, SQLite FTS5, Postgres-compatible CI mode, psql-backed Postgres/Cockroach remote driver | `npm run verify:postgres` against the target Postgres path |
-| Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, Engineering Memory types, coding context packs, action guards, patch evidence trails, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen`, `npm run benchmark:cognicode`, and `npm run audit:plan1_2` |
+| Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, Engineering Memory types, coding context packs, action guards, patch evidence trails, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen`, `npm run benchmark:cognicode`, `npm run verify:status`, and `npm run audit:plan1_3` |
 | Connectors | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, real GitHub/Slack/Discord vendor drivers, HTTP adapter verifier, vendor driver verifier | `npm run verify:connectors`, `npm run verify:vendor-connectors`, and deployment-specific vendor credential smoke tests |
 | Benchmarks | CogniCodeBench, LoCoMo, LongMemEval, BEAM, nextgen, answer-generation, market gate, load artifacts | `npm run benchmark:cognicode`, `npm run benchmark:certified`, `npm run benchmark:market`, and the selected `benchmark:load` profile |
 | Open-source packaging | MIT license, contribution guide, security policy, Docker, Kubernetes, npm package dry-run, Python PyPI-style SDK package | `./bin/cognibrain.mjs doctor --publish`, `npm pack --dry-run`, and Python SDK tests |
@@ -29,13 +29,17 @@ Do not claim:
 - vendor connector certification without running the connector against real GitHub, Slack, Discord, Jira, Linear, Notion, Google, or other tenant credentials;
 - benchmark leadership against a competitor unless the comparison imports comparable artifacts with the same dataset, top-K, metric, and budget.
 
+## Production Docs
+
+This page is the production-docs hub for local install, team install, storage backends, auth/security, policies, connectors, CogniCodeBench, backup/restore, migrations, and troubleshooting. Keep it aligned with `docs/implementation-status.md` and `docs/claims.md` before changing public readiness language.
+
 ## Setup Paths
 
 ### Five-Minute Local Demo
 
 ```bash
 npm install
-./bin/cognibrain.mjs setup --all-harnesses
+./bin/cognibrain.mjs setup --self-hosted
 ./bin/cognibrain.mjs memory add "Atlas releases require npm test before publish."
 ./bin/cognibrain.mjs memory evidence-pack "What should Atlas do before release?"
 ./bin/cognibrain.mjs doctor
@@ -89,15 +93,22 @@ Run these before tagging a release or calling a deployment production-ready:
 
 ```bash
 npm run verify:nextgen
+npm run verify:status
+npm run audit:plan1_3
 npm run benchmark:cognicode
 npm run verify:postgres
+npm run verify:compatibility
 npm run verify:connectors
 npm run verify:vendor-connectors
+npm run verify:vendor-live
+npm run verify:selfhosted:claims
 npm run benchmark:load -- --memories 10000 --concurrent-writes 50 --concurrent-searches 20 --connector-events 20 --out artifacts/load-benchmark-10k-dream.json
 ./bin/cognibrain.mjs doctor --publish
 npm pack --dry-run
 python3 -m unittest discover -s sdk/python/tests
 ```
+
+`npm run verify:vendor-live` is safe by default: it writes `artifacts/vendor-live-smoke.json` and skips network calls unless `MEMORY_VENDOR_LIVE_SMOKE=true` or `--live` is supplied. Self-hosted teams can opt into live GitHub, Slack, or Discord checks by setting the corresponding `MEMORY_*` credentials. Real writeback remains dry-run unless `MEMORY_VENDOR_LIVE_WRITE=true` or `--writeback` is supplied.
 
 For larger deployments, repeat the load benchmark at 100k or 1M memories using the commands in `docs/benchmarking.md`, then keep the generated artifacts with the release notes.
 
@@ -106,7 +117,7 @@ For larger deployments, repeat the load benchmark at 100k or 1M memories using t
 - README explains the Engineering Memory OS claim, benefits, setup, usage, CogniCodeBench proof, production boundary, and status matrix.
 - `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `PRODUCT.md`, Docker, Kubernetes, and `.env.example` are present.
 - `docs/implementation-status.md` matches the current code and does not list closed work as open.
-- `npm run audit:plan1_1` and `npm run audit:plan1_2` pass after checking product and production readiness text.
+- `npm run verify:status`, `npm run audit:plan1_1`, `npm run audit:plan1_2`, and `npm run audit:plan1_3` pass after checking product and production readiness text.
 - GitHub issues for the plan pass are closed only after the related verifier output is fresh.
 - Python SDK remains PyPI-style packageable from `sdk/python`; publish to PyPI only from a release workflow with a real token.
 
@@ -116,4 +127,4 @@ For larger deployments, repeat the load benchmark at 100k or 1M memories using t
 - If `docker compose` is unavailable but `docker-compose` exists, use the standalone binary with the same flags.
 - If `/health` is reachable but non-health routes return `401`, confirm that callers send `x-api-key` when `MEMORY_REQUIRE_AUTH=true`.
 - If vendor connector checks pass locally but production sync fails, rerun `npm run verify:vendor-connectors` with tenant credentials and inspect `/connectors/health` before claiming vendor certification.
-- If `npm run audit:plan1_2` fails, open `artifacts/plan1_2-audit.json`; it reports the exact Epic/WP check and failed assertion index.
+- If `npm run audit:plan1_2` or `npm run audit:plan1_3` fails, open `artifacts/plan1_2-audit.json` or `artifacts/plan1_3-audit.json`; it reports the exact Epic/WP check and failed assertion index.

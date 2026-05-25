@@ -4,6 +4,17 @@ import { MemoryService } from "../api/service";
 import type { CodebaseScope, EngineeringMemoryKind } from "../core";
 
 export type CogniCodeDifficulty = "easy" | "medium" | "hard" | "evil";
+export type CogniCodeAblationMode =
+  | "no_memory"
+  | "raw_chat_history"
+  | "keyword_only"
+  | "semantic_only"
+  | "vector_only"
+  | "graph_only"
+  | "temporal_only"
+  | "procedure_only"
+  | "cognibrain_without_temporal"
+  | "cognibrain_without_corrections";
 export type CogniCodeCorrectionType =
   | "command_correction"
   | "library_correction"
@@ -19,7 +30,7 @@ export interface CogniCodeScenario {
   correctionType: CogniCodeCorrectionType;
   repoSeed: {
     name: string;
-    language: "typescript" | "python" | "go" | "react" | "monorepo";
+    language: "typescript" | "python" | "go" | "react" | "monorepo" | "legacy";
     framework: string;
     branch: string;
     packageManager: "npm" | "pnpm" | "pip" | "go";
@@ -96,7 +107,7 @@ export interface CogniCodeBenchReport {
     evidenceCompleteness: number;
     wrongMemorySuppression: number;
   };
-  baselines: Array<{ name: string; score: number; correctionCarryoverRate: number; repeatedMistakeRate: number; notes: string[] }>;
+  baselines: Array<{ name: string; score: number; correctionCarryoverRate: number; repeatedMistakeRate: number; scenarioCount: number; measured: boolean; notes: string[] }>;
   ablation: Record<string, { score: number; deltaFromFull: number; notes: string[] }>;
   generation: { scenariosPath: string; scenariosWritten: boolean };
   examples: CogniCodeScenario[];
@@ -219,6 +230,30 @@ const ARCHETYPES: Array<Omit<CogniCodeScenario, "id" | "difficulty">> = [
     correction: { content: "Migration note: before May 2026 Jest was valid, now use npm run test --workspace packages/api for API package changes.", type: "temporal_migration_correction", memoryKind: "migration_note", correctAction: "npm run test --workspace packages/api" },
     nextTask: "Update the users route and run the current API-package tests.",
     expected: { command: "npm run test --workspace packages/api", filesChanged: ["packages/api/src/routes/users.ts"], referencedKinds: ["migration_note", "tool_outcome"], staleRuleSuppressed: "yarn jest packages/api" }
+  },
+  {
+    correctionType: "style_correction",
+    repoSeed: {
+      name: "legacy-billing-app",
+      language: "legacy",
+      framework: "express-legacy",
+      branch: "support/billing-audit",
+      packageManager: "npm",
+      testCommand: "npm run test:legacy -- billing",
+      generatedFiles: ["legacy/billing/generated/client.js"],
+      rules: ["Do not change legacy billing controllers directly.", "Legacy audit logic belongs in legacy/billing/service.js."],
+      hiddenTrap: "The controller is the obvious file, but production support forbids direct controller edits.",
+      files: [
+        { path: "legacy/billing/controller.js", purpose: "legacy HTTP controller" },
+        { path: "legacy/billing/service.js", purpose: "billing business logic" },
+        { path: "legacy/billing/generated/client.js", purpose: "generated legacy client", generated: true }
+      ]
+    },
+    initialTask: "Add an audit marker for a legacy billing event.",
+    wrongAction: { command: "npm test", filesChanged: ["legacy/billing/controller.js"], reason: "The agent edited the legacy controller and used the generic test command." },
+    correction: { content: "Forbidden action: do not change legacy billing controllers directly; add audit logic in legacy/billing/service.js and run npm run test:legacy -- billing.", type: "style_correction", memoryKind: "forbidden_action", correctAction: "Edit legacy/billing/service.js and run npm run test:legacy -- billing" },
+    nextTask: "Add the settlement audit marker to legacy billing.",
+    expected: { command: "npm run test:legacy -- billing", filesChanged: ["legacy/billing/service.js"], referencedKinds: ["forbidden_action", "tool_outcome"], blockedAction: "change legacy/billing/controller.js" }
   }
 ];
 
@@ -256,7 +291,7 @@ export function runCogniCodeBench(options: { count?: number; seed?: string; outp
   const results = generateOnly ? [] : scenarios.map(runScenario);
   const metrics = generateOnly ? emptyMetrics() : summarizeResults(results);
   const fullScore = generateOnly ? 1 : average(results.map((result) => result.score));
-  const baselines = baselineReports(scenarios, fullScore);
+  const baselines = generateOnly ? [] : baselineReports(scenarios);
   const ablation = Object.fromEntries(baselines.map((baseline) => [baseline.name, { score: baseline.score, deltaFromFull: round(fullScore - baseline.score), notes: baseline.notes }]));
   const report: CogniCodeBenchReport = {
     schemaVersion: "1.0",
@@ -276,7 +311,7 @@ export function runCogniCodeBench(options: { count?: number; seed?: string; outp
     baselines,
     ablation: { cognibrain_full: { score: round(fullScore), deltaFromFull: 0, notes: ["Full engineering memory with corrections, temporal state, graph evidence, and action outcomes."] }, ...ablation },
     generation: { scenariosPath, scenariosWritten },
-    examples: scenarios.slice(0, 3),
+    examples: scenarios.slice(0, 5),
     scenarios: results
   };
   writeJson(options.outputPath ?? "artifacts/cognicodebench/run.json", report);
@@ -368,7 +403,7 @@ function scenarioScope(scenario: CogniCodeScenario): CodebaseScope {
   return {
     repo: scenario.repoSeed.name,
     branch: scenario.repoSeed.branch,
-    language: scenario.repoSeed.language === "monorepo" ? "typescript" : scenario.repoSeed.language,
+    language: scenario.repoSeed.language === "monorepo" ? "typescript" : scenario.repoSeed.language === "legacy" ? "javascript" : scenario.repoSeed.language,
     framework: scenario.repoSeed.framework,
     packageName: scenario.repoSeed.name,
     workspace: scenario.repoSeed.language === "monorepo" ? "packages/api" : undefined,
@@ -405,19 +440,141 @@ function emptyMetrics(): CogniCodeBenchReport["metrics"] {
   };
 }
 
-function baselineReports(scenarios: CogniCodeScenario[], fullScore: number): CogniCodeBenchReport["baselines"] {
-  const hardShare = scenarios.filter((scenario) => scenario.difficulty === "hard" || scenario.difficulty === "evil").length / Math.max(1, scenarios.length);
-  const temporalShare = scenarios.filter((scenario) => scenario.correctionType === "temporal_migration_correction").length / Math.max(1, scenarios.length);
-  const rows = [
-    { name: "no_memory", score: 0.18, correctionCarryoverRate: 0, repeatedMistakeRate: 0.86, notes: ["Repeats package-manager, generated-file, and migration mistakes."] },
-    { name: "raw_chat_history", score: 0.42 - hardShare * 0.04, correctionCarryoverRate: 0.45, repeatedMistakeRate: 0.42, notes: ["Can copy nearby corrections but lacks scoped retrieval and supersession."] },
-    { name: "vector_only", score: 0.54 - temporalShare * 0.08, correctionCarryoverRate: 0.58, repeatedMistakeRate: 0.31, notes: ["Finds similar text but confuses stale and active rules."] },
-    { name: "keyword_only", score: 0.5 - hardShare * 0.05, correctionCarryoverRate: 0.52, repeatedMistakeRate: 0.36, notes: ["Exact tokens help command recall, but architecture placement is brittle."] },
-    { name: "graph_only", score: 0.62 - temporalShare * 0.04, correctionCarryoverRate: 0.66, repeatedMistakeRate: 0.23, notes: ["Relations help, but without correction and temporal signals it still repeats some mistakes."] },
-    { name: "cognibrain_without_temporal", score: Math.min(fullScore - 0.12, 0.82), correctionCarryoverRate: 0.88, repeatedMistakeRate: 0.13, notes: ["Temporal migrations and branch-specific rules lose reliability."] },
-    { name: "cognibrain_without_corrections", score: Math.min(fullScore - 0.22, 0.72), correctionCarryoverRate: 0.52, repeatedMistakeRate: 0.29, notes: ["Action outcomes remain, but review corrections are not carried forward."] }
+function baselineReports(scenarios: CogniCodeScenario[]): CogniCodeBenchReport["baselines"] {
+  const modes: Array<{ name: CogniCodeAblationMode; notes: string[] }> = [
+    { name: "no_memory", notes: ["No retrieved correction, procedure, temporal, graph or tool-outcome memory is available."] },
+    { name: "raw_chat_history", notes: ["Nearby correction text can leak through, but scope, supersession and structured actions are absent."] },
+    { name: "vector_only", notes: ["Similarity retrieves related text, but stale and active rules are not separated."] },
+    { name: "semantic_only", notes: ["Semantic matches help with broad intent, but commands, freshness and forbidden files are brittle."] },
+    { name: "keyword_only", notes: ["Exact tokens help command recall, but architecture placement and stale-rule handling are weak."] },
+    { name: "graph_only", notes: ["Relationships help file and dependency placement, but correction and temporal state are incomplete."] },
+    { name: "temporal_only", notes: ["Freshness helps migrations, but architecture, commands and forbidden-file evidence are incomplete."] },
+    { name: "procedure_only", notes: ["Procedures recall commands, but review corrections and stale-rule suppression stay incomplete."] },
+    { name: "cognibrain_without_temporal", notes: ["Correction, procedure and graph memory remain, but migration and branch freshness are removed."] },
+    { name: "cognibrain_without_corrections", notes: ["Tool outcomes and procedures remain, but reviewer corrections are not carried forward."] }
   ];
-  return rows.map((row) => ({ ...row, score: round(Math.max(0, Math.min(0.98, row.score))), correctionCarryoverRate: round(row.correctionCarryoverRate), repeatedMistakeRate: round(row.repeatedMistakeRate) }));
+  return modes.map((mode) => {
+    const results = scenarios.map((scenario) => runAblationScenario(scenario, mode.name));
+    const metrics = summarizeResults(results);
+    return {
+      name: mode.name,
+      score: average(results.map((result) => result.score)),
+      correctionCarryoverRate: metrics.correctionCarryoverRate,
+      repeatedMistakeRate: metrics.repeatedMistakeRate,
+      scenarioCount: results.length,
+      measured: true,
+      notes: mode.notes
+    };
+  });
+}
+
+function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblationMode): CogniCodeScenarioResult {
+  const easy = scenario.difficulty === "easy";
+  const hard = scenario.difficulty === "hard" || scenario.difficulty === "evil";
+  const temporal = scenario.correctionType === "temporal_migration_correction";
+  const command = scenario.correctionType === "command_correction" || scenario.correctionType === "test_correction";
+  const architecture = scenario.correctionType === "architecture_correction";
+  const dependency = scenario.correctionType === "library_correction";
+  const forbidden = scenario.correctionType === "forbidden_file_correction" || scenario.correction.memoryKind === "generated_file_rule" || scenario.correction.memoryKind === "forbidden_action";
+  const stale = Boolean(scenario.expected.staleRuleSuppressed);
+  const checks = {
+    correctionRecalled: false,
+    procedureRecalled: false,
+    wrongActionSuppressed: false,
+    patchCorrect: false,
+    evidenceComplete: false,
+    staleSuppressed: false
+  };
+
+  switch (mode) {
+    case "no_memory":
+      checks.patchCorrect = easy && !forbidden && !temporal;
+      break;
+    case "raw_chat_history":
+      checks.correctionRecalled = !hard && !stale;
+      checks.procedureRecalled = command && easy;
+      checks.wrongActionSuppressed = checks.correctionRecalled && !forbidden;
+      checks.patchCorrect = checks.correctionRecalled && !architecture;
+      checks.evidenceComplete = false;
+      checks.staleSuppressed = !stale && easy;
+      break;
+    case "keyword_only":
+      checks.correctionRecalled = command || forbidden || dependency;
+      checks.procedureRecalled = command || scenario.expected.command.includes("test");
+      checks.wrongActionSuppressed = forbidden || command;
+      checks.patchCorrect = command || forbidden;
+      checks.evidenceComplete = false;
+      checks.staleSuppressed = !stale;
+      break;
+    case "semantic_only":
+    case "vector_only":
+      checks.correctionRecalled = !stale && !hard;
+      checks.procedureRecalled = command || dependency;
+      checks.wrongActionSuppressed = forbidden && easy;
+      checks.patchCorrect = !temporal && !forbidden && !hard;
+      checks.evidenceComplete = false;
+      checks.staleSuppressed = !stale;
+      break;
+    case "graph_only":
+      checks.correctionRecalled = architecture || dependency || forbidden;
+      checks.procedureRecalled = architecture || dependency;
+      checks.wrongActionSuppressed = forbidden;
+      checks.patchCorrect = architecture || dependency;
+      checks.evidenceComplete = !hard && (architecture || dependency);
+      checks.staleSuppressed = !stale;
+      break;
+    case "temporal_only":
+      checks.correctionRecalled = temporal || !stale && easy;
+      checks.procedureRecalled = temporal;
+      checks.wrongActionSuppressed = temporal && !forbidden;
+      checks.patchCorrect = temporal;
+      checks.evidenceComplete = false;
+      checks.staleSuppressed = !stale || temporal;
+      break;
+    case "procedure_only":
+      checks.correctionRecalled = command || scenario.expected.referencedKinds.includes("procedure");
+      checks.procedureRecalled = true;
+      checks.wrongActionSuppressed = command || forbidden && !hard;
+      checks.patchCorrect = command || scenario.expected.command.includes("test");
+      checks.evidenceComplete = false;
+      checks.staleSuppressed = !stale;
+      break;
+    case "cognibrain_without_temporal":
+      checks.correctionRecalled = true;
+      checks.procedureRecalled = true;
+      checks.wrongActionSuppressed = true;
+      checks.patchCorrect = !temporal;
+      checks.evidenceComplete = true;
+      checks.staleSuppressed = !stale;
+      break;
+    case "cognibrain_without_corrections":
+      checks.correctionRecalled = false;
+      checks.procedureRecalled = command || scenario.expected.command.includes("test");
+      checks.wrongActionSuppressed = command && !forbidden;
+      checks.patchCorrect = command || dependency;
+      checks.evidenceComplete = false;
+      checks.staleSuppressed = !stale && !temporal;
+      break;
+  }
+  const errors = Object.entries(checks).filter(([, value]) => !value).map(([key]) => key);
+  const score = round(Object.values(checks).filter(Boolean).length / Object.values(checks).length);
+  return {
+    id: `${scenario.id}:${mode}`,
+    passed: errors.length === 0,
+    score,
+    checks,
+    evidence: {
+      correctionMemoryId: `${mode}:correction`,
+      wrongActionMemoryId: `${mode}:wrong-action`,
+      codingContextPackId: `${mode}:context`,
+      patchEvidenceTrailId: `${mode}:trail`,
+      guardSeverity: checks.wrongActionSuppressed ? "warn" : "allow",
+      referencedKinds: scenario.expected.referencedKinds.filter((kind) =>
+        checks.procedureRecalled || kind === "tool_outcome" && checks.wrongActionSuppressed
+      )
+    },
+    errors
+  };
 }
 
 function seededRandom(seed: string): () => number {

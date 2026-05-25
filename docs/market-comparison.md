@@ -15,6 +15,14 @@ This is stronger than a synthetic demo because the certified runners use public 
 
 The current repo also proves a category-specific Engineering Memory OS loop through CogniCodeBench. That artifact is intentionally synthetic: it measures whether coding-agent corrections, review feedback, commands, tool outcomes, generated-file rules, and codebase migrations carry into the next patch. It should be compared with other coding-agent memory systems only when they run the same scenario schema and report the same correction carryover, repeated mistake, procedure recall, evidence, and stale-rule metrics.
 
+Focused plan1_3 market pages:
+
+- [`docs/market/engineering-memory-os.md`](market/engineering-memory-os.md)
+- [`docs/market/cognibrain-vs-mem0.md`](market/cognibrain-vs-mem0.md)
+- [`docs/market/cognibrain-vs-gbrain.md`](market/cognibrain-vs-gbrain.md)
+- [`docs/market/cognibrain-vs-hindsight.md`](market/cognibrain-vs-hindsight.md)
+- [`docs/market/cognibrain-vs-zep.md`](market/cognibrain-vs-zep.md)
+
 ## Proof Boundary
 
 Direct market leadership is only claimed against artifacts that use comparable methodology. Many public vendor claims report answer-generation accuracy, LLM-as-judge scores, different retrieval budgets, or proprietary evaluation settings. Those are useful landscape signals, while this repo keeps retrieval-first metrics, deterministic answer-generation artifacts, and public-claim comparisons separated.

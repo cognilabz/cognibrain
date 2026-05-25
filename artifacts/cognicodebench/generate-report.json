@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T10:44:47.310Z",
+  "generatedAt": "2026-05-25T11:19:20.789Z",
   "benchmark": "CogniCodeBench",
   "mode": "scenario_generation",
   "seed": "cognicodebench-v1",
@@ -20,8 +20,11 @@
       "no_memory",
       "raw_chat_history",
       "vector_only",
+      "semantic_only",
       "keyword_only",
       "graph_only",
+      "temporal_only",
+      "procedure_only",
       "cognibrain_without_temporal",
       "cognibrain_without_corrections"
     ],
@@ -59,11 +62,20 @@
     },
     {
       "name": "vector_only",
-      "score": 0.524,
+      "score": 0.527,
       "correctionCarryoverRate": 0.58,
       "repeatedMistakeRate": 0.31,
       "notes": [
         "Finds similar text but confuses stale and active rules."
+      ]
+    },
+    {
+      "name": "semantic_only",
+      "score": 0.527,
+      "correctionCarryoverRate": 0.58,
+      "repeatedMistakeRate": 0.31,
+      "notes": [
+        "Semantic similarity alone finds related corrections but misses scope, commands, and freshness."
       ]
     },
     {
@@ -77,11 +89,29 @@
     },
     {
       "name": "graph_only",
-      "score": 0.612,
+      "score": 0.614,
       "correctionCarryoverRate": 0.66,
       "repeatedMistakeRate": 0.23,
       "notes": [
         "Relations help, but without correction and temporal signals it still repeats some mistakes."
+      ]
+    },
+    {
+      "name": "temporal_only",
+      "score": 0.473,
+      "correctionCarryoverRate": 0.5,
+      "repeatedMistakeRate": 0.38,
+      "notes": [
+        "Freshness helps migrations but misses architecture, commands, and forbidden-file evidence."
+      ]
+    },
+    {
+      "name": "procedure_only",
+      "score": 0.56,
+      "correctionCarryoverRate": 0.6,
+      "repeatedMistakeRate": 0.27,
+      "notes": [
+        "Procedures recall commands, but review corrections and stale-rule suppression stay incomplete."
       ]
     },
     {
@@ -126,10 +156,17 @@
       ]
     },
     "vector_only": {
-      "score": 0.524,
-      "deltaFromFull": 0.476,
+      "score": 0.527,
+      "deltaFromFull": 0.473,
       "notes": [
         "Finds similar text but confuses stale and active rules."
+      ]
+    },
+    "semantic_only": {
+      "score": 0.527,
+      "deltaFromFull": 0.473,
+      "notes": [
+        "Semantic similarity alone finds related corrections but misses scope, commands, and freshness."
       ]
     },
     "keyword_only": {
@@ -140,10 +177,24 @@
       ]
     },
     "graph_only": {
-      "score": 0.612,
-      "deltaFromFull": 0.388,
+      "score": 0.614,
+      "deltaFromFull": 0.386,
       "notes": [
         "Relations help, but without correction and temporal signals it still repeats some mistakes."
+      ]
+    },
+    "temporal_only": {
+      "score": 0.473,
+      "deltaFromFull": 0.527,
+      "notes": [
+        "Freshness helps migrations but misses architecture, commands, and forbidden-file evidence."
+      ]
+    },
+    "procedure_only": {
+      "score": 0.56,
+      "deltaFromFull": 0.44,
+      "notes": [
+        "Procedures recall commands, but review corrections and stale-rule suppression stay incomplete."
       ]
     },
     "cognibrain_without_temporal": {
@@ -344,6 +395,123 @@
       },
       "id": "cognicode-003",
       "difficulty": "hard"
+    },
+    {
+      "correctionType": "forbidden_file_correction",
+      "repoSeed": {
+        "name": "meridian-react-3ya",
+        "language": "react",
+        "framework": "react",
+        "branch": "migration/3ya",
+        "packageManager": "npm",
+        "testCommand": "npm run test -- SettingsPanel",
+        "generatedFiles": [
+          "src/graphql/types.generated.ts"
+        ],
+        "rules": [
+          "Do not edit generated GraphQL types.",
+          "UI copy lives with components.",
+          "Scenario seed 3ya is reproducible."
+        ],
+        "hiddenTrap": "The generated GraphQL type looks like the easiest place to add a field.",
+        "files": [
+          {
+            "path": "src/components/settings/SettingsPanel.tsx",
+            "purpose": "settings UI"
+          },
+          {
+            "path": "src/graphql/types.generated.ts",
+            "purpose": "generated GraphQL types",
+            "generated": true
+          }
+        ]
+      },
+      "initialTask": "Add a settings flag to the panel.",
+      "wrongAction": {
+        "command": "npm run test -- SettingsPanel",
+        "filesChanged": [
+          "src/graphql/types.generated.ts"
+        ],
+        "reason": "The agent edited generated GraphQL types."
+      },
+      "correction": {
+        "content": "Do not edit generated files like src/graphql/types.generated.ts; update src/components/settings/SettingsPanel.tsx and regenerate types separately.",
+        "type": "forbidden_file_correction",
+        "memoryKind": "generated_file_rule",
+        "correctAction": "Edit src/components/settings/SettingsPanel.tsx and run npm run test -- SettingsPanel"
+      },
+      "nextTask": "Add the billing-settings flag to the panel.",
+      "expected": {
+        "command": "npm run test -- SettingsPanel",
+        "filesChanged": [
+          "src/components/settings/SettingsPanel.tsx"
+        ],
+        "referencedKinds": [
+          "generated_file_rule"
+        ],
+        "blockedAction": "edit src/graphql/types.generated.ts"
+      },
+      "id": "cognicode-004",
+      "difficulty": "evil"
+    },
+    {
+      "correctionType": "temporal_migration_correction",
+      "repoSeed": {
+        "name": "orbit-monorepo-hj",
+        "language": "monorepo",
+        "framework": "turbo",
+        "branch": "main",
+        "packageManager": "npm",
+        "testCommand": "npm run test --workspace packages/api",
+        "generatedFiles": [
+          "packages/api/src/schema.generated.ts"
+        ],
+        "rules": [
+          "The repo migrated from Jest to Vitest in May 2026.",
+          "Package tests must use npm workspaces.",
+          "Scenario seed hj is reproducible."
+        ],
+        "hiddenTrap": "Older memories still mention yarn jest.",
+        "files": [
+          {
+            "path": "packages/api/src/routes/users.ts",
+            "purpose": "API route"
+          },
+          {
+            "path": "packages/api/src/schema.generated.ts",
+            "purpose": "generated schema",
+            "generated": true
+          }
+        ]
+      },
+      "initialTask": "Fix an API route after the test migration.",
+      "wrongAction": {
+        "command": "yarn jest packages/api",
+        "filesChanged": [
+          "packages/api/src/routes/users.ts"
+        ],
+        "reason": "The agent followed stale pre-migration test instructions."
+      },
+      "correction": {
+        "content": "Migration note: before May 2026 Jest was valid, now use npm run test --workspace packages/api for API package changes.",
+        "type": "temporal_migration_correction",
+        "memoryKind": "migration_note",
+        "correctAction": "npm run test --workspace packages/api"
+      },
+      "nextTask": "Update the users route and run the current API-package tests.",
+      "expected": {
+        "command": "npm run test --workspace packages/api",
+        "filesChanged": [
+          "packages/api/src/routes/users.ts"
+        ],
+        "referencedKinds": [
+          "migration_note",
+          "tool_outcome"
+        ],
+        "staleRuleSuppressed": "yarn jest packages/api"
+      },
+      "id": "cognicode-005",
+      "difficulty": "easy"
     }
   ],
   "scenarios": []

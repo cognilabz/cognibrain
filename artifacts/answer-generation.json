@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T10:58:30.238Z",
+  "generatedAt": "2026-05-25T12:44:47.900Z",
   "mode": "answer-generation",
   "privacy": {
     "benchmarkQuestionsOnly": true,
@@ -226,7 +226,7 @@
           "dataset": "nextgen:retrieval-calibration",
           "prompt": "context-exclusion",
           "promptHash": "8a061a8c1bbacb95",
-          "generatedAnswer": "[de378a4a-00ec-4df1-94d0-13e01f644a72] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release.",
+          "generatedAnswer": "[e47f5384-2f51-428b-8085-20a3a094f5ae] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release.",
           "expected": [
             "weak memory excluded"
           ],

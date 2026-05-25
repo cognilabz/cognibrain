@@ -18,7 +18,7 @@
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string" },
-        "language": { "type": "string", "enum": ["typescript", "python", "go", "react", "monorepo"] },
+        "language": { "type": "string", "enum": ["typescript", "python", "go", "react", "monorepo", "legacy"] },
         "framework": { "type": "string" },
         "branch": { "type": "string" },
         "packageManager": { "type": "string", "enum": ["npm", "pnpm", "pip", "go"] },

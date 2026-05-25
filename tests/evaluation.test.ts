@@ -248,7 +248,11 @@ describe("self verification benchmark loop", () => {
     expect(report.metrics.correctionCarryoverRate).toBe(1);
     expect(report.metrics.repeatedMistakeRate).toBe(0);
     expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.no_memory.score);
+    expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.procedure_only.score);
+    expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.temporal_only.score);
+    expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.semantic_only.score);
     expect(report.baselines.map((baseline) => baseline.name)).toContain("cognibrain_without_corrections");
+    expect(report.examples).toHaveLength(5);
   });
 
   it("generates CogniCodeBench scenarios as a passing generation artifact", () => {

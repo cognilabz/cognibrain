@@ -70,9 +70,10 @@ switch (command) {
 
 async function setup(setupArgs) {
   const flags = new Set(setupArgs);
+  const selfHosted = flags.has("--self-hosted");
   if (!flags.has("--no-skill")) runNodeChecked("scripts/install-codex-skill.mjs", []);
 
-  if (flags.has("--all-harnesses")) {
+  if (flags.has("--all-harnesses") || selfHosted) {
     writeHarnessConfig("all");
   } else {
     if (flags.has("--codex")) writeHarnessConfig("codex");
@@ -87,7 +88,7 @@ async function setup(setupArgs) {
   }
 
   if (!flags.has("--no-start")) runNodeChecked("scripts/start-local.mjs", ["--daemon"]);
-  if (!flags.has("--no-doctor")) await doctor([]);
+  if (!flags.has("--no-doctor")) await doctor(selfHosted ? ["--publish"] : []);
 }
 
 async function doctor(doctorArgs) {
@@ -605,7 +606,7 @@ function usage(exitCode) {
 
 Usage:
   cognibrain [--runtime-root <path>] <command>
-  cognibrain setup [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--all-harnesses]
+  cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--all-harnesses]
       Install the Codex skill, optionally write harness configs, start API + dashboard, run doctor
   cognibrain doctor [--publish]
       Check local runtime, skill install, package readiness, and optional npm pack hygiene

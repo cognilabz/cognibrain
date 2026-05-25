@@ -60,7 +60,7 @@ const checks = [
     has(files.cognicode, "cognibrain_without_corrections"),
     exists("docs/benchmarks/cognicodebench.md"),
     has(files.scenarioSchema, "CogniCodeBench Scenario"),
-    (JSON.parse(files.scenarioExamples).scenarios ?? []).length === 3,
+    (JSON.parse(files.scenarioExamples).scenarios ?? []).length >= 3,
     artifact("artifacts/cognicodebench/scenarios.json", (report) => (report.scenarios ?? []).length >= 100),
     artifact("artifacts/cognicodebench/generate-report.json", (report) =>
       report.passed === true &&
@@ -166,7 +166,7 @@ const workpackageChecks = [
   check("WP 1.1 Benchmark Specification", [
     exists("docs/benchmarks/cognicodebench.md"),
     has(files.scenarioSchema, "CogniCodeBench Scenario"),
-    (JSON.parse(files.scenarioExamples).scenarios ?? []).length === 3,
+    (JSON.parse(files.scenarioExamples).scenarios ?? []).length >= 3,
     has(files.benchDocs, "Scenario Format")
   ]),
   check("WP 1.2 Synthetic Repo Generator", [

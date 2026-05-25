@@ -5,7 +5,7 @@ cognibrain is CLI-first and MCP-compatible.
 The CLI is the human and automation surface: install, start, stop, status, health checks, memory commands, and CI-friendly scripting. MCP is the agent tool surface: let compatible harnesses retrieve, write, and inspect memory without shell parsing.
 
 ```bash
-./bin/cognibrain.mjs setup --all-harnesses
+./bin/cognibrain.mjs setup --self-hosted
 npx cognibrain-connect claude-code
 npx cognibrain-connect all --no-start
 ./bin/cognibrain.mjs status
@@ -32,7 +32,7 @@ Harness config commands:
 ./bin/cognibrain.mjs config crewai
 ```
 
-Generated harness packages call the packaged CLI with `--runtime-root <project>`, so an npm-installed package stores memory in the target project instead of inside `node_modules`. `setup --all-harnesses` writes:
+Generated harness packages call the packaged CLI with `--runtime-root <project>`, so an npm-installed package stores memory in the target project instead of inside `node_modules`. `setup --self-hosted` and `setup --all-harnesses` write:
 
 - Codex: `~/.codex/config.toml`, `~/.codex/skills/cognibrain/SKILL.md`, and project `AGENTS.md`.
 - Claude Code: project `.mcp.json` and `.claude/settings.json` hooks.
@@ -50,8 +50,8 @@ Existing non-cognibrain instruction files are not overwritten; a `.cognibrain` s
 Install, update, uninstall:
 
 ```bash
-./bin/cognibrain.mjs setup --all-harnesses
-./bin/cognibrain.mjs setup --all-harnesses --no-start
+./bin/cognibrain.mjs setup --self-hosted
+./bin/cognibrain.mjs setup --self-hosted --no-start
 ./bin/cognibrain.mjs doctor --publish
 rm -f AGENTS.md.cognibrain .github/copilot-instructions.md.cognibrain .github/instructions/cognibrain.instructions.md .claude/settings.json.cognibrain .cursor/rules/open-memory.mdc.cognibrain .opencode/cognibrain.md.cognibrain .openclaw/cognibrain.md.cognibrain langgraph.cognibrain.json langgraph-cognibrain.ts crewai.cognibrain.json crewai_cognibrain.py .cognibrain-harness-package.json
 ```
@@ -126,9 +126,22 @@ Run the live connector gate with:
 ```bash
 npm run verify:connectors
 npm run verify:vendor-connectors
+npm run verify:vendor-live
 ```
 
 `verify:connectors` starts a local HTTP connector target, verifies OAuth hash/revoke, pulls GitHub/Slack/Discord-shaped events, sends writebacks, checks connector health, and runs the harness package installer in a temporary project. `verify:vendor-connectors` keeps the seeded official manifests intact, points their vendor API bases at hermetic fixtures, verifies real GitHub/Slack/Discord REST paths, auth schemes, writeback endpoints, dry-run no-post behavior, source provenance, review queues, connector health, and secret redaction.
+
+## Connector Compatibility
+
+Self-hosted compatibility has three layers:
+
+| Gate | Command | What it proves |
+| --- | --- | --- |
+| Harness packages | `npm run verify:connectors` | Generates Codex, Claude Code, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI configs, then runs the Claude Code hook golden path from context to patch evidence. |
+| Vendor contract | `npm run verify:vendor-connectors` | Exercises the built-in GitHub, Slack and Discord vendor drivers against hermetic REST fixtures without leaking secrets. |
+| Deployment credentials | `npm run verify:vendor-live` | Produces `artifacts/vendor-live-smoke.json`; skips network by default and can run real tenant list/poll/dry-run writeback when `MEMORY_VENDOR_LIVE_SMOKE=true` plus provider credentials are set. |
+
+For live credential checks, keep writeback dry-run until the target issue, pull request, channel or thread is explicitly approved. Set `MEMORY_VENDOR_LIVE_WRITE=true` only for a controlled smoke target.
 
 Native harness packages should prefer `connector-telemetry` or `POST /connectors/telemetry` over asking users to run manual feedback commands. The telemetry endpoint accepts `accepted_suggestion`, `rejected_suggestion`, `context_pack_feedback`, and `tool_outcome` events. Accepted/rejected suggestion events become connector feedback memories and update linked memory trust. Context-pack feedback creates retrieval training samples and learned profile updates. Tool outcomes become first-class harness action memories, so retrieval can answer what command, test, or fix worked last time.
 

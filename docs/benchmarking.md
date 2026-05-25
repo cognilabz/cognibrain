@@ -49,7 +49,7 @@ The same benchmark command also includes `retrieval-calibration`, which checks t
 
 ## CogniCodeBench
 
-`npm run benchmark:cognicode` measures whether coding agents learn from repo corrections before the next patch. It generates 100 deterministic synthetic repository scenarios across TypeScript/Node, Python/FastAPI, Go, React and monorepo layouts.
+`npm run benchmark:cognicode` measures whether coding agents learn from repo corrections before the next patch. It generates 100 deterministic synthetic repository scenarios across TypeScript/Node, Python/FastAPI, Go, React, monorepo, and legacy-repo layouts.
 
 The runner stores the first wrong action as `tool_outcome`, records a scoped correction such as `repo_policy`, `architecture_decision`, `dependency_rule`, `generated_file_rule` or `migration_note`, then evaluates the next change through a coding context pack, action guard and patch evidence trail.
 
@@ -65,7 +65,7 @@ Outputs:
 - `artifacts/cognicodebench/scenarios.json`
 - `artifacts/cognicodebench/run.json`
 
-The pass gate requires at least 100 scenarios, correction carryover >= 0.90, repeated mistake rate <= 0.05, procedure recall >= 0.90, wrong-memory suppression >= 0.90, and a full score above `no_memory`, `raw_chat_history`, `vector_only`, `keyword_only`, `graph_only`, `cognibrain_without_temporal`, and `cognibrain_without_corrections`.
+The pass gate requires at least 100 scenarios, correction carryover >= 0.90, repeated mistake rate <= 0.05, procedure recall >= 0.90, wrong-memory suppression >= 0.90, and a full score above `no_memory`, `raw_chat_history`, `keyword_only`, `semantic_only`, `vector_only`, `graph_only`, `temporal_only`, `procedure_only`, `cognibrain_without_temporal`, and `cognibrain_without_corrections`.
 
 Methodology and scenario schema: [`docs/benchmarks/cognicodebench.md`](benchmarks/cognicodebench.md).
 

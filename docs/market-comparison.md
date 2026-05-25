@@ -13,6 +13,8 @@ The current repo proves certified public benchmark baseline superiority:
 
 This is stronger than a synthetic demo because the certified runners use public benchmark datasets and user simulators that ingest sessions chronologically.
 
+The current repo also proves a category-specific Engineering Memory OS loop through CogniCodeBench. That artifact is intentionally synthetic: it measures whether coding-agent corrections, review feedback, commands, tool outcomes, generated-file rules, and codebase migrations carry into the next patch. It should be compared with other coding-agent memory systems only when they run the same scenario schema and report the same correction carryover, repeated mistake, procedure recall, evidence, and stale-rule metrics.
+
 ## Proof Boundary
 
 Direct market leadership is only claimed against artifacts that use comparable methodology. Many public vendor claims report answer-generation accuracy, LLM-as-judge scores, different retrieval budgets, or proprietary evaluation settings. Those are useful landscape signals, while this repo keeps retrieval-first metrics, deterministic answer-generation artifacts, and public-claim comparisons separated.

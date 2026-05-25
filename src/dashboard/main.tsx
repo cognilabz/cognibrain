@@ -254,6 +254,15 @@ const certifiedBenchmarks = [
     baseline: "Graphonomous public 96.9%",
     margin: 0.67,
     artifact: "artifacts/beam-500k-report.json"
+  },
+  {
+    dataset: "CogniCodeBench",
+    metric: "engineering-memory score",
+    ours: "100/100",
+    accuracy: 100,
+    baseline: "best ablation below full",
+    margin: 18,
+    artifact: "artifacts/cognicodebench/run.json"
   }
 ];
 
@@ -271,6 +280,9 @@ const beamCategories = [
 ];
 
 const nextgenProof = [
+  ["engineering memory", "10 typed kinds"],
+  ["action guard", "do/don't before tools"],
+  ["patch evidence", "corrections + outcomes"],
   ["graph inference", "typed rules"],
   ["path explainer", "multi-hop"],
   ["brain/source scope", "team-ready"],
@@ -1056,7 +1068,7 @@ function MemoryView({
               <span className={`status-dot ${memory.archivedAt ? "archived" : needsReview(memory) ? "warn" : "ok"}`} />
               <span>
                 <strong>{memory.content}</strong>
-                <small>{memory.source.kind} · trust {memory.trust.toFixed(2)} · {memory.layer}/{memory.type}</small>
+                <small>{memory.source.kind} · trust {memory.trust.toFixed(2)} · {engineeringKindLabel(memory) ?? `${memory.layer}/${memory.type}`}</small>
               </span>
               <meter value={memory.trust} min={0} max={1} />
             </button>
@@ -1079,6 +1091,7 @@ function MemoryView({
               <div><dt>Trust</dt><dd>{selectedMemory.trust.toFixed(2)}</dd></div>
               <div><dt>Source</dt><dd>{selectedMemory.source.kind}</dd></div>
               <div><dt>Layer</dt><dd>{selectedMemory.layer}</dd></div>
+              <div><dt>Engineering</dt><dd>{engineeringKindLabel(selectedMemory) ?? "none"}</dd></div>
               <div><dt>Scope</dt><dd>{scopeLabel(selectedMemory)}</dd></div>
               <div><dt>Consent</dt><dd>{selectedMemory.consent.visibility}</dd></div>
               <div><dt>Tags</dt><dd>{selectedMemory.tags.join(", ") || "none"}</dd></div>
@@ -1719,6 +1732,13 @@ function MemoryMini({ memory }: { memory: Memory }) {
   );
 }
 
+function engineeringKindLabel(memory: Memory): string | undefined {
+  const engineering = memory.metadata.engineering as { kind?: string; codebase?: { repo?: string; branch?: string; filePattern?: string } } | undefined;
+  if (!engineering?.kind) return undefined;
+  const scope = [engineering.codebase?.repo, engineering.codebase?.branch, engineering.codebase?.filePattern].filter(Boolean).join(" / ");
+  return scope ? `${engineering.kind} · ${scope}` : engineering.kind;
+}
+
 function ActionLog({ actions, empty = "No cleanup actions yet." }: { actions: string[]; empty?: string }) {
   return (
     <div className="action-log">
@@ -1763,7 +1783,28 @@ function summarizeArtifact(value: string): string[] {
         total?: number;
         questions?: Array<{ id: string; generatedAnswer?: string; expected?: string[]; judge?: { passed?: boolean; score?: number; reason?: string } }>;
       }>;
+      benchmark?: string;
+      scenarioCount?: number;
+      metrics?: {
+        correctionCarryoverRate?: number;
+        repeatedMistakeRate?: number;
+        procedureRecallRate?: number;
+        wrongMemorySuppression?: number;
+      };
+      ablation?: Record<string, { score?: number }>;
     };
+    if (parsed.benchmark === "CogniCodeBench") {
+      const full = parsed.ablation?.cognibrain_full?.score ?? 0;
+      const bestBaseline = Math.max(...Object.entries(parsed.ablation ?? {}).filter(([name]) => name !== "cognibrain_full").map(([, value]) => value.score ?? 0), 0);
+      return [
+        `benchmark=CogniCodeBench scenarios=${parsed.scenarioCount ?? 0}`,
+        `passed=${String(parsed.passed)} full=${(full * 100).toFixed(2)}% bestBaseline=${(bestBaseline * 100).toFixed(2)}%`,
+        `correctionCarryover=${parsed.metrics?.correctionCarryoverRate ?? 0}`,
+        `repeatedMistakeRate=${parsed.metrics?.repeatedMistakeRate ?? 1}`,
+        `procedureRecall=${parsed.metrics?.procedureRecallRate ?? 0}`,
+        `wrongMemorySuppression=${parsed.metrics?.wrongMemorySuppression ?? 0}`
+      ];
+    }
     if (parsed.benchmarks) {
       const failedRows = parsed.benchmarks.flatMap((benchmark) =>
         (benchmark.questions ?? [])

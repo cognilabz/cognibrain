@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "1.0",
+  "description": "Three complete CogniCodeBench scenario examples. The full generator creates 100 deterministic variants with npm run benchmark:cognicode:generate.",
+  "scenarios": [
+    {
+      "id": "cognicode-001",
+      "difficulty": "easy",
+      "correctionType": "command_correction",
+      "repoSeed": {
+        "name": "atlas-node-service",
+        "language": "typescript",
+        "framework": "node",
+        "branch": "main",
+        "packageManager": "npm",
+        "testCommand": "npm test",
+        "generatedFiles": ["src/generated/api.generated.ts"],
+        "rules": ["Use npm, not pnpm.", "Validation lives in src/validation."],
+        "hiddenTrap": "pnpm exists locally but is not supported by CI.",
+        "files": [
+          { "path": "src/validation/userValidation.ts", "purpose": "request validation" },
+          { "path": "src/generated/api.generated.ts", "purpose": "generated OpenAPI client", "generated": true }
+        ]
+      },
+      "initialTask": "Add a validation rule and run tests.",
+      "wrongAction": {
+        "command": "pnpm test",
+        "filesChanged": ["src/generated/api.generated.ts"],
+        "reason": "The agent picked the globally installed package manager and edited a generated file."
+      },
+      "correction": {
+        "content": "Do not use pnpm in this repo; use npm test and keep generated files untouched.",
+        "type": "command_correction",
+        "memoryKind": "repo_policy",
+        "correctAction": "npm test"
+      },
+      "nextTask": "Add a validation rule for account status and run the right tests.",
+      "expected": {
+        "command": "npm test",
+        "filesChanged": ["src/validation/userValidation.ts"],
+        "referencedKinds": ["repo_policy", "tool_outcome"],
+        "blockedAction": "pnpm test"
+      }
+    },
+    {
+      "id": "cognicode-002",
+      "difficulty": "medium",
+      "correctionType": "architecture_correction",
+      "repoSeed": {
+        "name": "ledger-fastapi",
+        "language": "python",
+        "framework": "fastapi",
+        "branch": "feature/invoices",
+        "packageManager": "pip",
+        "testCommand": "pytest tests/unit",
+        "generatedFiles": ["app/schemas/generated_models.py"],
+        "rules": ["FastAPI validators live in app/validation.", "Do not edit generated_models.py."],
+        "hiddenTrap": "The route file imports validators but should not define them inline.",
+        "files": [
+          { "path": "app/api/invoices.py", "purpose": "HTTP route" },
+          { "path": "app/validation/invoices.py", "purpose": "validation logic" },
+          { "path": "app/schemas/generated_models.py", "purpose": "generated schema", "generated": true }
+        ]
+      },
+      "initialTask": "Add invoice validation.",
+      "wrongAction": {
+        "command": "pytest",
+        "filesChanged": ["app/api/invoices.py"],
+        "reason": "The agent added validation in the route instead of the validation module."
+      },
+      "correction": {
+        "content": "Validation architecture decision: invoice validation lives in app/validation/invoices.py, not in app/api/invoices.py.",
+        "type": "architecture_correction",
+        "memoryKind": "architecture_decision",
+        "correctAction": "Edit app/validation/invoices.py and run pytest tests/unit"
+      },
+      "nextTask": "Add due-date validation for invoices.",
+      "expected": {
+        "command": "pytest tests/unit",
+        "filesChanged": ["app/validation/invoices.py"],
+        "referencedKinds": ["architecture_decision", "test_strategy"]
+      }
+    },
+    {
+      "id": "cognicode-003",
+      "difficulty": "evil",
+      "correctionType": "temporal_migration_correction",
+      "repoSeed": {
+        "name": "orbit-monorepo",
+        "language": "monorepo",
+        "framework": "turbo",
+        "branch": "main",
+        "packageManager": "npm",
+        "testCommand": "npm run test --workspace packages/api",
+        "generatedFiles": ["packages/api/src/schema.generated.ts"],
+        "rules": ["The repo migrated from Jest to Vitest in May 2026.", "Package tests must use npm workspaces."],
+        "hiddenTrap": "Older memories still mention yarn jest.",
+        "files": [
+          { "path": "packages/api/src/routes/users.ts", "purpose": "API route" },
+          { "path": "packages/api/src/schema.generated.ts", "purpose": "generated schema", "generated": true }
+        ]
+      },
+      "initialTask": "Fix an API route after the test migration.",
+      "wrongAction": {
+        "command": "yarn jest packages/api",
+        "filesChanged": ["packages/api/src/routes/users.ts"],
+        "reason": "The agent followed stale pre-migration test instructions."
+      },
+      "correction": {
+        "content": "Migration note: before May 2026 Jest was valid, now use npm run test --workspace packages/api for API package changes.",
+        "type": "temporal_migration_correction",
+        "memoryKind": "migration_note",
+        "correctAction": "npm run test --workspace packages/api"
+      },
+      "nextTask": "Update the users route and run the current API-package tests.",
+      "expected": {
+        "command": "npm run test --workspace packages/api",
+        "filesChanged": ["packages/api/src/routes/users.ts"],
+        "referencedKinds": ["migration_note", "tool_outcome"],
+        "staleRuleSuppressed": "yarn jest packages/api"
+      }
+    }
+  ]
+}

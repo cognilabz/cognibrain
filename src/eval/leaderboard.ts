@@ -12,7 +12,7 @@ export interface LeaderboardArtifact {
   };
   entries: Array<{
     suite: string;
-    category: "retrieval" | "answer_generation" | "vendor_claim";
+    category: "retrieval" | "answer_generation" | "vendor_claim" | "engineering_memory";
     metric: string;
     score: number;
     artifact: string;
@@ -26,11 +26,12 @@ export interface LeaderboardArtifact {
   };
 }
 
-export function buildLeaderboardArtifact(options: { nextgenPath?: string; evaluationPath?: string; answerGenerationPath?: string; marketGatePath?: string; outputPath?: string } = {}): LeaderboardArtifact {
+export function buildLeaderboardArtifact(options: { nextgenPath?: string; evaluationPath?: string; answerGenerationPath?: string; marketGatePath?: string; cognicodePath?: string; outputPath?: string } = {}): LeaderboardArtifact {
   const nextgenPath = options.nextgenPath ?? "artifacts/nextgen-benchmarks.json";
   const evaluationPath = options.evaluationPath ?? "artifacts/evaluation-report.json";
   const answerGenerationPath = options.answerGenerationPath ?? "artifacts/answer-generation.json";
   const marketGatePath = options.marketGatePath ?? "artifacts/market-gate.json";
+  const cognicodePath = options.cognicodePath ?? "artifacts/cognicodebench/run.json";
   const entries: LeaderboardArtifact["entries"] = [];
   if (existsSync(nextgenPath)) {
     const report = JSON.parse(readFileSync(nextgenPath, "utf8"));
@@ -56,6 +57,27 @@ export function buildLeaderboardArtifact(options: { nextgenPath?: string; evalua
         notes: [`answerer=${dataset.answerer}`, `judge=${dataset.judge}`, `${dataset.total ?? 0} per-question rows`]
       });
     }
+  }
+  if (existsSync(cognicodePath)) {
+    const report = JSON.parse(readFileSync(cognicodePath, "utf8"));
+    entries.push({
+      suite: "cognicodebench",
+      category: "engineering_memory",
+      metric: "engineering_memory_score",
+      score: Number(report.ablation?.cognibrain_full?.score ?? averageCogniCodeScore(report)),
+      artifact: cognicodePath,
+      proof: "local-deterministic",
+      methodology: {
+        dataset: "synthetic-codebase-scenarios",
+        scenarios: Number(report.scenarioCount ?? 0),
+        baselines: (report.methodology?.baselines ?? []).slice?.(0, 8) ?? []
+      },
+      notes: [
+        "Measures whether coding agents carry corrections, procedures, tool outcomes, and codebase changes into the next patch.",
+        `correctionCarryover=${Number(report.metrics?.correctionCarryoverRate ?? 0)}`,
+        `repeatedMistakeRate=${Number(report.metrics?.repeatedMistakeRate ?? 1)}`
+      ]
+    });
   }
   if (existsSync(marketGatePath)) {
     const gate = JSON.parse(readFileSync(marketGatePath, "utf8"));
@@ -92,6 +114,11 @@ export function buildLeaderboardArtifact(options: { nextgenPath?: string; evalua
   mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, JSON.stringify(artifact, null, 2));
   return artifact;
+}
+
+function averageCogniCodeScore(report: { scenarios?: Array<{ score?: number }> }): number {
+  const scores = (report.scenarios ?? []).map((scenario) => Number(scenario.score ?? 0));
+  return scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0;
 }
 
 export function validateLeaderboardArtifact(artifact: LeaderboardArtifact): true {

@@ -1,4 +1,4 @@
-import type { ConnectorManifest, ConnectorSyncRecord, EpisodeRecord, EvidencePack, FeedbackKind, GraphExplainReport, MarketplaceModule, Memory, MemoryInput, MemoryPolicyOperation, MemoryPolicyRule, MemoryRouteReport, MemoryScope, PolicyDecision, QueryIntentReport, SearchOptions, SearchResult } from "../core";
+import type { ActionGuardReport, CodebaseScope, CodingContextPack, ConnectorManifest, ConnectorSyncRecord, EngineeringMemoryKind, EpisodeRecord, EvidencePack, FeedbackKind, GraphExplainReport, HarnessActionInput, MarketplaceModule, Memory, MemoryInput, MemoryPolicyOperation, MemoryPolicyRule, MemoryRouteReport, MemoryScope, PatchEvidenceTrail, PolicyDecision, QueryIntentReport, SearchOptions, SearchResult } from "../core";
 
 export interface CognibrainClientOptions {
   baseUrl?: string;
@@ -83,8 +83,46 @@ export class CognibrainClient {
     return this.request("/evidence-pack", { method: "POST", body: options });
   }
 
+  codingContextPack(options: SearchOptions & { tokenBudget?: number }): Promise<CodingContextPack> {
+    return this.request("/coding-context-pack", { method: "POST", body: options });
+  }
+
   getEvidencePack(id: string): Promise<EvidencePack> {
     return this.request(`/context-packs/${encodeURIComponent(id)}/evidence`);
+  }
+
+  getCodingContextPack(id: string): Promise<CodingContextPack> {
+    return this.request(`/coding-context-packs/${encodeURIComponent(id)}`);
+  }
+
+  recordAction(input: HarnessActionInput): Promise<Memory> {
+    return this.request("/actions", { method: "POST", body: input });
+  }
+
+  recordCodeCorrection(input: {
+    userId: string;
+    content: string;
+    agentId?: string;
+    sessionId?: string;
+    appId?: string;
+    orgId?: string;
+    projectId?: string;
+    previousMemoryId?: string;
+    previousWrongAction?: string;
+    correctAction?: string;
+    kind?: EngineeringMemoryKind;
+    codebase?: CodebaseScope;
+    evidenceIds?: string[];
+  }): Promise<Memory> {
+    return this.request("/code/corrections", { method: "POST", body: input });
+  }
+
+  guardAction(input: { userId: string; action: string; agentId?: string; sessionId?: string; appId?: string; orgId?: string; projectId?: string; codebaseScope?: CodebaseScope }): Promise<ActionGuardReport> {
+    return this.request("/code/action-guard", { method: "POST", body: input });
+  }
+
+  patchEvidenceTrail(input: { userId: string; task: string; agentId?: string; sessionId?: string; appId?: string; orgId?: string; projectId?: string; codebaseScope?: CodebaseScope; filesChanged?: string[]; commandsRun?: string[]; memoryIds?: string[] }): Promise<PatchEvidenceTrail> {
+    return this.request("/patch-evidence", { method: "POST", body: input });
   }
 
   route(options: SearchOptions): Promise<MemoryRouteReport> {

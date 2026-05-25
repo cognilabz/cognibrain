@@ -1,0 +1,2751 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-25T08:08:00.115Z",
+  "benchmark": "CogniCodeBench",
+  "mode": "benchmark",
+  "seed": "cognicodebench-v1",
+  "scenarioCount": 100,
+  "passed": true,
+  "methodology": {
+    "task": "Measure whether coding agents learn from codebase corrections, review feedback, commands, and tool outcomes before the next change.",
+    "metrics": [
+      "correction carryover",
+      "repeated mistake rate",
+      "procedure recall",
+      "patch correctness",
+      "evidence completeness",
+      "wrong-memory suppression"
+    ],
+    "baselines": [
+      "no_memory",
+      "raw_chat_history",
+      "vector_only",
+      "keyword_only",
+      "graph_only",
+      "cognibrain_without_temporal",
+      "cognibrain_without_corrections"
+    ],
+    "privacy": {
+      "syntheticReposOnly": true,
+      "noUserData": true
+    }
+  },
+  "metrics": {
+    "correctionCarryoverRate": 1,
+    "repeatedMistakeRate": 0,
+    "procedureRecallRate": 1,
+    "patchCorrectness": 1,
+    "evidenceCompleteness": 1,
+    "wrongMemorySuppression": 1
+  },
+  "baselines": [
+    {
+      "name": "no_memory",
+      "score": 0.18,
+      "correctionCarryoverRate": 0,
+      "repeatedMistakeRate": 0.86,
+      "notes": [
+        "Repeats package-manager, generated-file, and migration mistakes."
+      ]
+    },
+    {
+      "name": "raw_chat_history",
+      "score": 0.4,
+      "correctionCarryoverRate": 0.45,
+      "repeatedMistakeRate": 0.42,
+      "notes": [
+        "Can copy nearby corrections but lacks scoped retrieval and supersession."
+      ]
+    },
+    {
+      "name": "vector_only",
+      "score": 0.524,
+      "correctionCarryoverRate": 0.58,
+      "repeatedMistakeRate": 0.31,
+      "notes": [
+        "Finds similar text but confuses stale and active rules."
+      ]
+    },
+    {
+      "name": "keyword_only",
+      "score": 0.475,
+      "correctionCarryoverRate": 0.52,
+      "repeatedMistakeRate": 0.36,
+      "notes": [
+        "Exact tokens help command recall, but architecture placement is brittle."
+      ]
+    },
+    {
+      "name": "graph_only",
+      "score": 0.612,
+      "correctionCarryoverRate": 0.66,
+      "repeatedMistakeRate": 0.23,
+      "notes": [
+        "Relations help, but without correction and temporal signals it still repeats some mistakes."
+      ]
+    },
+    {
+      "name": "cognibrain_without_temporal",
+      "score": 0.82,
+      "correctionCarryoverRate": 0.88,
+      "repeatedMistakeRate": 0.13,
+      "notes": [
+        "Temporal migrations and branch-specific rules lose reliability."
+      ]
+    },
+    {
+      "name": "cognibrain_without_corrections",
+      "score": 0.72,
+      "correctionCarryoverRate": 0.52,
+      "repeatedMistakeRate": 0.29,
+      "notes": [
+        "Action outcomes remain, but review corrections are not carried forward."
+      ]
+    }
+  ],
+  "ablation": {
+    "cognibrain_full": {
+      "score": 1,
+      "deltaFromFull": 0,
+      "notes": [
+        "Full engineering memory with corrections, temporal state, graph evidence, and action outcomes."
+      ]
+    },
+    "no_memory": {
+      "score": 0.18,
+      "deltaFromFull": 0.82,
+      "notes": [
+        "Repeats package-manager, generated-file, and migration mistakes."
+      ]
+    },
+    "raw_chat_history": {
+      "score": 0.4,
+      "deltaFromFull": 0.6,
+      "notes": [
+        "Can copy nearby corrections but lacks scoped retrieval and supersession."
+      ]
+    },
+    "vector_only": {
+      "score": 0.524,
+      "deltaFromFull": 0.476,
+      "notes": [
+        "Finds similar text but confuses stale and active rules."
+      ]
+    },
+    "keyword_only": {
+      "score": 0.475,
+      "deltaFromFull": 0.525,
+      "notes": [
+        "Exact tokens help command recall, but architecture placement is brittle."
+      ]
+    },
+    "graph_only": {
+      "score": 0.612,
+      "deltaFromFull": 0.388,
+      "notes": [
+        "Relations help, but without correction and temporal signals it still repeats some mistakes."
+      ]
+    },
+    "cognibrain_without_temporal": {
+      "score": 0.82,
+      "deltaFromFull": 0.18,
+      "notes": [
+        "Temporal migrations and branch-specific rules lose reliability."
+      ]
+    },
+    "cognibrain_without_corrections": {
+      "score": 0.72,
+      "deltaFromFull": 0.28,
+      "notes": [
+        "Action outcomes remain, but review corrections are not carried forward."
+      ]
+    }
+  },
+  "generation": {
+    "scenariosPath": "artifacts/cognicodebench/scenarios.json",
+    "scenariosWritten": true
+  },
+  "examples": [
+    {
+      "correctionType": "command_correction",
+      "repoSeed": {
+        "name": "atlas-node-service-4m5",
+        "language": "typescript",
+        "framework": "node",
+        "branch": "main",
+        "packageManager": "npm",
+        "testCommand": "npm test",
+        "generatedFiles": [
+          "src/generated/api.generated.ts"
+        ],
+        "rules": [
+          "Use npm, not pnpm.",
+          "Validation lives in src/validation.",
+          "Scenario seed 4m5 is reproducible."
+        ],
+        "hiddenTrap": "pnpm exists on the developer machine but is not supported by CI.",
+        "files": [
+          {
+            "path": "src/validation/userValidation.ts",
+            "purpose": "request validation"
+          },
+          {
+            "path": "src/generated/api.generated.ts",
+            "purpose": "generated OpenAPI client",
+            "generated": true
+          }
+        ]
+      },
+      "initialTask": "Add a validation rule and run tests.",
+      "wrongAction": {
+        "command": "pnpm test",
+        "filesChanged": [
+          "src/generated/api.generated.ts"
+        ],
+        "reason": "The agent picked the globally installed package manager and edited a generated file."
+      },
+      "correction": {
+        "content": "Do not use pnpm in this repo; use npm test and keep generated files untouched.",
+        "type": "command_correction",
+        "memoryKind": "repo_policy",
+        "correctAction": "npm test"
+      },
+      "nextTask": "Add a validation rule for account status and run the right tests.",
+      "expected": {
+        "command": "npm test",
+        "filesChanged": [
+          "src/validation/userValidation.ts"
+        ],
+        "referencedKinds": [
+          "repo_policy",
+          "tool_outcome"
+        ],
+        "blockedAction": "pnpm test"
+      },
+      "id": "cognicode-001",
+      "difficulty": "easy"
+    },
+    {
+      "correctionType": "architecture_correction",
+      "repoSeed": {
+        "name": "ledger-fastapi-51b",
+        "language": "python",
+        "framework": "fastapi",
+        "branch": "feature/invoices",
+        "packageManager": "pip",
+        "testCommand": "pytest tests/unit",
+        "generatedFiles": [
+          "app/schemas/generated_models.py"
+        ],
+        "rules": [
+          "FastAPI validators live in app/validation.",
+          "Do not edit generated_models.py.",
+          "Scenario seed 51b is reproducible."
+        ],
+        "hiddenTrap": "The route file imports validators but should not define them inline.",
+        "files": [
+          {
+            "path": "app/api/invoices.py",
+            "purpose": "HTTP route"
+          },
+          {
+            "path": "app/validation/invoices.py",
+            "purpose": "validation logic"
+          },
+          {
+            "path": "app/schemas/generated_models.py",
+            "purpose": "generated schema",
+            "generated": true
+          }
+        ]
+      },
+      "initialTask": "Add invoice validation.",
+      "wrongAction": {
+        "command": "pytest",
+        "filesChanged": [
+          "app/api/invoices.py"
+        ],
+        "reason": "The agent added validation in the route instead of the validation module."
+      },
+      "correction": {
+        "content": "Validation architecture decision: invoice validation lives in app/validation/invoices.py, not in app/api/invoices.py.",
+        "type": "architecture_correction",
+        "memoryKind": "architecture_decision",
+        "correctAction": "Edit app/validation/invoices.py and run pytest tests/unit"
+      },
+      "nextTask": "Add due-date validation for invoices.",
+      "expected": {
+        "command": "pytest tests/unit",
+        "filesChanged": [
+          "app/validation/invoices.py"
+        ],
+        "referencedKinds": [
+          "architecture_decision",
+          "test_strategy"
+        ]
+      },
+      "id": "cognicode-002",
+      "difficulty": "medium"
+    },
+    {
+      "correctionType": "library_correction",
+      "repoSeed": {
+        "name": "northwind-go-295",
+        "language": "go",
+        "framework": "chi",
+        "branch": "main",
+        "packageManager": "go",
+        "testCommand": "go test ./...",
+        "generatedFiles": [
+          "internal/gen/openapi.gen.go"
+        ],
+        "rules": [
+          "Use zerolog for logging.",
+          "Generated Go files are read-only.",
+          "Scenario seed 295 is reproducible."
+        ],
+        "hiddenTrap": "The stdlib logger compiles but violates the service convention.",
+        "files": [
+          {
+            "path": "internal/orders/service.go",
+            "purpose": "order service"
+          },
+          {
+            "path": "internal/gen/openapi.gen.go",
+            "purpose": "generated server stubs",
+            "generated": true
+          }
+        ]
+      },
+      "initialTask": "Add logging around order cancellation.",
+      "wrongAction": {
+        "command": "go test ./...",
+        "filesChanged": [
+          "internal/orders/service.go"
+        ],
+        "reason": "The agent used log.Printf instead of zerolog."
+      },
+      "correction": {
+        "content": "Dependency rule: use zerolog, not log.Printf, for order-service logging.",
+        "type": "library_correction",
+        "memoryKind": "dependency_rule",
+        "correctAction": "Use zerolog and run go test ./..."
+      },
+      "nextTask": "Add logging for order refund handling.",
+      "expected": {
+        "command": "go test ./...",
+        "filesChanged": [
+          "internal/orders/service.go"
+        ],
+        "referencedKinds": [
+          "dependency_rule",
+          "tool_outcome"
+        ]
+      },
+      "id": "cognicode-003",
+      "difficulty": "hard"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "cognicode-001",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "89f829b9-e2b0-4a49-ba05-dade91228f74",
+        "wrongActionMemoryId": "d9029baa-192c-4118-a66b-2783b7d269f8",
+        "codingContextPackId": "code_ctx_1snren2",
+        "patchEvidenceTrailId": "patch_ev_1feelkz",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-002",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "45e3124c-f9fd-4c44-94b1-791d7fb7d743",
+        "wrongActionMemoryId": "69eeae64-dddc-418a-95e1-5fa4f2a16506",
+        "codingContextPackId": "code_ctx_1lg05u1",
+        "patchEvidenceTrailId": "patch_ev_vz2un3",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-003",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "0fb1816f-17a1-4850-9f5b-cc3bda78bad0",
+        "wrongActionMemoryId": "c66b8fae-ba51-4af3-93ac-5576e1c9ab3a",
+        "codingContextPackId": "code_ctx_v8fgt3",
+        "patchEvidenceTrailId": "patch_ev_13xjwmk",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-004",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "ff9eb0b7-5e31-4a63-a574-10d02dfc03a0",
+        "wrongActionMemoryId": "1bd5365f-8036-4cc3-be70-ae31f2ee6469",
+        "codingContextPackId": "code_ctx_12trkdc",
+        "patchEvidenceTrailId": "patch_ev_kmzjfa",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-005",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "5abaf433-a4be-421c-a0a0-ff982c48f121",
+        "wrongActionMemoryId": "b9411c52-ff26-45ab-8aa0-ad1826a063a7",
+        "codingContextPackId": "code_ctx_nzdguz",
+        "patchEvidenceTrailId": "patch_ev_e2yaic",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-006",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "f25bf195-b497-4b1f-acaa-bd9e3125815e",
+        "wrongActionMemoryId": "383f44f3-fec8-40e1-bc2e-a93d87b24b8b",
+        "codingContextPackId": "code_ctx_1oc08m9",
+        "patchEvidenceTrailId": "patch_ev_1t4stzz",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-007",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "d025ac6f-9aa1-4824-840b-2e6384eda771",
+        "wrongActionMemoryId": "f544aa7b-585b-44fd-b4de-7ceb11ce1a76",
+        "codingContextPackId": "code_ctx_11akvru",
+        "patchEvidenceTrailId": "patch_ev_1hg3r36",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-008",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "5c9f5d02-7e73-41a5-ab08-ded841693127",
+        "wrongActionMemoryId": "acbd5f47-26a6-4519-b2d7-945ce6997df3",
+        "codingContextPackId": "code_ctx_nusbm3",
+        "patchEvidenceTrailId": "patch_ev_1j9xo9l",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-009",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "2eebd913-2e36-4b4e-8354-41bda5d6f74d",
+        "wrongActionMemoryId": "64840014-9c33-4f86-a9de-5881aaf8f470",
+        "codingContextPackId": "code_ctx_1nws40v",
+        "patchEvidenceTrailId": "patch_ev_im244n",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-010",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "3c11b275-760b-4b32-95da-829150f18d0e",
+        "wrongActionMemoryId": "5584da29-1529-488c-ac50-23b345b56528",
+        "codingContextPackId": "code_ctx_1i7qqjp",
+        "patchEvidenceTrailId": "patch_ev_1oy333u",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-011",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "a6d123b1-a34a-4d15-9291-07b4bfe622f7",
+        "wrongActionMemoryId": "2fbb8ab5-7188-4700-a421-94981fe7432f",
+        "codingContextPackId": "code_ctx_1m4e8oh",
+        "patchEvidenceTrailId": "patch_ev_1ihl3lh",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-012",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "5c809eb1-d4ca-4935-a5a2-ef5e0754dd60",
+        "wrongActionMemoryId": "98d89e30-5995-4729-9068-074cb71d5cb0",
+        "codingContextPackId": "code_ctx_1twui72",
+        "patchEvidenceTrailId": "patch_ev_ff2xty",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-013",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "903ade2a-6534-421f-a3ef-2364328fd3ee",
+        "wrongActionMemoryId": "84c271ed-84bd-4128-8b2d-882ad3118fd8",
+        "codingContextPackId": "code_ctx_22om7z",
+        "patchEvidenceTrailId": "patch_ev_ig30y9",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-014",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "47dd8b98-8614-4371-80e7-b48924fb5663",
+        "wrongActionMemoryId": "33ac3dce-ce48-42b3-813b-4c73762ab23a",
+        "codingContextPackId": "code_ctx_q11w5o",
+        "patchEvidenceTrailId": "patch_ev_1teij3k",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-015",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "322a2f75-8a1c-436d-bcce-d6a299fc96d9",
+        "wrongActionMemoryId": "c9eee96a-d63f-4df9-8d7a-6a74a5f4c41d",
+        "codingContextPackId": "code_ctx_te4gkh",
+        "patchEvidenceTrailId": "patch_ev_1f1tfhx",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-016",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "baa43a2d-83b8-4f6b-bbac-42bc74680c79",
+        "wrongActionMemoryId": "a3fd1fe0-d0c7-48d6-a489-889e5a2abe11",
+        "codingContextPackId": "code_ctx_g4qjcz",
+        "patchEvidenceTrailId": "patch_ev_rnunly",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-017",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "5375fe9c-3fd2-466e-92a5-43bf25cdbdd8",
+        "wrongActionMemoryId": "ac67c9c8-71c4-45f6-8086-e8e6355b83a1",
+        "codingContextPackId": "code_ctx_1bgn7ja",
+        "patchEvidenceTrailId": "patch_ev_17o5v5d",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-018",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "1b222e79-c1e8-42ba-8816-065111d0e715",
+        "wrongActionMemoryId": "6d494615-0c0a-463a-8638-15691c65dbb2",
+        "codingContextPackId": "code_ctx_6qhrq5",
+        "patchEvidenceTrailId": "patch_ev_w05bm",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-019",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "2077e174-5baa-4ade-8f57-207e7328cb82",
+        "wrongActionMemoryId": "22c18142-1908-488f-9168-215a1d835686",
+        "codingContextPackId": "code_ctx_1gglgib",
+        "patchEvidenceTrailId": "patch_ev_v3fmlx",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-020",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "2d56a02d-e439-4fb1-9f9f-64c2542ac8ec",
+        "wrongActionMemoryId": "e88aa5ff-2a40-440f-98ae-59b3e7bf3497",
+        "codingContextPackId": "code_ctx_sfn6fr",
+        "patchEvidenceTrailId": "patch_ev_ti8upd",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-021",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "1d27ff7b-1e4d-4c08-8ab2-2950c310f83a",
+        "wrongActionMemoryId": "eb1bb28e-9ac7-491e-9b58-5b14addbb0d4",
+        "codingContextPackId": "code_ctx_1hq3dx",
+        "patchEvidenceTrailId": "patch_ev_gy9j2f",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-022",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "5dae87f0-e604-459c-b959-cb3f9f21ff4e",
+        "wrongActionMemoryId": "0ba84ba4-b9db-48d3-85db-bcac451d1fa6",
+        "codingContextPackId": "code_ctx_lu64kb",
+        "patchEvidenceTrailId": "patch_ev_378y9o",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-023",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "78ab3667-32cf-46af-a73b-a9fcea36dd4a",
+        "wrongActionMemoryId": "21325297-cab8-4e2b-8ec6-29347b3afbdc",
+        "codingContextPackId": "code_ctx_17lz6vd",
+        "patchEvidenceTrailId": "patch_ev_4ykj2i",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-024",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "35f1095e-a70b-4c33-a8da-b6bb89a2e210",
+        "wrongActionMemoryId": "bb9a7558-7cfe-4918-9c5a-f310c96203e6",
+        "codingContextPackId": "code_ctx_3r8l9f",
+        "patchEvidenceTrailId": "patch_ev_1030x7o",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-025",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "f23ce274-6506-4c0a-9e18-e5042d1329c0",
+        "wrongActionMemoryId": "094a30b6-add9-4fda-a5bb-ba280d8944f7",
+        "codingContextPackId": "code_ctx_1nl0ec3",
+        "patchEvidenceTrailId": "patch_ev_11m6zdd",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-026",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "59d05deb-7ad4-4e46-9cba-23d9b0500ef1",
+        "wrongActionMemoryId": "9f39bbf8-f6d1-4b96-be44-2c59bcc858cc",
+        "codingContextPackId": "code_ctx_14hv679",
+        "patchEvidenceTrailId": "patch_ev_1fgqits",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-027",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "2bc0c288-152c-4d37-88bd-9ee85504b90d",
+        "wrongActionMemoryId": "0663f137-ef55-47d0-939a-6f63cd0c25a0",
+        "codingContextPackId": "code_ctx_szhu75",
+        "patchEvidenceTrailId": "patch_ev_upp89n",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-028",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "e57a3bcf-97b1-4a42-8627-cce0d9420d1e",
+        "wrongActionMemoryId": "a860f4b0-c36a-49ab-baaf-4fde569a7894",
+        "codingContextPackId": "code_ctx_6ira2o",
+        "patchEvidenceTrailId": "patch_ev_vjjwcr",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-029",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "d8040c0d-e633-4176-8cca-fe7ee40a2e35",
+        "wrongActionMemoryId": "2b4c1dd4-cf10-4a46-81b7-f4929c64d436",
+        "codingContextPackId": "code_ctx_1uavpk4",
+        "patchEvidenceTrailId": "patch_ev_ino6ky",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-030",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "ef3c1a3e-73a6-49d7-b26a-14cd6b716919",
+        "wrongActionMemoryId": "8da956da-a0f8-4438-b78f-4e2761b4422f",
+        "codingContextPackId": "code_ctx_v0llul",
+        "patchEvidenceTrailId": "patch_ev_dc3pva",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-031",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "be8b6e3f-6fa8-4eed-bee0-eaf0d84e116a",
+        "wrongActionMemoryId": "cb816703-09ab-47da-aca6-562fabce05d8",
+        "codingContextPackId": "code_ctx_jo65ga",
+        "patchEvidenceTrailId": "patch_ev_eyk9hf",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-032",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "4b193fe3-9a3b-49bc-9d0c-a58424fbef48",
+        "wrongActionMemoryId": "a5fcd93c-bb82-4963-bcf3-9e7a27ca3e4c",
+        "codingContextPackId": "code_ctx_1euxl7d",
+        "patchEvidenceTrailId": "patch_ev_1sceyzi",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-033",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "e29cd569-47f5-4951-ac4d-557607d91398",
+        "wrongActionMemoryId": "8b71948a-dc75-4c48-bcdc-b03d74616f9d",
+        "codingContextPackId": "code_ctx_1091wm1",
+        "patchEvidenceTrailId": "patch_ev_txijnq",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-034",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "47f89d2b-326c-41f5-803b-fd39493d66e1",
+        "wrongActionMemoryId": "c8491f51-bb7e-4b81-a3ad-d91bc690e08b",
+        "codingContextPackId": "code_ctx_1lsnm5e",
+        "patchEvidenceTrailId": "patch_ev_t2c6b",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-035",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "8e8651fe-acc9-42fd-bef8-c8c9ff4eb9a2",
+        "wrongActionMemoryId": "07a7752f-64b9-4dc2-8e68-30368ce31e7b",
+        "codingContextPackId": "code_ctx_siekko",
+        "patchEvidenceTrailId": "patch_ev_kxqcea",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-036",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "3e3955d2-b591-400c-9217-a0e9125ef7c9",
+        "wrongActionMemoryId": "3e1de746-9796-4741-b813-6200a23e0831",
+        "codingContextPackId": "code_ctx_1dyx4kt",
+        "patchEvidenceTrailId": "patch_ev_ksixux",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-037",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "f9af8332-b23b-496f-9e2e-96dae84d3003",
+        "wrongActionMemoryId": "45dc142f-fab1-42b0-95b2-2276cfb97d52",
+        "codingContextPackId": "code_ctx_9o0lj3",
+        "patchEvidenceTrailId": "patch_ev_hx4b9m",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-038",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "0e7587eb-2252-4d48-9ea0-a7827afe7ea6",
+        "wrongActionMemoryId": "17b48350-1805-4bdd-b8f7-46e56a37103c",
+        "codingContextPackId": "code_ctx_15tnlvx",
+        "patchEvidenceTrailId": "patch_ev_1j02bl",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-039",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "f425b4cc-01c6-41b6-9aa1-ccce82f66b8d",
+        "wrongActionMemoryId": "87478bf4-17bc-4ef4-8610-f29abadc3e58",
+        "codingContextPackId": "code_ctx_u765gk",
+        "patchEvidenceTrailId": "patch_ev_1oeer6f",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-040",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "615dea27-1321-41d5-b33e-baf0ab59f50d",
+        "wrongActionMemoryId": "d9d7d106-347d-42d2-a3ab-a0a66b38ce53",
+        "codingContextPackId": "code_ctx_11lwjjf",
+        "patchEvidenceTrailId": "patch_ev_qjn2xc",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-041",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "1c4c0074-a57d-4334-95a3-44dd9a9d29e6",
+        "wrongActionMemoryId": "9204d8b2-8d52-4c21-8a99-590568bc012a",
+        "codingContextPackId": "code_ctx_31mq2b",
+        "patchEvidenceTrailId": "patch_ev_gibpjt",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-042",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "03ef62f1-75f7-4f6f-a6a3-7546ef6028c5",
+        "wrongActionMemoryId": "74804326-c867-4967-adc2-d824f920541c",
+        "codingContextPackId": "code_ctx_b73quv",
+        "patchEvidenceTrailId": "patch_ev_1vmrhdg",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-043",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "4d740545-81b5-4be9-bf15-bf9a28ea9a44",
+        "wrongActionMemoryId": "b635f5c2-443e-4a96-bc93-a0145a41cd7e",
+        "codingContextPackId": "code_ctx_cprun9",
+        "patchEvidenceTrailId": "patch_ev_5gbij7",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-044",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "b8103ff4-da99-41f1-8eff-573042eaf2f9",
+        "wrongActionMemoryId": "ab82e19d-b453-4b81-877d-c66370808d35",
+        "codingContextPackId": "code_ctx_qlqxws",
+        "patchEvidenceTrailId": "patch_ev_imaucj",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-045",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "e95cd3f2-203e-45de-83cd-a30b47850e83",
+        "wrongActionMemoryId": "ce41ea47-ee39-406f-ba3e-6a031f534214",
+        "codingContextPackId": "code_ctx_132fq7m",
+        "patchEvidenceTrailId": "patch_ev_1hgaqa2",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-046",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "129c0bfd-3891-4d41-ac8d-5bc7230560e9",
+        "wrongActionMemoryId": "9d225331-22fb-4055-85c1-22afb137edbd",
+        "codingContextPackId": "code_ctx_1gp2s98",
+        "patchEvidenceTrailId": "patch_ev_1n3ef94",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-047",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "5fdc50b2-4d7b-4db7-8989-67b0131b2847",
+        "wrongActionMemoryId": "a048bcc7-64fc-437a-818e-3d698d73f001",
+        "codingContextPackId": "code_ctx_1smv81i",
+        "patchEvidenceTrailId": "patch_ev_1j80amw",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-048",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "1d1353a0-1a28-4060-ac8c-2ce10297f701",
+        "wrongActionMemoryId": "2e5d6122-f776-4656-b99d-72f413f4b209",
+        "codingContextPackId": "code_ctx_1m11ew9",
+        "patchEvidenceTrailId": "patch_ev_17kdc1o",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-049",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "9032be50-0e29-429e-9111-83196a6c6e69",
+        "wrongActionMemoryId": "4df8471c-3c3b-40b4-9112-6595276de321",
+        "codingContextPackId": "code_ctx_rnul1w",
+        "patchEvidenceTrailId": "patch_ev_i2rwtl",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-050",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "69c81382-6eab-4d82-9bc1-68c2422cf9a3",
+        "wrongActionMemoryId": "edc31e22-f0ad-499b-8e00-1b879f061261",
+        "codingContextPackId": "code_ctx_eqfgav",
+        "patchEvidenceTrailId": "patch_ev_13ctf84",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-051",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "999d7212-8412-418b-9820-154a09c30208",
+        "wrongActionMemoryId": "ede6d04d-507f-4283-b9bd-6c8eae14e81c",
+        "codingContextPackId": "code_ctx_rwn1dw",
+        "patchEvidenceTrailId": "patch_ev_jjddxv",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-052",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "63480686-7485-4041-887e-c962dc5bd2ad",
+        "wrongActionMemoryId": "570297ec-a54d-43a3-a602-613602b3edf4",
+        "codingContextPackId": "code_ctx_rsnk5p",
+        "patchEvidenceTrailId": "patch_ev_1tz0zfg",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-053",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "262f32ae-6f25-45bc-85b9-9fdc2176c2b2",
+        "wrongActionMemoryId": "fb88d32f-fde4-43a1-918c-830eaec9add4",
+        "codingContextPackId": "code_ctx_4b12jg",
+        "patchEvidenceTrailId": "patch_ev_gaxigm",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-054",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "6b8aea78-ac3d-499a-9fad-b36c8ac6c65c",
+        "wrongActionMemoryId": "1d4b6b5d-57eb-48bb-b139-09d564bd7151",
+        "codingContextPackId": "code_ctx_u4k22",
+        "patchEvidenceTrailId": "patch_ev_1tu4vph",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-055",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "94bec39e-9404-4b6d-82a0-a1363f0576e1",
+        "wrongActionMemoryId": "a83e718b-6b15-4f25-8c48-8ff3078c3717",
+        "codingContextPackId": "code_ctx_gamexm",
+        "patchEvidenceTrailId": "patch_ev_45xndj",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-056",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "6bcb5014-9292-4b7d-b16a-4b40ddc03637",
+        "wrongActionMemoryId": "bdbd490d-3d7a-4e49-9fc2-b0349b96891e",
+        "codingContextPackId": "code_ctx_fk6co9",
+        "patchEvidenceTrailId": "patch_ev_15g5f40",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-057",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "0a80b43d-3b6d-4d0e-8aa4-7cf52222fced",
+        "wrongActionMemoryId": "8f632c99-831b-419d-9935-f94346ec000c",
+        "codingContextPackId": "code_ctx_1unq78k",
+        "patchEvidenceTrailId": "patch_ev_ih0ws8",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-058",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "2ccc49ca-22d6-4554-813c-1b1e9e6bd3be",
+        "wrongActionMemoryId": "14491612-0b76-4f70-a968-3c3c56ff9f59",
+        "codingContextPackId": "code_ctx_18nz5ia",
+        "patchEvidenceTrailId": "patch_ev_wp1157",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-059",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "fd27c33d-1f8a-4aff-a6fe-7cf13b914ade",
+        "wrongActionMemoryId": "691a3054-3686-4993-91bd-65d7879cde2d",
+        "codingContextPackId": "code_ctx_1stfqd3",
+        "patchEvidenceTrailId": "patch_ev_oy1fe1",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-060",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "c62701e1-1e98-4192-be35-c022f638e4b5",
+        "wrongActionMemoryId": "ef510cb8-7141-4e3b-9c10-495215b55504",
+        "codingContextPackId": "code_ctx_1iswfl8",
+        "patchEvidenceTrailId": "patch_ev_25k1c5",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-061",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "bc04c401-bb32-4426-abf4-fa11241ea5ae",
+        "wrongActionMemoryId": "d7e4f9f1-40b1-4272-8f3b-fcff94f301f0",
+        "codingContextPackId": "code_ctx_1jjtmbl",
+        "patchEvidenceTrailId": "patch_ev_1vbsu35",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-062",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "90d61ae1-ca0e-4283-bba6-054e38c12525",
+        "wrongActionMemoryId": "290d0f03-cfc9-4b2e-9c9f-f6dda57b6563",
+        "codingContextPackId": "code_ctx_5667pk",
+        "patchEvidenceTrailId": "patch_ev_779ohn",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-063",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "855cf34b-d92d-4052-99a5-7e97b3750026",
+        "wrongActionMemoryId": "de8026c3-a38b-4b69-8352-0d7828c4d0da",
+        "codingContextPackId": "code_ctx_1sv34w5",
+        "patchEvidenceTrailId": "patch_ev_1czmavb",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-064",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "90a9f717-c639-40c3-8961-41d9eb7d5524",
+        "wrongActionMemoryId": "3efea697-544e-457e-80f5-4b54cd68f877",
+        "codingContextPackId": "code_ctx_5k68z9",
+        "patchEvidenceTrailId": "patch_ev_bi4hni",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-065",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "88559b0c-f640-4fc7-9f5f-a9597832484d",
+        "wrongActionMemoryId": "22ac663c-7bac-4088-a7e0-35d17d94663b",
+        "codingContextPackId": "code_ctx_1d9macu",
+        "patchEvidenceTrailId": "patch_ev_10nf1xe",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-066",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "44b22f06-c160-49f8-b528-598cb9d914b2",
+        "wrongActionMemoryId": "dcf51bbb-e5e2-46d5-94d5-87c615db6647",
+        "codingContextPackId": "code_ctx_133uhz4",
+        "patchEvidenceTrailId": "patch_ev_1t53juz",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-067",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "28477334-c327-4ce9-aa20-8c8c6cdf56a3",
+        "wrongActionMemoryId": "2f8625ae-a4d1-414a-bbd8-92bc5c56949c",
+        "codingContextPackId": "code_ctx_l9uqpy",
+        "patchEvidenceTrailId": "patch_ev_114r2ae",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-068",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "a746375d-c5f2-4c08-8ddc-f0886cdd8067",
+        "wrongActionMemoryId": "bf8fb6ca-f5cd-42bc-a7c2-172f0d2f98e2",
+        "codingContextPackId": "code_ctx_1e0kode",
+        "patchEvidenceTrailId": "patch_ev_1cdptqf",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-069",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "a7dde86f-fc08-4a2d-a6ec-3263c8db3ff3",
+        "wrongActionMemoryId": "d0f64046-1117-4566-87d2-c3f142cb5173",
+        "codingContextPackId": "code_ctx_1xl6gko",
+        "patchEvidenceTrailId": "patch_ev_1xftfi3",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-070",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "96ecb2fa-4abf-44bb-a185-d54e1c36aba6",
+        "wrongActionMemoryId": "092304e6-eb58-4249-93fa-f629e1658bd8",
+        "codingContextPackId": "code_ctx_1c4ouj9",
+        "patchEvidenceTrailId": "patch_ev_23h4zk",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-071",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "7316252f-b9f0-431c-b6fc-c7de912ba091",
+        "wrongActionMemoryId": "b858b981-bf8c-4420-b437-7322beeeb9df",
+        "codingContextPackId": "code_ctx_1mqpm97",
+        "patchEvidenceTrailId": "patch_ev_1pqwygg",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-072",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "779a2e10-afc5-487a-82a2-0ad66ec161f2",
+        "wrongActionMemoryId": "e33b93ae-a949-46f8-9ba3-db86e3c4396c",
+        "codingContextPackId": "code_ctx_kli31h",
+        "patchEvidenceTrailId": "patch_ev_wsfoc9",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-073",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "7edca914-3cc2-4807-ba98-5a7667a3fae1",
+        "wrongActionMemoryId": "0e81df8c-1084-4840-8ac3-1ebb0e522067",
+        "codingContextPackId": "code_ctx_tsh4t2",
+        "patchEvidenceTrailId": "patch_ev_15qhupj",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-074",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "2a6ce10b-a475-4281-9fbc-4f76daf4be13",
+        "wrongActionMemoryId": "7b04cc6b-443e-4ded-b858-3647b9d8884b",
+        "codingContextPackId": "code_ctx_6srnic",
+        "patchEvidenceTrailId": "patch_ev_al5f9",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-075",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "961098f1-96b3-4cd4-88fa-2fe8b08d3339",
+        "wrongActionMemoryId": "b7b41476-8271-4393-b4df-c45ed29797fd",
+        "codingContextPackId": "code_ctx_3g3h0q",
+        "patchEvidenceTrailId": "patch_ev_1gzzv7f",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-076",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "5f391fce-6546-4da5-a88d-0e4d6763e22b",
+        "wrongActionMemoryId": "b46023c3-fb59-4c5d-9b46-1633eacfae72",
+        "codingContextPackId": "code_ctx_ajjo0d",
+        "patchEvidenceTrailId": "patch_ev_mq61qt",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-077",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "13314b7d-dcca-4e99-acd2-903746e3eb84",
+        "wrongActionMemoryId": "25e0ef76-b64d-4b75-8030-593bea776418",
+        "codingContextPackId": "code_ctx_1ysm00e",
+        "patchEvidenceTrailId": "patch_ev_1t4drlu",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-078",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "924f7571-5762-435c-a04b-ea5109030e12",
+        "wrongActionMemoryId": "b71453c2-8bee-4435-a929-3803ff2962f7",
+        "codingContextPackId": "code_ctx_miz963",
+        "patchEvidenceTrailId": "patch_ev_7z6onc",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-079",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "b19df4ba-e9b6-4f26-bf79-59be3e45261e",
+        "wrongActionMemoryId": "b478af17-b8cb-4014-80d9-0df346a146c7",
+        "codingContextPackId": "code_ctx_1ojjwot",
+        "patchEvidenceTrailId": "patch_ev_1m535bs",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-080",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "295a089b-a084-4e61-b5db-19b99d594016",
+        "wrongActionMemoryId": "64b5e610-2bfb-4b1f-a3c7-8769f27aa279",
+        "codingContextPackId": "code_ctx_73xc6x",
+        "patchEvidenceTrailId": "patch_ev_51tjdj",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-081",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "91fa2098-b7c9-46f6-88e3-448a691f1ea9",
+        "wrongActionMemoryId": "cff16ca4-06a1-4882-9e5c-e80b26df3f22",
+        "codingContextPackId": "code_ctx_17hnhnh",
+        "patchEvidenceTrailId": "patch_ev_6xg6ja",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-082",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "d8b5c42f-1143-48b2-ad46-fa5f84c971a5",
+        "wrongActionMemoryId": "74a7635b-6840-46e0-a3f4-c9bdac89bffd",
+        "codingContextPackId": "code_ctx_12wce91",
+        "patchEvidenceTrailId": "patch_ev_cgalnf",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-083",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "77ef28da-fb6b-4b67-8015-9004e94448ca",
+        "wrongActionMemoryId": "fc3a9c0a-7887-41b8-97c9-d20242d6948c",
+        "codingContextPackId": "code_ctx_2qbjms",
+        "patchEvidenceTrailId": "patch_ev_iycp5m",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-084",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "1bf0dc4a-9fe7-4d93-b930-35a5b8c67ea2",
+        "wrongActionMemoryId": "27705a59-2a25-4108-b75c-51b0f9fc02e8",
+        "codingContextPackId": "code_ctx_1nmwbdk",
+        "patchEvidenceTrailId": "patch_ev_1ssdqri",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-085",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "4e7d0bdc-93ba-4eb2-8ff4-478b31fe6fbb",
+        "wrongActionMemoryId": "601f8885-19bf-424c-beae-63e4025da8f1",
+        "codingContextPackId": "code_ctx_33k3ob",
+        "patchEvidenceTrailId": "patch_ev_17ognh0",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-086",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "5f34dc16-acf8-4451-bd0e-7fd67d1c04ac",
+        "wrongActionMemoryId": "2b2522f1-a3a4-4cf8-822d-a1b53752b959",
+        "codingContextPackId": "code_ctx_12aej01",
+        "patchEvidenceTrailId": "patch_ev_8zamm9",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-087",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "82b7b30a-3b62-44e0-b339-fdb98101848d",
+        "wrongActionMemoryId": "6178ebaa-d1df-460f-b3ed-fb09852bad57",
+        "codingContextPackId": "code_ctx_ix73hb",
+        "patchEvidenceTrailId": "patch_ev_1npytf5",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-088",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "60d75bb4-ec93-43ee-a02a-e4e04f02486d",
+        "wrongActionMemoryId": "3dfd3ec8-5c2f-4a12-9757-bd41eaaf89c6",
+        "codingContextPackId": "code_ctx_xaoi6u",
+        "patchEvidenceTrailId": "patch_ev_1v35nhj",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-089",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "56257304-7f2a-45b1-9ea3-d817dd6801c8",
+        "wrongActionMemoryId": "8c7c7c91-6687-40c3-8561-ffa2f435033f",
+        "codingContextPackId": "code_ctx_62lwz7",
+        "patchEvidenceTrailId": "patch_ev_sotksf",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-090",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "429e4b2d-8419-4061-bd4d-7b7534814d04",
+        "wrongActionMemoryId": "e831213d-c281-4ce5-8a8e-b55051bbf4e7",
+        "codingContextPackId": "code_ctx_10cy5v6",
+        "patchEvidenceTrailId": "patch_ev_gpy3gw",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-091",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "d07d50e7-020a-4dbf-8ae4-da639368a6b4",
+        "wrongActionMemoryId": "a45c0add-0d50-4f7e-ba4c-3e2040531990",
+        "codingContextPackId": "code_ctx_1rqvpxi",
+        "patchEvidenceTrailId": "patch_ev_gwd4mh",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-092",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "bab84b1e-e465-4478-947c-aba03de9d515",
+        "wrongActionMemoryId": "106bc1d4-9f9e-4b05-82d7-5d181a293b7d",
+        "codingContextPackId": "code_ctx_bu8eb3",
+        "patchEvidenceTrailId": "patch_ev_1hxs2xx",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-093",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "abfdd56d-498d-48bc-aaa2-e65f391cb324",
+        "wrongActionMemoryId": "30dbfcee-262c-4e28-9004-bd78e4571796",
+        "codingContextPackId": "code_ctx_153n8an",
+        "patchEvidenceTrailId": "patch_ev_1l3hqwm",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-094",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "25fa6728-9e8d-4518-827b-f43961417508",
+        "wrongActionMemoryId": "d98fb4a5-d2f3-46b4-be1b-4b06a2d49e84",
+        "codingContextPackId": "code_ctx_12igo37",
+        "patchEvidenceTrailId": "patch_ev_1ncavp3",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-095",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "7061d17d-c7bc-4a27-bcff-b35e1d42830a",
+        "wrongActionMemoryId": "fddd3404-8730-4ca4-bb28-66a62c662466",
+        "codingContextPackId": "code_ctx_scwnv1",
+        "patchEvidenceTrailId": "patch_ev_ybtn7u",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-096",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "b962cfd2-64d0-4207-8fcd-24f252c7e10a",
+        "wrongActionMemoryId": "8f07b5c3-0a87-49a6-b096-e7cd0f1fd1c1",
+        "codingContextPackId": "code_ctx_q6dpe9",
+        "patchEvidenceTrailId": "patch_ev_l58wqs",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "repo_policy"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-097",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "9f7a0796-d1b0-4988-851a-1f58c84a620b",
+        "wrongActionMemoryId": "20ec90b2-3a24-4502-9565-504b1d08d74b",
+        "codingContextPackId": "code_ctx_cb1or7",
+        "patchEvidenceTrailId": "patch_ev_lv568a",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "architecture_decision"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-098",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "3268d6e1-aecc-4dea-aade-955a389bd7fc",
+        "wrongActionMemoryId": "cee81f6b-1fe5-47f1-97ba-380b2329448c",
+        "codingContextPackId": "code_ctx_6tznxw",
+        "patchEvidenceTrailId": "patch_ev_9ndvtl",
+        "guardSeverity": "allow",
+        "referencedKinds": [
+          "dependency_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-099",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "1fb22248-67dd-4cb1-adb8-2d9ba8bc1129",
+        "wrongActionMemoryId": "28d798e4-9599-4954-9bbd-8d8ef2fcbec4",
+        "codingContextPackId": "code_ctx_ovbsed",
+        "patchEvidenceTrailId": "patch_ev_7xn4zs",
+        "guardSeverity": "block",
+        "referencedKinds": [
+          "generated_file_rule"
+        ]
+      },
+      "errors": []
+    },
+    {
+      "id": "cognicode-100",
+      "passed": true,
+      "score": 1,
+      "checks": {
+        "correctionRecalled": true,
+        "procedureRecalled": true,
+        "wrongActionSuppressed": true,
+        "patchCorrect": true,
+        "evidenceComplete": true,
+        "staleSuppressed": true
+      },
+      "evidence": {
+        "correctionMemoryId": "4264605d-ca79-4f24-8985-1ee9bf830eab",
+        "wrongActionMemoryId": "57959bab-156f-4a65-894d-d19eca7e06d1",
+        "codingContextPackId": "code_ctx_12ahn72",
+        "patchEvidenceTrailId": "patch_ev_15ulum1",
+        "guardSeverity": "warn",
+        "referencedKinds": [
+          "migration_note"
+        ]
+      },
+      "errors": []
+    }
+  ]
+}

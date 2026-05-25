@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T07:15:33.539Z",
+  "generatedAt": "2026-05-25T08:08:00.316Z",
   "mode": "answer-generation",
   "privacy": {
     "benchmarkQuestionsOnly": true,
@@ -182,7 +182,7 @@
         "answererConfigurable": true,
         "judgeConfigurable": true
       },
-      "score": 0.9347931696560589,
+      "score": 0.9398860533328159,
       "total": 3,
       "questions": [
         {
@@ -190,7 +190,7 @@
           "dataset": "nextgen:retrieval-calibration",
           "prompt": "confidence-field",
           "promptHash": "7edab43956caed24",
-          "generatedAnswer": "0.8043795089681766",
+          "generatedAnswer": "0.8196581599984479",
           "expected": [
             "confidence>0.5"
           ],
@@ -198,7 +198,7 @@
           "retrievedEvidence": [],
           "judge": {
             "name": "deterministic-coverage-v1",
-            "score": 0.8043795089681766,
+            "score": 0.8196581599984479,
             "passed": true,
             "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
           }
@@ -208,7 +208,7 @@
           "dataset": "nextgen:retrieval-calibration",
           "prompt": "unsafe-threshold",
           "promptHash": "b0759428d97efd29",
-          "generatedAnswer": "{\"confidence\":0.47556951312703927,\"unsafeToInject\":true}",
+          "generatedAnswer": "{\"confidence\":0.4755695131254872,\"unsafeToInject\":true}",
           "expected": [
             "unsafe low-confidence"
           ],
@@ -226,7 +226,7 @@
           "dataset": "nextgen:retrieval-calibration",
           "prompt": "context-exclusion",
           "promptHash": "8a061a8c1bbacb95",
-          "generatedAnswer": "[3a85e927-82a9-4edb-a4c7-7f611d220946] trust=0.94 score=0.75 confidence=0.80 Atlas deployment requires reviewed npm test evidence before release.",
+          "generatedAnswer": "[410da180-3225-4dc0-8045-23f092c44007] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release.",
           "expected": [
             "weak memory excluded"
           ],
@@ -262,7 +262,7 @@
           "dataset": "nextgen:usp-evidence-pack",
           "prompt": "why-used-explanation",
           "promptHash": "e929979a60f71819",
-          "generatedAnswer": "[\"keyword 1.00\",\"temporal 1.00\",\"graph 0.67\",\"graph Atlas deploys require npm test before release. -mentions-> deploys require\",\"mode hybrid\",\"rerank coverage 0.67\",\"calibration confidence 0.78\"]",
+          "generatedAnswer": "[\"keyword 1.00\",\"temporal 1.00\",\"trust 0.69\",\"graph Atlas deploys require npm test before release. -mentions-> procedure\",\"mode hybrid\",\"rerank coverage 0.67\",\"calibration confidence 0.79\"]",
           "expected": [
             "explanation",
             "trust signal"
@@ -336,6 +336,6 @@
   ],
   "summary": {
     "totalQuestions": 13,
-    "meanScore": 0.9611061160744752
+    "meanScore": 0.9622813969229576
   }
 }

@@ -12,6 +12,24 @@ export function createOpenMemoryMcpServer(service = createDefaultMemoryService()
     version: "0.1.0"
   });
   const handlers = createMemoryToolHandlers(service);
+  const engineeringKindSchema = z.enum(["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "forbidden_action", "migration_note", "test_strategy", "dependency_rule", "generated_file_rule"]);
+  const codebaseScopeSchema = z.object({
+    org: z.string().optional(),
+    orgId: z.string().optional(),
+    repo: z.string().optional(),
+    repository: z.string().optional(),
+    branch: z.string().optional(),
+    commit: z.string().optional(),
+    commitRange: z.string().optional(),
+    packageName: z.string().optional(),
+    workspace: z.string().optional(),
+    directory: z.string().optional(),
+    filePattern: z.string().optional(),
+    language: z.string().optional(),
+    framework: z.string().optional(),
+    harness: z.string().optional(),
+    currentPath: z.string().optional()
+  });
 
   server.registerTool(
     "memory_add",
@@ -100,6 +118,93 @@ export function createOpenMemoryMcpServer(service = createDefaultMemoryService()
       }
     },
     async (args) => jsonText(handlers.evidencePack(args))
+  );
+
+  server.registerTool(
+    "memory_coding_context_pack",
+    {
+      title: "Build Coding Context Pack",
+      description: "Build an evidence-grade context pack specialized for coding agents, with repo policies, corrections, procedures, tool outcomes, architecture decisions, and stale-rule exclusions.",
+      inputSchema: {
+        userId: z.string().min(1),
+        query: z.string().min(1),
+        agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
+        limit: z.number().int().positive().max(50).optional(),
+        includeArchived: z.boolean().optional(),
+        tokenBudget: z.number().int().positive().max(8000).optional(),
+        codebaseScope: codebaseScopeSchema.optional()
+      }
+    },
+    async (args) => jsonText(handlers.codingContextPack(args))
+  );
+
+  server.registerTool(
+    "memory_code_correction",
+    {
+      title: "Record Code Correction",
+      description: "Store a user or review correction as engineering memory, link the previous wrong action, and supersede the stale belief.",
+      inputSchema: {
+        userId: z.string().min(1),
+        content: z.string().min(1),
+        agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
+        previousMemoryId: z.string().optional(),
+        previousWrongAction: z.string().optional(),
+        correctAction: z.string().optional(),
+        kind: engineeringKindSchema.optional(),
+        codebase: codebaseScopeSchema.optional(),
+        evidenceIds: z.array(z.string()).optional()
+      }
+    },
+    async (args) => jsonText(handlers.codeCorrection(args))
+  );
+
+  server.registerTool(
+    "memory_action_guard",
+    {
+      title: "Guard Coding Action",
+      description: "Check engineering memory before a tool call or edit and block or warn on known forbidden actions.",
+      inputSchema: {
+        userId: z.string().min(1),
+        action: z.string().min(1),
+        agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
+        codebaseScope: codebaseScopeSchema.optional()
+      }
+    },
+    async (args) => jsonText(handlers.actionGuard(args))
+  );
+
+  server.registerTool(
+    "memory_patch_evidence",
+    {
+      title: "Build Patch Evidence Trail",
+      description: "Return the memories, corrections, procedures, tool outcomes, graph paths, and excluded stale rules used for a patch.",
+      inputSchema: {
+        userId: z.string().min(1),
+        task: z.string().min(1),
+        agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
+        codebaseScope: codebaseScopeSchema.optional(),
+        filesChanged: z.array(z.string()).optional(),
+        commandsRun: z.array(z.string()).optional(),
+        memoryIds: z.array(z.string()).optional()
+      }
+    },
+    async (args) => jsonText(handlers.patchEvidence(args))
   );
 
   server.registerTool(
@@ -263,6 +368,12 @@ export function createOpenMemoryMcpServer(service = createDefaultMemoryService()
         orgId: z.string().optional(),
         projectId: z.string().optional(),
         command: z.string().optional(),
+        cwd: z.string().optional(),
+        envRequirements: z.array(z.string()).optional(),
+        exitCode: z.number().int().optional(),
+        failureReason: z.string().optional(),
+        benchmarkScenarioId: z.string().optional(),
+        evidencePackId: z.string().optional(),
         filesChanged: z.array(z.string()).optional(),
         tests: z.array(z.object({ name: z.string(), status: z.enum(["passed", "failed", "skipped"]), output: z.string().optional() })).optional(),
         pullRequest: z.string().optional(),
@@ -287,6 +398,12 @@ export function createOpenMemoryMcpServer(service = createDefaultMemoryService()
         orgId: z.string().optional(),
         projectId: z.string().optional(),
         command: z.string().optional(),
+        cwd: z.string().optional(),
+        envRequirements: z.array(z.string()).optional(),
+        exitCode: z.number().int().optional(),
+        failureReason: z.string().optional(),
+        benchmarkScenarioId: z.string().optional(),
+        evidencePackId: z.string().optional(),
         filesChanged: z.array(z.string()).optional(),
         tests: z.array(z.object({ name: z.string(), status: z.enum(["passed", "failed", "skipped"]), output: z.string().optional() })).optional(),
         pullRequest: z.string().optional(),

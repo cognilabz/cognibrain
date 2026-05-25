@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "generatedAt": "2026-05-25T07:15:33.338Z",
+  "generatedAt": "2026-05-25T08:07:59.777Z",
   "suites": [
     {
       "id": "answer-generation",
@@ -80,16 +80,16 @@
     {
       "id": "retrieval-calibration",
       "passed": true,
-      "score": 0.9347931696560589,
+      "score": 0.9398860533328159,
       "details": [
         {
           "id": "confidence-field",
           "passed": true,
-          "score": 0.8043795089681766,
+          "score": 0.8196581599984479,
           "expected": [
             "confidence>0.5"
           ],
-          "actual": "0.8043795089681766"
+          "actual": "0.8196581599984479"
         },
         {
           "id": "unsafe-threshold",
@@ -98,7 +98,7 @@
           "expected": [
             "unsafe low-confidence"
           ],
-          "actual": "{\"confidence\":0.47556951312703927,\"unsafeToInject\":true}"
+          "actual": "{\"confidence\":0.4755695131254872,\"unsafeToInject\":true}"
         },
         {
           "id": "context-exclusion",
@@ -107,7 +107,7 @@
           "expected": [
             "weak memory excluded"
           ],
-          "actual": "[3a85e927-82a9-4edb-a4c7-7f611d220946] trust=0.94 score=0.75 confidence=0.80 Atlas deployment requires reviewed npm test evidence before release."
+          "actual": "[410da180-3225-4dc0-8045-23f092c44007] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release."
         }
       ]
     },
@@ -124,7 +124,7 @@
             "explanation",
             "trust signal"
           ],
-          "actual": "[\"keyword 1.00\",\"temporal 1.00\",\"graph 0.67\",\"graph Atlas deploys require npm test before release. -mentions-> deploys require\",\"mode hybrid\",\"rerank coverage 0.67\",\"calibration confidence 0.78\"]"
+          "actual": "[\"keyword 1.00\",\"temporal 1.00\",\"trust 0.69\",\"graph Atlas deploys require npm test before release. -mentions-> procedure\",\"mode hybrid\",\"rerank coverage 0.67\",\"calibration confidence 0.79\"]"
         },
         {
           "id": "source-citation",
@@ -159,66 +159,6 @@
   ],
   "trend": {
     "points": [
-      {
-        "generatedAt": "2026-05-24T18:09:59.148Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9612499999999999
-      },
-      {
-        "generatedAt": "2026-05-24T18:16:50.890Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9612499999999999
-      },
-      {
-        "generatedAt": "2026-05-24T18:22:32.066Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9612499999999999
-      },
-      {
-        "generatedAt": "2026-05-24T18:35:48.127Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9612499999999999
-      },
-      {
-        "generatedAt": "2026-05-24T18:41:32.599Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9612499999999999
-      },
-      {
-        "generatedAt": "2026-05-24T18:43:14.530Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9612499999999999
-      },
       {
         "generatedAt": "2026-05-24T18:45:07.693Z",
         "suites": {
@@ -368,6 +308,72 @@
           "usp-evidence-pack": 1
         },
         "meanScore": 0.9559586339312117
+      },
+      {
+        "generatedAt": "2026-05-25T08:00:17.324Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9398860533333333,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9569772106666665
+      },
+      {
+        "generatedAt": "2026-05-25T08:00:48.872Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9398860533333333,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9569772106666665
+      },
+      {
+        "generatedAt": "2026-05-25T08:03:12.297Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9398860533328159,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9569772106665632
+      },
+      {
+        "generatedAt": "2026-05-25T08:04:02.949Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9398860533333333,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9569772106666665
+      },
+      {
+        "generatedAt": "2026-05-25T08:06:35.060Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9398860533333333,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9569772106666665
+      },
+      {
+        "generatedAt": "2026-05-25T08:07:59.777Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9398860533328159,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9569772106665632
       }
     ]
   }

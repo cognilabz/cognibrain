@@ -1,5 +1,6 @@
 import { normalizeRetrievalWeights } from "./config";
 import { cosineVector, embeddingsDisabled } from "./embeddings";
+import { codebaseScopeMatches, getEngineeringMetadata } from "./engineeringMemory";
 import { activateGraph } from "./graphReasoning";
 import { clamp, MemoryStore } from "./store";
 import { cosineLike, estimateTokens, keywordCoverage, tokenize } from "./text";
@@ -36,8 +37,12 @@ export class RetrievalEngine {
       if (!temporalAllows(memory, temporalConstraint)) return false;
       if (options.filters?.type && memory.type !== options.filters.type) return false;
       if (options.filters?.layer && memory.layer !== options.filters.layer) return false;
+      const engineeringKind = getEngineeringMetadata(memory)?.kind;
+      if (options.filters?.engineeringKind && engineeringKind !== options.filters.engineeringKind) return false;
+      if (options.filters?.engineeringKinds?.length && (!engineeringKind || !options.filters.engineeringKinds.includes(engineeringKind))) return false;
       if (options.filters?.minTrust && memory.trust < options.filters.minTrust) return false;
       if (options.filters?.tags?.length && !options.filters.tags.every((tag) => memory.tags.includes(tag))) return false;
+      if (!codebaseScopeMatches(memory, options.codebaseScope).matches) return false;
       return true;
     });
 
@@ -52,7 +57,11 @@ export class RetrievalEngine {
       .map((memory) => {
         const graph = graphBoosts.get(memory.id);
         const vectorScore = vectorSemantic.get(memory.id);
-        return this.score(memory, queryTokens, queryEntities, queryText, now, graph?.score ?? 0, graph?.paths ?? [], weights, mode, expandedQueries, bm25, lexical, vectorScore, vectorScore === undefined ? undefined : options.embeddingProvider?.id);
+        const result = this.score(memory, queryTokens, queryEntities, queryText, now, graph?.score ?? 0, graph?.paths ?? [], weights, mode, expandedQueries, bm25, lexical, vectorScore, vectorScore === undefined ? undefined : options.embeddingProvider?.id);
+        const scope = codebaseScopeMatches(memory, options.codebaseScope);
+        return scope.warnings.length
+          ? { ...result, decision: "warn" as const, explanation: [...(result.explanation ?? []), ...scope.warnings], stale: true }
+          : result;
       })
       .filter((result) => result.score > 0.05 && relevanceEvidence(result) > 0.08)
       .sort((a, b) => b.score - a.score)

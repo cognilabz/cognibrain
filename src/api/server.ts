@@ -104,6 +104,31 @@ const searchSchema = z.object({
   includeSharedBrains: z.boolean().optional(),
   profileId: z.string().optional(),
   weights: z.record(z.number()).optional(),
+  codebaseScope: z.object({
+    org: z.string().optional(),
+    orgId: z.string().optional(),
+    repo: z.string().optional(),
+    repository: z.string().optional(),
+    branch: z.string().optional(),
+    commit: z.string().optional(),
+    commitRange: z.string().optional(),
+    packageName: z.string().optional(),
+    workspace: z.string().optional(),
+    directory: z.string().optional(),
+    filePattern: z.string().optional(),
+    language: z.string().optional(),
+    framework: z.string().optional(),
+    harness: z.string().optional(),
+    currentPath: z.string().optional()
+  }).optional(),
+  filters: z.object({
+    type: z.enum(["user", "feedback", "project", "reference", "episodic", "procedural"]).optional(),
+    layer: z.enum(["working", "episodic", "long_term", "procedural", "reflection"]).optional(),
+    tags: z.array(z.string()).optional(),
+    minTrust: z.number().optional(),
+    engineeringKind: z.enum(["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "forbidden_action", "migration_note", "test_strategy", "dependency_rule", "generated_file_rule"]).optional(),
+    engineeringKinds: z.array(z.enum(["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "forbidden_action", "migration_note", "test_strategy", "dependency_rule", "generated_file_rule"])).optional()
+  }).optional(),
   graphDepth: z.number().int().positive().max(8).optional(),
   relationTypes: z.array(relationTypeSchema).optional()
 });
@@ -120,12 +145,61 @@ const harnessActionSchema = z.object({
   orgId: z.string().optional(),
   projectId: z.string().optional(),
   command: z.string().optional(),
+  cwd: z.string().optional(),
+  envRequirements: z.array(z.string()).optional(),
+  exitCode: z.number().int().optional(),
+  failureReason: z.string().optional(),
+  benchmarkScenarioId: z.string().optional(),
+  evidencePackId: z.string().optional(),
   filesChanged: z.array(z.string()).optional(),
   tests: z.array(z.object({ name: z.string(), status: z.enum(["passed", "failed", "skipped"]), output: z.string().optional() })).optional(),
   pullRequest: z.string().optional(),
   errorFixed: z.string().optional(),
   content: z.string().optional(),
   timestamp: z.string().optional()
+});
+
+const codeCorrectionSchema = z.object({
+  userId: z.string().min(1),
+  agentId: z.string().optional(),
+  sessionId: z.string().optional(),
+  appId: z.string().optional(),
+  orgId: z.string().optional(),
+  projectId: z.string().optional(),
+  content: z.string().min(1),
+  previousMemoryId: z.string().optional(),
+  previousWrongAction: z.string().optional(),
+  correctAction: z.string().optional(),
+  kind: z.enum(["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "forbidden_action", "migration_note", "test_strategy", "dependency_rule", "generated_file_rule"]).optional(),
+  codebase: searchSchema.shape.codebaseScope,
+  source: z.object({ kind: z.enum(["human", "reviewed_code", "tool", "agent", "transcript", "import"]), uri: z.string().optional(), commit: z.string().optional(), lineStart: z.number().optional(), lineEnd: z.number().optional(), confidence: z.number() }).optional(),
+  timestamp: z.string().optional(),
+  evidenceIds: z.array(z.string()).optional()
+});
+
+const actionGuardSchema = z.object({
+  userId: z.string().min(1),
+  action: z.string().min(1),
+  agentId: z.string().optional(),
+  sessionId: z.string().optional(),
+  appId: z.string().optional(),
+  orgId: z.string().optional(),
+  projectId: z.string().optional(),
+  codebaseScope: searchSchema.shape.codebaseScope
+});
+
+const patchEvidenceSchema = z.object({
+  userId: z.string().min(1),
+  task: z.string().min(1),
+  agentId: z.string().optional(),
+  sessionId: z.string().optional(),
+  appId: z.string().optional(),
+  orgId: z.string().optional(),
+  projectId: z.string().optional(),
+  codebaseScope: searchSchema.shape.codebaseScope,
+  filesChanged: z.array(z.string()).optional(),
+  commandsRun: z.array(z.string()).optional(),
+  memoryIds: z.array(z.string()).optional()
 });
 
 const graphExportSchema = z.object({
@@ -1216,6 +1290,16 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && url.pathname === "/code/corrections") {
+    send(response, 201, serialize(defaultService.recordCodeCorrection(codeCorrectionSchema.parse(await json(request)))));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/code/action-guard") {
+    send(response, 200, defaultService.guardAction(actionGuardSchema.parse(await json(request))));
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/ingest/media") {
     const body = z
       .object({
@@ -1330,6 +1414,16 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && url.pathname === "/coding-context-pack") {
+    send(response, 200, defaultService.codingContextPack(evidencePackSchema.parse(await json(request))));
+    return;
+  }
+
+  if (method === "POST" && url.pathname === "/patch-evidence") {
+    send(response, 200, defaultService.patchEvidenceTrail(patchEvidenceSchema.parse(await json(request))));
+    return;
+  }
+
   if (method === "GET" && parts[0] === "evidence-pack" && parts[1]) {
     send(response, 200, defaultService.getEvidencePack(parts[1]));
     return;
@@ -1337,6 +1431,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   if (method === "GET" && parts[0] === "context-packs" && parts[1] && parts[2] === "evidence") {
     send(response, 200, defaultService.getEvidencePack(parts[1]));
+    return;
+  }
+
+  if (method === "GET" && parts[0] === "coding-context-packs" && parts[1]) {
+    send(response, 200, defaultService.getCodingContextPack(parts[1]));
     return;
   }
 

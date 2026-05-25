@@ -5,7 +5,7 @@
 <h1 align="center">cognibrain</h1>
 
 <p align="center">
-  <strong>Inspectable Agent Memory OS.</strong>
+  <strong>Engineering Memory OS for coding agents.</strong>
 </p>
 
 <p align="center">
@@ -17,11 +17,13 @@
   <a href="docs/implementation-status.md">Status Matrix</a>
 </p>
 
-cognibrain is a local-first TypeScript Agent Memory OS for teams that need durable context without opaque recall. It remembers across agent harnesses, proves every memory with source and retrieval evidence, explains why context was selected, respects scope and consent boundaries, and keeps memory valid over time through graph, temporal, contradiction and dream-maintenance surfaces.
+cognibrain is a local-first TypeScript Engineering Memory OS for teams that need coding agents to stop repeating the same mistake. It is still an Inspectable Agent Memory OS at the platform layer: every memory can be routed, governed, cited and audited before injection. It captures corrections, repo policies, architecture decisions, review feedback and tool outcomes as evidence-grade memory, then injects the right context before the next change. It remembers across agent harnesses, proves every memory with source and retrieval evidence, explains why context was selected, respects scope and consent boundaries, and keeps memory valid over time through graph, temporal, contradiction and dream-maintenance surfaces.
 
 The project includes the memory engine, HTTP API, CLI, official connector manifests, built-in GitHub/Slack/Discord vendor drivers, provider adapters, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
 
-**Claim:** memory you can prove, route, govern, and reuse across every agent.
+**Claim:** coding-agent memory you can prove, route, govern, benchmark, and reuse across every agent.
+
+**USP:** Stop fixing the same agent mistake twice.
 
 Implementation status is tracked in [`docs/implementation-status.md`](docs/implementation-status.md), which separates local-ready surfaces from roadmap items so market claims stay tied to code, tests and exposed APIs.
 Production setup and the exact claim boundary are documented in [`docs/production-readiness.md`](docs/production-readiness.md).
@@ -75,11 +77,11 @@ That makes cognibrain different from narrower memory products:
 | Temporal graph memory | Conversation graph over time | Adds source-quality gates, evidence export, marketplace modules, compliance surfaces and local-first packaging |
 | Graph/vector control plane | Hybrid retrieval over knowledge | Adds “why-used” proof, dream maintenance, policy-aware context injection and cross-harness reuse |
 
-The short version: **cognibrain remembers across agents, proves every memory, explains every retrieval, respects every boundary, and learns from every run.**
+The short version: **cognibrain remembers across agents, proves every memory, explains every retrieval, respects every boundary, and learns from every correction, review, command, and codebase change.**
 
 ## Is It Production Ready?
 
-For an open-source launch, yes: cognibrain is ready to present as a **self-hosted production candidate** when the verification gates pass in the target environment. That means the repo includes the core engine, API, CLI, MCP surface, dashboard, official connector manifests, real external GitHub/Slack/Discord vendor drivers, durable storage adapters, Docker/Kubernetes starter artifacts, benchmark gates, MIT license, contribution guide, security policy, and a status matrix that ties claims to code.
+For an open-source launch, yes: cognibrain is ready to present as a **self-hosted production candidate** when the verification gates pass in the target environment. That means the repo includes the core engine, Engineering Memory object model, API, CLI, MCP surface, dashboard, official connector manifests, real external GitHub/Slack/Discord vendor drivers, durable storage adapters, Docker/Kubernetes starter artifacts, CogniCodeBench and general benchmark gates, MIT license, contribution guide, security policy, and a status matrix that ties claims to code.
 
 The boundary is explicit. Local development can run with JSON storage and no keys. Team or networked use must set `MEMORY_REQUIRE_AUTH=true`, configure `MEMORY_API_KEYS`, use a durable backend such as `postgres-remote` or SQLite for a single-node local team install, put TLS in front of the API, configure vendor credentials for source integrations, and run the publish checks. Managed SaaS readiness, vendor certification beyond the built-in GitHub/Slack/Discord drivers, and competitor benchmark leadership are deployment-specific claims, not automatic README claims.
 
@@ -87,6 +89,7 @@ Production gates:
 
 ```bash
 npm run verify:nextgen
+npm run benchmark:cognicode
 npm run verify:postgres
 npm run verify:connectors
 npm run verify:vendor-connectors
@@ -342,6 +345,8 @@ Pinned memories are never faded or archived.
 
 The current runtime also supports configurable and scoped learned retrieval profiles, injection-feedback learning from accepted/rejected context packs, adaptive dream-policy previews, generated observations with citation provenance, behavioral prediction and prefetch reports, deterministic answer-generation/multi-hop/temporal/pattern benchmark suites, scoped retention rules with search/dream enforcement, encrypted-memory key id/version metadata, key-provider reporting, encrypted backup recovery verification, transport-security readiness checks, managed import/export deployment bundles, differentially private aggregate insights with k-anonymity suppression, validated marketplace install plans, TypeScript and Python client surfaces plus OpenAPI for code generation, packaged domain modules, JSON/JSONL/SQLite/Postgres persistence adapters, `hybrid`/`rrf`/`graph`/`path` retrieval modes, deterministic or provider-backed query expansion, behavioural retrieval scoring, contradiction-aware context selection, graph path/activation/export reasoning, JSON-command intelligence adapters, deterministic fallback reranking, verifier/summarizer/classifier/extractor/translator providers, official connector manifests, built-in GitHub/Slack/Discord vendor API drivers, connector sync records, webhook delivery/retry inspection, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), multi-tenant brains/sources with explicit shared-brain federation, agent subscriptions, shared-memory review/revoke workflows, persona defaults, consent mutation, audit history and revert, offline operation queues, explicit identity links, privacy consent flags, secret redaction/encryption, canonical entity records with merge/split suggestions, typed relations, staged add-only extraction with media/language envelopes, translated media ingestion, enrichment candidates, hour/day/week/month temporal timelines, persisted timeline summaries, multilingual contradiction checks, behavioral-pattern review, feedback-based trust/importance updates, domain evaluations, local metrics, lifecycle preview, and export/delete APIs.
 
+For coding agents, the runtime also includes first-class Engineering Memory types (`repo_policy`, `architecture_decision`, `review_correction`, `tool_outcome`, `procedure`, `forbidden_action`, `migration_note`, `test_strategy`, `dependency_rule`, `generated_file_rule`), repo/branch/package/file scope, coding context packs, action guards, patch evidence trails, and CogniCodeBench.
+
 ## Connectors
 
 cognibrain exposes four integration surfaces. The CLI is the primary install and runtime surface; MCP is available for compatible agent clients without making MCP the only way to operate the platform.
@@ -364,6 +369,10 @@ Available MCP tools:
 - `memory_search`
 - `memory_context_pack`
 - `memory_evidence_pack`
+- `memory_coding_context_pack`
+- `memory_code_correction`
+- `memory_action_guard`
+- `memory_patch_evidence`
 - `memory_list`
 - `memory_reflect`
 - `memory_dream`
@@ -402,6 +411,12 @@ Certified benchmark gate:
 npm run benchmark:certified
 ```
 
+Engineering-memory benchmark:
+
+```bash
+npm run benchmark:cognicode
+```
+
 Public market-claim gate:
 
 ```bash
@@ -418,6 +433,8 @@ Latest checked evidence:
 <!-- benchmark-claims:end -->
 
 The public market gate is a public-claim comparison, not a vendor-signed rerun. Stronger commercial proof imports vendor artifacts with the same dataset, metric, top-K, and budget.
+
+CogniCodeBench is the coding-agent proof: 100 deterministic synthetic repo scenarios measure whether corrections, review feedback, commands, tool outcomes and migrations carry into the next patch. See [`docs/benchmarks/cognicodebench.md`](docs/benchmarks/cognicodebench.md).
 
 ## Architecture
 

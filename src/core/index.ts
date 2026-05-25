@@ -13,3 +13,4 @@ export * from "./evaluation";
 export * from "./entityRegistry";
 export * from "./graphReasoning";
 export * from "./embeddings";
+export * from "./engineeringMemory";

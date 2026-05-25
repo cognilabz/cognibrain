@@ -2616,4 +2616,57 @@ describe("TypeScript memory core", () => {
     const friday = service.search({ userId: "u1", query: "Friday release habit", weights: { behavioral: 1, semantic: 0, keyword: 0, entity: 0, temporal: 0, trust: 0, graph: 0, access: 0 } });
     expect(friday[0].signals.behavioral).toBeGreaterThan(0.5);
   });
+
+  it("stores engineering corrections, guards forbidden actions, and builds patch evidence", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    const wrong = service.recordHarnessAction({
+      userId: "dev",
+      agentId: "codex",
+      projectId: "atlas",
+      command: "pnpm test",
+      cwd: "/repo/atlas",
+      exitCode: 1,
+      failureReason: "CI uses npm, not pnpm.",
+      filesChanged: ["src/generated/api.generated.ts"],
+      tests: [{ name: "npm test", status: "failed", output: "pnpm is unsupported" }]
+    });
+    const correction = service.recordCodeCorrection({
+      userId: "dev",
+      agentId: "reviewer",
+      projectId: "atlas",
+      previousMemoryId: wrong.id,
+      content: "Do not use pnpm in this repo; use npm test and do not edit generated files.",
+      kind: "repo_policy",
+      correctAction: "npm test",
+      codebase: { repo: "atlas", branch: "main", filePattern: "**/api.generated.ts" }
+    });
+
+    expect(service.get(wrong.id).beliefState).toBe("superseded");
+    expect((correction.metadata.engineering as { kind?: string }).kind).toBe("repo_policy");
+    expect(correction.temporal.verificationDueAt).toBeTruthy();
+
+    const pack = service.codingContextPack({
+      userId: "dev",
+      projectId: "atlas",
+      query: "what command should I run before changing validation",
+      codebaseScope: { repo: "atlas", branch: "main" },
+      tokenBudget: 900
+    });
+    expect(pack.sections.some((section) => section.id === "repo_policies" && section.evidence.some((item) => item.memoryId === correction.id))).toBe(true);
+
+    const guard = service.guardAction({ userId: "dev", projectId: "atlas", action: "pnpm test", codebaseScope: { repo: "atlas" } });
+    expect(guard.severity).toBe("warn");
+    expect(guard.alternatives).toContain("npm test");
+
+    const trail = service.patchEvidenceTrail({
+      userId: "dev",
+      projectId: "atlas",
+      task: "fix validation",
+      filesChanged: ["src/validation/userValidation.ts"],
+      commandsRun: ["npm test"],
+      memoryIds: [wrong.id, correction.id]
+    });
+    expect(trail.correctionIds).toContain(correction.id);
+    expect(trail.toolOutcomeIds).toContain(wrong.id);
+  });
 });

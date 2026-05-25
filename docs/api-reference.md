@@ -81,6 +81,28 @@ curl -X POST http://localhost:8787/actions \
 
 Harness action memories capture commands, changed files, test outcomes, pull requests, and fixed errors as first-class episodic memories. This lets retrieval answer "what fixed this last time?" from tool evidence instead of relying on a prose summary.
 
+Engineering Memory endpoints make coding-agent corrections first-class:
+
+```bash
+curl -X POST http://localhost:8787/code/corrections \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","agentId":"reviewer","projectId":"atlas","content":"Do not use pnpm in this repo; use npm test.","kind":"repo_policy","correctAction":"npm test","codebase":{"repo":"atlas","branch":"main"}}'
+
+curl -X POST http://localhost:8787/coding-context-pack \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","agentId":"codex","projectId":"atlas","query":"what command should I run before changing validation?","codebaseScope":{"repo":"atlas","branch":"main"},"tokenBudget":900}'
+
+curl -X POST http://localhost:8787/code/action-guard \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","projectId":"atlas","action":"pnpm test","codebaseScope":{"repo":"atlas"}}'
+
+curl -X POST http://localhost:8787/patch-evidence \
+  -H "content-type: application/json" \
+  -d '{"userId":"dev","projectId":"atlas","task":"fix validation","filesChanged":["src/validation/userValidation.ts"],"commandsRun":["npm test"]}'
+```
+
+Engineering Memory stores `repo_policy`, `architecture_decision`, `review_correction`, `tool_outcome`, `procedure`, `forbidden_action`, `migration_note`, `test_strategy`, `dependency_rule`, and `generated_file_rule` under `metadata.engineering`. Retrieval accepts `codebaseScope` plus `filters.engineeringKind` or `filters.engineeringKinds`, and coding context packs group evidence into repo policies, procedures, previous corrections, known pitfalls, architecture decisions, tool commands, forbidden actions, and temporal notes.
+
 ## Connectors, Providers, Translation, And Media
 
 ```bash
@@ -200,7 +222,7 @@ Episodes preserve the raw extraction ground truth. `memory extract` creates an e
 
 The Python SDK under `sdk/python` covers the same local/team API subset for agent frameworks: auth headers, retries, typed HTTP errors, memory CRUD, search, route/intent, evidence packs, graph calls, connector sync/writeback, policy checks, and OpenAPI retrieval. It is dependency-free and packaged with a local `pyproject.toml` for PyPI-style builds.
 
-The MCP server exposes the same Memory OS surfaces through tools: `memory_context_pack`, `memory_evidence_pack`, `memory_policy_check`, `memory_verify_claim`, graph path/query/activation/explain tools, procedure recall, and action record/outcome telemetry.
+The MCP server exposes the same Memory OS surfaces through tools: `memory_context_pack`, `memory_evidence_pack`, `memory_coding_context_pack`, `memory_code_correction`, `memory_action_guard`, `memory_patch_evidence`, `memory_policy_check`, `memory_verify_claim`, graph path/query/activation/explain tools, procedure recall, and action record/outcome telemetry.
 
 Search accepts optional scope and retrieval-weight overrides:
 
@@ -494,4 +516,4 @@ When the service is configured with a domain module, this endpoint runs the modu
 npm run verify:nextgen
 ```
 
-This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, deterministic nextgen benchmark suites, public leaderboard artifact generation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json`; `benchmark:nextgen` writes `artifacts/nextgen-benchmarks.json` plus `artifacts/benchmark-trend.json`; `leaderboard` writes `artifacts/leaderboard.json` with anonymized score metadata and no raw prompts. Together they prove graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, connector ingestion, injection-feedback learning, adaptive dream policy, generated observations, prediction reports, security/compliance retention, key rotation, privacy insights, multi-tenant audit, webhook event feeds, marketplace persona installation, and public benchmark publication safety.
+This loop runs unit tests, the synthetic retrieval evaluation, the next-generation feature evaluation, deterministic nextgen benchmark suites, CogniCodeBench, public leaderboard artifact generation, and the production dashboard build. The nextgen evaluator writes `artifacts/nextgen-eval.json`; `benchmark:nextgen` writes `artifacts/nextgen-benchmarks.json` plus `artifacts/benchmark-trend.json`; `benchmark:cognicode` writes `artifacts/cognicodebench/run.json`; `leaderboard` writes `artifacts/leaderboard.json` with anonymized score metadata and no raw prompts. Together they prove graph inference/path explanation, graph activation, graph query, GraphML/JSON export, temporal interval and pattern reporting, Engineering Memory correction carryover, action guards, patch evidence trails, behavioural retrieval scoring, timeline summaries, staged extraction/enrichment, entity merge suggestions, connector ingestion, injection-feedback learning, adaptive dream policy, generated observations, prediction reports, security/compliance retention, key rotation, privacy insights, multi-tenant audit, webhook event feeds, marketplace persona installation, and public benchmark publication safety.

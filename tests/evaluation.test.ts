@@ -8,6 +8,7 @@ import { runLongMemEvalBenchmark } from "../src/eval/longmemeval";
 import { runMarketGate } from "../src/eval/marketGate";
 import { runBeamBenchmark } from "../src/eval/beam";
 import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
+import { runCogniCodeBench } from "../src/eval/cognicodeBench";
 
 describe("self verification benchmark loop", () => {
   it("beats local baselines and satisfies the synthetic token-efficiency gate", () => {
@@ -233,5 +234,35 @@ describe("self verification benchmark loop", () => {
       process.env.MEMORY_BENCHMARK_JUDGE_COMMAND = previousJudge;
       process.env.MEMORY_BENCHMARK_JUDGE_ARGS = previousJudgeArgs;
     }
+  });
+
+  it("runs CogniCodeBench with correction carryover, action guards, and ablations", () => {
+    const dir = mkdtempSync(join(tmpdir(), "open-memory-cognicode-"));
+    const report = runCogniCodeBench({
+      count: 12,
+      outputPath: join(dir, "run.json"),
+      scenariosPath: join(dir, "scenarios.json")
+    });
+    expect(report.scenarioCount).toBe(12);
+    expect(report.scenarios.every((scenario) => scenario.passed)).toBe(true);
+    expect(report.metrics.correctionCarryoverRate).toBe(1);
+    expect(report.metrics.repeatedMistakeRate).toBe(0);
+    expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.no_memory.score);
+    expect(report.baselines.map((baseline) => baseline.name)).toContain("cognibrain_without_corrections");
+  });
+
+  it("generates CogniCodeBench scenarios as a passing generation artifact", () => {
+    const dir = mkdtempSync(join(tmpdir(), "open-memory-cognicode-generate-"));
+    const report = runCogniCodeBench({
+      count: 10,
+      generateOnly: true,
+      outputPath: join(dir, "generate.json"),
+      scenariosPath: join(dir, "scenarios.json")
+    });
+    expect(report.mode).toBe("scenario_generation");
+    expect(report.passed).toBe(true);
+    expect(report.scenarioCount).toBe(10);
+    expect(report.generation.scenariosWritten).toBe(true);
+    expect(report.scenarios).toHaveLength(0);
   });
 });

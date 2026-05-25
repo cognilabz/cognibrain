@@ -168,6 +168,10 @@ Tools:
 - `memory_search`
 - `memory_context_pack`
 - `memory_evidence_pack`
+- `memory_coding_context_pack`
+- `memory_code_correction`
+- `memory_action_guard`
+- `memory_patch_evidence`
 - `memory_list`
 - `memory_reflect`
 - `memory_dream`
@@ -194,7 +198,11 @@ Recommended client policy:
 
 - call `memory_search` before multi-step work, repo archaeology, debugging loops, or user-preference-sensitive edits,
 - call `memory_context_pack` when the retrieved result set needs to fit into a small prompt budget,
+- call `memory_coding_context_pack` before code edits, dependency changes, generated-file edits, migrations, or test-command selection,
+- call `memory_action_guard` before a known-risk command or file edit and follow returned alternatives when severity is `warn` or `block`,
 - call `memory_add` only for durable facts, user corrections, stable repo conventions, benchmark evidence, or verified integration discoveries,
+- call `memory_code_correction` when a user, reviewer, CI failure, or PR comment corrects a previous coding action,
+- call `memory_patch_evidence` after a patch to attach the memories, corrections, tool outcomes and stale-rule exclusions used by the run,
 - call `memory_maintenance_status` to inspect automatic dream policy and counters,
 - call `memory_dream` before handoff, release, imports, contradiction cleanup, or scheduled maintenance windows,
 - never store secrets, credentials, private keys, or raw sensitive transcripts without an explicit connector policy.

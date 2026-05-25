@@ -26,12 +26,17 @@ import {
 import {
   EntityRegistry,
   activateGraph,
+  buildCodingContextPackFromResults,
+  buildPatchEvidenceTrail,
   citationFor,
   classifyDurability,
+  engineeringQueryWeights,
+  evaluateForbiddenAction,
   extractAddOnlyMemories,
   extractClaim,
   exportMemoryGraph,
   findGraphPaths,
+  getEngineeringMetadata,
   healthReport,
   IdentityResolver,
   InMemoryStorageAdapter,
@@ -44,6 +49,7 @@ import {
   DOMAIN_MODULES,
   ReflectionEngine,
   RetrievalEngine,
+  withEngineeringMemoryMetadata,
   type LifecyclePolicy,
   type DomainModule,
   type MemoryStorageAdapter
@@ -62,8 +68,11 @@ import type {
   ConnectorAuthSession,
   ConnectorSyncRecord,
   EnrichmentCandidate,
+  ActionGuardReport,
   EpisodeInput,
   EpisodeRecord,
+  CodebaseScope,
+  CodingContextPack,
   EntityMergeSuggestion,
   EntityRecord,
   EvidencePack,
@@ -72,6 +81,7 @@ import type {
   FeedbackKind,
   FeedbackEvent,
   FederatedSearchReport,
+  EngineeringMemoryKind,
   GraphReport,
   GraphActivationResult,
   GraphExplainReport,
@@ -102,6 +112,7 @@ import type {
   OfflineOperation,
   PersonaProfile,
   PolicyDecision,
+  PatchEvidenceTrail,
   ProceduralMemoryMetadata,
   RelationType,
   RetrievalProfile,
@@ -111,6 +122,7 @@ import type {
   RetentionRule,
   RetentionReviewReport,
   SearchOptions,
+  SearchResult,
   SecurityKeyReport,
   ReflectionSummarizer,
   StorageBackendStatus,
@@ -231,6 +243,8 @@ export class MemoryService {
   private connectorAuthSessions = new Map<string, ConnectorAuthSession>();
   private connectorSyncRecords: ConnectorSyncRecord[] = [];
   private evidencePacks = new Map<string, EvidencePack>();
+  private codingContextPacks = new Map<string, CodingContextPack>();
+  private patchEvidenceTrails = new Map<string, PatchEvidenceTrail>();
   private policyRules = new Map<string, MemoryPolicyRule>();
   private retentionRules = new Map<string, RetentionRule>();
   private searchEvents: Array<{
@@ -312,7 +326,8 @@ export class MemoryService {
     const personaConsent = agentPersona?.privacyDefault ? { visibility: agentPersona.privacyDefault } : undefined;
     const scopedInput = { ...input, consent: { ...personaConsent, ...sourceDefaultConsent, ...(input.consent ?? {}) } };
     const enriched = this.applyDomainEnrichment(scopedInput);
-    const proceduralized = withProceduralMetadata(enriched);
+    const engineeringized = withEngineeringMemoryMetadata(enriched);
+    const proceduralized = withProceduralMetadata(engineeringized);
     this.ensureScopedAccess(proceduralized);
     const writeDecision = this.evaluatePolicy("write", proceduralized);
     if (!writeDecision.allowed) {
@@ -760,6 +775,203 @@ export class MemoryService {
     return pack;
   }
 
+  recordCodeCorrection(input: {
+    userId: string;
+    agentId?: string;
+    sessionId?: string;
+    appId?: string;
+    orgId?: string;
+    projectId?: string;
+    content: string;
+    previousMemoryId?: string;
+    previousWrongAction?: string;
+    correctAction?: string;
+    kind?: EngineeringMemoryKind;
+    codebase?: CodebaseScope;
+    source?: MemoryInput["source"];
+    timestamp?: Date | string;
+    evidenceIds?: string[];
+  }): Memory {
+    const kind = input.kind ?? inferCorrectionKind(input.content);
+    const previous = input.previousMemoryId ? safeGet(this.store, input.previousMemoryId) : undefined;
+    const memory = this.add({
+      userId: input.userId,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      appId: input.appId,
+      orgId: input.orgId,
+      projectId: input.projectId,
+      content: input.content,
+      type: kind === "review_correction" ? "feedback" : "project",
+      layer: "long_term",
+      source: input.source ?? { kind: "reviewed_code", confidence: 0.9 },
+      tags: ["engineering-correction", "correction", `engineering:${kind}`],
+      entities: [
+        ...(input.codebase?.repo ? [input.codebase.repo] : []),
+        ...(input.codebase?.branch ? [input.codebase.branch] : []),
+        ...(input.codebase?.filePattern ? [input.codebase.filePattern] : [])
+      ],
+      temporal: { eventAt: input.timestamp ?? new Date().toISOString(), validFrom: input.timestamp ?? new Date().toISOString() },
+      relations: previous ? [{ type: "supersedes", targetId: previous.id, confidence: 0.9, evidence: "review correction replaced the previous wrong coding action" }] : [],
+      metadata: {
+        engineering: {
+          kind,
+          codebase: input.codebase ?? { repo: input.projectId },
+          correctionOfMemoryId: previous?.id,
+          previousWrongAction: input.previousWrongAction ?? previous?.content,
+          correctAction: input.correctAction,
+          confidence: 0.9,
+          evidenceIds: input.evidenceIds ?? []
+        }
+      }
+    });
+    this.applySupersession(memory);
+    this.recordAudit("memory.write", { userId: input.userId, memoryId: memory.id, metadata: { resource: "engineering-correction", previousMemoryId: previous?.id, kind } });
+    return memory;
+  }
+
+  codingContextPack(options: SearchOptions & { tokenBudget?: number }): CodingContextPack {
+    const tokenBudget = options.tokenBudget ?? 900;
+    const intent = this.classifyQueryIntent(options.query);
+    const preferredKinds = Object.keys(engineeringQueryWeights(intent.plan.queryType)) as EngineeringMemoryKind[];
+    const allEngineeringKinds: EngineeringMemoryKind[] = ["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "forbidden_action", "migration_note", "test_strategy", "dependency_rule", "generated_file_rule"];
+    const engineeringKinds: EngineeringMemoryKind[] = options.filters?.engineeringKind
+      ? [options.filters.engineeringKind]
+      : options.filters?.engineeringKinds?.length
+        ? options.filters.engineeringKinds
+        : [...new Set([...preferredKinds, ...allEngineeringKinds])];
+    const results = this.search({
+      ...options,
+      limit: options.limit ?? 18,
+      expandQuery: true,
+      filters: { ...(options.filters ?? {}), engineeringKinds },
+      query: `${options.query} repo policy procedure correction forbidden architecture tool outcome migration generated file`
+    });
+    const evidence = this.evidencePack({ ...options, limit: options.limit ?? 18, tokenBudget });
+    const id = `code_ctx_${contentHash(`${options.userId}:${options.query}:${results.map((result) => result.memory.id).join(",")}:${tokenBudget}`).slice(2, 14)}`;
+    const pack = buildCodingContextPackFromResults({
+      id,
+      query: options.query,
+      userId: options.userId,
+      results,
+      tokenBudget,
+      scope: {
+        userId: options.userId,
+        agentId: options.agentId,
+        sessionId: options.sessionId,
+        appId: options.appId,
+        orgId: options.orgId,
+        projectId: options.projectId,
+        codebase: options.codebaseScope
+      },
+      evidencePackId: evidence.id
+    });
+    this.codingContextPacks.set(pack.id, pack);
+    this.recordAudit("search.run", { userId: options.userId, metadata: { resource: "coding-context-pack", contextPackId: pack.id, query: options.query, sections: pack.sections.length, memories: pack.sections.reduce((sum, section) => sum + section.evidence.length, 0) } });
+    this.persist();
+    return pack;
+  }
+
+  getCodingContextPack(id: string): CodingContextPack {
+    const pack = this.codingContextPacks.get(id);
+    if (!pack) throw new Error(`Coding context pack not found: ${id}`);
+    return pack;
+  }
+
+  guardAction(input: {
+    userId: string;
+    action: string;
+    agentId?: string;
+    sessionId?: string;
+    appId?: string;
+    orgId?: string;
+    projectId?: string;
+    codebaseScope?: CodebaseScope;
+  }): ActionGuardReport {
+    const results = this.search({
+      userId: input.userId,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      appId: input.appId,
+      orgId: input.orgId,
+      projectId: input.projectId,
+      query: `${input.action} forbidden action repo policy generated file procedure alternative`,
+      limit: 12,
+      codebaseScope: input.codebaseScope,
+      filters: { engineeringKinds: ["forbidden_action", "generated_file_rule", "repo_policy", "procedure", "test_strategy"] }
+    });
+    const existingIds = new Set(results.map((result) => result.memory.id));
+    const supplemental = this.store.list(input.userId)
+      .filter((memory) => !existingIds.has(memory.id))
+      .filter((memory) => {
+        const engineering = getEngineeringMetadata(memory);
+        return Boolean(engineering && ["forbidden_action", "generated_file_rule", "repo_policy", "procedure", "test_strategy"].includes(engineering.kind) && codingActionOverlap(input.action, memory.content));
+      })
+      .map((memory) => ({
+        memory,
+        score: 0.72,
+        signals: { semantic: 0, keyword: 0.72, entity: 0, temporal: 0, trust: memory.trust, graph: 0, access: 0 },
+        citation: citationFor(memory),
+        stale: memory.beliefState === "stale" || memory.beliefState === "needs_verification",
+        explanation: ["action guard supplemental engineering-memory match"]
+      }));
+    const report = evaluateForbiddenAction({ userId: input.userId, action: input.action, results: [...results, ...supplemental] });
+    this.recordAudit(report.allowed ? "search.run" : "policy.violation", { userId: input.userId, metadata: { resource: "action-guard", action: input.action, allowed: report.allowed, evidenceIds: report.evidenceIds } });
+    return report;
+  }
+
+  patchEvidenceTrail(input: {
+    userId: string;
+    task: string;
+    agentId?: string;
+    sessionId?: string;
+    appId?: string;
+    orgId?: string;
+    projectId?: string;
+    codebaseScope?: CodebaseScope;
+    filesChanged?: string[];
+    commandsRun?: string[];
+    memoryIds?: string[];
+  }): PatchEvidenceTrail {
+    const results: SearchResult[] = input.memoryIds?.length
+      ? input.memoryIds.map((id) => safeGet(this.store, id)).filter((memory): memory is Memory => Boolean(memory)).map((memory) => ({
+          memory,
+          score: 1,
+          signals: { semantic: 0, keyword: 0, entity: 0, temporal: 0, trust: memory.trust, graph: 0, access: 0 },
+          citation: citationFor(memory),
+          stale: memory.beliefState === "stale" || memory.beliefState === "needs_verification",
+          explanation: ["explicit evidence memory id supplied"]
+        }))
+      : this.search({
+          userId: input.userId,
+          agentId: input.agentId,
+          sessionId: input.sessionId,
+          appId: input.appId,
+          orgId: input.orgId,
+          projectId: input.projectId,
+          query: `${input.task} correction procedure tool outcome architecture policy`,
+          limit: 18,
+          codebaseScope: input.codebaseScope,
+          filters: { engineeringKinds: ["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "test_strategy", "dependency_rule", "migration_note"] }
+        });
+    const excludedStaleRules = results
+      .filter((result) => result.memory.beliefState === "superseded" || result.memory.beliefState === "stale" || result.memory.beliefState === "needs_verification" || result.decision === "exclude")
+      .map((result) => ({ memoryId: result.memory.id, reason: `belief=${result.memory.beliefState} decision=${result.decision ?? "include"}` }));
+    const trail = buildPatchEvidenceTrail({
+      id: `patch_ev_${contentHash(`${input.userId}:${input.task}:${results.map((result) => result.memory.id).join(",")}`).slice(2, 14)}`,
+      userId: input.userId,
+      task: input.task,
+      results,
+      filesChanged: input.filesChanged,
+      commandsRun: input.commandsRun,
+      excludedStaleRules
+    });
+    this.patchEvidenceTrails.set(trail.id, trail);
+    this.recordAudit("search.run", { userId: input.userId, metadata: { resource: "patch-evidence-trail", trailId: trail.id, memories: trail.memoryIds.length } });
+    this.persist();
+    return trail;
+  }
+
   federatedSearch(options: SearchOptions & { brainIds: string[] }): FederatedSearchReport {
     const allowed = new Set(this.accessibleBrainIds(options));
     const requested = [...new Set(options.brainIds)];
@@ -838,6 +1050,10 @@ export class MemoryService {
     const failed = input.tests?.filter((test) => test.status === "failed").map((test) => test.name) ?? [];
     const content = input.content ?? [
       input.command ? `Command executed: ${input.command}.` : undefined,
+      input.cwd ? `Working directory: ${input.cwd}.` : undefined,
+      input.envRequirements?.length ? `Environment requirements: ${input.envRequirements.join(", ")}.` : undefined,
+      typeof input.exitCode === "number" ? `Exit code: ${input.exitCode}.` : undefined,
+      input.failureReason ? `Failure reason: ${input.failureReason}.` : undefined,
       input.filesChanged?.length ? `Files changed: ${input.filesChanged.join(", ")}.` : undefined,
       passed.length ? `Tests passed: ${passed.join(", ")}.` : undefined,
       failed.length ? `Tests failed: ${failed.join(", ")}.` : undefined,
@@ -855,16 +1071,44 @@ export class MemoryService {
       type: "episodic",
       layer: "episodic",
       source: { kind: "tool", confidence: failed.length ? 0.72 : 0.9 },
-      tags: ["harness-action", ...(input.command ? ["command"] : []), ...(input.tests?.length ? ["tests"] : []), ...(input.errorFixed ? ["fix"] : [])],
+      tags: [
+        "harness-action",
+        "engineering:tool_outcome",
+        ...(input.command ? ["command"] : []),
+        ...(input.tests?.length ? ["tests"] : []),
+        ...(failed.length || (typeof input.exitCode === "number" && input.exitCode !== 0) ? ["test-failure"] : []),
+        ...(passed.length && !failed.length && (input.exitCode ?? 0) === 0 ? ["success-pattern"] : []),
+        ...(input.errorFixed ? ["fix"] : [])
+      ],
       entities: [...(input.filesChanged ?? []), ...(input.command ? [input.command.split(/\s+/)[0]] : [])],
-      temporal: { eventAt: input.timestamp ?? new Date().toISOString(), lastConfirmedAt: failed.length ? undefined : new Date().toISOString() },
+      temporal: { eventAt: input.timestamp ?? new Date().toISOString(), lastConfirmedAt: failed.length ? undefined : new Date().toISOString(), verificationDueAt: failed.length ? new Date(Date.now() + 7 * 86_400_000).toISOString() : undefined },
       metadata: {
         action: {
           command: input.command,
+          cwd: input.cwd,
+          envRequirements: input.envRequirements ?? [],
+          exitCode: input.exitCode,
+          failureReason: input.failureReason,
           filesChanged: input.filesChanged ?? [],
           tests: input.tests ?? [],
           pullRequest: input.pullRequest,
-          errorFixed: input.errorFixed
+          errorFixed: input.errorFixed,
+          benchmarkScenarioId: input.benchmarkScenarioId,
+          evidencePackId: input.evidencePackId
+        },
+        engineering: {
+          kind: "tool_outcome",
+          codebase: { repo: input.projectId, harness: input.agentId, currentPath: input.cwd },
+          confidence: failed.length ? 0.72 : 0.9,
+          command: input.command,
+          cwd: input.cwd,
+          envRequirements: input.envRequirements ?? [],
+          exitCode: input.exitCode,
+          failureReason: input.failureReason,
+          successPattern: passed.length && !failed.length ? `Command ${input.command ?? "tool"} passed ${passed.join(", ")}` : undefined,
+          filesChanged: input.filesChanged ?? [],
+          testOutputSummary: [...passed.map((name) => `passed:${name}`), ...failed.map((name) => `failed:${name}`)].join(", "),
+          evidenceIds: input.evidencePackId ? [input.evidencePackId] : []
         }
       }
     });
@@ -1002,7 +1246,15 @@ export class MemoryService {
       const action = this.recordHarnessAction({
         userId: input.userId,
         agentId: input.harnessId,
+        appId: typeof input.metadata?.appId === "string" ? input.metadata.appId : undefined,
+        orgId: typeof input.metadata?.orgId === "string" ? input.metadata.orgId : undefined,
+        projectId: typeof input.metadata?.projectId === "string" ? input.metadata.projectId : undefined,
         command: input.command ?? input.content,
+        cwd: typeof input.metadata?.cwd === "string" ? input.metadata.cwd : undefined,
+        envRequirements: Array.isArray(input.metadata?.envRequirements) ? input.metadata.envRequirements.filter((item): item is string => typeof item === "string") : undefined,
+        exitCode: typeof input.metadata?.exitCode === "number" ? input.metadata.exitCode : undefined,
+        failureReason: typeof input.metadata?.failureReason === "string" ? input.metadata.failureReason : undefined,
+        evidencePackId: typeof input.metadata?.evidencePackId === "string" ? input.metadata.evidencePackId : undefined,
         filesChanged: input.filesChanged,
         tests: input.tests,
         content: input.content,
@@ -2199,10 +2451,15 @@ export class MemoryService {
       "/episodes": ["GET"],
       "/episodes/{id}": ["GET"],
       "/actions": ["POST"],
+      "/code/corrections": ["POST"],
+      "/code/action-guard": ["POST"],
       "/search": ["POST"],
       "/route": ["POST"],
       "/intent": ["POST"],
       "/evidence-pack": ["POST"],
+      "/coding-context-pack": ["POST"],
+      "/coding-context-packs/{id}": ["GET"],
+      "/patch-evidence": ["POST"],
       "/evidence-pack/{id}": ["GET"],
       "/context-packs/{id}": ["GET"],
       "/context-packs/{id}/evidence": ["GET"],
@@ -4539,6 +4796,24 @@ function providerFromEnv(): NonNullable<MemoryServiceOptions["intelligence"]> {
   };
 }
 
+function inferCorrectionKind(content: string): EngineeringMemoryKind {
+  const lower = content.toLowerCase();
+  if (/\b(do not|don't|dont|never|must not|should not)\b.*\b(generated|\.generated\.|dist\/|build\/|vendor\/)\b/.test(lower)) return "generated_file_rule";
+  if (/\b(use npm|don't use pnpm|dont use pnpm|never use pnpm|always use|repo policy|repository policy)\b/.test(lower)) return "repo_policy";
+  if (/\b(validation|architecture|belongs in|lives in|layer|directory|folder|adr)\b/.test(lower)) return "architecture_decision";
+  if (/\b(test|vitest|jest|pytest|go test|e2e)\b/.test(lower)) return "test_strategy";
+  if (/\b(dependency|package|library|import)\b/.test(lower)) return "dependency_rule";
+  if (/\b(migrat|deprecated|moved|renamed|now uses|formerly)\b/.test(lower)) return "migration_note";
+  if (/\b(do not|don't|dont|never|must not|should not)\b/.test(lower)) return "forbidden_action";
+  return "review_correction";
+}
+
+function codingActionOverlap(action: string, content: string): boolean {
+  const actionTokens = new Set(action.toLowerCase().split(/\W+/).filter((token) => token.length > 2));
+  const contentTokens = new Set(content.toLowerCase().split(/\W+/).filter((token) => token.length > 2));
+  return [...actionTokens].some((token) => contentTokens.has(token));
+}
+
 function withProceduralMetadata(input: MemoryInput): MemoryInput {
   const content = input.content.toLowerCase();
   const tags = new Set((input.tags ?? []).map((tag) => tag.toLowerCase()));
@@ -4876,6 +5151,13 @@ function buildQueryPlan(query: string): QueryPlan {
     recommendedWeights?: Partial<RetrievalWeights>;
     reason: string;
   }> = [
+    { queryType: "command_selection", pattern: /\b(what command should i run|which command|test command|run tests|run before|npm|pnpm|yarn|pytest|go test|cargo test|command)\b/, intent: "preference_procedural", strategies: ["repo_policy", "procedure", "tool_outcome", "keyword", "evidence"], confidence: 0.86, recommendedWeights: { trust: 0.3, keyword: 0.22, temporal: 0.18, entity: 0.16 }, reason: "coding command-selection language detected" },
+    { queryType: "change_location", pattern: /\b(where should|where does|which file|which folder|which directory|what file|add validation|place this|belongs in|change go)\b/, intent: "project_context", strategies: ["architecture", "repo_policy", "scope", "keyword", "evidence"], confidence: 0.84, recommendedWeights: { entity: 0.28, trust: 0.24, keyword: 0.2, graph: 0.14 }, reason: "coding change-location language detected" },
+    { queryType: "reviewer_correction", pattern: /\b(review corrected|reviewer|requested changes|what did .* correct|correction|feedback|wrong last time|korrigiert)\b/, intent: "preference_procedural", strategies: ["correction", "repo_policy", "procedure", "temporal", "evidence"], confidence: 0.86, recommendedWeights: { trust: 0.3, temporal: 0.22, keyword: 0.18, graph: 0.16 }, reason: "review correction language detected" },
+    { queryType: "dangerous_file", pattern: /\b(dangerous file|do not edit|generated file|forbidden file|safe to edit|should i edit|lockfile|dist\/|build\/)\b/, intent: "preference_procedural", strategies: ["guard", "policy", "repo_policy", "keyword", "evidence"], confidence: 0.88, recommendedWeights: { trust: 0.34, keyword: 0.22, entity: 0.16, temporal: 0.12 }, reason: "forbidden-file or action-guard language detected" },
+    { queryType: "architecture_decision", pattern: /\b(architecture|architecture decision|adr|module boundary|directory convention|validation architecture|dependency rule|existing pattern)\b/, intent: "project_context", strategies: ["architecture", "graph_path", "entity", "evidence"], confidence: 0.84, recommendedMode: "path", recommendedWeights: { graph: 0.32, entity: 0.24, trust: 0.22, keyword: 0.12 }, reason: "architecture decision language detected" },
+    { queryType: "failed_last_time", pattern: /\b(failed last time|what failed|last failure|previous command failed|ci failed|test failed|exit code|failure reason)\b/, intent: "temporal_question", strategies: ["tool_outcome", "timeline", "temporal", "keyword", "evidence"], confidence: 0.86, recommendedWeights: { temporal: 0.3, trust: 0.24, keyword: 0.2, entity: 0.12 }, reason: "previous tool-outcome language detected" },
+    { queryType: "repo_change", pattern: /\b(what changed in this repo|repo changed|repository changed|migrated|test migration|dependency migration|architecture migration|deprecated|new convention|branch rule|package changed|ci config changed)\b/, intent: "temporal_question", strategies: ["timeline", "engineering_memory", "repo_policy", "temporal", "evidence"], confidence: 0.84, recommendedWeights: { temporal: 0.32, trust: 0.22, keyword: 0.18, graph: 0.14 }, reason: "repo-state change language detected" },
     { queryType: "temporal_recent", pattern: /\b(today|yesterday|last week|recent|latest|now)\b/, intent: "temporal_question", strategies: ["temporal", "keyword"], confidence: 0.8, recommendedWeights: { temporal: 0.3, trust: 0.22, keyword: 0.18 }, reason: "recent-time language detected" },
     { queryType: "temporal_range", pattern: /\b(before|after|since|between|from .* to|valid until|gültig|seit|vor|nach)\b/, intent: "temporal_question", strategies: ["temporal", "timeline"], confidence: 0.8, recommendedWeights: { temporal: 0.34, trust: 0.2, semantic: 0.16 }, reason: "time-window language detected" },
     { queryType: "change_summary", pattern: /\b(what changed|changed|history|timeline|changelog|difference|diff|was hat sich geändert)\b/, intent: "temporal_question", strategies: ["timeline", "temporal", "entity"], confidence: 0.78, reason: "change-summary language detected" },

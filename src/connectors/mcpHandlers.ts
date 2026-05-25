@@ -1,5 +1,5 @@
 import { MemoryService } from "../api/service";
-import type { HarnessActionInput, Memory, MemoryInput, MemoryPolicyOperation, Provenance, SearchResult } from "../core";
+import type { CodebaseScope, EngineeringMemoryKind, HarnessActionInput, Memory, MemoryInput, MemoryPolicyOperation, Provenance, SearchResult } from "../core";
 
 export interface MemoryAddArgs {
   userId: string;
@@ -33,6 +33,48 @@ export interface MemorySearchArgs {
 
 export interface MemoryContextPackArgs extends MemorySearchArgs {
   tokenBudget?: number;
+  codebaseScope?: CodebaseScope;
+}
+
+export interface MemoryCodeCorrectionArgs {
+  userId: string;
+  content: string;
+  agentId?: string;
+  sessionId?: string;
+  appId?: string;
+  orgId?: string;
+  projectId?: string;
+  previousMemoryId?: string;
+  previousWrongAction?: string;
+  correctAction?: string;
+  kind?: EngineeringMemoryKind;
+  codebase?: CodebaseScope;
+  evidenceIds?: string[];
+}
+
+export interface MemoryActionGuardArgs {
+  userId: string;
+  action: string;
+  agentId?: string;
+  sessionId?: string;
+  appId?: string;
+  orgId?: string;
+  projectId?: string;
+  codebaseScope?: CodebaseScope;
+}
+
+export interface MemoryPatchEvidenceArgs {
+  userId: string;
+  task: string;
+  agentId?: string;
+  sessionId?: string;
+  appId?: string;
+  orgId?: string;
+  projectId?: string;
+  codebaseScope?: CodebaseScope;
+  filesChanged?: string[];
+  commandsRun?: string[];
+  memoryIds?: string[];
 }
 
 export interface MemoryListArgs {
@@ -154,6 +196,34 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
         evidencePack: pack,
         results: pack.results
       };
+    },
+
+    codingContextPack(args: MemoryContextPackArgs) {
+      return service.codingContextPack({
+        userId: args.userId,
+        agentId: args.agentId,
+        sessionId: args.sessionId,
+        appId: args.appId,
+        orgId: args.orgId,
+        projectId: args.projectId,
+        query: args.query,
+        limit: args.limit ?? 8,
+        includeArchived: args.includeArchived,
+        tokenBudget: args.tokenBudget ?? 900,
+        codebaseScope: args.codebaseScope
+      });
+    },
+
+    codeCorrection(args: MemoryCodeCorrectionArgs) {
+      return serializeMemory(service.recordCodeCorrection(args));
+    },
+
+    actionGuard(args: MemoryActionGuardArgs) {
+      return service.guardAction(args);
+    },
+
+    patchEvidence(args: MemoryPatchEvidenceArgs) {
+      return service.patchEvidenceTrail(args);
     },
 
     evidencePack(args: MemoryEvidenceArgs) {

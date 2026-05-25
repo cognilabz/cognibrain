@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cognibrain.local/schemas/cognicodebench-scenario.schema.json",
+  "title": "CogniCodeBench Scenario",
+  "type": "object",
+  "required": ["id", "difficulty", "correctionType", "repoSeed", "initialTask", "wrongAction", "correction", "nextTask", "expected"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^cognicode-[0-9]{3,}$" },
+    "difficulty": { "type": "string", "enum": ["easy", "medium", "hard", "evil"] },
+    "correctionType": {
+      "type": "string",
+      "enum": ["command_correction", "library_correction", "architecture_correction", "style_correction", "test_correction", "forbidden_file_correction", "temporal_migration_correction"]
+    },
+    "repoSeed": {
+      "type": "object",
+      "required": ["name", "language", "framework", "branch", "packageManager", "testCommand", "generatedFiles", "rules", "hiddenTrap", "files"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "language": { "type": "string", "enum": ["typescript", "python", "go", "react", "monorepo"] },
+        "framework": { "type": "string" },
+        "branch": { "type": "string" },
+        "packageManager": { "type": "string", "enum": ["npm", "pnpm", "pip", "go"] },
+        "testCommand": { "type": "string" },
+        "generatedFiles": { "type": "array", "items": { "type": "string" } },
+        "rules": { "type": "array", "items": { "type": "string" } },
+        "hiddenTrap": { "type": "string" },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "purpose"],
+            "additionalProperties": false,
+            "properties": {
+              "path": { "type": "string" },
+              "purpose": { "type": "string" },
+              "generated": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "initialTask": { "type": "string" },
+    "wrongAction": {
+      "type": "object",
+      "required": ["reason"],
+      "additionalProperties": false,
+      "properties": {
+        "command": { "type": "string" },
+        "filesChanged": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": "string" }
+      }
+    },
+    "correction": {
+      "type": "object",
+      "required": ["content", "type", "memoryKind", "correctAction"],
+      "additionalProperties": false,
+      "properties": {
+        "content": { "type": "string" },
+        "type": { "$ref": "#/properties/correctionType" },
+        "memoryKind": {
+          "type": "string",
+          "enum": ["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "forbidden_action", "migration_note", "test_strategy", "dependency_rule", "generated_file_rule"]
+        },
+        "correctAction": { "type": "string" }
+      }
+    },
+    "nextTask": { "type": "string" },
+    "expected": {
+      "type": "object",
+      "required": ["command", "filesChanged", "referencedKinds"],
+      "additionalProperties": false,
+      "properties": {
+        "command": { "type": "string" },
+        "filesChanged": { "type": "array", "items": { "type": "string" } },
+        "referencedKinds": {
+          "type": "array",
+          "items": { "$ref": "#/properties/correction/properties/memoryKind" }
+        },
+        "blockedAction": { "type": "string" },
+        "staleRuleSuppressed": { "type": "string" }
+      }
+    }
+  }
+}

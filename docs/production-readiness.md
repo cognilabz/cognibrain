@@ -1,6 +1,6 @@
 # Production Readiness
 
-cognibrain is ready to present as an open-source, self-hosted Agent Memory OS when the gates below pass in the target environment. The honest status is **self-hosted production candidate**, not a managed SaaS certification. Local development works with no keys or database; team and networked deployments must turn on auth, durable storage, backup, and transport controls.
+cognibrain is ready to present as an open-source, self-hosted Engineering Memory OS when the gates below pass in the target environment. The honest status is **self-hosted production candidate**, not a managed SaaS certification. Local development works with no keys or database; team and networked deployments must turn on auth, durable storage, backup, and transport controls.
 
 ## What Is Ready
 
@@ -9,16 +9,17 @@ cognibrain is ready to present as an open-source, self-hosted Agent Memory OS wh
 | Local install | One-command setup, CLI, API, dashboard, MCP, harness package generation | `./bootstrap.sh --all` or `./bin/cognibrain.mjs setup --all-harnesses` plus `./bin/cognibrain.mjs doctor` |
 | Team API | API-key auth, actor ids, policy rules, scoped retrieval, audit events | `MEMORY_REQUIRE_AUTH=true` and `MEMORY_API_KEYS` set before exposing the server |
 | Durable storage | JSON/JSONL, SQLite FTS5, Postgres-compatible CI mode, psql-backed Postgres/Cockroach remote driver | `npm run verify:postgres` against the target Postgres path |
-| Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen` and `npm run audit:plan1_1` |
+| Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, Engineering Memory types, coding context packs, action guards, patch evidence trails, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen`, `npm run benchmark:cognicode`, and `npm run audit:plan1_2` |
 | Connectors | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, real GitHub/Slack/Discord vendor drivers, HTTP adapter verifier, vendor driver verifier | `npm run verify:connectors`, `npm run verify:vendor-connectors`, and deployment-specific vendor credential smoke tests |
-| Benchmarks | LoCoMo, LongMemEval, BEAM, nextgen, answer-generation, market gate, load artifacts | `npm run benchmark:certified`, `npm run benchmark:market`, and the selected `benchmark:load` profile |
+| Benchmarks | CogniCodeBench, LoCoMo, LongMemEval, BEAM, nextgen, answer-generation, market gate, load artifacts | `npm run benchmark:cognicode`, `npm run benchmark:certified`, `npm run benchmark:market`, and the selected `benchmark:load` profile |
 | Open-source packaging | MIT license, contribution guide, security policy, Docker, Kubernetes, npm package dry-run, Python PyPI-style SDK package | `./bin/cognibrain.mjs doctor --publish`, `npm pack --dry-run`, and Python SDK tests |
 
 ## Production Claim Boundary
 
 You can honestly say:
 
-- "cognibrain is a local-first, self-hostable Agent Memory OS with inspectable evidence packs, policy-aware retrieval, durable storage options, connectors, MCP tools, dashboard operations, and reproducible verification gates."
+- "cognibrain is a local-first, self-hostable Engineering Memory OS with inspectable evidence packs, policy-aware retrieval, durable storage options, connectors, MCP tools, dashboard operations, and reproducible verification gates."
+- "CogniCodeBench proves the synthetic coding-agent loop where corrections, review feedback, commands, tool outcomes and codebase changes carry into the next patch."
 - "A team can run it behind its own API key, Postgres/Cockroach storage, TLS ingress, backup process, and connector credentials for built-in GitHub, Slack, and Discord vendor drivers."
 - "The public benchmark claims are generated from repo-local artifacts and distinguish synthetic/public gates from vendor-signed external reruns."
 
@@ -48,6 +49,12 @@ This proves setup, memory write, evidence export, API/dashboard startup, Codex S
 export MEMORY_API_KEYS="$(openssl rand -hex 32)"
 export POSTGRES_PASSWORD="$(openssl rand -hex 32)"
 docker compose -f docker/docker-compose.yml up --build
+```
+
+If your local Docker CLI ships Compose as the standalone binary, use the same command through `docker-compose`. To validate the rendered config before startup:
+
+```bash
+MEMORY_API_KEYS=dummy-key POSTGRES_PASSWORD=dummy-password docker-compose -f docker/docker-compose.yml config
 ```
 
 The compose file runs the API against Postgres 16, requires API-key auth, installs the `psql` client inside the container, and keeps Postgres data in a named volume. Put TLS in front of compose or set `MEMORY_TLS_TERMINATED_BY` when an ingress or reverse proxy handles encryption.
@@ -82,6 +89,7 @@ Run these before tagging a release or calling a deployment production-ready:
 
 ```bash
 npm run verify:nextgen
+npm run benchmark:cognicode
 npm run verify:postgres
 npm run verify:connectors
 npm run verify:vendor-connectors
@@ -95,9 +103,9 @@ For larger deployments, repeat the load benchmark at 100k or 1M memories using t
 
 ## Release Checklist
 
-- README explains the Memory OS claim, benefits, setup, usage, proof, production boundary, and status matrix.
+- README explains the Engineering Memory OS claim, benefits, setup, usage, CogniCodeBench proof, production boundary, and status matrix.
 - `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `PRODUCT.md`, Docker, Kubernetes, and `.env.example` are present.
 - `docs/implementation-status.md` matches the current code and does not list closed work as open.
-- `npm run audit:plan1_1` passes after checking product and production readiness text.
+- `npm run audit:plan1_1` and `npm run audit:plan1_2` pass after checking product and production readiness text.
 - GitHub issues for the plan pass are closed only after the related verifier output is fresh.
 - Python SDK remains PyPI-style packageable from `sdk/python`; publish to PyPI only from a release workflow with a real token.

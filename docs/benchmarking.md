@@ -1,13 +1,14 @@
 # Benchmarking
 
-cognibrain has six benchmark layers:
+cognibrain has seven benchmark layers:
 
 1. `npm run eval` runs the local transparent proof suite.
 2. `npm run benchmark:locomo` runs against the official LoCoMo dataset from `snap-research/locomo`.
 3. `npm run benchmark:longmemeval` runs against LongMemEval-S from Hugging Face.
 4. `npm run benchmark:beam` runs against BEAM splits from Hugging Face.
 5. `npm run benchmark:nextgen` runs deterministic Agent Memory OS suites, including the `usp-evidence-pack` why-used benchmark.
-6. `npm run benchmark:market` combines certified artifacts into one machine-readable gate.
+6. `npm run benchmark:cognicode` runs CogniCodeBench, the engineering-memory benchmark for coding agents.
+7. `npm run benchmark:market` combines certified artifacts into one machine-readable gate.
 
 ## Official LoCoMo Runner
 
@@ -45,6 +46,28 @@ The query contains only the benchmark question. The runner does not use the grou
 This suite is intentionally different from ordinary recall accuracy. It measures whether a retrieved memory can be proved, governed and reused safely.
 
 The same benchmark command also includes `retrieval-calibration`, which checks that search results expose calibrated confidence, weak memories fall below the injection threshold, and unsafe low-confidence memories are excluded from context packs.
+
+## CogniCodeBench
+
+`npm run benchmark:cognicode` measures whether coding agents learn from repo corrections before the next patch. It generates 100 deterministic synthetic repository scenarios across TypeScript/Node, Python/FastAPI, Go, React and monorepo layouts.
+
+The runner stores the first wrong action as `tool_outcome`, records a scoped correction such as `repo_policy`, `architecture_decision`, `dependency_rule`, `generated_file_rule` or `migration_note`, then evaluates the next change through a coding context pack, action guard and patch evidence trail.
+
+Artifacts:
+
+```bash
+npm run benchmark:cognicode:generate
+npm run benchmark:cognicode
+```
+
+Outputs:
+
+- `artifacts/cognicodebench/scenarios.json`
+- `artifacts/cognicodebench/run.json`
+
+The pass gate requires at least 100 scenarios, correction carryover >= 0.90, repeated mistake rate <= 0.05, procedure recall >= 0.90, wrong-memory suppression >= 0.90, and a full score above `no_memory`, `raw_chat_history`, `vector_only`, `keyword_only`, `graph_only`, `cognibrain_without_temporal`, and `cognibrain_without_corrections`.
+
+Methodology and scenario schema: [`docs/benchmarks/cognicodebench.md`](benchmarks/cognicodebench.md).
 
 ## Official LongMemEval-S Runner
 

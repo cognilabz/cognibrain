@@ -57,7 +57,15 @@ export type QueryPlanStrategy =
   | "source"
   | "policy"
   | "trust"
-  | "timeline";
+  | "timeline"
+  | "repo_policy"
+  | "engineering_memory"
+  | "tool_outcome"
+  | "scope"
+  | "guard"
+  | "architecture"
+  | "correction"
+  | "evidence";
 
 export interface QueryPlan {
   query: string;
@@ -236,6 +244,123 @@ export interface ProceduralMemoryMetadata {
   feedback: Array<{ kind: FeedbackKind | "observed"; at: Date | string; note?: string }>;
 }
 
+export type EngineeringMemoryKind =
+  | "repo_policy"
+  | "architecture_decision"
+  | "review_correction"
+  | "tool_outcome"
+  | "procedure"
+  | "forbidden_action"
+  | "migration_note"
+  | "test_strategy"
+  | "dependency_rule"
+  | "generated_file_rule";
+
+export interface CodebaseScope {
+  org?: string;
+  orgId?: string;
+  repo?: string;
+  repository?: string;
+  branch?: string;
+  commit?: string;
+  commitRange?: string;
+  packageName?: string;
+  workspace?: string;
+  directory?: string;
+  filePattern?: string;
+  language?: string;
+  framework?: string;
+  harness?: string;
+  currentPath?: string;
+}
+
+export interface EngineeringMemoryMetadata {
+  kind: EngineeringMemoryKind;
+  codebase: CodebaseScope;
+  confidence: number;
+  correctionOfMemoryId?: string;
+  previousWrongAction?: string;
+  correctAction?: string;
+  forbiddenAction?: string;
+  command?: string;
+  cwd?: string;
+  envRequirements?: string[];
+  exitCode?: number;
+  failureReason?: string;
+  successPattern?: string;
+  filesChanged?: string[];
+  testOutputSummary?: string;
+  evidenceIds?: string[];
+  verificationDueAt?: Date | string;
+}
+
+export interface CodingContextPack {
+  schemaVersion: "1.0";
+  id: string;
+  generatedAt: string;
+  query: string;
+  userId: string;
+  scope?: Partial<MemoryScope> & { codebase?: CodebaseScope };
+  tokenBudget: number;
+  context: string;
+  sections: Array<{
+    id:
+      | "repo_policies"
+      | "procedures_before_action"
+      | "previous_corrections"
+      | "known_pitfalls"
+      | "architecture_decisions"
+      | "tool_commands"
+      | "forbidden_actions"
+      | "graph_temporal_notes";
+    title: string;
+    evidence: Array<{
+      memoryId: string;
+      kind?: EngineeringMemoryKind;
+      content: string;
+      score: number;
+      trust: number;
+      source: Provenance;
+      stale: boolean;
+      graphPaths?: string[];
+    }>;
+  }>;
+  excludedStaleRules: Array<{ memoryId: string; reason: string; kind?: EngineeringMemoryKind }>;
+  evidencePackId?: string;
+}
+
+export interface ActionGuardReport {
+  schemaVersion: "1.0";
+  generatedAt: string;
+  userId: string;
+  action: string;
+  allowed: boolean;
+  severity: "allow" | "warn" | "block";
+  warnings: string[];
+  blockedBy: Array<{ memoryId: string; kind?: EngineeringMemoryKind; reason: string }>;
+  alternatives: string[];
+  evidenceIds: string[];
+}
+
+export interface PatchEvidenceTrail {
+  schemaVersion: "1.0";
+  id: string;
+  generatedAt: string;
+  userId: string;
+  task: string;
+  memoryIds: string[];
+  correctionIds: string[];
+  procedureIds: string[];
+  toolOutcomeIds: string[];
+  graphPaths: string[];
+  excludedStaleRules: Array<{ memoryId: string; reason: string }>;
+  summary: {
+    filesChanged: string[];
+    commandsRun: string[];
+    evidenceCount: number;
+  };
+}
+
 export interface MemoryInput {
   brainId?: string;
   sourceId?: string;
@@ -338,11 +463,14 @@ export interface SearchOptions {
   embeddingProvider?: EmbeddingProvider;
   disableEmbeddings?: boolean;
   lexicalProvider?: LexicalScoreProvider;
+  codebaseScope?: CodebaseScope;
   filters?: {
     type?: MemoryType;
     layer?: MemoryLayer;
     tags?: string[];
     minTrust?: number;
+    engineeringKind?: EngineeringMemoryKind;
+    engineeringKinds?: EngineeringMemoryKind[];
   };
   graphDepth?: number;
   relationTypes?: RelationType[];
@@ -618,6 +746,12 @@ export interface HarnessActionInput {
   orgId?: string;
   projectId?: string;
   command?: string;
+  cwd?: string;
+  envRequirements?: string[];
+  exitCode?: number;
+  failureReason?: string;
+  benchmarkScenarioId?: string;
+  evidencePackId?: string;
   filesChanged?: string[];
   tests?: Array<{ name: string; status: "passed" | "failed" | "skipped"; output?: string }>;
   pullRequest?: string;

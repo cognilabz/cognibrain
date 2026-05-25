@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "1.0",
+  "id": "github-review-demo",
+  "generatedAt": "2026-05-25T15:18:48.154Z",
+  "connectorId": "official-github",
+  "passed": true,
+  "pullRequest": "https://github.com/example/atlas/pull/42",
+  "reviewCommentUrl": "https://github.com/example/atlas/pull/42#discussion_r1",
+  "syncRecordId": "sync_1yu6fnm",
+  "syncedMemoryIds": [
+    "956fb058-bfd1-41c9-bc90-343f26c2ec83"
+  ],
+  "correctionId": "cec3deb5-c27d-4c99-94d5-e7e33f56eaa8",
+  "evidencePackId": "ctx_1cnmizl",
+  "patchEvidenceTrailId": "patch_ev_1ova8ty",
+  "sourceRefs": [
+    {
+      "connectorId": "official-github",
+      "externalId": "discussion_r1",
+      "url": "https://github.com/example/atlas/pull/42#discussion_r1",
+      "author": "reviewer",
+      "hash": "c_g2205g"
+    }
+  ],
+  "trail": {
+    "schemaVersion": "1.0",
+    "id": "patch_ev_1ova8ty",
+    "generatedAt": "2026-05-25T15:18:48.139Z",
+    "userId": "github-review-demo",
+    "task": "apply PR review feedback",
+    "contextPackId": "956fb058-bfd1-41c9-bc90-343f26c2ec83",
+    "memoryIds": [
+      "956fb058-bfd1-41c9-bc90-343f26c2ec83",
+      "cec3deb5-c27d-4c99-94d5-e7e33f56eaa8",
+      "7494e174-85f6-4681-8480-f2673ea32013",
+      "bc24e1e1-82c8-452a-b9f7-2696ef31e50d",
+      "e545c264-b65b-4d80-8ea0-bf5b7802d85a"
+    ],
+    "correctionIds": [
+      "cec3deb5-c27d-4c99-94d5-e7e33f56eaa8"
+    ],
+    "procedureIds": [
+      "e545c264-b65b-4d80-8ea0-bf5b7802d85a",
+      "956fb058-bfd1-41c9-bc90-343f26c2ec83",
+      "7494e174-85f6-4681-8480-f2673ea32013"
+    ],
+    "toolOutcomeIds": [],
+    "graphPaths": [],
+    "excludedStaleRules": [],
+    "memoriesUsed": [
+      {
+        "memoryId": "956fb058-bfd1-41c9-bc90-343f26c2ec83",
+        "kind": "repo_policy",
+        "content": "Please use npm test here; pnpm is not supported by CI for this repo.",
+        "trust": 0.85,
+        "citation": "https://github.com/example/atlas/pull/42#discussion_r1",
+        "graphPaths": []
+      },
+      {
+        "memoryId": "cec3deb5-c27d-4c99-94d5-e7e33f56eaa8",
+        "kind": "review_correction",
+        "content": "Use npm test here; pnpm is not supported by CI for this repo.",
+        "trust": 0.89,
+        "citation": "reviewed_code",
+        "graphPaths": []
+      },
+      {
+        "memoryId": "7494e174-85f6-4681-8480-f2673ea32013",
+        "kind": "repo_policy",
+        "content": "Repo policy for atlas: Use npm test here; pnpm is not supported by CI for this repo.",
+        "trust": 0.88,
+        "citation": "reviewed_code",
+        "graphPaths": []
+      },
+      {
+        "memoryId": "bc24e1e1-82c8-452a-b9f7-2696ef31e50d",
+        "kind": "forbidden_action",
+        "content": "Forbidden action for atlas: do not pnpm test.",
+        "trust": 0.88,
+        "citation": "reviewed_code",
+        "graphPaths": []
+      },
+      {
+        "memoryId": "e545c264-b65b-4d80-8ea0-bf5b7802d85a",
+        "kind": "procedure",
+        "content": "Procedure for atlas: before the next related code change, use npm test.",
+        "trust": 0.88,
+        "citation": "reviewed_code",
+        "graphPaths": []
+      }
+    ],
+    "correctionsApplied": [
+      {
+        "memoryId": "cec3deb5-c27d-4c99-94d5-e7e33f56eaa8",
+        "content": "Use npm test here; pnpm is not supported by CI for this repo.",
+        "correctAction": "npm test"
+      }
+    ],
+    "proceduresRecalled": [
+      {
+        "memoryId": "956fb058-bfd1-41c9-bc90-343f26c2ec83",
+        "content": "Please use npm test here; pnpm is not supported by CI for this repo."
+      },
+      {
+        "memoryId": "7494e174-85f6-4681-8480-f2673ea32013",
+        "content": "Repo policy for atlas: Use npm test here; pnpm is not supported by CI for this repo."
+      },
+      {
+        "memoryId": "e545c264-b65b-4d80-8ea0-bf5b7802d85a",
+        "content": "Procedure for atlas: before the next related code change, use npm test.",
+        "command": "npm test"
+      }
+    ],
+    "forbiddenActionsAvoided": [
+      {
+        "memoryId": "bc24e1e1-82c8-452a-b9f7-2696ef31e50d",
+        "content": "Forbidden action for atlas: do not pnpm test.",
+        "forbiddenAction": "pnpm test",
+        "alternative": "npm test"
+      }
+    ],
+    "toolOutcomes": [],
+    "staleMemoriesExcluded": [],
+    "summary": {
+      "filesChanged": [
+        "src/validation/inviteValidation.ts"
+      ],
+      "commandsRun": [
+        "npm test"
+      ],
+      "evidenceCount": 5
+    }
+  }
+}

@@ -795,6 +795,13 @@ textarea {
   margin-top: 14px;
 }
 
+.export-preview summary {
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .action-log,
 .output-group {
   display: grid;

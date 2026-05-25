@@ -23,7 +23,8 @@ const files = {
   mcp: read("src/connectors/mcpServer.ts"),
   dashboard: read("src/dashboard/main.tsx"),
   tests: read("tests/core.test.ts"),
-  ccb: read("docs/benchmarks/cognicodebench.md")
+  ccb: read("docs/benchmarks/cognicodebench.md"),
+  githubIntegration: read("docs/integrations/github.md")
 };
 
 const requiredDocs = [
@@ -81,7 +82,12 @@ const requiredDocs = [
   "docs/status.md",
   "docs/README.md",
   "fixtures/cognicodebench/demo-repos.json",
-  "fixtures/connectors/github-review-demo.json"
+  "fixtures/connectors/github-review-demo.json",
+  "scripts/demo-plan1_4.mjs",
+  "artifacts/demos/why-used.json",
+  "artifacts/demos/cognicodebench-demo-replay.json",
+  "artifacts/demos/github-review.json",
+  "artifacts/demos/plan1_4-demos.json"
 ];
 
 const claimIds = [
@@ -122,8 +128,10 @@ const checks = [
   check("CogniCodeBench is flagship proof with baselines and demos", [
     has(files.ccb, "Latest Baseline Table"),
     has(files.ccb, "Real Demo Repo Scenarios"),
+    has(files.ccb, "npm run demo:cognicodebench"),
     artifact("artifacts/cognicodebench/run.json", (report) => report.passed === true && report.scenarioCount >= 100 && report.ablation?.cognibrain_full?.score === 1),
-    artifact("fixtures/cognicodebench/demo-repos.json", (report) => (report.demos ?? []).length === 5)
+    artifact("fixtures/cognicodebench/demo-repos.json", (report) => (report.demos ?? []).length === 5),
+    artifact("artifacts/demos/cognicodebench-demo-replay.json", (report) => report.passed === true && report.scenarioCount === 5)
   ]),
   check("evidence and patch trail product surfaces are complete", [
     has(files.types, "memoriesUsed"),
@@ -136,8 +144,10 @@ const checks = [
     has(files.mcp, "memory_patch_evidence"),
     has(files.cli, "patch-evidence"),
     has(files.cli, "searchFiltersFromEnv"),
-    has(files.dashboard, "patch evidence"),
-    has(files.dashboard, "engineering-kind-filter")
+    has(files.dashboard, "Patch Evidence Trail"),
+    has(files.dashboard, "Export evidence JSON"),
+    has(files.dashboard, "engineering-kind-filter"),
+    artifact("artifacts/demos/why-used.json", (report) => report.passed === true && report.trail?.forbiddenActionsAvoided?.length > 0)
   ]),
   check("engineering correction and tool-outcome pipeline is implemented", [
     has(files.service, "derivedCorrectionMemories"),
@@ -147,12 +157,15 @@ const checks = [
     has(files.service, "successReason"),
     has(files.service, "environmentHints"),
     has(files.tests, "derivedMemoryIds"),
-    has(files.tests, "filesTouched")
+    has(files.tests, "filesTouched"),
+    has(files.tests, "runs a retrieval and patch-evidence loop for every engineering memory type")
   ]),
   check("connector docs and maturity matrix are present", [
     has(files.connectors, "Connector Maturity Matrix"),
     has(files.connectors, "vendor-smoke required"),
     has(files.connectors, "integrations/github.md"),
+    has(files.githubIntegration, "npm run demo:github-review"),
+    artifact("artifacts/demos/github-review.json", (report) => report.passed === true && report.connectorId === "official-github" && String(report.reviewCommentUrl).includes("discussion_r1")),
     artifact("artifacts/connectors-live.json", (report) => report.passed === true),
     artifact("artifacts/vendor-connectors-live.json", (report) => report.passed === true),
     artifact("artifacts/vendor-live-smoke.json", (report) => report.passed === true)
@@ -175,6 +188,7 @@ const checks = [
   check("release automation is wired", [
     has(files.package, "\"release:check\""),
     has(files.package, "\"audit:plan1_4\""),
+    has(files.package, "\"demo:plan1_4\""),
     exists("scripts/release-check.mjs"),
     exists("scripts/audit-plan1_4.mjs"),
     has(files.production, "npm run release:check"),

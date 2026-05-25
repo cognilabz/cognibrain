@@ -336,6 +336,17 @@ const harnessRunProof = [
   ["GitHub", "review and CI writeback"]
 ];
 
+const patchEvidenceProof = [
+  ["context pack", "code_ctx_* linked when supplied by EvidencePack"],
+  ["memories used", "citation, trust and graph paths retained"],
+  ["corrections applied", "reviewed corrections and derived policies"],
+  ["procedures recalled", "next command and success pattern"],
+  ["forbidden actions", "repeated mistakes blocked before tools"],
+  ["commands run", "patch summary captures exact validation"],
+  ["tool outcomes", "exit code, duration and touched files"],
+  ["stale excluded", "superseded rules kept out of context"]
+];
+
 const platformSignals = [
   { label: "CLI", value: "setup installs skill + runtime", icon: Terminal },
   { label: "API", value: "scoped HTTP and MCP store", icon: Network },
@@ -1291,15 +1302,38 @@ function RecallView({
               <span>keyword {result.signals.keyword.toFixed(2)}</span>
               <span>trust {result.signals.trust.toFixed(2)}</span>
               <span>graph {result.signals.graph.toFixed(2)}</span>
+              <span>source {result.memory.source.kind}</span>
+              <span>citation {result.citation}</span>
+              <span>policy {result.decision ?? "include"}</span>
               <span>{result.queryPlan?.queryType ?? "direct_fact"}</span>
+              <span>profile {result.queryPlan?.recommendedMode ?? "hybrid"}</span>
               <span>{result.unsafeToInject ? "unsafe" : "injectable"}</span>
-              <span>{result.decision ?? "include"}</span>
+              <span>valid {result.memory.temporal.validUntil ? `until ${new Date(result.memory.temporal.validUntil).toLocaleDateString()}` : "until superseded"}</span>
+              <span>{supersessionLabel(result.memory)}</span>
               <p className="why-used-line">Why used: {(result.explanation ?? []).slice(0, 4).join(" · ") || "direct match"}</p>
               <p className="why-used-line">Evidence: {result.citation}{result.graphPaths?.length ? ` · ${result.graphPaths[0]}` : ""}</p>
               <p>{result.memory.content}</p>
             </article>
           ))}
         </div>
+        <details className="export-preview">
+          <summary>Export evidence JSON</summary>
+          <pre>{JSON.stringify(results.slice(0, 3).map((result) => ({
+            memoryId: result.memory.id,
+            whySelected: result.explanation ?? [],
+            source: result.memory.source,
+            citation: result.citation,
+            trust: result.memory.trust,
+            confidence: result.confidence ?? result.score,
+            policyDecision: result.decision ?? "include",
+            graphPaths: result.graphPaths ?? [],
+            temporalValidity: result.memory.temporal,
+            contradiction: result.contradiction,
+            supersessionState: result.memory.beliefState,
+            retrievalProfile: result.queryPlan?.recommendedMode ?? "hybrid",
+            signals: result.signals
+          })), null, 2)}</pre>
+        </details>
         {selectedMemory ? <MemoryMini memory={selectedMemory} /> : null}
       </div>
       <div className="panel tuning-panel wide-panel">
@@ -1765,6 +1799,17 @@ function ProofView({
           </div>
         </div>
         <div className="panel">
+          <h2><FileJson size={17} /> Patch Evidence Trail</h2>
+          <div className="ability-list">
+            {patchEvidenceProof.map(([label, value]) => (
+              <div key={label} className="ability-row">
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="panel">
           <h2><BarChart3 size={17} /> Proof Trend</h2>
           <div className="trend-list">
             {certifiedBenchmarks.map((benchmark) => (
@@ -2014,6 +2059,15 @@ function reviewReason(memory: Memory): string {
   if (memory.trust < 0.55) return "Low trust: archive, verify, or replace with better evidence.";
   if (memory.tags.includes("needs-review")) return "Tagged for review.";
   return "Ready for context injection.";
+}
+
+function supersessionLabel(memory: Memory): string {
+  if (memory.beliefState === "superseded") return "superseded by newer correction";
+  if (memory.beliefState === "contradicted") return "contradiction warning";
+  if (memory.beliefState === "stale") return "stale rule";
+  if (memory.beliefState === "needs_verification") return "needs verification";
+  if (memory.temporal.supersededAt) return `superseded ${new Date(memory.temporal.supersededAt).toLocaleDateString()}`;
+  return "current rule";
 }
 
 function itemLabel(item: MemoryFilter): string {

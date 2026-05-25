@@ -18,10 +18,17 @@ Run the benchmark:
 npm run benchmark:cognicode
 ```
 
+Replay the concrete demo repo scenarios:
+
+```bash
+npm run demo:cognicodebench
+```
+
 Default artifacts:
 
 - `artifacts/cognicodebench/scenarios.json`
 - `artifacts/cognicodebench/run.json`
+- `artifacts/demos/cognicodebench-demo-replay.json`
 - `artifacts/plan1_2-audit.json` after `npm run audit:plan1_2`
 - `artifacts/plan1_3-audit.json` after `npm run audit:plan1_3`
 - `artifacts/leaderboard.json` after `npm run leaderboard`
@@ -141,6 +148,7 @@ Synthetic benchmark scenarios are complemented by replayable demo briefs in [`..
 - Legacy app
 
 Each demo includes a before task, wrong action, correction, next task and expected next action. These examples are still demo fixtures, not customer-production evidence.
+Run `npm run demo:cognicodebench` to replay all five examples through the CLI and generate `artifacts/demos/cognicodebench-demo-replay.json`.
 
 ## Interpreting Results
 

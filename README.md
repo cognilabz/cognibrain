@@ -42,6 +42,16 @@ MEMORY_PREVIOUS_WRONG_ACTION="pnpm test" MEMORY_CORRECT_ACTION="npm test" ./bin/
 ./bin/cognibrain.mjs memory patch-evidence "release validation"
 ```
 
+Replayable demo artifacts for the same loop:
+
+```bash
+npm run demo:why-used
+npm run demo:cognicodebench
+npm run demo:github-review
+```
+
+The demos generate `artifacts/demos/why-used.json`, `artifacts/demos/cognicodebench-demo-replay.json` and `artifacts/demos/github-review.json`, which are checked by `npm run audit:plan1_4`.
+
 CogniCodeBench is the flagship benchmark for this loop: mistake -> correction -> memory -> next patch -> correct action. The checked-in artifact is synthetic proof, not a claim about arbitrary customer repositories. See [`docs/benchmarks/cognicodebench.md`](docs/benchmarks/cognicodebench.md), [`docs/benchmarks/results.md`](docs/benchmarks/results.md), and [`docs/claims.md`](docs/claims.md).
 
 ![cognibrain desktop dashboard](docs/assets/dashboard-desktop.png)

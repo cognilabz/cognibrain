@@ -1,0 +1,729 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-25T15:18:48.154Z",
+  "passed": true,
+  "reports": {
+    "whyUsed": {
+      "schemaVersion": "1.0",
+      "id": "why-used-demo",
+      "generatedAt": "2026-05-25T15:18:41.749Z",
+      "passed": true,
+      "steps": {
+        "wrongActionId": "f573ac24-09e6-476b-9442-e4bf8772547a",
+        "correctionId": "e9436335-94bf-4db2-b825-109f30281812",
+        "derivedMemoryIds": [
+          "8bc5f645-a95d-4f26-b9d0-c8d65b60c647",
+          "28838269-4fe1-4dfb-b37f-d5f5b620b3b5",
+          "9bc0730d-4fb8-47fe-85d8-189c72529caf"
+        ],
+        "evidencePackId": "ctx_1ch5qck",
+        "actionGuardSeverity": "block",
+        "patchEvidenceTrailId": "patch_ev_jfs895"
+      },
+      "evidence": {
+        "schemaVersion": "1.0",
+        "id": "ctx_1ch5qck",
+        "generatedAt": "2026-05-25T15:18:41.287Z",
+        "query": "Why should Atlas use npm test and avoid generated files?",
+        "actor": {
+          "userId": "why-used-demo"
+        },
+        "userId": "why-used-demo",
+        "scope": {
+          "userId": "why-used-demo"
+        },
+        "retrievalProfile": {
+          "id": "default",
+          "label": "Default benchmark profile",
+          "weights": {
+            "semantic": 0.24761904761904763,
+            "keyword": 0.22857142857142856,
+            "entity": 0.15238095238095237,
+            "temporal": 0.07619047619047618,
+            "behavioral": 0.047619047619047616,
+            "trust": 0.1714285714285714,
+            "graph": 0.05714285714285714,
+            "access": 0.019047619047619046
+          },
+          "updatedAt": "2026-05-25T15:18:40.821Z",
+          "provenance": "constructor"
+        },
+        "queryIntent": {
+          "query": "Why should Atlas use npm test and avoid generated files?",
+          "intent": "preference_procedural",
+          "confidence": 0.86,
+          "recommendedMode": "hybrid",
+          "recommendedWeights": {
+            "trust": 0.3,
+            "keyword": 0.22,
+            "temporal": 0.18,
+            "entity": 0.16
+          },
+          "reasons": [
+            "coding command-selection language detected"
+          ],
+          "plan": {
+            "query": "Why should Atlas use npm test and avoid generated files?",
+            "queryType": "command_selection",
+            "secondaryTypes": [],
+            "intent": "preference_procedural",
+            "recommendedMode": "hybrid",
+            "strategies": [
+              "repo_policy",
+              "procedure",
+              "tool_outcome",
+              "keyword",
+              "evidence",
+              "semantic"
+            ],
+            "recommendedWeights": {
+              "trust": 0.3,
+              "keyword": 0.22,
+              "temporal": 0.18,
+              "entity": 0.16
+            },
+            "explanation": [
+              "coding command-selection language detected"
+            ],
+            "confidence": 0.86
+          }
+        },
+        "tokenBudget": 900,
+        "hash": "c_1krr3hg",
+        "context": "[e9436335-94bf-4db2-b825-109f30281812] trust=0.89 score=0.64 confidence=0.73 Do not use pnpm in this repo; use npm test and do not edit generated files.",
+        "results": [
+          {
+            "memoryId": "e9436335-94bf-4db2-b825-109f30281812",
+            "content": "Do not use pnpm in this repo; use npm test and do not edit generated files.",
+            "source": {
+              "kind": "reviewed_code",
+              "confidence": 0.9
+            },
+            "scope": {
+              "userId": "why-used-demo",
+              "agentId": "codex",
+              "projectId": "atlas-api"
+            },
+            "consent": {
+              "visibility": "user",
+              "allowTraining": false,
+              "deleteOnRequest": true
+            },
+            "trust": 0.89,
+            "confidence": 0.9,
+            "importance": 0.7999999999999999,
+            "beliefState": "active",
+            "provenance": {
+              "source": {
+                "kind": "reviewed_code",
+                "confidence": 0.9
+              },
+              "citations": [
+                "reviewed_code"
+              ]
+            },
+            "validity": {
+              "eventAt": "2026-05-25T15:18:41.019Z",
+              "validFrom": "2026-05-25T15:18:41.019Z",
+              "verificationDueAt": "2026-06-24T15:18:41.025Z",
+              "stale": false,
+              "decision": "include"
+            },
+            "retrieval": {
+              "score": 0.6383068045132547,
+              "confidence": 0.7347003553351638,
+              "initialScore": 0.5754261173795205,
+              "mode": "hybrid",
+              "signals": {
+                "semantic": 0.45226701686664544,
+                "keyword": 1,
+                "entity": 0,
+                "temporal": 0.9999999857896091,
+                "behavioral": 0,
+                "trust": 0.712,
+                "graph": 0.6408,
+                "access": 0
+              },
+              "scoreBreakdown": {
+                "semantic": 0.45226701686664544,
+                "keyword": 1,
+                "entity": 0,
+                "temporal": 0.9999999857896091,
+                "behavioral": 0,
+                "trust": 0.712,
+                "graph": 0.6408,
+                "access": 0,
+                "finalScore": 0.6383068045132547,
+                "initialScore": 0.5754261173795205,
+                "confidence": 0.7347003553351638
+              },
+              "explanation": [
+                "keyword 1.00",
+                "temporal 1.00",
+                "trust 0.71",
+                "graph Procedure for atlas-api: before the next related code change, use npm test. -mentions-> main",
+                "mode hybrid",
+                "rerank coverage 0.75",
+                "calibration confidence 0.73"
+              ],
+              "whyIncluded": [
+                "keyword 1.00",
+                "temporal 1.00",
+                "trust 0.71",
+                "graph Procedure for atlas-api: before the next related code change, use npm test. -mentions-> main",
+                "mode hybrid",
+                "rerank coverage 0.75",
+                "calibration confidence 0.73",
+                "graph path: Procedure for atlas-api: before the next related code change, use npm test. -mentions-> main",
+                "calibrated confidence 0.735"
+              ],
+              "whyNotExcluded": [
+                "policy allowed for actor and scope",
+                "above unsafe-to-inject threshold",
+                "temporal validity allows use",
+                "no blocking contradiction"
+              ],
+              "graphPaths": [
+                "Procedure for atlas-api: before the next related code change, use npm test. -mentions-> main",
+                "Do not use pnpm in this repo; use npm test and do not edit generated files. -mentions-> main",
+                "Do not use pnpm in this repo; use npm test and do not edit generated files. -mentions-> main",
+                "Procedure for atlas-api: before the next related code change, use npm test. -mentions-> main"
+              ],
+              "citation": "reviewed_code",
+              "plan": {
+                "query": "Why should Atlas use npm test and avoid generated files?",
+                "queryType": "command_selection",
+                "secondaryTypes": [],
+                "intent": "preference_procedural",
+                "recommendedMode": "hybrid",
+                "strategies": [
+                  "repo_policy",
+                  "procedure",
+                  "tool_outcome",
+                  "keyword",
+                  "evidence",
+                  "semantic"
+                ],
+                "recommendedWeights": {
+                  "trust": 0.3,
+                  "keyword": 0.22,
+                  "temporal": 0.18,
+                  "entity": 0.16
+                },
+                "explanation": [
+                  "coding command-selection language detected"
+                ],
+                "confidence": 0.86
+              },
+              "unsafeToInject": false
+            },
+            "policyDecision": {
+              "operation": "retrieve",
+              "allowed": true,
+              "memoryId": "e9436335-94bf-4db2-b825-109f30281812",
+              "matchedRules": [],
+              "reasons": [
+                "no matching policy rule"
+              ]
+            },
+            "contradictionWarnings": []
+          }
+        ],
+        "excludedResults": [
+          {
+            "memoryId": "9bc0730d-4fb8-47fe-85d8-189c72529caf",
+            "reason": "calibrated confidence below injection threshold",
+            "decision": "review",
+            "policyDecision": {
+              "operation": "retrieve",
+              "allowed": true,
+              "memoryId": "9bc0730d-4fb8-47fe-85d8-189c72529caf",
+              "matchedRules": [],
+              "reasons": [
+                "no matching policy rule"
+              ]
+            },
+            "score": 0.5759809285530488
+          },
+          {
+            "memoryId": "28838269-4fe1-4dfb-b37f-d5f5b620b3b5",
+            "reason": "calibrated confidence below injection threshold",
+            "decision": "review",
+            "policyDecision": {
+              "operation": "retrieve",
+              "allowed": true,
+              "memoryId": "28838269-4fe1-4dfb-b37f-d5f5b620b3b5",
+              "matchedRules": [],
+              "reasons": [
+                "no matching policy rule"
+              ]
+            },
+            "score": 0.4372967770688838
+          },
+          {
+            "memoryId": "8bc5f645-a95d-4f26-b9d0-c8d65b60c647",
+            "reason": "calibrated confidence below injection threshold",
+            "decision": "review",
+            "policyDecision": {
+              "operation": "retrieve",
+              "allowed": true,
+              "memoryId": "8bc5f645-a95d-4f26-b9d0-c8d65b60c647",
+              "matchedRules": [],
+              "reasons": [
+                "no matching policy rule"
+              ]
+            },
+            "score": 0.42328127073174565
+          }
+        ],
+        "policyDecisions": [
+          {
+            "operation": "retrieve",
+            "allowed": true,
+            "memoryId": "e9436335-94bf-4db2-b825-109f30281812",
+            "matchedRules": [],
+            "reasons": [
+              "no matching policy rule"
+            ]
+          },
+          {
+            "operation": "retrieve",
+            "allowed": true,
+            "memoryId": "9bc0730d-4fb8-47fe-85d8-189c72529caf",
+            "matchedRules": [],
+            "reasons": [
+              "no matching policy rule"
+            ]
+          },
+          {
+            "operation": "retrieve",
+            "allowed": true,
+            "memoryId": "28838269-4fe1-4dfb-b37f-d5f5b620b3b5",
+            "matchedRules": [],
+            "reasons": [
+              "no matching policy rule"
+            ]
+          },
+          {
+            "operation": "retrieve",
+            "allowed": true,
+            "memoryId": "8bc5f645-a95d-4f26-b9d0-c8d65b60c647",
+            "matchedRules": [],
+            "reasons": [
+              "no matching policy rule"
+            ]
+          }
+        ],
+        "graphPaths": [
+          "Procedure for atlas-api: before the next related code change, use npm test. -mentions-> main",
+          "Do not use pnpm in this repo; use npm test and do not edit generated files. -mentions-> main"
+        ],
+        "temporalState": {
+          "generatedAt": "2026-05-25T15:18:41.287Z",
+          "stale": 0,
+          "valid": 1,
+          "needsVerification": 0,
+          "contradicted": 0
+        },
+        "summary": {
+          "included": 1,
+          "warnings": 0,
+          "excluded": 0,
+          "stale": 0,
+          "contradictions": 0
+        }
+      },
+      "guard": {
+        "schemaVersion": "1.0",
+        "generatedAt": "2026-05-25T15:18:41.518Z",
+        "userId": "why-used-demo",
+        "action": "pnpm test",
+        "allowed": false,
+        "severity": "block",
+        "warnings": [
+          "Do not use pnpm in this repo; use npm test and do not edit generated files.",
+          "Procedure for atlas-api: before the next related code change, use npm test."
+        ],
+        "blockedBy": [
+          {
+            "memoryId": "8bc5f645-a95d-4f26-b9d0-c8d65b60c647",
+            "kind": "forbidden_action",
+            "reason": "pnpm test"
+          }
+        ],
+        "alternatives": [
+          "npm test"
+        ],
+        "evidenceIds": [
+          "8bc5f645-a95d-4f26-b9d0-c8d65b60c647",
+          "e9436335-94bf-4db2-b825-109f30281812",
+          "9bc0730d-4fb8-47fe-85d8-189c72529caf"
+        ]
+      },
+      "trail": {
+        "schemaVersion": "1.0",
+        "id": "patch_ev_jfs895",
+        "generatedAt": "2026-05-25T15:18:41.733Z",
+        "userId": "why-used-demo",
+        "task": "release validation",
+        "memoryIds": [
+          "f573ac24-09e6-476b-9442-e4bf8772547a",
+          "e9436335-94bf-4db2-b825-109f30281812",
+          "8bc5f645-a95d-4f26-b9d0-c8d65b60c647",
+          "28838269-4fe1-4dfb-b37f-d5f5b620b3b5",
+          "9bc0730d-4fb8-47fe-85d8-189c72529caf"
+        ],
+        "correctionIds": [
+          "e9436335-94bf-4db2-b825-109f30281812"
+        ],
+        "procedureIds": [
+          "9bc0730d-4fb8-47fe-85d8-189c72529caf",
+          "e9436335-94bf-4db2-b825-109f30281812"
+        ],
+        "toolOutcomeIds": [
+          "f573ac24-09e6-476b-9442-e4bf8772547a"
+        ],
+        "graphPaths": [],
+        "excludedStaleRules": [
+          {
+            "memoryId": "f573ac24-09e6-476b-9442-e4bf8772547a",
+            "reason": "belief=superseded decision=include"
+          }
+        ],
+        "memoriesUsed": [
+          {
+            "memoryId": "f573ac24-09e6-476b-9442-e4bf8772547a",
+            "kind": "tool_outcome",
+            "content": "Command executed: pnpm test. Exit code: 1. Output summary: pnpm unsupported; generated file touched. Failure reason: CI uses npm test, not pnpm.. Files touched: src/generated/api.generated.ts.",
+            "trust": 0.81,
+            "citation": "tool",
+            "graphPaths": []
+          },
+          {
+            "memoryId": "e9436335-94bf-4db2-b825-109f30281812",
+            "kind": "repo_policy",
+            "content": "Do not use pnpm in this repo; use npm test and do not edit generated files.",
+            "trust": 0.89,
+            "citation": "reviewed_code",
+            "graphPaths": []
+          },
+          {
+            "memoryId": "8bc5f645-a95d-4f26-b9d0-c8d65b60c647",
+            "kind": "forbidden_action",
+            "content": "Forbidden action for atlas-api: do not pnpm test.",
+            "trust": 0.88,
+            "citation": "reviewed_code",
+            "graphPaths": []
+          },
+          {
+            "memoryId": "28838269-4fe1-4dfb-b37f-d5f5b620b3b5",
+            "kind": "generated_file_rule",
+            "content": "Generated-file rule for atlas-api: do not edit generated files unless the generator is part of the task.",
+            "trust": 0.88,
+            "citation": "reviewed_code",
+            "graphPaths": []
+          },
+          {
+            "memoryId": "9bc0730d-4fb8-47fe-85d8-189c72529caf",
+            "kind": "procedure",
+            "content": "Procedure for atlas-api: before the next related code change, use npm test.",
+            "trust": 0.88,
+            "citation": "reviewed_code",
+            "graphPaths": []
+          }
+        ],
+        "correctionsApplied": [
+          {
+            "memoryId": "e9436335-94bf-4db2-b825-109f30281812",
+            "content": "Do not use pnpm in this repo; use npm test and do not edit generated files.",
+            "correctAction": "npm test"
+          }
+        ],
+        "proceduresRecalled": [
+          {
+            "memoryId": "e9436335-94bf-4db2-b825-109f30281812",
+            "content": "Do not use pnpm in this repo; use npm test and do not edit generated files."
+          },
+          {
+            "memoryId": "9bc0730d-4fb8-47fe-85d8-189c72529caf",
+            "content": "Procedure for atlas-api: before the next related code change, use npm test.",
+            "command": "npm test"
+          }
+        ],
+        "forbiddenActionsAvoided": [
+          {
+            "memoryId": "8bc5f645-a95d-4f26-b9d0-c8d65b60c647",
+            "content": "Forbidden action for atlas-api: do not pnpm test.",
+            "forbiddenAction": "pnpm test",
+            "alternative": "npm test"
+          },
+          {
+            "memoryId": "28838269-4fe1-4dfb-b37f-d5f5b620b3b5",
+            "content": "Generated-file rule for atlas-api: do not edit generated files unless the generator is part of the task.",
+            "forbiddenAction": "edit generated files",
+            "alternative": "npm test"
+          }
+        ],
+        "toolOutcomes": [
+          {
+            "memoryId": "f573ac24-09e6-476b-9442-e4bf8772547a",
+            "command": "pnpm test",
+            "exitCode": 1,
+            "outputSummary": "pnpm unsupported; generated file touched",
+            "failureReason": "CI uses npm test, not pnpm.",
+            "filesTouched": [
+              "src/generated/api.generated.ts"
+            ]
+          }
+        ],
+        "staleMemoriesExcluded": [
+          {
+            "memoryId": "f573ac24-09e6-476b-9442-e4bf8772547a",
+            "reason": "belief=superseded decision=include"
+          }
+        ],
+        "summary": {
+          "filesChanged": [
+            "src/validation/inviteValidation.ts"
+          ],
+          "commandsRun": [
+            "npm test"
+          ],
+          "evidenceCount": 5
+        }
+      }
+    },
+    "cogniCodeBench": {
+      "schemaVersion": "1.0",
+      "id": "cognicodebench-demo-replay",
+      "generatedAt": "2026-05-25T15:18:47.081Z",
+      "scenarioCount": 5,
+      "passed": true,
+      "replays": [
+        {
+          "id": "typescript-api",
+          "repoType": "TypeScript API",
+          "beforeTask": "Add request validation to the user endpoint.",
+          "nextTask": "Add validation for organization invites.",
+          "passed": true,
+          "wrongActionId": "b6c19757-d74d-4a68-a099-7c81243e76db",
+          "correctionId": "006cd9f3-fe10-4a5a-a7b3-a9b5321b54db",
+          "derivedMemoryIds": [
+            "f26f5b97-088c-4d38-8088-602c9fa6e84f",
+            "725ac134-8424-45b5-84cf-67f4387efd54",
+            "136f2c3d-7e6f-4f0b-8c10-bf741fb3f051"
+          ],
+          "contextPackId": "code_ctx_1i9vxtp",
+          "actionGuardSeverity": "block",
+          "patchEvidenceTrailId": "patch_ev_6ed2wd",
+          "expectedNextAction": "Edit src/validation and run npm test."
+        },
+        {
+          "id": "react-app",
+          "repoType": "React app",
+          "beforeTask": "Add loading state to the settings panel.",
+          "nextTask": "Add empty state to billing settings.",
+          "passed": true,
+          "wrongActionId": "d9237450-4c42-4c49-8716-0ff2e229a281",
+          "correctionId": "d7463432-8f77-4c39-88be-76667044f723",
+          "derivedMemoryIds": [
+            "97fed448-7b0e-4433-a6f4-a9cb80d2e514",
+            "6d38aca7-f27d-48ca-8cf7-159b7151507c",
+            "9ec7eebf-a596-48b1-8a73-d92fb1bdc250"
+          ],
+          "contextPackId": "code_ctx_v1374t",
+          "actionGuardSeverity": "block",
+          "patchEvidenceTrailId": "patch_ev_zpwyzr",
+          "expectedNextAction": "Edit source component only and avoid generated route types."
+        },
+        {
+          "id": "python-fastapi",
+          "repoType": "Python FastAPI service",
+          "beforeTask": "Add a health route.",
+          "nextTask": "Add readiness route.",
+          "passed": true,
+          "wrongActionId": "a2c6a754-83c0-488d-8e2e-b70ad25fbbbc",
+          "correctionId": "335559d1-3295-4126-916a-c487b597bdf2",
+          "derivedMemoryIds": [
+            "2789bf8a-888b-4e50-bad1-51a0c52b0699",
+            "923f0520-0185-46ea-b3ee-a3b3dc76367c",
+            "6cd700ca-3438-4357-b15c-e0bf64abd5fe"
+          ],
+          "contextPackId": "code_ctx_a9owio",
+          "actionGuardSeverity": "block",
+          "patchEvidenceTrailId": "patch_ev_1w2ajnq",
+          "expectedNextAction": "Edit app/routes and run pytest."
+        },
+        {
+          "id": "monorepo",
+          "repoType": "Monorepo",
+          "beforeTask": "Update the payments package.",
+          "nextTask": "Update payments refund validation.",
+          "passed": true,
+          "wrongActionId": "bd5ab162-0a41-458d-9333-f65c1e3dc8d3",
+          "correctionId": "a2d173af-7880-4559-97e5-be1f875596dc",
+          "derivedMemoryIds": [
+            "ac87effe-1be7-4e71-ab6f-632ce64ceb82",
+            "89af7e59-0064-4ae7-a355-6287c183558b",
+            "45d8f958-4ca7-4f60-9dde-820f089cdc92"
+          ],
+          "contextPackId": "code_ctx_1sgd2q6",
+          "actionGuardSeverity": "block",
+          "patchEvidenceTrailId": "patch_ev_1k4hzrk",
+          "expectedNextAction": "Run the package-local test and avoid the root lockfile."
+        },
+        {
+          "id": "legacy-app",
+          "repoType": "Legacy app",
+          "beforeTask": "Patch account export.",
+          "nextTask": "Patch invoice export.",
+          "passed": true,
+          "wrongActionId": "c57d0094-b8f4-434a-b24c-49d07e2cb386",
+          "correctionId": "439d6565-aba1-4546-8551-127ed505d448",
+          "derivedMemoryIds": [
+            "40b6e5c6-7240-46c4-bd7a-10cfe826584b",
+            "5fda8625-08c4-4239-8811-07a8f66913f8"
+          ],
+          "contextPackId": "code_ctx_qk3jt2",
+          "actionGuardSeverity": "block",
+          "patchEvidenceTrailId": "patch_ev_1w1t1l",
+          "expectedNextAction": "Use lib/exports and mark the stale migration rule as excluded."
+        }
+      ]
+    },
+    "githubReview": {
+      "schemaVersion": "1.0",
+      "id": "github-review-demo",
+      "generatedAt": "2026-05-25T15:18:48.154Z",
+      "connectorId": "official-github",
+      "passed": true,
+      "pullRequest": "https://github.com/example/atlas/pull/42",
+      "reviewCommentUrl": "https://github.com/example/atlas/pull/42#discussion_r1",
+      "syncRecordId": "sync_1yu6fnm",
+      "syncedMemoryIds": [
+        "956fb058-bfd1-41c9-bc90-343f26c2ec83"
+      ],
+      "correctionId": "cec3deb5-c27d-4c99-94d5-e7e33f56eaa8",
+      "evidencePackId": "ctx_1cnmizl",
+      "patchEvidenceTrailId": "patch_ev_1ova8ty",
+      "sourceRefs": [
+        {
+          "connectorId": "official-github",
+          "externalId": "discussion_r1",
+          "url": "https://github.com/example/atlas/pull/42#discussion_r1",
+          "author": "reviewer",
+          "hash": "c_g2205g"
+        }
+      ],
+      "trail": {
+        "schemaVersion": "1.0",
+        "id": "patch_ev_1ova8ty",
+        "generatedAt": "2026-05-25T15:18:48.139Z",
+        "userId": "github-review-demo",
+        "task": "apply PR review feedback",
+        "contextPackId": "956fb058-bfd1-41c9-bc90-343f26c2ec83",
+        "memoryIds": [
+          "956fb058-bfd1-41c9-bc90-343f26c2ec83",
+          "cec3deb5-c27d-4c99-94d5-e7e33f56eaa8",
+          "7494e174-85f6-4681-8480-f2673ea32013",
+          "bc24e1e1-82c8-452a-b9f7-2696ef31e50d",
+          "e545c264-b65b-4d80-8ea0-bf5b7802d85a"
+        ],
+        "correctionIds": [
+          "cec3deb5-c27d-4c99-94d5-e7e33f56eaa8"
+        ],
+        "procedureIds": [
+          "e545c264-b65b-4d80-8ea0-bf5b7802d85a",
+          "956fb058-bfd1-41c9-bc90-343f26c2ec83",
+          "7494e174-85f6-4681-8480-f2673ea32013"
+        ],
+        "toolOutcomeIds": [],
+        "graphPaths": [],
+        "excludedStaleRules": [],
+        "memoriesUsed": [
+          {
+            "memoryId": "956fb058-bfd1-41c9-bc90-343f26c2ec83",
+            "kind": "repo_policy",
+            "content": "Please use npm test here; pnpm is not supported by CI for this repo.",
+            "trust": 0.85,
+            "citation": "https://github.com/example/atlas/pull/42#discussion_r1",
+            "graphPaths": []
+          },
+          {
+            "memoryId": "cec3deb5-c27d-4c99-94d5-e7e33f56eaa8",
+            "kind": "review_correction",
+            "content": "Use npm test here; pnpm is not supported by CI for this repo.",
+            "trust": 0.89,
+            "citation": "reviewed_code",
+            "graphPaths": []
+          },
+          {
+            "memoryId": "7494e174-85f6-4681-8480-f2673ea32013",
+            "kind": "repo_policy",
+            "content": "Repo policy for atlas: Use npm test here; pnpm is not supported by CI for this repo.",
+            "trust": 0.88,
+            "citation": "reviewed_code",
+            "graphPaths": []
+          },
+          {
+            "memoryId": "bc24e1e1-82c8-452a-b9f7-2696ef31e50d",
+            "kind": "forbidden_action",
+            "content": "Forbidden action for atlas: do not pnpm test.",
+            "trust": 0.88,
+            "citation": "reviewed_code",
+            "graphPaths": []
+          },
+          {
+            "memoryId": "e545c264-b65b-4d80-8ea0-bf5b7802d85a",
+            "kind": "procedure",
+            "content": "Procedure for atlas: before the next related code change, use npm test.",
+            "trust": 0.88,
+            "citation": "reviewed_code",
+            "graphPaths": []
+          }
+        ],
+        "correctionsApplied": [
+          {
+            "memoryId": "cec3deb5-c27d-4c99-94d5-e7e33f56eaa8",
+            "content": "Use npm test here; pnpm is not supported by CI for this repo.",
+            "correctAction": "npm test"
+          }
+        ],
+        "proceduresRecalled": [
+          {
+            "memoryId": "956fb058-bfd1-41c9-bc90-343f26c2ec83",
+            "content": "Please use npm test here; pnpm is not supported by CI for this repo."
+          },
+          {
+            "memoryId": "7494e174-85f6-4681-8480-f2673ea32013",
+            "content": "Repo policy for atlas: Use npm test here; pnpm is not supported by CI for this repo."
+          },
+          {
+            "memoryId": "e545c264-b65b-4d80-8ea0-bf5b7802d85a",
+            "content": "Procedure for atlas: before the next related code change, use npm test.",
+            "command": "npm test"
+          }
+        ],
+        "forbiddenActionsAvoided": [
+          {
+            "memoryId": "bc24e1e1-82c8-452a-b9f7-2696ef31e50d",
+            "content": "Forbidden action for atlas: do not pnpm test.",
+            "forbiddenAction": "pnpm test",
+            "alternative": "npm test"
+          }
+        ],
+        "toolOutcomes": [],
+        "staleMemoriesExcluded": [],
+        "summary": {
+          "filesChanged": [
+            "src/validation/inviteValidation.ts"
+          ],
+          "commandsRun": [
+            "npm test"
+          ],
+          "evidenceCount": 5
+        }
+      }
+    }
+  }
+}

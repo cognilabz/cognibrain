@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities } from "../src/core";
+import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities, type EngineeringMemoryKind } from "../src/core";
 import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { connectorAuthHeaders, createConnectorManifest, createWritebackPlan, runConnectorPoll } from "../src/connectors/sdk";
@@ -2768,5 +2768,68 @@ describe("TypeScript memory core", () => {
     expect(trail.proceduresRecalled.some((item) => item.command === "npm test")).toBe(true);
     expect(trail.forbiddenActionsAvoided.some((item) => item.forbiddenAction?.includes("pnpm test"))).toBe(true);
     expect(trail.toolOutcomes[0]).toMatchObject({ command: "pnpm test", exitCode: 1 });
+  });
+
+  it("runs a retrieval and patch-evidence loop for every engineering memory type", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    const kinds: EngineeringMemoryKind[] = [
+      "repo_policy",
+      "architecture_decision",
+      "review_correction",
+      "tool_outcome",
+      "procedure",
+      "forbidden_action",
+      "migration_note",
+      "test_strategy",
+      "dependency_rule",
+      "generated_file_rule"
+    ];
+    const memories = kinds.map((kind) => service.add({
+      userId: "dev",
+      projectId: "atlas",
+      content: `Atlas ${kind} evidence for release validation: use npm test and avoid pnpm test for ${kind}.`,
+      type: kind === "procedure" ? "procedural" : kind === "review_correction" ? "feedback" : "project",
+      source: { kind: kind === "tool_outcome" ? "tool" : "reviewed_code", confidence: 0.92 },
+      tags: ["engineering-memory", `engineering:${kind}`, kind === "review_correction" ? "engineering-correction" : "loop-proof"],
+      metadata: {
+        engineering: {
+          kind,
+          codebase: { repo: "atlas", branch: "main" },
+          confidence: 0.9,
+          correctAction: "npm test",
+          forbiddenAction: kind === "forbidden_action" || kind === "generated_file_rule" ? "pnpm test" : undefined,
+          command: kind === "tool_outcome" || kind === "procedure" || kind === "test_strategy" ? "npm test" : undefined,
+          exitCode: kind === "tool_outcome" ? 0 : undefined,
+          outputSummary: kind === "tool_outcome" ? "npm test passed" : undefined,
+          filesTouched: kind === "tool_outcome" ? ["src/validation/inviteValidation.ts"] : undefined
+        }
+      }
+    }));
+
+    for (const kind of kinds) {
+      const pack = service.codingContextPack({
+        userId: "dev",
+        projectId: "atlas",
+        query: `Atlas release validation ${kind} npm test pnpm test`,
+        codebaseScope: { repo: "atlas", branch: "main" },
+        filters: { engineeringKind: kind },
+        tokenBudget: 1200
+      });
+      expect(pack.sections.flatMap((section) => section.evidence).some((item) => item.kind === kind)).toBe(true);
+    }
+
+    const trail = service.patchEvidenceTrail({
+      userId: "dev",
+      projectId: "atlas",
+      task: "release validation",
+      filesChanged: ["src/validation/inviteValidation.ts"],
+      commandsRun: ["npm test"],
+      memoryIds: memories.map((memory) => memory.id)
+    });
+    expect(trail.memoriesUsed.map((item) => item.kind)).toEqual(expect.arrayContaining(kinds));
+    expect(trail.correctionIds.length).toBeGreaterThan(0);
+    expect(trail.proceduresRecalled.some((item) => item.command === "npm test")).toBe(true);
+    expect(trail.forbiddenActionsAvoided.some((item) => item.forbiddenAction === "pnpm test")).toBe(true);
+    expect(trail.toolOutcomes.some((item) => item.command === "npm test" && item.exitCode === 0)).toBe(true);
   });
 });

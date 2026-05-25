@@ -26,6 +26,14 @@ npm run verify:vendor-live
 
 Replay data: [`../../fixtures/connectors/github-review-demo.json`](../../fixtures/connectors/github-review-demo.json).
 
+Run the hermetic product demo:
+
+```bash
+npm run demo:github-review
+```
+
+The demo uses the built-in `official-github` connector, stores the PR review comment with `sourceRef.url`, creates a `review_correction`, builds a Patch Evidence Trail with `npm test`, and writes `artifacts/demos/github-review.json`.
+
 ## Maturity
 
 `vendor-smoke required`: hermetic GitHub REST driver proof exists. Tenant certification requires fresh credentials and a target PR or issue for dry-run writeback.

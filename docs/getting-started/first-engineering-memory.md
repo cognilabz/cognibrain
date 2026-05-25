@@ -27,6 +27,14 @@ This flow demonstrates the core product loop.
 ./bin/cognibrain.mjs memory patch-evidence "release validation"
 ```
 
+## 5. Replay The Local Demo
+
+```bash
+npm run demo:why-used
+```
+
+The replay stores the wrong action, stores the correction, asks why the memory was used, blocks the repeated `pnpm test` action, builds a Patch Evidence Trail, and writes `artifacts/demos/why-used.json`.
+
 The stored correction can derive repo-policy, forbidden-action and procedure memory so future guards can warn before the same mistake repeats.
 
 Claim IDs: `CB-CLAIM-CONTEXT`, `CB-CLAIM-GUARD`, `CB-CLAIM-PATCH-EVIDENCE`.

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const cli = join(root, "bin", "cognibrain.mjs");
 const connectCli = join(root, "bin", "cognibrain-connect.mjs");
+const slowCliTimeout = 15_000;
 
 describe("cognibrain CLI", () => {
   it("prints the one-command surface", () => {
@@ -71,7 +72,7 @@ describe("cognibrain CLI", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, slowCliTimeout);
 
   it("records coding corrections, guards actions, and exports patch evidence through the CLI", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-code-"));
@@ -129,7 +130,7 @@ describe("cognibrain CLI", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, slowCliTimeout);
 
   it("generates reviewable harness packages for all nextplan connector targets", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-"));

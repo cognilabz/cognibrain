@@ -15,7 +15,7 @@ The product is useful when a team keeps seeing the same agent mistake:
 
 | Surface | What it does |
 | --- | --- |
-| CLI product surface | React/Ink `cognibrain` home, self-hosted profiles, memory workbench, connections workbench, service automation, config, harness config, skill lifecycle and `doctor --fix`. |
+| CLI product surface | React/Ink `cognibrain` home, self-hosted profiles, memory workbench, connections workbench, service automation, config, connector, adapter, SDK, skill lifecycle and `doctor --fix` workbenches with screenshots in [`setup-cli.md`](setup-cli.md#ink-cli-screenshots). |
 | Memory runtime | Local API by default, optional dashboard, MCP tools and durable storage options. |
 | Agent integrations | Codex, Claude Code, Cursor, Copilot, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI config generation. |
 | Connectors | Native drivers for GitHub, Slack, Discord, Jira, Confluence, Notion, Linear, GitLab, Azure DevOps, Teams, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog. |

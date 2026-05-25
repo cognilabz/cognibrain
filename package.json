@@ -70,6 +70,7 @@
     "benchmark:certified": "tsx src/eval/certified.ts",
     "leaderboard:publish": "tsx src/eval/publishLeaderboard.ts --input artifacts/leaderboard.json --out public/leaderboard",
     "docs:market-claims": "tsx src/eval/readmeClaims.ts",
+    "docs:cli-screenshots": "node scripts/render-cli-screenshots.mjs",
     "verify:status": "node scripts/verify-status.mjs",
     "verify:selfhosted:claims": "node scripts/verify-selfhosted.mjs",
     "audit:nextplan": "node scripts/audit-nextplan.mjs",

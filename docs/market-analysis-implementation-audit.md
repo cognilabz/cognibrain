@@ -15,7 +15,7 @@ cognibrain is correctly positioned as an inspectable Agent Memory OS:
 
 | Market-analysis workpackage | Current status | Evidence in repo | Verification rule |
 | --- | --- | --- | --- |
-| Product positioning and UX narrative | Implemented | `README.md`, `docs/agent-memory-os.md`, dashboard proof/recall/graph/timeline views | README screenshots are regenerated from the live dashboard after dashboard changes |
+| Product positioning and UX narrative | Implemented | `README.md`, `docs/agent-memory-os.md`, Ink CLI screenshots, dashboard proof/recall/graph/timeline views | CLI screenshots are regenerated with `npm run docs:cli-screenshots`; dashboard screenshots are regenerated from the live dashboard after dashboard changes |
 | Why-used evidence demo | Implemented | `memory why-used`, `POST /evidence-pack`, `GET /evidence-pack/:id`, MCP `memory_context_pack`, `usp-evidence-pack` benchmark, dashboard artifact inspector with failed question rows | CLI, HTTP, MCP and dashboard surfaces expose the same evidence-pack contract |
 | MemoryRecordV2 evidence object | Implemented | `MemoryRecordV2`, JSON schema, inspect/evidence surfaces | Schema and migration paths are covered by tests |
 | Validity and belief state | Implemented | `active`, `stale`, `superseded`, `contradicted`, `needs_verification`, `retracted`; dream and retrieval use these states; provider hooks can verify nuanced conflicts | Covered by deterministic and provider-ready verification paths |

@@ -92,6 +92,29 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 
+  it("renders graphical Ink workbenches for the product surfaces", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-ink-"));
+    try {
+      const env = { ...process.env, COGNIBRAIN_FORCE_INK: "true", MEMORY_AUTO_DREAM: "false" };
+      const surfaces = [
+        { args: ["config", "show"], title: "cognibrain config" },
+        { args: ["connector", "list"], title: "cognibrain connectors" },
+        { args: ["adapter", "list"], title: "cognibrain adapters" },
+        { args: ["sdk", "list"], title: "cognibrain SDK" },
+        { args: ["skill", "status"], title: "cognibrain skill" },
+        { args: ["doctor", "--no-start", "--no-skill"], title: "cognibrain doctor" }
+      ];
+      for (const surface of surfaces) {
+        const output = execFileSync(process.execPath, [cli, "--runtime-root", dir, ...surface.args], { cwd: dir, env, encoding: "utf8" });
+        expect(output).toContain("╭");
+        expect(output).toContain("╰");
+        expect(output).toContain(surface.title);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
   it("manages setup config, connector config, adapter config, and skill status through CLI commands", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-config-"));
     const codexHome = join(dir, ".codex");

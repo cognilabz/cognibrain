@@ -66,7 +66,7 @@ switch (command) {
     break;
 
   case "config":
-    configCommand(commandArgs);
+    await configCommand(commandArgs);
     break;
 
   case "connector":
@@ -190,7 +190,7 @@ async function connectionsCommand(connectionArgs = []) {
   if (subcommand === "doctor") {
     const result = combinedConnectionsDoctor();
     if (connectionArgs.includes("--json")) printJson(result);
-    else printCombinedConnectionsDoctor(result);
+    else await renderCliSurface("connections-doctor", result, { title: "cognibrain connections doctor" });
     if (!result.ok) process.exit(1);
     return;
   }
@@ -370,10 +370,28 @@ async function doctor(doctorArgs) {
     add("production docs", productionDocs.length === 5, productionDocs.length === 5 ? "docs/production/overview.md and docs/claims.md" : "missing production docs");
   }
 
-  for (const check of checks) {
-    console.log(`${check.level === "warn" ? "warn" : check.ok ? "ok" : "fail"}  ${check.name}${check.detail ? ` - ${check.detail}` : ""}`);
-  }
-  if (fixed.length) console.log(`fixed ${fixed.join(", ")}`);
+  const result = {
+    schemaVersion: "1.0",
+    publish,
+    fixed,
+    checks,
+    summary: {
+      total: checks.length,
+      ok: checks.filter((check) => check.ok && check.level !== "warn").length,
+      warn: checks.filter((check) => check.level === "warn").length,
+      fail: checks.filter((check) => !check.ok && check.level !== "warn").length
+    },
+    runtime: runtimeStatus(),
+    commands: [
+      "cognibrain doctor --fix",
+      "cognibrain doctor --publish",
+      "cognibrain config doctor",
+      "cognibrain connections doctor",
+      "cognibrain service status"
+    ]
+  };
+  if (doctorArgs.includes("--json")) printJson(result);
+  else await renderCliSurface("doctor", result, { title: "cognibrain doctor" });
 
   if (checks.some((check) => !check.ok && check.level !== "warn")) process.exit(1);
 }
@@ -434,44 +452,47 @@ async function skillCommand(commandArgs) {
       path,
       installCommand: "cognibrain skill install",
       doctorCommand: "cognibrain skill doctor --fix",
-      docs: "docs/getting-started/setup-cli.md"
+      docs: "docs/getting-started/setup-cli.md",
+      commands: [
+        "cognibrain skill status",
+        "cognibrain skill install",
+        "cognibrain skill doctor --fix",
+        "cognibrain skill path"
+      ]
     };
     if (commandArgs.includes("--json")) printJson(result);
-    else {
-      console.log(`${installed ? "ok" : "missing"}  Codex skill - ${path}`);
-      console.log(`next: ${installed ? "cognibrain memory coding-context <query>" : "cognibrain skill install"}`);
-    }
+    else await renderCliSurface("skill", result, { title: "cognibrain skill" });
     if (!installed && subcommand === "doctor") process.exit(1);
     return;
   }
   skillUsage(1);
 }
 
-function configCommand(commandArgs) {
+async function configCommand(commandArgs) {
   const subcommand = commandArgs[0] ?? "show";
   if (subcommand === "help" || subcommand === "--help") configUsage(0);
   if (subcommand === "list") {
     const result = configCatalog();
     if (commandArgs.includes("--json")) printJson(result);
-    else printConfigCatalog(result);
+    else await renderCliSurface("config-catalog", result, { title: "cognibrain config catalog" });
     return;
   }
   if (subcommand === "show") {
     const result = readConfigurationState();
     if (commandArgs.includes("--json")) printJson(result);
-    else printConfigurationState(result);
+    else await renderCliSurface("config", result, { title: "cognibrain config" });
     return;
   }
   if (subcommand === "paths") {
     const result = configPaths();
     if (commandArgs.includes("--json")) printJson(result);
-    else Object.entries(result).forEach(([name, path]) => console.log(`${name}: ${path}`));
+    else await renderCliSurface("config-paths", result, { title: "cognibrain config paths" });
     return;
   }
   if (subcommand === "doctor") {
     const result = configurationDoctor();
     if (commandArgs.includes("--json")) printJson(result);
-    else printConfigurationDoctor(result);
+    else await renderCliSurface("config-doctor", result, { title: "cognibrain config doctor" });
     if (!result.ok) process.exit(1);
     return;
   }
@@ -492,7 +513,7 @@ async function connectorCommand(commandArgs) {
   if (subcommand === "list") {
     const result = connectorCatalog();
     if (commandArgs.includes("--json")) printJson(result);
-    else printConnectorCatalog(result);
+    else await renderCliSurface("connector-catalog", result, { title: "cognibrain connectors" });
     return;
   }
   if (subcommand === "show") {
@@ -501,14 +522,14 @@ async function connectorCommand(commandArgs) {
     const result = connectorShow(provider);
     if (!result) connectorUsage(1);
     if (commandArgs.includes("--json")) printJson(result);
-    else printConnectorShow(result);
+    else await renderCliSurface("connector-show", result, { title: `${provider} connector` });
     return;
   }
   if (subcommand === "doctor") {
     if (commandArgs[1] && !connectorDefinitions()[commandArgs[1]]) connectorUsage(1);
     const result = connectorDoctor(commandArgs[1]);
     if (commandArgs.includes("--json")) printJson(result);
-    else printConnectorDoctor(result);
+    else await renderCliSurface("connector-doctor", result, { title: "cognibrain connector doctor" });
     if (!result.ok) process.exit(1);
     return;
   }
@@ -542,7 +563,7 @@ async function adapterCommand(commandArgs) {
   if (subcommand === "list") {
     const result = adapterCatalog();
     if (commandArgs.includes("--json")) printJson(result);
-    else printAdapterCatalog(result);
+    else await renderCliSurface("adapter-catalog", result, { title: "cognibrain adapters" });
     return;
   }
   if (subcommand === "show") {
@@ -551,14 +572,14 @@ async function adapterCommand(commandArgs) {
     const result = adapterShow(adapter);
     if (!result) adapterUsage(1);
     if (commandArgs.includes("--json")) printJson(result);
-    else printAdapterShow(result);
+    else await renderCliSurface("adapter-show", result, { title: `${adapter} adapter` });
     return;
   }
   if (subcommand === "doctor") {
     if (commandArgs[1] && !adapterDefinitions()[commandArgs[1]]) adapterUsage(1);
     const result = adapterDoctor(commandArgs[1]);
     if (commandArgs.includes("--json")) printJson(result);
-    else printAdapterDoctor(result);
+    else await renderCliSurface("adapter-doctor", result, { title: "cognibrain adapter doctor" });
     if (!result.ok) process.exit(1);
     return;
   }
@@ -589,13 +610,13 @@ async function sdkCommand(commandArgs) {
   if (subcommand === "list") {
     const result = sdkCatalog();
     if (commandArgs.includes("--json")) printJson(result);
-    else printSdkCatalog(result);
+    else await renderCliSurface("sdk-catalog", result, { title: "cognibrain SDK" });
     return;
   }
   if (subcommand === "doctor") {
     const result = sdkDoctor();
     if (commandArgs.includes("--json")) printJson(result);
-    else printSdkDoctor(result);
+    else await renderCliSurface("sdk-doctor", result, { title: "cognibrain SDK doctor" });
     if (!result.ok) process.exit(1);
     return;
   }
@@ -610,7 +631,7 @@ async function sdkCommand(commandArgs) {
     dryRun: commandArgs.includes("--dry-run")
   });
   if (commandArgs.includes("--json")) printJson(result);
-  else printPlatformSdkScaffold(result);
+  else await renderCliSurface("sdk-scaffold", result, { title: "cognibrain SDK scaffold" });
 }
 
 function transportSecurityCheck(localUrl) {
@@ -2839,6 +2860,226 @@ async function renderCliSurface(kind, payload, options = {}) {
 }
 
 function surfaceLines(kind, payload) {
+  if (kind === "doctor") {
+    const summary = payload.summary ?? {};
+    return {
+      metrics: [
+        ["checks", `${summary.ok ?? 0} ok / ${summary.warn ?? 0} warn / ${summary.fail ?? 0} fail`, (summary.fail ?? 0) ? "red" : (summary.warn ?? 0) ? "yellow" : "green"],
+        ["publish", payload.publish ? "enabled" : "local", payload.publish ? "cyan" : "gray"],
+        ["runtime", payload.runtime?.mode ?? "unknown", payload.runtime?.api?.alive ? "green" : "yellow"],
+        ["fixed", payload.fixed?.length ? payload.fixed.join(", ") : "none", payload.fixed?.length ? "green" : "gray"]
+      ],
+      sections: [
+        { title: "Checks", items: compactItems(payload.checks ?? [], checkLine, 14) },
+        { title: "Commands", items: payload.commands ?? [] }
+      ]
+    };
+  }
+  if (kind === "skill") {
+    return {
+      metrics: [
+        ["skill", payload.installed ? "installed" : "missing", payload.installed ? "green" : "yellow"],
+        ["path", payload.path, payload.installed ? "green" : "gray"]
+      ],
+      sections: [
+        { title: "Commands", items: payload.commands ?? [] },
+        { title: "Docs", items: [payload.docs].filter(Boolean) },
+        { title: "Next", items: [payload.installed ? "cognibrain memories coding-context <query>" : payload.installCommand, payload.doctorCommand].filter(Boolean) }
+      ]
+    };
+  }
+  if (kind === "config") {
+    return {
+      metrics: [
+        ["runtime", payload.runtimeRoot, "cyan"],
+        ["setup", payload.setupState?.profile ?? "missing", payload.setupState ? "green" : "yellow"],
+        ["harness", payload.harnessManifest ? "present" : "missing", payload.harnessManifest ? "green" : "yellow"],
+        ["skill", payload.skill?.installed ? "installed" : "missing", payload.skill?.installed ? "green" : "yellow"]
+      ],
+      sections: [
+        { title: "Connectors", items: payload.connectors?.length ? payload.connectors.map((item) => item.provider ?? item.connectorId ?? "connector") : ["none configured"] },
+        { title: "Adapters", items: payload.adapters?.length ? payload.adapters.map((item) => item.adapter ?? item.adapterId ?? "adapter") : ["none configured"] },
+        { title: "Files", items: Object.entries(configPaths()).map(([name, value]) => `${name}: ${value}`) },
+        { title: "Commands", items: ["cognibrain config list", "cognibrain config doctor", "cognibrain config all", "cognibrain connections"] }
+      ]
+    };
+  }
+  if (kind === "config-catalog") {
+    return {
+      metrics: [
+        ["runtime", payload.runtimeRoot, "cyan"],
+        ["harnesses", payload.harnesses?.length ?? 0, "green"],
+        ["connectors", payload.connectors?.length ?? 0, "green"],
+        ["adapters", payload.adapters?.length ?? 0, "green"]
+      ],
+      sections: [
+        { title: "Harnesses", items: compactItems(payload.harnesses ?? [], (item) => `${item.target} - ${item.command}`, 10) },
+        { title: "Connectors", items: compactItems(payload.connectors ?? [], (item) => `${item.provider} (${item.status})`, 12) },
+        { title: "Adapters", items: compactItems(payload.adapters ?? [], (item) => `${item.adapter} (${item.status})`, 8) },
+        { title: "Skill", items: [payload.skill?.command, payload.skill?.path].filter(Boolean) }
+      ]
+    };
+  }
+  if (kind === "config-paths") {
+    return {
+      metrics: [["paths", Object.keys(payload).length, "cyan"]],
+      sections: [{ title: "Files", items: Object.entries(payload).map(([name, value]) => `${name}: ${value}`) }]
+    };
+  }
+  if (kind === "config-doctor") {
+    return {
+      metrics: [
+        ["status", payload.ok ? "ready" : "needs attention", payload.ok ? "green" : "yellow"],
+        ["checks", payload.checks?.length ?? 0, "cyan"]
+      ],
+      sections: [
+        { title: "Checks", items: compactItems(payload.checks ?? [], checkLine, 12) },
+        { title: "Commands", items: ["cognibrain doctor --fix", "cognibrain config all", "cognibrain connections"] }
+      ]
+    };
+  }
+  if (kind === "connections-doctor") {
+    return {
+      metrics: [
+        ["status", payload.ok ? "ready" : "needs attention", payload.ok ? "green" : "yellow"],
+        ["config", payload.config?.ok ? "ok" : "warn", payload.config?.ok ? "green" : "yellow"],
+        ["connectors", payload.connectors?.checks?.length ?? 0, "cyan"],
+        ["adapters", payload.adapters?.checks?.length ?? 0, "cyan"]
+      ],
+      sections: [
+        { title: "Config", items: compactItems(payload.config?.checks ?? [], checkLine, 6) },
+        { title: "Connectors", items: compactItems(payload.connectors?.checks ?? [], connectorCheckLine, 8) },
+        { title: "Adapters", items: compactItems(payload.adapters?.checks ?? [], adapterCheckLine, 8) }
+      ]
+    };
+  }
+  if (kind === "connector-catalog") {
+    const configured = payload.filter((item) => item.configured);
+    const available = payload.filter((item) => !item.configured);
+    const vendor = payload.filter((item) => item.status === "vendor-driver");
+    return {
+      metrics: [
+        ["configured", `${configured.length}/${payload.length}`, configured.length ? "green" : "yellow"],
+        ["native drivers", vendor.length, "cyan"],
+        ["available", available.length, "white"]
+      ],
+      sections: [
+        { title: "Configured", items: configured.length ? configured.map((item) => `${item.provider} - ${item.connectorId}`) : ["none yet"] },
+        { title: "Available", items: compactItems(available, (item) => `${item.provider} (${item.status})`, 25) },
+        { title: "Commands", items: ["cognibrain connections add <provider> --set key=value", "cognibrain connector show <provider>", "cognibrain connector doctor <provider>"] }
+      ]
+    };
+  }
+  if (kind === "connector-show") {
+    return {
+      metrics: [
+        ["provider", payload.provider, "cyan"],
+        ["status", payload.definition?.status ?? "unknown", payload.config ? "green" : "yellow"],
+        ["config", payload.config ? "present" : "missing", payload.config ? "green" : "yellow"]
+      ],
+      sections: [
+        { title: "Required Env", items: payload.definition?.requiredEnv?.length ? payload.definition.requiredEnv : ["none"] },
+        { title: "Settings", items: payload.config?.settings ? Object.entries(payload.config.settings).map(([key, value]) => `${key}: ${value}`) : ["not configured"] },
+        { title: "Preview", items: payload.definition?.sampleEvents ?? [] },
+        { title: "Docs", items: [payload.definition?.docs].filter(Boolean) }
+      ]
+    };
+  }
+  if (kind === "connector-doctor") {
+    return {
+      metrics: [
+        ["status", payload.ok ? "ready" : "needs attention", payload.ok ? "green" : "yellow"],
+        ["checks", payload.checks?.length ?? 0, "cyan"]
+      ],
+      sections: [
+        { title: "Checks", items: compactItems(payload.checks ?? [], connectorCheckLine, 12) },
+        { title: "Commands", items: ["cognibrain connections add github --set repo=owner/repo", "cognibrain memory connector-health <connector-id>"] }
+      ]
+    };
+  }
+  if (kind === "adapter-catalog") {
+    const configured = payload.filter((item) => item.configured);
+    const available = payload.filter((item) => !item.configured);
+    return {
+      metrics: [
+        ["configured", `${configured.length}/${payload.length}`, configured.length ? "green" : "yellow"],
+        ["storage", payload.filter((item) => item.kind === "storage").length, "cyan"],
+        ["providers", payload.filter((item) => item.kind === "provider").length, "cyan"]
+      ],
+      sections: [
+        { title: "Configured", items: configured.length ? configured.map((item) => `${item.adapter} - ${item.adapterId}`) : ["none yet"] },
+        { title: "Available", items: compactItems(available, (item) => `${item.adapter} (${item.kind}, ${item.status})`, 20) },
+        { title: "Commands", items: ["cognibrain connections add <adapter> --set key=value", "cognibrain adapter show <adapter>", "cognibrain adapter doctor <adapter>"] }
+      ]
+    };
+  }
+  if (kind === "adapter-show") {
+    return {
+      metrics: [
+        ["adapter", payload.adapter, "cyan"],
+        ["kind", payload.definition?.kind ?? "unknown", "white"],
+        ["config", payload.config ? "present" : "missing", payload.config ? "green" : "yellow"]
+      ],
+      sections: [
+        { title: "Required Env", items: payload.definition?.requiredEnv?.length ? payload.definition.requiredEnv : ["none"] },
+        { title: "Settings", items: payload.config?.settings ? Object.entries(payload.config.settings).map(([key, value]) => `${key}: ${value}`) : ["not configured"] },
+        { title: "Preview", items: payload.definition?.sampleEvents ?? [] },
+        { title: "Docs", items: [payload.definition?.docs].filter(Boolean) }
+      ]
+    };
+  }
+  if (kind === "adapter-doctor") {
+    return {
+      metrics: [
+        ["status", payload.ok ? "ready" : "needs attention", payload.ok ? "green" : "yellow"],
+        ["checks", payload.checks?.length ?? 0, "cyan"]
+      ],
+      sections: [
+        { title: "Checks", items: compactItems(payload.checks ?? [], adapterCheckLine, 12) },
+        { title: "Commands", items: ["cognibrain connections add storage-sqlite", "cognibrain connections adapters doctor"] }
+      ]
+    };
+  }
+  if (kind === "sdk-catalog") {
+    return {
+      metrics: [
+        ["surfaces", payload.length, "cyan"],
+        ["platform sdk", payload.some((item) => item.sdk === "platform") ? "available" : "missing", "green"]
+      ],
+      sections: [
+        { title: "SDKs", items: payload.map((item) => `${item.sdk} (${item.status}) - ${item.command}`) },
+        { title: "Includes", items: compactItems(payload.flatMap((item) => item.includes ?? []), (item) => item, 10) },
+        { title: "Commands", items: ["cognibrain sdk platform acme --kind project_management --out integrations/acme", "cognibrain sdk doctor"] }
+      ]
+    };
+  }
+  if (kind === "sdk-doctor") {
+    return {
+      metrics: [
+        ["status", payload.ok ? "ready" : "needs attention", payload.ok ? "green" : "yellow"],
+        ["checks", payload.checks?.length ?? 0, "cyan"]
+      ],
+      sections: [
+        { title: "Checks", items: compactItems(payload.checks ?? [], checkLine, 10) },
+        { title: "Commands", items: ["cognibrain sdk platform acme --kind project_management --out integrations/acme"] }
+      ]
+    };
+  }
+  if (kind === "sdk-scaffold") {
+    return {
+      metrics: [
+        ["sdk", payload.sdk, "cyan"],
+        ["name", payload.slug, "white"],
+        ["mode", payload.dryRun ? "dry run" : "written", payload.dryRun ? "yellow" : "green"]
+      ],
+      sections: [
+        { title: "Summary", items: [`${payload.dryRun ? "would scaffold" : "scaffolded"} platform SDK: ${payload.slug}`] },
+        { title: "Files", items: payload.files ?? [] },
+        { title: "Commands", items: payload.commands ?? [] },
+        { title: "Docs", items: [payload.docs].filter(Boolean) }
+      ]
+    };
+  }
   if (kind === "service") {
     return {
       metrics: [
@@ -2923,6 +3164,30 @@ function printCombinedConnectionsDoctor(result) {
 
 function shortMemoryId(memory) {
   return String(memory?.id ?? "memory").slice(0, 8);
+}
+
+function compactItems(items, formatter = (item) => String(item), limit = 10) {
+  const rendered = items.slice(0, limit).map(formatter);
+  if (items.length > limit) rendered.push(`and ${items.length - limit} more`);
+  return rendered.length ? rendered : ["none"];
+}
+
+function checkLine(check) {
+  const state = check.level === "warn" ? "warn" : check.ok ? "ok" : "fail";
+  const detail = check.detail || check.path || check.fix || "";
+  return `${state} ${check.name}${detail ? ` - ${detail}` : ""}`;
+}
+
+function connectorCheckLine(check) {
+  const state = check.ok ? "ok" : "fail";
+  const missing = [...(check.missingSettings ?? []), ...(check.missingEnv ?? [])];
+  return `${state} ${check.provider ?? check.connectorId} - ${missing.length ? `missing ${missing.join(", ")}` : check.healthCommand ?? check.path ?? "ready"}`;
+}
+
+function adapterCheckLine(check) {
+  const state = check.ok || check.status === "available-contract" ? "ok" : "fail";
+  const missing = [...(check.missingSettings ?? []), ...(check.missingEnv ?? [])];
+  return `${state} ${check.adapter ?? check.adapterId} - ${missing.length ? `missing ${missing.join(", ")}` : check.healthCommand ?? check.path ?? "ready"}`;
 }
 
 function renderPlainPanel(kind, payload, options = {}) {

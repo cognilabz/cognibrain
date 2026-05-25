@@ -15,6 +15,28 @@ npx cognibrain dashboard
 npx cognibrain start --dashboard
 ```
 
+## Ink CLI Screenshots
+
+The installable CLI is an Ink terminal UI first, with JSON output for scripts. Home, memories, connections, service automation, config, connector, adapter, SDK, skill and doctor surfaces all render as structured terminal panels when `stdout` is a TTY.
+
+![cognibrain Ink CLI home](../assets/cli-home.svg)
+
+![cognibrain Ink memories workbench](../assets/cli-memories.svg)
+
+![cognibrain Ink connections workbench](../assets/cli-connections.svg)
+
+![cognibrain Ink service automation](../assets/cli-service.svg)
+
+![cognibrain Ink configuration workbench](../assets/cli-config.svg)
+
+![cognibrain Ink SDK workbench](../assets/cli-sdk.svg)
+
+Regenerate these screenshots from real CLI output after UI changes:
+
+```bash
+npm run docs:cli-screenshots
+```
+
 ## Guided Install
 
 ```bash

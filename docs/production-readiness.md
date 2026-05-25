@@ -6,7 +6,7 @@ cognibrain is ready to present as an open-source, self-hosted Engineering Memory
 
 | Area | Ready today | Required gate |
 | --- | --- | --- |
-| Local install | React/Ink CLI home, guided setup, memory workbench, connections/config surfaces, API, native service automation, optional dashboard, MCP, harness package generation, connector config, adapter config and skill lifecycle | `npx cognibrain`, `npx cognibrain init`, `npx cognibrain service plan`, `./bootstrap.sh --self-hosted`, or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
+| Local install | React/Ink CLI home, guided setup, memory, connections, service, config, connector, adapter, SDK, skill and doctor workbenches, generated CLI screenshots, API, native service automation, optional dashboard, MCP and harness package generation | `npx cognibrain`, `npx cognibrain init`, `npx cognibrain service plan`, `npm run docs:cli-screenshots`, `./bootstrap.sh --self-hosted`, or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
 | Team API | API-key auth, actor ids, policy rules, scoped retrieval, audit events | `MEMORY_REQUIRE_AUTH=true` and `MEMORY_API_KEYS` set before exposing the server |
 | Durable storage | JSON/JSONL, SQLite FTS5, Postgres-compatible CI mode, psql-backed Postgres/Cockroach remote driver | `npm run verify:postgres` against the target Postgres path |
 | Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, Engineering Memory types, coding context packs, action guards, patch evidence trails, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen`, `npm run benchmark:cognicode`, `npm run verify:status`, and `npm run audit:plan1_3` |

@@ -7,6 +7,7 @@ Start here when evaluating cognibrain as a self-hosted Engineering Memory OS.
 - Product overview: [`getting-started/overview.md`](getting-started/overview.md)
 - Getting started: [`getting-started/quickstart.md`](getting-started/quickstart.md)
 - Setup CLI: [`getting-started/setup-cli.md`](getting-started/setup-cli.md)
+- Ink CLI screenshots: [`getting-started/setup-cli.md#ink-cli-screenshots`](getting-started/setup-cli.md#ink-cli-screenshots)
 - Connectors and adapters: [`connectors.md`](connectors.md)
 - Platform SDK: [`tutorials/platform-sdk.md`](tutorials/platform-sdk.md)
 - Concepts: [`concepts/engineering-memory.md`](concepts/engineering-memory.md)

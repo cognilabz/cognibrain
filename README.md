@@ -153,6 +153,22 @@ npx cognibrain config show --json
 npx cognibrain doctor --fix
 ```
 
+### Ink CLI Screenshots
+
+The graphical terminal surface is rendered with React/Ink for real terminals. The same data stays available as `--json` for automation, but daily operation can stay in the visual CLI workbenches:
+
+![cognibrain Ink CLI home](docs/assets/cli-home.svg)
+
+![cognibrain Ink connections workbench](docs/assets/cli-connections.svg)
+
+![cognibrain Ink service automation](docs/assets/cli-service.svg)
+
+More CLI screenshots live in [`docs/getting-started/setup-cli.md`](docs/getting-started/setup-cli.md#ink-cli-screenshots). Regenerate them from live CLI output with:
+
+```bash
+npm run docs:cli-screenshots
+```
+
 The web dashboard is optional. Start it only when you want a browser inspection view:
 
 ```bash

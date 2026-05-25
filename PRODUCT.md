@@ -16,6 +16,18 @@ product
 
 cognibrain is a local-first memory platform and operator console for AI agents. It helps technical teams inspect what an agent remembers, why that context was retrieved, whether memory hygiene is healthy, and whether benchmark proof supports production use.
 
+## USP
+
+Evidence-grade Agent Memory OS: every injected memory should be explainable by source, scope, consent, trust, graph path, temporal validity, policy decision, and benchmark evidence.
+
+## Benefits
+
+- Reduces repeated agent onboarding by preserving durable project and user context across harnesses.
+- Makes recall inspectable through evidence packs instead of opaque vector hits.
+- Lets teams enforce memory boundaries with scopes, consent, policy rules, auth, and audit logs.
+- Gives operators reproducible proof through local benchmarks, connector verifiers, Postgres gates, and dashboard artifacts.
+- Keeps deployment ownership local-first while still supporting self-hosted team storage and connector integrations.
+
 ## Users
 
 - Engineers evaluating agent memory before connecting it to coding workflows.
@@ -52,5 +64,6 @@ Calm, technical, direct. Avoid hype. Prefer nouns like recall, evidence, source,
 - The app name appears as `cognibrain` in the app and browser title.
 - The Cognilabz logo is visible without making the product name `Cognilabz`.
 - A first-time user understands the three jobs: test recall, run memory hygiene, inspect proof.
+- A public README visitor understands setup, usage, benefits, production-readiness scope, and how cognibrain differs from Mem0/GBrain-style alternatives.
 - The dashboard works on desktop and mobile with no horizontal overflow.
 - README feels like a polished public repo overview, not an internal report.

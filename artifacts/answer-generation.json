@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T06:26:35.161Z",
+  "generatedAt": "2026-05-25T06:49:02.522Z",
   "mode": "answer-generation",
   "privacy": {
     "benchmarkQuestionsOnly": true,
@@ -182,7 +182,7 @@
         "answererConfigurable": true,
         "judgeConfigurable": true
       },
-      "score": 0.9347931696560589,
+      "score": 0.9347931696555415,
       "total": 3,
       "questions": [
         {
@@ -190,7 +190,7 @@
           "dataset": "nextgen:retrieval-calibration",
           "prompt": "confidence-field",
           "promptHash": "7edab43956caed24",
-          "generatedAnswer": "0.8043795089681766",
+          "generatedAnswer": "0.8043795089666246",
           "expected": [
             "confidence>0.5"
           ],
@@ -198,7 +198,7 @@
           "retrievedEvidence": [],
           "judge": {
             "name": "deterministic-coverage-v1",
-            "score": 0.8043795089681766,
+            "score": 0.8043795089666246,
             "passed": true,
             "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
           }
@@ -208,7 +208,7 @@
           "dataset": "nextgen:retrieval-calibration",
           "prompt": "unsafe-threshold",
           "promptHash": "b0759428d97efd29",
-          "generatedAnswer": "{\"confidence\":0.47556951312703927,\"unsafeToInject\":true}",
+          "generatedAnswer": "{\"confidence\":0.4755695131254872,\"unsafeToInject\":true}",
           "expected": [
             "unsafe low-confidence"
           ],
@@ -226,7 +226,7 @@
           "dataset": "nextgen:retrieval-calibration",
           "prompt": "context-exclusion",
           "promptHash": "8a061a8c1bbacb95",
-          "generatedAnswer": "[7b0de446-13bd-4a5f-a114-60e729dc8e48] trust=0.94 score=0.75 confidence=0.80 Atlas deployment requires reviewed npm test evidence before release.",
+          "generatedAnswer": "[9904fe26-8f5c-4398-9872-fdcb8bddbcf4] trust=0.94 score=0.75 confidence=0.80 Atlas deployment requires reviewed npm test evidence before release.",
           "expected": [
             "weak memory excluded"
           ],
@@ -336,6 +336,6 @@
   ],
   "summary": {
     "totalQuestions": 13,
-    "meanScore": 0.9611061160744752
+    "meanScore": 0.9611061160743557
   }
 }

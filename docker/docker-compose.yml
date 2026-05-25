@@ -9,9 +9,38 @@ services:
       NODE_ENV: production
       HOST: "0.0.0.0"
       PORT: "8787"
+      MEMORY_DEPLOYMENT_MODE: self_hosted
+      MEMORY_REQUIRE_AUTH: "true"
+      MEMORY_API_KEYS: "${MEMORY_API_KEYS:?Set MEMORY_API_KEYS before starting compose}"
+      MEMORY_STORAGE_BACKEND: postgres-remote
+      MEMORY_POSTGRES_URL: "postgres://cognibrain:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting compose}@postgres:5432/cognibrain"
+      MEMORY_PUBLIC_URL: "${MEMORY_PUBLIC_URL:-http://localhost:8787}"
+      MEMORY_TLS_TERMINATED_BY: "${MEMORY_TLS_TERMINATED_BY:-}"
+      MEMORY_BACKUP_REF: "${MEMORY_BACKUP_REF:-local-backup://compose}"
+      MEMORY_SECRET_MANAGER: "${MEMORY_SECRET_MANAGER:-local-env}"
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8787/health"]
       interval: 10s
       timeout: 5s
       retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cognibrain
+      POSTGRES_USER: cognibrain
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting compose}"
+    volumes:
+      - cognibrain-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cognibrain -d cognibrain"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  cognibrain-postgres:

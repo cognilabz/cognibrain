@@ -2256,8 +2256,7 @@ export class MemoryService {
       clients: {
         typescript: "src/sdk/client.ts",
         python: "sdk/python/cognibrain_client.py",
-        go: "sdk/go/cognibrain/client.go",
-        rust: "sdk/rust/src/lib.rs"
+        openapiCodegen: "/sdk/openapi"
       }
     };
   }

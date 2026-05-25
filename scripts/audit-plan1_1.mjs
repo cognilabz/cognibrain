@@ -14,12 +14,18 @@ const files = {
   package: read("package.json"),
   status: read("docs/implementation-status.md"),
   readme: read("README.md"),
+  product: read("PRODUCT.md"),
   apiDocs: read("docs/api-reference.md"),
   benchmarkDocs: read("docs/benchmarking.md"),
   connectorDocs: read("docs/connectors.md"),
+  productionDocs: exists("docs/production-readiness.md") ? read("docs/production-readiness.md") : "",
   advancedDocs: read("docs/advanced-features.md"),
   memoryOsDocs: read("docs/agent-memory-os.md"),
   auditDocs: exists("docs/market-analysis-implementation-audit.md") ? read("docs/market-analysis-implementation-audit.md") : "",
+  envExample: read(".env.example"),
+  dockerfile: read("docker/Dockerfile"),
+  compose: read("docker/docker-compose.yml"),
+  kubernetes: read("deploy/kubernetes/cognibrain.yaml"),
   service: read("src/api/service.ts"),
   server: read("src/api/server.ts"),
   persistence: read("src/api/persistence.ts"),
@@ -91,6 +97,8 @@ const checks = [
     has(files.persistence, "cognibrain_schema_migrations"),
     has(files.persistence, "search_vector"),
     has(files.postgresLive, "transactionRollback") || has(files.postgresLive, "rollback"),
+    has(files.productionDocs, "PgBouncer") || has(files.productionDocs, "pooler"),
+    has(files.dockerfile, "postgresql-client"),
     artifact("artifacts/postgres-live.json", (report) => report.passed === true && report.acceptance?.idempotentMigrations === true)
   ]),
   check("WP 2.4 Event-sourced audit journal", [
@@ -192,7 +200,9 @@ const checks = [
     has(files.mcp, "memory_graph_path"),
     has(files.mcp, "memory_graph_query"),
     has(files.mcp, "memory_graph_activate"),
-    has(files.mcp, "memory_explain_connection")
+    has(files.mcp, "memory_explain_connection"),
+    has(files.readme, "memory_graph_path"),
+    has(files.connectorDocs, "memory_graph_query")
   ]),
   check("WP 7.2 MCP evidence and policy tools", [
     has(files.mcp, "memory_evidence_pack"),
@@ -266,15 +276,29 @@ const checks = [
     exists("sdk/python/examples/langgraph_agent.py"),
     exists("sdk/python/examples/crewai_memory_tool.py"),
     has(files.pythonClient, "evidence_pack"),
-    has(files.pythonClient, "policy")
+    has(files.pythonClient, "policy"),
+    has(read("sdk/python/README.md"), "PyPI-style installable")
   ]),
   check("WP 10.4 Production documentation", [
     exists("docs/configuration.md"),
     exists("docs/connectors.md"),
     exists("docs/benchmarking.md"),
+    exists("docs/production-readiness.md"),
     has(files.apiDocs, "production"),
     has(files.apiDocs.toLowerCase(), "local development"),
-    exists("docs/implementation-status.md")
+    exists("docs/implementation-status.md"),
+    has(files.productionDocs, "self-hosted production candidate"),
+    has(files.productionDocs, "MEMORY_REQUIRE_AUTH=true"),
+    has(files.productionDocs, "MEMORY_STORAGE_BACKEND=postgres-remote"),
+    has(files.productionDocs, "npm run verify:postgres"),
+    has(files.productionDocs, "npm run verify:connectors"),
+    has(files.productionDocs, "benchmark:load"),
+    has(files.envExample, "MEMORY_API_KEYS"),
+    !has(files.envExample, "Future storage"),
+    has(files.compose, "MEMORY_REQUIRE_AUTH"),
+    has(files.compose, "postgres:16-alpine"),
+    has(files.kubernetes, "MEMORY_POSTGRES_URL"),
+    has(files.kubernetes, "MEMORY_REQUIRE_AUTH")
   ]),
   check("WP 11.1 End-to-end answer benchmarks", [
     has(files.package, "benchmark:answer-generation"),
@@ -297,17 +321,41 @@ const checks = [
   ]),
   check("WP 12.1 5-minute Memory OS demo", [
     has(files.readme, "first-five-minutes proof"),
+    has(files.readme, "Five-minute Memory OS demo"),
     has(files.readme, "docs/assets/dashboard-desktop.png"),
     exists("docs/assets/dashboard-desktop.png"),
     has(files.memoryOsDocs, "memory why-used"),
-    has(files.readme, "Mem0") && has(files.readme, "GBrain")
+    has(files.readme, "Mem0") && has(files.readme, "GBrain"),
+    has(files.product, "Evidence-grade Agent Memory OS")
   ]),
   check("WP 12.2 Implementation status matrix", [
     exists("docs/implementation-status.md"),
     has(files.status, "MemoryRecordV2"),
     has(files.status, "Production load benchmarks"),
     has(files.readme, "docs/implementation-status.md"),
-    has(files.package, "audit:plan1_1")
+    has(files.package, "audit:plan1_1"),
+    has(files.status, "#212-#261 are closed"),
+    has(files.status, "#262") && has(files.status, "#263"),
+    has(files.status, "Open-source launch readiness")
+  ]),
+  check("OSS launch and overclaim guard", [
+    has(files.readme, "Is It Production Ready?"),
+    has(files.readme, "self-hosted production candidate"),
+    has(files.readme, "Production Readiness"),
+    has(files.product, "Benefits"),
+    has(files.product, "Mem0/GBrain"),
+    exists("LICENSE"),
+    exists("CONTRIBUTING.md"),
+    exists("SECURITY.md"),
+    has(files.service, "openapiCodegen"),
+    has(read("bin/cognibrain.mjs"), "sdk/python/cognibrain.egg-info"),
+    !has(files.package, "\"sdk/\""),
+    !exists("sdk/go/cognibrain/client.go"),
+    !exists("sdk/rust/src/lib.rs"),
+    !has(files.service, "sdk/go"),
+    !has(files.service, "sdk/rust"),
+    !has(files.readme, "Go/Rust"),
+    !has(files.advancedDocs, "Go, and Rust")
   ])
 ];
 

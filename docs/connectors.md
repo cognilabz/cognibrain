@@ -154,11 +154,22 @@ Tools:
 - `memory_add`
 - `memory_search`
 - `memory_context_pack`
+- `memory_evidence_pack`
 - `memory_list`
 - `memory_reflect`
 - `memory_dream`
 - `memory_health`
 - `memory_maintenance_status`
+- `memory_policy_check`
+- `memory_retention_review`
+- `memory_verify_claim`
+- `memory_graph_path`
+- `memory_graph_query`
+- `memory_graph_activate`
+- `memory_explain_connection`
+- `memory_procedure_recall`
+- `memory_action_record`
+- `memory_action_outcome`
 
 Prompt:
 

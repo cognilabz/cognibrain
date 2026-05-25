@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "generatedAt": "2026-05-25T06:26:34.965Z",
+  "generatedAt": "2026-05-25T06:49:02.330Z",
   "suites": [
     {
       "id": "answer-generation",
@@ -80,16 +80,16 @@
     {
       "id": "retrieval-calibration",
       "passed": true,
-      "score": 0.9347931696560589,
+      "score": 0.9347931696555415,
       "details": [
         {
           "id": "confidence-field",
           "passed": true,
-          "score": 0.8043795089681766,
+          "score": 0.8043795089666246,
           "expected": [
             "confidence>0.5"
           ],
-          "actual": "0.8043795089681766"
+          "actual": "0.8043795089666246"
         },
         {
           "id": "unsafe-threshold",
@@ -98,7 +98,7 @@
           "expected": [
             "unsafe low-confidence"
           ],
-          "actual": "{\"confidence\":0.47556951312703927,\"unsafeToInject\":true}"
+          "actual": "{\"confidence\":0.4755695131254872,\"unsafeToInject\":true}"
         },
         {
           "id": "context-exclusion",
@@ -107,7 +107,7 @@
           "expected": [
             "weak memory excluded"
           ],
-          "actual": "[7b0de446-13bd-4a5f-a114-60e729dc8e48] trust=0.94 score=0.75 confidence=0.80 Atlas deployment requires reviewed npm test evidence before release."
+          "actual": "[9904fe26-8f5c-4398-9872-fdcb8bddbcf4] trust=0.94 score=0.75 confidence=0.80 Atlas deployment requires reviewed npm test evidence before release."
         }
       ]
     },
@@ -159,26 +159,6 @@
   ],
   "trend": {
     "points": [
-      {
-        "generatedAt": "2026-05-24T16:47:04.172Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9612499999999999
-      },
-      {
-        "generatedAt": "2026-05-24T17:24:21.947Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9612499999999999
-      },
       {
         "generatedAt": "2026-05-24T17:26:44.509Z",
         "suites": {
@@ -364,6 +344,28 @@
           "usp-evidence-pack": 1
         },
         "meanScore": 0.9559586339312117
+      },
+      {
+        "generatedAt": "2026-05-25T06:46:21.002Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9347931696560589,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9559586339312117
+      },
+      {
+        "generatedAt": "2026-05-25T06:49:02.330Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9347931696555415,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9559586339311081
       }
     ]
   }

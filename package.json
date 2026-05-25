@@ -11,7 +11,11 @@
   "files": [
     "bin/",
     "scripts/",
-    "sdk/",
+    "sdk/python/README.md",
+    "sdk/python/cognibrain_client.py",
+    "sdk/python/pyproject.toml",
+    "sdk/python/examples/",
+    "sdk/python/tests/test_cognibrain_client.py",
     "src/",
     "fixtures/",
     "templates/",

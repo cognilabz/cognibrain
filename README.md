@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
+  <a href="#is-it-production-ready">Production Readiness</a> ·
   <a href="#proof">Proof</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#documentation">Documentation</a> ·
@@ -23,6 +24,7 @@ The project includes the memory engine, HTTP API, CLI, official connector manife
 **Claim:** memory you can prove, route, govern, and reuse across every agent.
 
 Implementation status is tracked in [`docs/implementation-status.md`](docs/implementation-status.md), which separates local-ready surfaces from roadmap items so market claims stay tied to code, tests and exposed APIs.
+Production setup and the exact claim boundary are documented in [`docs/production-readiness.md`](docs/production-readiness.md).
 
 ![cognibrain desktop dashboard](docs/assets/dashboard-desktop.png)
 
@@ -75,6 +77,24 @@ That makes cognibrain different from narrower memory products:
 
 The short version: **cognibrain remembers across agents, proves every memory, explains every retrieval, respects every boundary, and learns from every run.**
 
+## Is It Production Ready?
+
+For an open-source launch, yes: cognibrain is ready to present as a **self-hosted production candidate** when the verification gates pass in the target environment. That means the repo includes the core engine, API, CLI, MCP surface, dashboard, official connector manifests, durable storage adapters, Docker/Kubernetes starter artifacts, benchmark gates, MIT license, contribution guide, security policy, and a status matrix that ties claims to code.
+
+The boundary is explicit. Local development can run with JSON storage and no keys. Team or networked use must set `MEMORY_REQUIRE_AUTH=true`, configure `MEMORY_API_KEYS`, use a durable backend such as `postgres-remote` or SQLite for a single-node local team install, put TLS in front of the API, and run the publish checks. Managed SaaS readiness, vendor-certified connectors, and competitor benchmark leadership are deployment-specific claims, not automatic README claims.
+
+Production gates:
+
+```bash
+npm run verify:nextgen
+npm run verify:postgres
+npm run verify:connectors
+./bin/cognibrain.mjs doctor --publish
+npm pack --dry-run
+```
+
+See [`docs/production-readiness.md`](docs/production-readiness.md) for the deploy tiers, required environment, backup/export checks, connector proof scope, and release checklist.
+
 ## Dashboard
 
 The dashboard is a working inspection surface, not a decorative demo. It presents cognibrain as a platform runtime plus an operator gate:
@@ -107,6 +127,16 @@ One command from this checkout:
 ./bootstrap.sh --all
 ```
 
+Five-minute Memory OS demo:
+
+```bash
+npm install
+./bin/cognibrain.mjs setup --all-harnesses
+./bin/cognibrain.mjs memory add "Atlas releases require npm test before publish."
+./bin/cognibrain.mjs memory evidence-pack "What should Atlas do before release?"
+./bin/cognibrain.mjs doctor
+```
+
 Or use the CLI directly:
 
 ```bash
@@ -114,7 +144,7 @@ npm install
 ./bin/cognibrain.mjs setup --all-harnesses
 ```
 
-After publishing the package, the same one-click path is:
+When installed from the npm package, the same one-click path is:
 
 ```bash
 npx cognibrain setup --all-harnesses
@@ -309,7 +339,7 @@ The `dream` cycle is the self-maintenance loop for the memory store:
 
 Pinned memories are never faded or archived.
 
-The current runtime also supports configurable and scoped learned retrieval profiles, injection-feedback learning from accepted/rejected context packs, adaptive dream-policy previews, generated observations with citation provenance, behavioral prediction and prefetch reports, deterministic answer-generation/multi-hop/temporal/pattern benchmark suites, scoped retention rules with search/dream enforcement, encrypted-memory key id/version metadata, key-provider reporting, encrypted backup recovery verification, transport-security readiness checks, managed import/export deployment bundles, differentially private aggregate insights with k-anonymity suppression, validated marketplace install plans, TypeScript/Python/Go/Rust client surfaces, packaged domain modules, JSON/JSONL/SQLite persistence adapters, `hybrid`/`rrf`/`graph`/`path` retrieval modes, deterministic or provider-backed query expansion, behavioural retrieval scoring, contradiction-aware context selection, graph path/activation/export reasoning, JSON-command intelligence adapters, deterministic fallback reranking, verifier/summarizer/classifier/extractor/translator providers, official connector manifests, connector sync records, webhook delivery/retry inspection, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), multi-tenant brains/sources with explicit shared-brain federation, agent subscriptions, shared-memory review/revoke workflows, persona defaults, consent mutation, audit history and revert, offline operation queues, explicit identity links, privacy consent flags, secret redaction/encryption, canonical entity records with merge/split suggestions, typed relations, staged add-only extraction with media/language envelopes, translated media ingestion, enrichment candidates, hour/day/week/month temporal timelines, persisted timeline summaries, multilingual contradiction checks, behavioral-pattern review, feedback-based trust/importance updates, domain evaluations, local metrics, lifecycle preview, and export/delete APIs.
+The current runtime also supports configurable and scoped learned retrieval profiles, injection-feedback learning from accepted/rejected context packs, adaptive dream-policy previews, generated observations with citation provenance, behavioral prediction and prefetch reports, deterministic answer-generation/multi-hop/temporal/pattern benchmark suites, scoped retention rules with search/dream enforcement, encrypted-memory key id/version metadata, key-provider reporting, encrypted backup recovery verification, transport-security readiness checks, managed import/export deployment bundles, differentially private aggregate insights with k-anonymity suppression, validated marketplace install plans, TypeScript and Python client surfaces plus OpenAPI for code generation, packaged domain modules, JSON/JSONL/SQLite/Postgres persistence adapters, `hybrid`/`rrf`/`graph`/`path` retrieval modes, deterministic or provider-backed query expansion, behavioural retrieval scoring, contradiction-aware context selection, graph path/activation/export reasoning, JSON-command intelligence adapters, deterministic fallback reranking, verifier/summarizer/classifier/extractor/translator providers, official connector manifests, connector sync records, webhook delivery/retry inspection, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), multi-tenant brains/sources with explicit shared-brain federation, agent subscriptions, shared-memory review/revoke workflows, persona defaults, consent mutation, audit history and revert, offline operation queues, explicit identity links, privacy consent flags, secret redaction/encryption, canonical entity records with merge/split suggestions, typed relations, staged add-only extraction with media/language envelopes, translated media ingestion, enrichment candidates, hour/day/week/month temporal timelines, persisted timeline summaries, multilingual contradiction checks, behavioral-pattern review, feedback-based trust/importance updates, domain evaluations, local metrics, lifecycle preview, and export/delete APIs.
 
 ## Connectors
 
@@ -332,11 +362,22 @@ Available MCP tools:
 - `memory_add`
 - `memory_search`
 - `memory_context_pack`
+- `memory_evidence_pack`
 - `memory_list`
 - `memory_reflect`
 - `memory_dream`
 - `memory_health`
 - `memory_maintenance_status`
+- `memory_policy_check`
+- `memory_retention_review`
+- `memory_verify_claim`
+- `memory_graph_path`
+- `memory_graph_query`
+- `memory_graph_activate`
+- `memory_explain_connection`
+- `memory_procedure_recall`
+- `memory_action_record`
+- `memory_action_outcome`
 
 Connector templates are included for Claude Code, Codex, GitHub Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI under `templates/`.
 
@@ -397,6 +438,7 @@ docker/            Container and compose files
 - [API Reference](docs/api-reference.md)
 - [Agent Memory OS](docs/agent-memory-os.md)
 - [Configuration](docs/configuration.md)
+- [Production Readiness](docs/production-readiness.md)
 - [Integration Guide](docs/integration-guide.md)
 - [Memory Lifecycle](docs/lifecycle.md)
 - [Connectors](docs/connectors.md)
@@ -421,10 +463,11 @@ This repository is prepared as a public Cognilabz project:
 - MIT license,
 - reproducible install and verification commands,
 - CI workflow,
-- Docker starter files,
+- Docker Compose and Kubernetes starter files for authenticated self-hosted deployments,
 - contribution guide,
 - security policy,
 - dashboard screenshots,
+- product positioning and production-readiness docs,
 - generated benchmark artifacts kept out of source control under `artifacts/`.
 
 ## Contributing

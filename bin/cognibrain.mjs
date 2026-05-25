@@ -123,9 +123,20 @@ async function doctor(doctorArgs) {
   if (publish) {
     const pack = runCapture("npm", ["pack", "--dry-run"]);
     add("npm pack dry-run", pack.status === 0, pack.status === 0 ? "ok" : pack.stderr.trim());
-    const leaked = [".cognibrain", ".memory-harness.json", ".playwright-cli", "output/", "artifacts/", "data/benchmarks"].filter((item) =>
-      pack.stdout.includes(item)
-    );
+    const leaked = [
+      ".cognibrain/",
+      ".cognibrain-harness-package.json",
+      ".memory-harness.json",
+      ".playwright-cli",
+      "output/",
+      "artifacts/",
+      "data/benchmarks",
+      "__pycache__",
+      "sdk/python/build",
+      "sdk/python/cognibrain.egg-info",
+      "sdk/go",
+      "sdk/rust"
+    ].filter((item) => `${pack.stdout}\n${pack.stderr}`.includes(item));
     add("package excludes generated files", leaked.length === 0, leaked.length ? leaked.join(", ") : "clean");
     const transport = transportSecurityCheck(state?.api?.url);
     add("transport security", transport.ok, transport.detail, transport.level);

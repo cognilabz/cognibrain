@@ -10,20 +10,11 @@ metadata:
   namespace: cognibrain
 type: Opaque
 stringData:
+  MEMORY_API_KEYS: "replace-with-random-api-key-list"
+  MEMORY_POSTGRES_URL: "postgres://cognibrain:replace-with-secret@postgres.example.com:5432/cognibrain"
   MEMORY_ENCRYPTION_KEY: "replace-with-secret-manager-sync"
   MEMORY_ENCRYPTION_KEY_ID: "org-default"
   MEMORY_ENCRYPTION_KEY_VERSION: "1"
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: cognibrain-data
-  namespace: cognibrain
-spec:
-  accessModes: ["ReadWriteOnce"]
-  resources:
-    requests:
-      storage: 10Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -54,9 +45,11 @@ spec:
             - name: PORT
               value: "8787"
             - name: MEMORY_STORAGE_BACKEND
-              value: sqlite
-            - name: MEMORY_SQLITE_PATH
-              value: /data/cognibrain.sqlite
+              value: postgres-remote
+            - name: MEMORY_REQUIRE_AUTH
+              value: "true"
+            - name: MEMORY_DEPLOYMENT_MODE
+              value: self_hosted
             - name: MEMORY_PUBLIC_URL
               value: https://memory.example.com
             - name: MEMORY_TLS_TERMINATED_BY
@@ -66,9 +59,6 @@ spec:
           envFrom:
             - secretRef:
                 name: cognibrain-secrets
-          volumeMounts:
-            - name: data
-              mountPath: /data
           readinessProbe:
             httpGet:
               path: /health
@@ -81,10 +71,6 @@ spec:
               port: 8787
             initialDelaySeconds: 15
             periodSeconds: 20
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: cognibrain-data
 ---
 apiVersion: v1
 kind: Service

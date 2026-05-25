@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "generatedAt": "2026-05-25T12:06:34.191Z",
+  "generatedAt": "2026-05-25T12:44:47.338Z",
   "suites": [
     {
       "id": "answer-generation",
@@ -80,16 +80,16 @@
     {
       "id": "retrieval-calibration",
       "passed": true,
-      "score": 0.9398860533328159,
+      "score": 0.9398860533333333,
       "details": [
         {
           "id": "confidence-field",
           "passed": true,
-          "score": 0.8196581599984479,
+          "score": 0.81965816,
           "expected": [
             "confidence>0.5"
           ],
-          "actual": "0.8196581599984479"
+          "actual": "0.81965816"
         },
         {
           "id": "unsafe-threshold",
@@ -98,7 +98,7 @@
           "expected": [
             "unsafe low-confidence"
           ],
-          "actual": "{\"confidence\":0.4755695131254872,\"unsafeToInject\":true}"
+          "actual": "{\"confidence\":0.47556951312703927,\"unsafeToInject\":true}"
         },
         {
           "id": "context-exclusion",
@@ -107,7 +107,7 @@
           "expected": [
             "weak memory excluded"
           ],
-          "actual": "[7a4d35c1-faf9-4cb1-b780-f8ab983723fd] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release."
+          "actual": "[e47f5384-2f51-428b-8085-20a3a094f5ae] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release."
         }
       ]
     },
@@ -159,17 +159,6 @@
   ],
   "trend": {
     "points": [
-      {
-        "generatedAt": "2026-05-24T20:15:27.943Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "retrieval-calibration": 0.9347931696555415,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9559586339311081
-      },
       {
         "generatedAt": "2026-05-25T05:00:24.740Z",
         "suites": {
@@ -378,6 +367,17 @@
           "usp-evidence-pack": 1
         },
         "meanScore": 0.9569772106665632
+      },
+      {
+        "generatedAt": "2026-05-25T12:44:47.338Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9398860533333333,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9569772106666665
       }
     ]
   }

@@ -6,6 +6,7 @@ Run from a fresh checkout:
 npm install
 ./bin/cognibrain.mjs setup --all-harnesses
 ./bin/cognibrain.mjs doctor --publish
+./bin/cognibrain.mjs
 ```
 
 Add and inspect memory:
@@ -16,7 +17,7 @@ Add and inspect memory:
 ./bin/cognibrain.mjs memory dream-policy
 ```
 
-The setup command installs the Codex skill, writes Codex/Claude/Copilot/Cursor harness packages, starts the API and dashboard, then runs doctor. Use `--no-start` for config-only installation and `doctor --publish` before publishing an npm package or release.
+The setup command installs the Codex skill, writes Codex/Claude/Copilot/Cursor harness packages, starts the API, then runs doctor. The terminal CLI is the default operator surface for status, memories, connections and config. Use `./bin/cognibrain.mjs dashboard` if you want the optional browser UI, `--no-start` for config-only installation, and `doctor --publish` before publishing an npm package or release.
 
 Update and uninstall paths:
 

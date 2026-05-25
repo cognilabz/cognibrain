@@ -13,13 +13,52 @@ const slowCliTimeout = 30_000;
 describe("cognibrain CLI", () => {
   it("prints the one-command surface", () => {
     const output = execFileSync(process.execPath, [cli, "help"], { cwd: root, encoding: "utf8" });
+    expect(output).toContain("cognibrain\n      Open the React/Ink CLI home");
     expect(output).toContain("cognibrain setup");
     expect(output).toContain("cognibrain doctor");
+    expect(output).toContain("cognibrain memories");
+    expect(output).toContain("cognibrain connections");
     expect(output).toContain("cognibrain memory search");
     expect(output).toContain("React/Ink guided");
     expect(output).toContain("azure-devops");
     expect(output).toContain("cognibrain adapter list");
     expect(output).toContain("cognibrain skill install|status|doctor|path");
+  }, slowCliTimeout);
+
+  it("opens the package-style CLI home without requiring the web dashboard", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-home-"));
+    try {
+      const env = {
+        ...process.env,
+        MEMORY_DB_PATH: join(dir, "memory.json"),
+        MEMORY_USER_ID: "cli-home",
+        MEMORY_AUTO_DREAM: "false"
+      };
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories", "add", "The terminal CLI is the primary product surface."], { cwd: dir, env, encoding: "utf8" });
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "connections", "add", "github", "--set", "repo=cognilabz/cognibrain", "--token-env", "MEMORY_GITHUB_TOKEN"], { cwd: dir, env, encoding: "utf8" });
+
+      const home = execFileSync(process.execPath, [cli, "--runtime-root", dir], { cwd: dir, env, encoding: "utf8" });
+      const status = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "status", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      const memoriesJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      const connectionsJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "connections", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      const memories = execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories"], { cwd: dir, env, encoding: "utf8" });
+      const connections = execFileSync(process.execPath, [cli, "--runtime-root", dir, "connections"], { cwd: dir, env, encoding: "utf8" });
+
+      expect(home).toContain("cognibrain CLI home");
+      expect(home).toContain("dashboard: optional");
+      expect(home).toContain("cognibrain memories search <query>");
+      expect(memories).toContain("cognibrain memories");
+      expect(memories).toContain("primary product surface");
+      expect(connections).toContain("cognibrain connections");
+      expect(connections).toContain("github");
+      expect(status.package.name).toBe("@cognilabz/cognibrain");
+      expect(status.dashboard.optional).toBe(true);
+      expect(status.runtime.dashboard.optional).toBe(true);
+      expect(memoriesJson.recent.length).toBeGreaterThan(0);
+      expect(connectionsJson.connectors.configured).toContain("github");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }, slowCliTimeout);
 
   it("manages setup config, connector config, adapter config, and skill status through CLI commands", () => {

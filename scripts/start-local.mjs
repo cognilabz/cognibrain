@@ -14,6 +14,7 @@ const statePath = join(stateDir, "local-runtime.json");
 const apiStartPort = Number(process.env.PORT ?? 8787);
 const uiStartPort = Number(process.env.VITE_PORT ?? 5173);
 const args = new Set(process.argv.slice(2));
+const withDashboard = args.has("--dashboard") || args.has("--with-dashboard") || process.env.COGNIBRAIN_DASHBOARD === "true";
 
 if (args.has("--status")) {
   await printStatus();
@@ -28,18 +29,16 @@ if (args.has("--status")) {
 async function startDaemon() {
   mkdirSync(stateDir, { recursive: true });
   const tsx = requireExecutable("tsx");
-  const vite = requireExecutable("vite");
+  const vite = withDashboard ? requireExecutable("vite") : null;
   const current = readState();
-  if (current && isAlive(current.api?.pid) && isAlive(current.ui?.pid)) {
-    console.log(`cognibrain already running: ${current.api.url} and ${current.ui.url}`);
+  if (current && isAlive(current.api?.pid) && (!withDashboard || isAlive(current.ui?.pid))) {
+    console.log(withDashboard && current.ui?.url ? `cognibrain already running: ${current.api.url} and ${current.ui.url}` : `cognibrain API already running: ${current.api.url}`);
     return;
   }
   if (current) stopRuntime();
 
   const apiPort = await findOpenPort(apiStartPort);
-  const uiPort = await findOpenPort(uiStartPort);
   const apiLog = openSync(join(stateDir, "api.log"), "a");
-  const uiLog = openSync(join(stateDir, "dashboard.log"), "a");
   const api = spawn(tsx, ["src/api/server.ts"], {
     cwd: root,
     detached: true,
@@ -52,36 +51,41 @@ async function startDaemon() {
     },
     stdio: ["ignore", apiLog, apiLog]
   });
-  const ui = spawn(vite, ["--host", "127.0.0.1", "--port", String(uiPort), "--strictPort"], {
-    cwd: root,
-    detached: true,
-    env: { ...process.env, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, VITE_API_URL: process.env.VITE_API_URL ?? `http://localhost:${apiPort}` },
-    stdio: ["ignore", uiLog, uiLog]
-  });
+  let ui = null;
+  let uiPort = null;
+  if (withDashboard) {
+    uiPort = await findOpenPort(uiStartPort);
+    const uiLog = openSync(join(stateDir, "dashboard.log"), "a");
+    ui = spawn(vite, ["--host", "127.0.0.1", "--port", String(uiPort), "--strictPort"], {
+      cwd: root,
+      detached: true,
+      env: { ...process.env, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, VITE_API_URL: process.env.VITE_API_URL ?? `http://localhost:${apiPort}` },
+      stdio: ["ignore", uiLog, uiLog]
+    });
+    ui.unref();
+  }
   api.unref();
-  ui.unref();
 
   const state = {
     startedAt: new Date().toISOString(),
     root,
     runtimeRoot,
     api: { pid: api.pid, port: apiPort, url: `http://localhost:${apiPort}` },
-    ui: { pid: ui.pid, port: uiPort, url: `http://localhost:${uiPort}` },
+    ui: ui ? { pid: ui.pid, port: uiPort, url: `http://localhost:${uiPort}` } : null,
     dbPath: defaultDbPath
   };
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
   await waitForUrl(`${state.api.url}/health`, 8_000);
-  await waitForUrl(state.ui.url, 8_000);
+  if (state.ui?.url) await waitForUrl(state.ui.url, 8_000);
   console.log(`cognibrain API: ${state.api.url}`);
-  console.log(`cognibrain UI:  ${state.ui.url}`);
+  console.log(state.ui?.url ? `cognibrain UI:  ${state.ui.url}` : "cognibrain UI:  optional; run cognibrain dashboard");
   console.log(`runtime state:   ${statePath}`);
 }
 
 async function startForeground() {
   const tsx = requireExecutable("tsx");
-  const vite = requireExecutable("vite");
+  const vite = withDashboard ? requireExecutable("vite") : null;
   const apiPort = await findOpenPort(apiStartPort);
-  const uiPort = await findOpenPort(uiStartPort);
   const api = spawn(tsx, ["src/api/server.ts"], {
     cwd: root,
     env: {
@@ -93,17 +97,22 @@ async function startForeground() {
     },
     stdio: "inherit"
   });
-  const ui = spawn(vite, ["--host", "127.0.0.1", "--port", String(uiPort), "--strictPort"], {
-    cwd: root,
-    env: { ...process.env, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, VITE_API_URL: process.env.VITE_API_URL ?? `http://localhost:${apiPort}` },
-    stdio: "inherit"
-  });
+  let ui = null;
+  let uiPort = null;
+  if (withDashboard) {
+    uiPort = await findOpenPort(uiStartPort);
+    ui = spawn(vite, ["--host", "127.0.0.1", "--port", String(uiPort), "--strictPort"], {
+      cwd: root,
+      env: { ...process.env, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, VITE_API_URL: process.env.VITE_API_URL ?? `http://localhost:${apiPort}` },
+      stdio: "inherit"
+    });
+  }
 
   console.log(`cognibrain API: http://localhost:${apiPort}`);
-  console.log(`cognibrain UI:  http://localhost:${uiPort}`);
+  console.log(uiPort ? `cognibrain UI:  http://localhost:${uiPort}` : "cognibrain UI:  optional; rerun with --dashboard");
   const stop = () => {
     api.kill("SIGTERM");
-    ui.kill("SIGTERM");
+    if (ui) ui.kill("SIGTERM");
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
@@ -115,7 +124,7 @@ function stopRuntime() {
     console.log("No cognibrain runtime state found.");
     return;
   }
-  for (const service of [state.api, state.ui]) {
+  for (const service of [state.api, state.ui].filter(Boolean)) {
     if (isAlive(service?.pid)) process.kill(service.pid, "SIGTERM");
   }
   rmSync(statePath, { force: true });

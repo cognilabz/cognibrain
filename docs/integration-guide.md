@@ -65,8 +65,10 @@ Use `memory_context_pack` before long-running agent work and `memory_add` after 
 ## Local Services
 
 ```bash
-./bin/cognibrain.mjs start   # API + dashboard, with open-port probing
+./bin/cognibrain.mjs start   # API, with open-port probing
+./bin/cognibrain.mjs         # CLI home for runtime, memories, connections and config
 ./bin/cognibrain.mjs status
+./bin/cognibrain.mjs dashboard   # optional browser dashboard
 ./bin/cognibrain.mjs stop
 npm run verify               # tests + evaluation + build
 ```
@@ -87,10 +89,10 @@ Inspect the generated artifacts:
 - `artifacts/beam-500k-report.json`
 - `artifacts/market-gate.json`
 
-Start the dashboard and use the Certified Benchmark Evidence section to review current scores, BEAM ability coverage, and pasted JSON artifacts:
+Use the CLI for daily local operation. Start the optional dashboard only when you want the Certified Benchmark Evidence browser section to review current scores, BEAM ability coverage, and pasted JSON artifacts:
 
 ```bash
-./bin/cognibrain.mjs start
+./bin/cognibrain.mjs dashboard
 ```
 
 The dashboard is intentionally read-only for benchmark files. Paste a report JSON into Artifact Inspector when reviewing a local run, CI artifact, or external competitor artifact.

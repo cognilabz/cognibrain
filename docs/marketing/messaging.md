@@ -25,7 +25,7 @@ Claim IDs: `CB-CLAIM-CONTEXT`, `CB-CLAIM-GUARD`, `CB-CLAIM-MCP`, `CB-CLAIM-PATCH
 - Correction carryover: user and reviewer corrections become future context instead of disappearing into chat history. Claim IDs: `CB-CLAIM-COGNICODE`, `CB-CLAIM-CONTEXT`.
 - Evidence-grade recall: context packs include source, scope, trust, graph path, temporal state and policy decisions. Claim IDs: `CB-CLAIM-EVIDENCE`, `CB-CLAIM-PATCH-EVIDENCE`.
 - Coding-agent guardrails: known bad commands, generated-file edits and stale repo rules can warn or block before action. Claim ID: `CB-CLAIM-GUARD`.
-- Self-hosted ownership: teams can run the API, dashboard, MCP server, connectors and storage under their own controls. Claim IDs: `CB-CLAIM-PRODUCTION`, `CB-CLAIM-STORAGE`.
+- Self-hosted ownership: teams can run the CLI-first operator surface, API, optional dashboard, MCP server, connectors and storage under their own controls. Claim IDs: `CB-CLAIM-PRODUCTION`, `CB-CLAIM-STORAGE`.
 - Connector path: official manifests and built-in native drivers cover GitHub, GitLab, Azure DevOps, Slack, Discord, Teams, Jira, Confluence, Notion, Linear, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog with hermetic verifier proof. Claim IDs: `CB-CLAIM-CONNECTORS`, `CB-CLAIM-CONNECTOR-MATURITY`.
 - Same-benchmark proof: Benchmark Arena compares Cognibrain, Mem0, Graphiti/Zep, Cognee, LangMem and GBrain on one local synthetic engineering-memory runner with explicit proof levels. Claim ID: `CB-CLAIM-BENCHMARK-ARENA`.
 

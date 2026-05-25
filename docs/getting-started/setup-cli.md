@@ -1,6 +1,19 @@
 # Setup CLI
 
-The setup CLI is the first-run product path. It uses a React/Ink terminal UI when a real terminal is available and falls back to deterministic text output in CI.
+The CLI is the primary self-hosted product path. Install the package, run `cognibrain`, and operate memory, connections, config, setup, skills and runtime health from the terminal. It uses a React/Ink terminal UI when a real terminal is available and falls back to deterministic text output in CI.
+
+```bash
+npm i @cognilabz/cognibrain
+npx cognibrain
+npx cognibrain status
+```
+
+The browser dashboard is optional. Start it only when you want a visual inspection surface:
+
+```bash
+npx cognibrain dashboard
+npx cognibrain start --dashboard
+```
 
 ## Guided Install
 
@@ -25,6 +38,32 @@ It writes:
 - MCP or instruction files for selected harnesses,
 - `.cognibrain-harness-package.json`.
 
+By default setup starts the local API and keeps the dashboard off. Add `--dashboard` if you want setup to start the browser UI as well:
+
+```bash
+npx cognibrain init --dashboard
+```
+
+## Daily CLI Home
+
+Run `cognibrain` with no subcommand to see the same operational state the dashboard exposes: runtime status, recent memory health, configured connectors, configured adapters, setup profile, skill state and next actions.
+
+```bash
+npx cognibrain
+npx cognibrain status --json
+npx cognibrain memories
+npx cognibrain connections
+```
+
+Use `memory` for raw command-level operations and `memories` for the terminal workbench:
+
+```bash
+npx cognibrain memories add "Atlas releases require npm test before publish."
+npx cognibrain memories search "release checks"
+npx cognibrain memories coding-context "prepare a release patch"
+npx cognibrain memory why-used "Why did this release memory appear?"
+```
+
 ## Non-Interactive Profiles
 
 ```bash
@@ -43,36 +82,36 @@ npx cognibrain setup --profile production --yes
 
 ## Connector Setup
 
-Connector configs are credential-safe. They point the built-in native drivers at the right workspace, project, channel or account, store `env:` references for secrets, and never store token values.
+Connector configs are credential-safe. They point the built-in native drivers at the right workspace, project, channel or account, store `env:` references for secrets, and never store token values. Use `connections` when you want the product-level surface and `connector` when you want the lower-level connector command directly.
 
 ```bash
-npx cognibrain connector add github --set repo=cognilabz/cognibrain
-npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --set project=ENG
-npx cognibrain connector add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
-npx cognibrain connector add notion --set databaseId=notion_database_id
-npx cognibrain connector add linear --set teamId=linear_team_id
-npx cognibrain connector add slack --set channelId=C123
-npx cognibrain connector add discord --set channelId=D123
-npx cognibrain connector list
-npx cognibrain connector show github
-npx cognibrain connector doctor
+npx cognibrain connections add github --set repo=cognilabz/cognibrain
+npx cognibrain connections add jira --set baseUrl=https://example.atlassian.net --set project=ENG
+npx cognibrain connections add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
+npx cognibrain connections add notion --set databaseId=notion_database_id
+npx cognibrain connections add linear --set teamId=linear_team_id
+npx cognibrain connections add slack --set channelId=C123
+npx cognibrain connections add discord --set channelId=D123
+npx cognibrain connections
+npx cognibrain connections connectors show github
+npx cognibrain connections doctor
 ```
 
 The same CLI configures the rest of the native vendor drivers:
 
 ```bash
-npx cognibrain connector add gitlab --set project=group/project
-npx cognibrain connector add azure-devops --set organization=my-org --set project=my-project
-npx cognibrain connector add teams --set teamId=team --set channelId=channel
-npx cognibrain connector add gmail --set account=engineering@example.com
-npx cognibrain connector add google-drive --set root=drive_root_id
-npx cognibrain connector add google-calendar --set calendarId=primary
-npx cognibrain connector add sentry --set organization=my-org --set project=web
-npx cognibrain connector add datadog --set site=datadoghq.com --set apiKeyEnv=MEMORY_DATADOG_API_KEY --set appKeyEnv=MEMORY_DATADOG_APP_KEY
-npx cognibrain connector add pagerduty --set account=my-team --set service=service_id
-npx cognibrain connector add asana --set workspace=workspace_gid --set project=project_gid
-npx cognibrain connector add clickup --set listId=list_id
-npx cognibrain connector add posthog --set project=project_id
+npx cognibrain connections add gitlab --set project=group/project
+npx cognibrain connections add azure-devops --set organization=my-org --set project=my-project
+npx cognibrain connections add teams --set teamId=team --set channelId=channel
+npx cognibrain connections add gmail --set account=engineering@example.com
+npx cognibrain connections add google-drive --set root=drive_root_id
+npx cognibrain connections add google-calendar --set calendarId=primary
+npx cognibrain connections add sentry --set organization=my-org --set project=web
+npx cognibrain connections add datadog --set site=datadoghq.com --set apiKeyEnv=MEMORY_DATADOG_API_KEY --set appKeyEnv=MEMORY_DATADOG_APP_KEY
+npx cognibrain connections add pagerduty --set account=my-team --set service=service_id
+npx cognibrain connections add asana --set workspace=workspace_gid --set project=project_gid
+npx cognibrain connections add clickup --set listId=list_id
+npx cognibrain connections add posthog --set project=project_id
 ```
 
 Run `npm run verify:vendor-connectors` for hermetic proof that these drivers call the expected vendor APIs. Run `npm run verify:vendor-live -- --live` only in a real deployment with your tenant credentials.
@@ -100,15 +139,15 @@ npx cognibrain memory connector-health acme
 Adapters are the runtime extension points behind storage, provider intelligence, media extraction, benchmark comparisons and remote MCP transport. They are also configured through the CLI and use the same no-secret-values policy.
 
 ```bash
-npx cognibrain adapter list
-npx cognibrain adapter add storage-sqlite --set path=.cognibrain/memory.sqlite
-npx cognibrain adapter add storage-postgres --url-env MEMORY_POSTGRES_URL
-npx cognibrain adapter add intelligence-json-command --command-env MEMORY_INTELLIGENCE_COMMAND
-npx cognibrain adapter add embedding-openai-compatible --set baseUrl=http://localhost:11434/v1 --set model=text-embedding-3-small
-npx cognibrain adapter add media-json-command --command-env MEMORY_MEDIA_COMMAND
-npx cognibrain adapter add benchmark-arena
-npx cognibrain adapter add mcp-remote --set url=https://memory.example.com/mcp --token-env MEMORY_MCP_REMOTE_TOKEN
-npx cognibrain adapter doctor
+npx cognibrain connections adapters list
+npx cognibrain connections add storage-sqlite --set path=.cognibrain/memory.sqlite
+npx cognibrain connections add storage-postgres --url-env MEMORY_POSTGRES_URL
+npx cognibrain connections add intelligence-json-command --command-env MEMORY_INTELLIGENCE_COMMAND
+npx cognibrain connections add embedding-openai-compatible --set baseUrl=http://localhost:11434/v1 --set model=text-embedding-3-small
+npx cognibrain connections add media-json-command --command-env MEMORY_MEDIA_COMMAND
+npx cognibrain connections add benchmark-arena
+npx cognibrain connections add mcp-remote --set url=https://memory.example.com/mcp --token-env MEMORY_MCP_REMOTE_TOKEN
+npx cognibrain connections adapters doctor
 ```
 
 ## Config And Skill
@@ -139,8 +178,9 @@ npx cognibrain skill path
 npx cognibrain doctor --fix
 npx cognibrain doctor --publish
 npx cognibrain config doctor
-npx cognibrain connector doctor
-npx cognibrain adapter doctor
+npx cognibrain connections doctor
+npx cognibrain connections connectors doctor
+npx cognibrain connections adapters doctor
 npm run verify:compatibility
 npm run verify:vendor-connectors
 ```

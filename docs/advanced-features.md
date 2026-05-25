@@ -116,4 +116,4 @@ Pinned memories and lifecycle-protected layers/source kinds are never faded or a
 
 ## Dashboard
 
-The dashboard is the local operator UI for the API-backed memory platform. It shows the platform runtime, operator gate, ranked evidence, trust meters, scope/consent metadata, feedback controls, retrieval/lifecycle sliders, automatic dream status, reflection controls, graph/time explanations, runtime analytics, benchmark trends, and benchmark proof.
+The CLI is the primary local operator UI for the API-backed memory platform. `cognibrain`, `cognibrain memories`, and `cognibrain connections` show runtime state, memory health, connector/adapter configuration, maintenance actions and next commands. The optional dashboard adds a browser view for the platform runtime, operator gate, ranked evidence, trust meters, scope/consent metadata, feedback controls, retrieval/lifecycle sliders, automatic dream status, reflection controls, graph/time explanations, runtime analytics, benchmark trends, and benchmark proof.

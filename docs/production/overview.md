@@ -6,7 +6,7 @@ cognibrain is a self-hosted production candidate after target-environment gates 
 
 | Tier | Label | Requirements |
 | --- | --- | --- |
-| Local demo | `local-ready` | JSON storage, local dashboard, no public API |
+| Local demo | `local-ready` | JSON storage, CLI-first operator surface, optional local dashboard, no public API |
 | Team install | `self-hosted candidate` | API keys, durable storage, backup, TLS ingress |
 | Target deployment | `deployment-verified` | Fresh `release:check`, Postgres, connector and doctor artifacts |
 | Managed service | `managed SaaS future` | Hosted controls, SSO, billing, support and SLA proof |

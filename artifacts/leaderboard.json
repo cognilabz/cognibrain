@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T19:15:37.687Z",
+  "generatedAt": "2026-05-25T19:40:04.206Z",
   "project": "cognibrain",
   "privacy": {
     "anonymized": true,
@@ -57,7 +57,7 @@
       "suite": "retrieval-calibration",
       "category": "retrieval",
       "metric": "suite_score",
-      "score": 0.9398860533317813,
+      "score": 0.9398860533328159,
       "artifact": "artifacts/nextgen-benchmarks.json",
       "proof": "local-deterministic",
       "methodology": {
@@ -162,7 +162,7 @@
       "suite": "nextgen:retrieval-calibration",
       "category": "answer_generation",
       "metric": "answer_generation_quality",
-      "score": 0.9398860533317813,
+      "score": 0.9398860533328159,
       "artifact": "artifacts/answer-generation.json",
       "proof": "local-deterministic",
       "methodology": {

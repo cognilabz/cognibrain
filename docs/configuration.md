@@ -9,7 +9,7 @@ npm install
 ./bin/cognibrain.mjs setup --all-harnesses
 ```
 
-The local launcher starts both the API and dashboard, chooses the next open port if a default port is busy, and writes runtime state under `.cognibrain/` in the launch directory. Set `COGNIBRAIN_RUNTIME_ROOT` or pass `--runtime-root <path>` to pin the memory/state directory somewhere else.
+The local launcher starts the API by default, chooses the next open port if a default port is busy, and writes runtime state under `.cognibrain/` in the launch directory. `./bin/cognibrain.mjs` opens the terminal operator home for status, memories, connections and config. Start the optional browser dashboard with `./bin/cognibrain.mjs dashboard`, `./bin/cognibrain.mjs start --dashboard`, or `COGNIBRAIN_DASHBOARD=true`. Set `COGNIBRAIN_RUNTIME_ROOT` or pass `--runtime-root <path>` to pin the memory/state directory somewhere else.
 
 Run a publish readiness check:
 
@@ -22,8 +22,9 @@ Environment variables:
 | Name | Default | Description |
 | --- | --- | --- |
 | `PORT` | `8787` | API server port |
-| `VITE_PORT` | `5173` | Dashboard start port for the local launcher |
-| `VITE_API_URL` | `http://localhost:<PORT>` | API URL shown by the dashboard |
+| `VITE_PORT` | `5173` | Optional dashboard start port for the local launcher |
+| `VITE_API_URL` | `http://localhost:<PORT>` | API URL shown by the optional dashboard |
+| `COGNIBRAIN_DASHBOARD` | unset | Set to `true` to start the optional dashboard whenever the launcher starts |
 | `NODE_ENV` | unset | Set to `production` in Docker |
 | `COGNIBRAIN_RUNTIME_ROOT` | launch directory | Directory for `.cognibrain/` runtime state and default memory JSON |
 | `MEMORY_DB_PATH` | `.memory-harness.json` | Local API and CLI persistence file |
@@ -102,8 +103,8 @@ Semantic scoring is deterministic by default, but embedded callers can pass an `
 The CLI can write an OpenAI-compatible embedding adapter stub without storing the API key:
 
 ```bash
-npx cognibrain adapter add embedding-openai-compatible --set baseUrl=http://localhost:11434/v1 --set model=text-embedding-3-small --api-key-env MEMORY_EMBEDDING_API_KEY
-npx cognibrain adapter doctor embedding-openai-compatible
+npx cognibrain connections add embedding-openai-compatible --set baseUrl=http://localhost:11434/v1 --set model=text-embedding-3-small --api-key-env MEMORY_EMBEDDING_API_KEY
+npx cognibrain connections adapters doctor embedding-openai-compatible
 ```
 
 Lexical scoring uses an in-process BM25 fallback for JSON/JSONL and memory-only runtimes. When `MEMORY_STORAGE_BACKEND=sqlite` is active and Node exposes `node:sqlite`, the SQLite adapter refreshes a `memory_fts` FTS5 virtual table in the same transaction as the snapshot and the service automatically passes SQLite BM25 scores into retrieval through the `lexicalProvider` hook. `storageStatus()` reports the active lexical strategy so production claims can distinguish indexed SQLite FTS5 from fallback scoring. Remote Postgres deployments create a generated `search_vector` column and GIN index on `cognibrain_memories`; the retrieval service consumes the same `lexicalProvider` hook with `postgres-tsvector` scores.
@@ -115,8 +116,8 @@ Search can also receive optional reranker and verifier implementations in the Ty
 Use a JSON-command adapter when a deployment wants stronger extraction, reranking, verification or summarization while keeping the local deterministic fallback:
 
 ```bash
-npx cognibrain adapter add intelligence-json-command --command-env MEMORY_INTELLIGENCE_COMMAND
-npx cognibrain adapter doctor intelligence-json-command
+npx cognibrain connections add intelligence-json-command --command-env MEMORY_INTELLIGENCE_COMMAND
+npx cognibrain connections adapters doctor intelligence-json-command
 ```
 
 Retrieval profiles are stored with normalized weights, optional user/project/app/org/agent scope, provenance, training sample count, and update timestamp. Use `memctl profiles`, `memctl profile-set`, `PUT /profiles`, or `profileId` on search requests to select a policy without editing source code.

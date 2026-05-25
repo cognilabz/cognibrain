@@ -1,6 +1,6 @@
 # Implementation Status Matrix
 
-This matrix is the code-verified status surface for the Evidence-Grade Agent Memory OS plan. It should be updated when tests, API routes, CLI commands, MCP tools, dashboard surfaces, packaging, or production-readiness claims change.
+This matrix is the code-verified status surface for the Evidence-Grade Agent Memory OS plan. It should be updated when tests, API routes, CLI commands, MCP tools, optional dashboard surfaces, packaging, or production-readiness claims change.
 
 | Feature | Code implemented | API exposed | CLI exposed | MCP exposed | Dashboard exposed | Tests | Docs | Production ready? |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -12,7 +12,7 @@ This matrix is the code-verified status surface for the Evidence-Grade Agent Mem
 | Policy engine and tenant isolation | Yes | Yes | Yes | Policy check tool | Scope/route preview | Yes, includes cross-scope fuzz matrix | Yes | Local/team-ready isolation surface |
 | Context/Evidence pack object model | Yes | Yes | Yes | Context pack tool | Context Pack Preview | Yes | Yes | Audit-ready local object |
 | Evidence pack export by id | Yes | Yes | Yes | Evidence pack tool | Context Pack Preview and Artifact Inspector | Yes | Yes | Local-ready |
-| Engineering Memory object model | Yes | Yes | SDK | Coding MCP tools | Status/docs surface; dashboard benchmark artifact view | Yes | Yes | Local-ready for coding-agent memory |
+| Engineering Memory object model | Yes | Yes | CLI home, memories workbench, SDK | Coding MCP tools | Status/docs surface; dashboard benchmark artifact view | Yes | Yes | Local-ready for coding-agent memory |
 | Coding context packs and action guard | Yes | Yes | SDK | `memory_coding_context_pack`, `memory_action_guard`, `memory_patch_evidence`, `memory_code_correction` | Artifact inspector and benchmark proof | Yes | Yes | Local-ready guard/evidence surface |
 | Patch Evidence Trail | Yes | Yes | Yes | `memory_patch_evidence` | Artifact inspector and proof docs | Yes | Yes | local-ready; patch correctness still needs tests/review evidence |
 | Query intent planner | Yes | Yes | Yes | Available through context/search outputs | Route Preview | Yes, 50 coding-agent intent cases plus broader planner coverage | Yes | Deterministic pattern-based plan with strategy/explanation |
@@ -32,7 +32,7 @@ This matrix is the code-verified status surface for the Evidence-Grade Agent Mem
 | USP benchmarks | Yes, certified public-baseline gate plus import format | Artifacts | Yes | Not required by planv1 | Artifact Inspector and proof scores | Yes, `benchmark:market` | Yes | Public-baseline proof with importable comparable artifacts |
 | CogniCodeBench | Yes, 100 synthetic coding-agent scenarios with correction simulator, next-change evaluator, ablations and leaderboard entry | Artifacts and leaderboard endpoint | Yes, `benchmark:cognicode` | Not required; harness tools consume same service APIs | Artifact Inspector reads JSON proof | Yes | Yes | Synthetic engineering-memory proof |
 | Production load benchmarks | Yes, local deterministic runner plus 10k/100k/1M artifacts and live Postgres smoke | Artifacts | Yes | Not required by planv1 | Artifact Inspector | Yes, includes 10k dream, 100k, 1M write/search/connector, and Postgres migration gate | Yes | Local/self-hosted proof |
-| Open-source launch readiness | Yes | N/A | `doctor --publish` | N/A | Screenshots and dashboard proof | Yes, `audit:plan1_1` checks docs/artifacts | README, PRODUCT, SECURITY, CONTRIBUTING, production readiness | Ready to offer as OSS self-hosted production candidate |
+| Open-source launch readiness | Yes | N/A | `cognibrain`, `doctor --publish`, memories/connections/config workbenches | N/A | Optional screenshots and dashboard proof | Yes, `audit:plan1_1` checks docs/artifacts | README, PRODUCT, SECURITY, CONTRIBUTING, production readiness | Ready to offer as OSS self-hosted production candidate |
 | Production deployment artifacts | Yes, Docker Compose plus Kubernetes starter | Health/readiness endpoints | `doctor --publish`, Docker/K8s commands | N/A | N/A | Publish doctor plus Docker/K8s static audit | Yes | Self-hosted starter, not a managed SaaS SLA |
 | Plan1_4 product readiness | Yes | N/A | `release:check`, `audit:plan1_4` | N/A | Dashboard proof surface plus docs | Yes | Yes | self-hosted candidate; managed SaaS future |
 

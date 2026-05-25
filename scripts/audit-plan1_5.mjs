@@ -19,6 +19,7 @@ const files = {
   connectorSdk: read("src/connectors/sdk.ts"),
   arena: read("src/eval/arena.ts"),
   cli: read("bin/cognibrain.mjs"),
+  startLocal: read("scripts/start-local.mjs"),
   dashboard: read("src/dashboard/main.tsx"),
   connectors: read("docs/connectors.md"),
   platformSdk: read("docs/tutorials/platform-sdk.md"),
@@ -71,7 +72,13 @@ const checks = [
     artifact("artifacts/vendor-connectors-live.json", (report) => report.passed === true && ["jiraUsesSearch", "confluenceUsesContent", "notionQueriesDatabase", "linearUsesGraphQL", "gitlabUsesMergeRequests", "azureDevOpsUsesPullRequests", "teamsUsesChannelMessages", "gmailUsesMessageList", "googleDriveUsesFilesList", "googleCalendarUsesEventsList", "asanaUsesTasks", "clickupUsesTasks", "sentryUsesProjectIssues", "datadogUsesMonitors", "pagerDutyUsesIncidents", "posthogUsesFeatureFlags"].every((name) => report.checks?.[name] === true))
   ]),
   check("guided self-hosted install is wired", [
+    has(files.package, "\"name\": \"@cognilabz/cognibrain\""),
     has(files.cli, "case \"init\""),
+    has(files.cli, "case undefined"),
+    has(files.cli, "cliHome"),
+    has(files.cli, "renderCliSurface"),
+    has(files.cli, "case \"memories\""),
+    has(files.cli, "case \"connections\""),
     has(files.cli, "connector add"),
     has(files.cli, "doctor --fix"),
     has(files.package, "\"ink\""),
@@ -87,11 +94,24 @@ const checks = [
     has(files.package, "\"demo:first-win\""),
     artifact("artifacts/demos/first-win.json", (report) => report.passed === true && report.install?.profile === "solo-dev")
   ]),
+  check("CLI-first runtime keeps dashboard opt-in", [
+    has(files.readme, "npm i @cognilabz/cognibrain"),
+    has(files.readme, "CLI-First Operator Surface"),
+    has(files.readme, "The web dashboard is optional"),
+    has(files.setupCli, "The CLI is the primary self-hosted product path"),
+    has(files.overview, "CLI product surface"),
+    has(files.cli, "cognibrain dashboard"),
+    has(files.cli, "dashboard: {"),
+    has(files.cli, "optional: true"),
+    has(files.startLocal, "const withDashboard"),
+    has(files.startLocal, "optional; run cognibrain dashboard"),
+    has(files.startLocal, "requireExecutable(\"vite\") : null")
+  ]),
   check("setup UX and docs are product-ready", [
     has(files.setupCli, "React/Ink"),
     has(files.setupCli, "npx cognibrain init"),
-    has(files.setupCli, "connector add jira --set"),
-    has(files.setupCli, "adapter add storage-sqlite"),
+    has(files.setupCli, "connections add jira --set"),
+    has(files.setupCli, "connections add storage-sqlite"),
     has(files.setupCli, "cognibrain sdk platform"),
     has(files.setupCli, "skill status"),
     has(files.setupCli, "config show --json"),

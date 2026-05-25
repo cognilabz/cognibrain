@@ -6,10 +6,12 @@ The CLI is the human and automation surface: install, start, stop, status, healt
 
 ```bash
 npx cognibrain init --profile team
+npx cognibrain
 npx cognibrain config show --json
-npx cognibrain connector add github --set repo=cognilabz/cognibrain
-npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --set project=ENG
-npx cognibrain adapter add storage-postgres --url-env MEMORY_POSTGRES_URL
+npx cognibrain connections add github --set repo=cognilabz/cognibrain
+npx cognibrain connections add jira --set baseUrl=https://example.atlassian.net --set project=ENG
+npx cognibrain connections add storage-postgres --url-env MEMORY_POSTGRES_URL
+npx cognibrain connections doctor
 npx cognibrain skill status
 npx cognibrain doctor --fix
 ```
@@ -19,7 +21,9 @@ For package-style harness install:
 ```bash
 npx cognibrain-connect claude-code
 npx cognibrain-connect all --no-start
+./bin/cognibrain.mjs
 ./bin/cognibrain.mjs status
+./bin/cognibrain.mjs connections
 ./bin/cognibrain.mjs memory search "project conventions"
 ./bin/cognibrain.mjs memory connectors
 ./bin/cognibrain.mjs mcp
@@ -27,7 +31,7 @@ npx cognibrain-connect all --no-start
 
 This mirrors the current AI-tooling direction: make the install path a small memorable command, then let each harness opt into deeper integration.
 The setup path uses a React/Ink terminal UI in interactive shells and writes deterministic JSON in CI. This is credential-safe connector setup: connector files keep non-secret choices and `env:` references only; token values stay in the environment.
-All setup surfaces have a CLI command: `config` for harness paths and generated files, `connector` for source systems, `adapter` for storage/provider/benchmark/MCP transport contracts, and `skill` for the Codex Skill lifecycle.
+All setup surfaces have a CLI command: `config` for harness paths and generated files, `connections` for source systems plus storage/provider/benchmark/MCP transport adapters, and `skill` for the Codex Skill lifecycle. The lower-level `connector` and `adapter` commands remain available for scripts.
 `cognibrain-connect` is the npm-bin surface for that path. It accepts `codex`, `claude-code`, `cursor`, `github-copilot`, `vscode`, `opencode`, `openclaw`, `langgraph`, `crewai`, or `all`, delegates to the same setup engine, writes `.cognibrain-harness-package.json`, and prints a `doctor --publish` health command after installation.
 `cognibrain-connect` also ships package-style setup for OpenCode, OpenClaw, LangGraph, and CrewAI. Those targets install MCP configs or helper files that fetch evidence packs and send tool-outcome telemetry through the same HTTP API.
 
@@ -125,28 +129,28 @@ The scaffold writes a TypeScript integration, connector manifest, `.env.example`
 Native vendor drivers are the built-in integrations. They can be configured from the CLI, verified against hermetic fixtures with `npm run verify:vendor-connectors`, and live-smoked with tenant credentials through `npm run verify:vendor-live`.
 
 ```bash
-npx cognibrain connector add github --set repo=owner/repo
-npx cognibrain connector add slack --set channelId=C123
-npx cognibrain connector add discord --set channelId=D123
-npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --set project=ENG
-npx cognibrain connector add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
-npx cognibrain connector add notion --set databaseId=notion_database_id
-npx cognibrain connector add linear --set teamId=linear_team_id
-npx cognibrain connector add gitlab --set project=group/project
-npx cognibrain connector add azure-devops --set organization=my-org --set project=my-project
-npx cognibrain connector add teams --set teamId=team --set channelId=channel
-npx cognibrain connector add gmail --set account=engineering@example.com
-npx cognibrain connector add google-drive --set root=drive_root_id
-npx cognibrain connector add google-calendar --set calendarId=primary
-npx cognibrain connector add asana --set workspace=workspace_gid --set project=project_gid
-npx cognibrain connector add clickup --set listId=list_id
-npx cognibrain connector add sentry --set organization=my-org --set project=web
-npx cognibrain connector add datadog --set site=datadoghq.com --api-key-env MEMORY_DATADOG_API_KEY --app-key-env MEMORY_DATADOG_APP_KEY
-npx cognibrain connector add pagerduty --set account=my-team --set service=service_id
-npx cognibrain connector add posthog --set project=project_id --set baseUrl=https://app.posthog.com
-npx cognibrain connector list
-npx cognibrain connector show sentry
-npx cognibrain connector doctor sentry
+npx cognibrain connections add github --set repo=owner/repo
+npx cognibrain connections add slack --set channelId=C123
+npx cognibrain connections add discord --set channelId=D123
+npx cognibrain connections add jira --set baseUrl=https://example.atlassian.net --set project=ENG
+npx cognibrain connections add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
+npx cognibrain connections add notion --set databaseId=notion_database_id
+npx cognibrain connections add linear --set teamId=linear_team_id
+npx cognibrain connections add gitlab --set project=group/project
+npx cognibrain connections add azure-devops --set organization=my-org --set project=my-project
+npx cognibrain connections add teams --set teamId=team --set channelId=channel
+npx cognibrain connections add gmail --set account=engineering@example.com
+npx cognibrain connections add google-drive --set root=drive_root_id
+npx cognibrain connections add google-calendar --set calendarId=primary
+npx cognibrain connections add asana --set workspace=workspace_gid --set project=project_gid
+npx cognibrain connections add clickup --set listId=list_id
+npx cognibrain connections add sentry --set organization=my-org --set project=web
+npx cognibrain connections add datadog --set site=datadoghq.com --api-key-env MEMORY_DATADOG_API_KEY --app-key-env MEMORY_DATADOG_APP_KEY
+npx cognibrain connections add pagerduty --set account=my-team --set service=service_id
+npx cognibrain connections add posthog --set project=project_id --set baseUrl=https://app.posthog.com
+npx cognibrain connections
+npx cognibrain connections connectors show sentry
+npx cognibrain connections connectors doctor sentry
 ```
 
 | Connector | Required environment | Reads | Writes |
@@ -285,15 +289,15 @@ Claim IDs: `CB-CLAIM-CONNECTORS`, `CB-CLAIM-CONNECTOR-MATURITY`.
 The JSON-command provider adapter supports `extract`, `translate`, `expand`, `rerank`, `verify`, `contradiction`, and `summarize` tasks with deterministic fallbacks. This keeps the one-click install local-first, while letting teams plug in OCR, ASR, vision, NLI, translation, or cross-encoder tools.
 
 ```bash
-./bin/cognibrain.mjs adapter list
-./bin/cognibrain.mjs adapter add intelligence-json-command --command-env MEMORY_INTELLIGENCE_COMMAND
-./bin/cognibrain.mjs adapter add embedding-openai-compatible --set baseUrl=http://localhost:11434/v1 --set model=text-embedding-3-small
-./bin/cognibrain.mjs adapter add media-json-command --command-env MEMORY_MEDIA_COMMAND
-./bin/cognibrain.mjs adapter add storage-sqlite --set path=.cognibrain/memory.sqlite
-./bin/cognibrain.mjs adapter add storage-postgres --url-env MEMORY_POSTGRES_URL
-./bin/cognibrain.mjs adapter add benchmark-arena
-./bin/cognibrain.mjs adapter add mcp-remote --set url=https://memory.example.com/mcp --token-env MEMORY_MCP_REMOTE_TOKEN
-./bin/cognibrain.mjs adapter doctor
+./bin/cognibrain.mjs connections adapters list
+./bin/cognibrain.mjs connections add intelligence-json-command --command-env MEMORY_INTELLIGENCE_COMMAND
+./bin/cognibrain.mjs connections add embedding-openai-compatible --set baseUrl=http://localhost:11434/v1 --set model=text-embedding-3-small
+./bin/cognibrain.mjs connections add media-json-command --command-env MEMORY_MEDIA_COMMAND
+./bin/cognibrain.mjs connections add storage-sqlite --set path=.cognibrain/memory.sqlite
+./bin/cognibrain.mjs connections add storage-postgres --url-env MEMORY_POSTGRES_URL
+./bin/cognibrain.mjs connections add benchmark-arena
+./bin/cognibrain.mjs connections add mcp-remote --set url=https://memory.example.com/mcp --token-env MEMORY_MCP_REMOTE_TOKEN
+./bin/cognibrain.mjs connections adapters doctor
 ./bin/cognibrain.mjs memory provider-status
 MEMORY_LANGUAGE=de ./bin/cognibrain.mjs memory translate "Speicher soll nicht fehler"
 MEMORY_MEDIA_TYPE=audio MEMORY_LANGUAGE=de ./bin/cognibrain.mjs memory media-ingest "Speicher soll release notes erfassen."
@@ -436,7 +440,7 @@ Enhancement path:
 
 1. Use the stdio command `./bin/cognibrain.mjs mcp`.
 2. Run `./bin/cognibrain.mjs skill install` to install the packaged Codex Skill into `~/.codex/skills/cognibrain`.
-3. Use `./bin/cognibrain.mjs start` to start the backend and dashboard together.
+3. Use `./bin/cognibrain.mjs start` to start the backend API, then `./bin/cognibrain.mjs` or `./bin/cognibrain.mjs connections` for the terminal operator view. Use `./bin/cognibrain.mjs dashboard` only when you want the optional browser UI.
 4. Start from `templates/codex/AGENTS.md` for repo-local policy.
 5. Use Streamable HTTP MCP for remote Codex environments that support HTTP MCP sessions.
 6. Keep repo-local memory policy compact so Codex can use MCP without overloading the prompt.
@@ -481,7 +485,7 @@ Source: https://docs.cursor.com/context/model-context-protocol
 | --- | --- | --- | --- |
 | Claude Code | stdio MCP plus hook template and TypeScript golden-path hook | `setup --all-harnesses` writes `.mcp.json`, `.claude/settings.json`, runtime auto-start, and `PostToolUse` maintenance feedback; `HarnessMemoryHook` covers session-start context, pre-tool procedure/action guard, post-tool outcome memory, correction capture and patch evidence | Generated settings contain the package path and MCP config; `npm run verify:connectors` runs a Claude Code demo repo through the full connector loop |
 | GitHub Copilot | instruction templates plus MCP-compatible server | `setup --all-harnesses` writes repository and scoped instruction files with feedback commands | Generated files match templates plus scoped feedback adapter |
-| OpenAI Codex | stdio MCP plus `AGENTS.md` and Skill template | Installs Skill, starts backend/dashboard with one command, and generates compact project memory policy | `memory_maintenance_status` works and `memory_search` returns project memories |
+| OpenAI Codex | stdio MCP plus `AGENTS.md` and Skill template | Installs Skill, starts backend API with one command, exposes CLI status/connections/memories, and generates compact project memory policy | `memory_maintenance_status` works and `memory_search` returns project memories |
 | Cursor | stdio MCP plus project rule template | `setup --all-harnesses` writes `.cursor/mcp.json` and `.cursor/rules/open-memory.mdc` | Cursor MCP config and rule file are generated deterministically |
 | VS Code | MCP server config | `setup --all-harnesses` writes `.vscode/mcp.json` | VS Code MCP config is generated deterministically |
 | OpenCode | MCP server config plus local instruction package | `setup --all-harnesses` writes `.opencode/mcp.json` and `.opencode/cognibrain.md` | OpenCode package files are generated deterministically |

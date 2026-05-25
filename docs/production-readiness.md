@@ -6,11 +6,11 @@ cognibrain is ready to present as an open-source, self-hosted Engineering Memory
 
 | Area | Ready today | Required gate |
 | --- | --- | --- |
-| Local install | React/Ink guided setup, CLI, API, dashboard, MCP, harness package generation, connector config, adapter config and skill lifecycle | `npx cognibrain init`, `./bootstrap.sh --self-hosted`, or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
+| Local install | React/Ink CLI home, guided setup, memory workbench, connections/config surfaces, API, optional dashboard, MCP, harness package generation, connector config, adapter config and skill lifecycle | `npx cognibrain`, `npx cognibrain init`, `./bootstrap.sh --self-hosted`, or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
 | Team API | API-key auth, actor ids, policy rules, scoped retrieval, audit events | `MEMORY_REQUIRE_AUTH=true` and `MEMORY_API_KEYS` set before exposing the server |
 | Durable storage | JSON/JSONL, SQLite FTS5, Postgres-compatible CI mode, psql-backed Postgres/Cockroach remote driver | `npm run verify:postgres` against the target Postgres path |
 | Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, Engineering Memory types, coding context packs, action guards, patch evidence trails, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen`, `npm run benchmark:cognicode`, `npm run verify:status`, and `npm run audit:plan1_3` |
-| Connectors and adapters | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, 19 native vendor drivers, Platform SDK scaffold for private systems, HTTP adapter verifier, vendor driver verifier, provider/storage/media/benchmark/MCP adapter configs | `npm run verify:connectors`, `npm run verify:vendor-connectors`, `npx cognibrain connector doctor`, `npx cognibrain adapter doctor`, and deployment-specific vendor credential smoke tests |
+| Connectors and adapters | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, 19 native vendor drivers, Platform SDK scaffold for private systems, HTTP adapter verifier, vendor driver verifier, provider/storage/media/benchmark/MCP adapter configs | `npm run verify:connectors`, `npm run verify:vendor-connectors`, `npx cognibrain connections doctor`, and deployment-specific vendor credential smoke tests |
 | Benchmarks | CogniCodeBench, LoCoMo, LongMemEval, BEAM, nextgen, answer-generation, market gate, load artifacts | `npm run benchmark:cognicode`, `npm run benchmark:certified`, `npm run benchmark:market`, and the selected `benchmark:load` profile |
 | Open-source packaging | MIT license, contribution guide, security policy, Docker, Kubernetes, npm package dry-run, Python PyPI-style SDK package | `./bin/cognibrain.mjs doctor --publish`, `npm pack --dry-run`, and Python SDK tests |
 
@@ -18,7 +18,7 @@ cognibrain is ready to present as an open-source, self-hosted Engineering Memory
 
 You can honestly say:
 
-- "cognibrain is a local-first, self-hostable Engineering Memory OS with inspectable evidence packs, policy-aware retrieval, durable storage options, connectors, MCP tools, dashboard operations, and reproducible verification gates."
+- "cognibrain is a local-first, self-hostable Engineering Memory OS with a CLI-first operator surface, inspectable evidence packs, policy-aware retrieval, durable storage options, connectors, MCP tools, optional dashboard operations, and reproducible verification gates."
 - "CogniCodeBench proves the synthetic coding-agent loop where corrections, review feedback, commands, tool outcomes and codebase changes carry into the next patch."
 - "A team can run it behind its own API key, Postgres/Cockroach storage, TLS ingress, backup process, and connector credentials for built-in GitHub, GitLab, Azure DevOps, Slack, Discord, Teams, Jira, Confluence, Notion, Linear, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog drivers."
 - "The public benchmark claims are generated from repo-local artifacts and distinguish synthetic/public gates from vendor-signed external reruns."
@@ -53,16 +53,18 @@ Detailed production pages:
 ```bash
 npm install
 npx cognibrain init --profile solo-dev --yes
+npx cognibrain
 npx cognibrain config show --json
-npx cognibrain connector list
-npx cognibrain adapter list
+npx cognibrain connections
+npx cognibrain connections connectors list
+npx cognibrain connections adapters list
 npx cognibrain skill status
 ./bin/cognibrain.mjs memory add "Atlas releases require npm test before publish."
 ./bin/cognibrain.mjs memory evidence-pack "What should Atlas do before release?"
 ./bin/cognibrain.mjs doctor
 ```
 
-This proves setup, memory write, evidence export, API/dashboard startup, Codex Skill generation, and local health. Use [`getting-started/setup-cli.md`](getting-started/setup-cli.md) for the interactive setup flow and connector examples.
+This proves setup, memory write, evidence export, API startup, terminal operator health, connector/adapter visibility, Codex Skill generation, and local health. Use [`getting-started/setup-cli.md`](getting-started/setup-cli.md) for the interactive setup flow and connector examples. The browser dashboard remains opt-in through `npx cognibrain dashboard`.
 
 ### Self-Hosted Compose
 
@@ -98,7 +100,7 @@ Set these before exposing a networked deployment:
 | `MEMORY_ENCRYPTION_KEY`, `MEMORY_ENCRYPTION_KEY_ID`, `MEMORY_ENCRYPTION_KEY_VERSION` | Encrypts secret-shaped memories and documents key rotation |
 | `MEMORY_BACKUP_REF` | Gives `migration-export` and `backup-verify` a recovery anchor |
 | `MEMORY_SECRET_MANAGER` | Records where deploy secrets are owned |
-| Provider credentials for enabled connectors | Set only the `MEMORY_*` variables for providers you enable through `npx cognibrain connector add <provider>`; the CLI stores non-secret IDs and env-var references, while tokens stay in your deployment secret manager |
+| Provider credentials for enabled connectors | Set only the `MEMORY_*` variables for providers you enable through `npx cognibrain connections add <provider>`; the CLI stores non-secret IDs and env-var references, while tokens stay in your deployment secret manager |
 
 For high-concurrency Postgres deployments, point `MEMORY_POSTGRES_URL` at the deployment pooler such as PgBouncer or a managed Postgres pool endpoint. `npm run verify:postgres` proves the schema, transaction rollback, tenant indexes, and indexed `tsvector` retrieval through the configured URL.
 

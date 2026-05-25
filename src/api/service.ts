@@ -515,6 +515,15 @@ export class MemoryService {
     return deleted;
   }
 
+  listMemories(userId: string, options: { limit?: number; includeArchived?: boolean } = {}) {
+    this.enforceRetention(new Date(), userId);
+    const limit = Math.max(1, Math.min(100, options.limit ?? 20));
+    return this.store
+      .list(userId)
+      .filter((memory) => options.includeArchived || !memory.archivedAt)
+      .slice(0, limit);
+  }
+
   search(options: SearchOptions) {
     const intent = this.classifyQueryIntent(options.query);
     const effectiveOptions = { ...options, mode: options.mode ?? intent.recommendedMode };

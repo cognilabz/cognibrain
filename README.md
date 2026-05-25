@@ -20,7 +20,7 @@
 
 cognibrain is a local-first TypeScript Engineering Memory OS for coding agents. It captures corrections, repo policies, architecture decisions, review feedback and tool outcomes as evidence-grade memory, then injects the right context before the next code change. It is still an Inspectable Agent Memory OS at the platform layer: every memory can be routed, governed, cited and audited before injection. It remembers across agent harnesses, proves every memory with source and retrieval evidence, explains why context was selected, respects scope and consent boundaries, and keeps memory valid over time through graph, temporal, contradiction and dream-maintenance surfaces.
 
-The project includes the memory engine, HTTP API, CLI, official connector manifests, 19 native vendor drivers across code, chat, docs, task, incident, observability and product systems, provider adapters, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
+The project includes the memory engine, CLI-first operator surface, HTTP API, official connector manifests, 19 native vendor drivers across code, chat, docs, task, incident, observability and product systems, provider adapters, MCP connector, harness hook, optional operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
 
 **Claim:** coding-agent memory you can prove, route, govern, benchmark, and reuse across every agent. Claim IDs: `CB-CLAIM-CONTEXT`, `CB-CLAIM-EVIDENCE`, `CB-CLAIM-PATCH-EVIDENCE`.
 
@@ -110,7 +110,7 @@ The short version: **cognibrain remembers across agents, proves every memory, ex
 
 ## Is It Production Ready?
 
-For an open-source launch, yes: cognibrain is ready to present as a **self-hosted production candidate** when the verification gates pass in the target environment. That means the repo includes the core engine, Engineering Memory object model, API, CLI, MCP surface, dashboard, official connector manifests, real external vendor drivers, guided install state, durable storage adapters, Docker/Kubernetes starter artifacts, CogniCodeBench and Benchmark Arena gates, MIT license, contribution guide, security policy, and a status matrix that ties claims to code.
+For an open-source launch, yes: cognibrain is ready to present as a **self-hosted production candidate** when the verification gates pass in the target environment. That means the repo includes the core engine, Engineering Memory object model, package-style CLI, API, MCP surface, optional dashboard, official connector manifests, real external vendor drivers, guided install state, durable storage adapters, Docker/Kubernetes starter artifacts, CogniCodeBench and Benchmark Arena gates, MIT license, contribution guide, security policy, and a status matrix that ties claims to code.
 
 The boundary is explicit. Local development can run with JSON storage and no keys. Team or networked use must set `MEMORY_REQUIRE_AUTH=true`, configure `MEMORY_API_KEYS`, use a durable backend such as `postgres-remote` or SQLite for a single-node local team install, put TLS in front of the API, configure vendor credentials for source integrations, and run the publish checks. Managed SaaS readiness, tenant-specific vendor certification, and vendor-hosted competitor benchmark leadership are deployment-specific claims, not automatic README claims.
 
@@ -132,14 +132,43 @@ npm pack --dry-run
 
 See [`docs/production-readiness.md`](docs/production-readiness.md) for the deploy tiers, required environment, backup/export checks, connector proof scope, and release checklist.
 
-## Dashboard
+## CLI-First Operator Surface
 
-The dashboard is a working inspection surface, not a decorative demo. It presents cognibrain as a platform runtime plus an operator gate:
+Install the package, then open the product from the terminal:
+
+```bash
+npm i @cognilabz/cognibrain
+npx cognibrain
+```
+
+`cognibrain` is the primary self-hosted interface. It uses React/Ink in an interactive terminal and a deterministic text renderer in CI. The CLI home shows runtime status, memory health, recent memories, configured connectors, adapters, setup state and next actions. Everything needed for the self-hosted product is reachable without opening a browser:
+
+```bash
+npx cognibrain status
+npx cognibrain memories
+npx cognibrain memories search "release checks"
+npx cognibrain connections
+npx cognibrain connections add github --set repo=cognilabz/cognibrain
+npx cognibrain config show --json
+npx cognibrain doctor --fix
+```
+
+The web dashboard is optional. Start it only when you want a browser inspection view:
+
+```bash
+npx cognibrain dashboard
+# or
+npx cognibrain start --dashboard
+```
+
+## Optional Dashboard
+
+The dashboard is a working inspection surface, not a decorative demo, but it is not required for local operation. It presents cognibrain as a browser view over the same runtime and operator gate exposed by the CLI:
 
 | Section | Why it exists |
 | --- | --- |
 | Operator gate | Shows whether context is ready before an agent can use it. |
-| Platform runtime | Shows that CLI, HTTP, dashboard, MCP, and templates run from one local package. |
+| Platform runtime | Shows that CLI, HTTP, optional dashboard, MCP, and templates run from one local package. |
 | Memory advantage | Explains the current USP: entity-linked hybrid recall plus dream maintenance. |
 | Health metrics | Shows whether the memory store is fresh, trusted, and active. |
 | Recall QA | Lets a user test the exact context an agent would receive. |
@@ -164,13 +193,15 @@ One command from this checkout:
 ./bootstrap.sh --self-hosted
 ```
 
-Guided install:
+Package install and guided setup:
 
 ```bash
+npm i @cognilabz/cognibrain
+npx cognibrain
 npx cognibrain init
 npx cognibrain config show --json
-npx cognibrain connector add github --set repo=cognilabz/cognibrain
-npx cognibrain adapter add storage-sqlite --set path=.cognibrain/memory.sqlite
+npx cognibrain connections add github --set repo=cognilabz/cognibrain
+npx cognibrain connections add storage-sqlite --set path=.cognibrain/memory.sqlite
 npx cognibrain sdk platform acme --kind project_management --out integrations/acme
 npx cognibrain skill status
 npx cognibrain doctor --fix
@@ -198,7 +229,9 @@ npm install
 When installed from the npm package, the same one-click path is:
 
 ```bash
+npm i @cognilabz/cognibrain
 npx cognibrain setup --self-hosted
+npx cognibrain
 npx cognibrain-connect claude-code
 npx cognibrain-connect codex --no-start
 npx cognibrain-connect opencode --no-start
@@ -217,13 +250,15 @@ pack = client.evidence_pack({"userId": "dev", "query": "release checklist"})
 print(pack["context"])
 ```
 
-`setup --self-hosted` installs the Codex Skill, writes MCP/config/helper packages for Codex, Claude Code, Cursor, GitHub Copilot, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI, starts the API plus dashboard, and runs the publish doctor.
-`cognibrain-connect` is the dedicated package-style connector installer: it writes the same reviewable harness package manifest, starts the local API/dashboard unless disabled, and prints the publish doctor command so teams can verify connector health after installation.
+`setup --self-hosted` installs the Codex Skill, writes MCP/config/helper packages for Codex, Claude Code, Cursor, GitHub Copilot, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI, starts the local API by default, and runs the publish doctor. Pass `--dashboard` only when you also want the browser UI started during setup.
+`cognibrain-connect` is the dedicated package-style connector installer: it writes the same reviewable harness package manifest, starts the local API unless disabled, and prints the publish doctor command so teams can verify connector health after installation.
 
-Then open the printed dashboard URL. Runtime and publish helpers:
+Then use `cognibrain` or `cognibrain status` for the terminal operator view. Runtime and publish helpers:
 
 ```bash
+./bin/cognibrain.mjs
 ./bin/cognibrain.mjs status
+./bin/cognibrain.mjs dashboard
 ./bin/cognibrain.mjs doctor --publish
 ./bin/cognibrain.mjs stop
 ./bin/cognibrain.mjs skill install

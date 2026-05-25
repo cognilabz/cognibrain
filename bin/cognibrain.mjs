@@ -15,6 +15,12 @@ const command = args[0];
 const commandArgs = args.slice(1);
 
 switch (command) {
+  case undefined:
+  case "ui":
+  case "home":
+    await cliHome(commandArgs);
+    break;
+
   case "init":
     await init(commandArgs);
     break;
@@ -28,15 +34,19 @@ switch (command) {
     break;
 
   case "start":
-    runNodeAndExit("scripts/start-local.mjs", ["--daemon"]);
+    runNodeAndExit("scripts/start-local.mjs", ["--daemon", ...commandArgs]);
     break;
 
   case "dev":
-    runNodeAndExit("scripts/start-local.mjs", []);
+    runNodeAndExit("scripts/start-local.mjs", commandArgs);
+    break;
+
+  case "dashboard":
+    runNodeAndExit("scripts/start-local.mjs", ["--daemon", "--dashboard", ...commandArgs]);
     break;
 
   case "status":
-    runNodeAndExit("scripts/start-local.mjs", ["--status"]);
+    await statusCommand(commandArgs);
     break;
 
   case "stop":
@@ -59,6 +69,11 @@ switch (command) {
     await connectorCommand(commandArgs);
     break;
 
+  case "connection":
+  case "connections":
+    await connectionsCommand(commandArgs);
+    break;
+
   case "adapter":
     await adapterCommand(commandArgs);
     break;
@@ -71,12 +86,15 @@ switch (command) {
     runTsxAndExit("src/cli/memctl.ts", commandArgs);
     break;
 
+  case "memories":
+    await memoriesCommand(commandArgs);
+    break;
+
   case "mcp":
     runTsxAndExit("src/connectors/mcpServer.ts", commandArgs);
     break;
 
   case "help":
-  case undefined:
     usage(0);
     break;
 
@@ -107,14 +125,106 @@ async function setup(setupArgs) {
     if (flags.has("--crewai")) writeHarnessConfig("crewai");
   }
 
-  if (!flags.has("--no-start")) runNodeChecked("scripts/start-local.mjs", ["--daemon"]);
+  if (!flags.has("--no-start")) runNodeChecked("scripts/start-local.mjs", ["--daemon", ...(flags.has("--dashboard") ? ["--dashboard"] : [])]);
   if (!flags.has("--no-doctor")) await doctor(selfHosted ? ["--publish"] : []);
+}
+
+async function cliHome(homeArgs = []) {
+  if (homeArgs.includes("--help")) {
+    usage(0);
+    return;
+  }
+  const result = await cliHomeData();
+  if (homeArgs.includes("--json")) {
+    printJson(result);
+    return;
+  }
+  await renderCliSurface("home", result, { title: "cognibrain CLI home" });
+}
+
+async function statusCommand(statusArgs = []) {
+  if (statusArgs.includes("--raw")) {
+    runNodeAndExit("scripts/start-local.mjs", ["--status"]);
+    return;
+  }
+  const result = await cliHomeData();
+  if (statusArgs.includes("--json")) {
+    printJson(result);
+    return;
+  }
+  await renderCliSurface("status", result, { title: "cognibrain status" });
+}
+
+async function memoriesCommand(memoryArgs = []) {
+  const subcommand = firstSubcommand(memoryArgs);
+  if (subcommand === "help" || subcommand === "--help") {
+    memoriesUsage(0);
+    return;
+  }
+  if (subcommand === "overview" || subcommand === "status" || subcommand === "list") {
+    const result = await memoryDashboardData(memoryArgs);
+    if (memoryArgs.includes("--json")) printJson(result);
+    else await renderCliSurface("memories", result, { title: "cognibrain memories" });
+    return;
+  }
+  runTsxAndExit("src/cli/memctl.ts", memoryArgs);
+}
+
+async function connectionsCommand(connectionArgs = []) {
+  const subcommandIndex = firstSubcommandIndex(connectionArgs);
+  const subcommand = subcommandIndex >= 0 ? connectionArgs[subcommandIndex] : "overview";
+  if (subcommand === "help" || subcommand === "--help") {
+    connectionsUsage(0);
+    return;
+  }
+  if (["overview", "status", "list"].includes(subcommand)) {
+    const result = connectionsDashboardData();
+    if (connectionArgs.includes("--json")) printJson(result);
+    else await renderCliSurface("connections", result, { title: "cognibrain connections" });
+    return;
+  }
+  if (subcommand === "doctor") {
+    const result = combinedConnectionsDoctor();
+    if (connectionArgs.includes("--json")) printJson(result);
+    else printCombinedConnectionsDoctor(result);
+    if (!result.ok) process.exit(1);
+    return;
+  }
+  if (subcommand === "add" || subcommand === "configure") {
+    const target = connectionArgs[subcommandIndex + 1];
+    if (!target) connectionsUsage(1);
+    const rest = connectionArgs.slice(subcommandIndex + 2);
+    if (connectorDefinitions()[target]) {
+      await connectorCommand(["add", target, ...rest]);
+      return;
+    }
+    if (adapterDefinitions()[target]) {
+      await adapterCommand(["add", target, ...rest]);
+      return;
+    }
+    console.error(`Unknown connection target: ${target}`);
+    console.error(`Connectors: ${Object.keys(connectorDefinitions()).join(", ")}`);
+    console.error(`Adapters: ${Object.keys(adapterDefinitions()).join(", ")}`);
+    process.exit(1);
+  }
+  if (subcommand === "connectors" || subcommand === "connector") {
+    const nestedArgs = connectionArgs.slice(subcommandIndex + 1);
+    await connectorCommand(nestedArgs.length ? nestedArgs : ["list"]);
+    return;
+  }
+  if (subcommand === "adapters" || subcommand === "adapter") {
+    const nestedArgs = connectionArgs.slice(subcommandIndex + 1);
+    await adapterCommand(nestedArgs.length ? nestedArgs : ["list"]);
+    return;
+  }
+  connectionsUsage(1);
 }
 
 async function doctor(doctorArgs) {
   const publish = doctorArgs.includes("--publish");
   const fix = doctorArgs.includes("--fix");
   const noStart = doctorArgs.includes("--no-start");
+  const dashboardRequired = doctorArgs.includes("--dashboard") || doctorArgs.includes("--with-dashboard");
   const fixed = [];
 
   if (fix) {
@@ -143,8 +253,8 @@ async function doctor(doctorArgs) {
       const state = readRuntimeState();
       const apiAlive = state?.api?.pid ? isAlive(state.api.pid) : false;
       const uiAlive = state?.ui?.pid ? isAlive(state.ui.pid) : false;
-      if (!apiAlive || !uiAlive) {
-        runNodeChecked("scripts/start-local.mjs", ["--daemon"]);
+      if (!apiAlive || (dashboardRequired && !uiAlive)) {
+        runNodeChecked("scripts/start-local.mjs", ["--daemon", ...(dashboardRequired ? ["--dashboard"] : [])]);
         fixed.push("runtime");
       }
     }
@@ -173,7 +283,8 @@ async function doctor(doctorArgs) {
   const apiAlive = state?.api?.pid ? isAlive(state.api.pid) : false;
   const uiAlive = state?.ui?.pid ? isAlive(state.ui.pid) : false;
   add("API process", apiAlive, state?.api?.url ?? "not started", apiAlive ? "ok" : noStart ? "warn" : "fail");
-  add("dashboard process", uiAlive, state?.ui?.url ?? "not started", uiAlive ? "ok" : noStart ? "warn" : "fail");
+  add("dashboard process", uiAlive, state?.ui?.url ?? "not started", uiAlive ? "ok" : "warn");
+  add("dashboard opt-in", true, dashboardRequired ? "required for this doctor run" : "optional; run cognibrain dashboard or cognibrain start --dashboard");
 
   if (state?.api?.url && apiAlive) {
     const health = await requestJson(`${state.api.url}/health`).catch((error) => ({ error: error.message }));
@@ -234,6 +345,7 @@ async function init(initArgs) {
   if (initArgs.includes("--no-skill")) setupArgs.add("--no-skill");
   if (initArgs.includes("--no-doctor")) setupArgs.add("--no-doctor");
   if (initArgs.includes("--all-harnesses")) setupArgs.add("--all-harnesses");
+  if (initArgs.includes("--dashboard")) setupArgs.add("--dashboard");
 
   await renderCliPanel("init", profile, {
     title: "cognibrain self-hosted setup",
@@ -246,7 +358,8 @@ async function init(initArgs) {
     installCommand: "npx cognibrain init",
     uiFramework: "ink-react",
     dryRun: initArgs.includes("--dry-run"),
-    dashboard: !initArgs.includes("--no-dashboard")
+    primaryInterface: "cli",
+    dashboard: initArgs.includes("--dashboard") ? "opt-in-started" : "optional"
   });
   for (const connector of profile.connectors) writeConnectorConfig(connector, { dryRun: initArgs.includes("--dry-run"), suggestedByProfile: profile.name });
   for (const adapter of profile.adapters ?? []) writeAdapterConfig(adapter, { dryRun: initArgs.includes("--dry-run"), suggestedByProfile: profile.name });
@@ -590,7 +703,7 @@ function setupFlagsForHarnesses(harnesses) {
 }
 
 function nextStepsForProfile(profileName, connectors) {
-  const steps = ["Run cognibrain doctor --fix", "Open the dashboard", "Run npm run demo:first-win"];
+  const steps = ["Run cognibrain", "Run cognibrain doctor --fix", "Run npm run demo:first-win"];
   if (connectors.length) steps.splice(1, 0, `Configure connector env: ${connectors.join(", ")}`);
   if (profileName === "benchmark") steps.push("Run npm run benchmark:arena");
   if (profileName === "enterprise") steps.push("Run npm run verify:vendor-live with tenant credentials");
@@ -610,7 +723,7 @@ function profileDefinition(name) {
       connectors: ["github"],
       adapters: ["storage-sqlite"],
       runDemo: true,
-      nextSteps: ["Open the dashboard", "Add GitHub credentials", "Run the first-win demo"]
+      nextSteps: ["Run cognibrain", "Add GitHub credentials", "Run the first-win demo", "Optional: cognibrain dashboard"]
     },
     team: {
       name: "team",
@@ -935,7 +1048,7 @@ function adapterDefinitions() {
       kind: "provider",
       status: "available-contract",
       requiredEnv: ["MEMORY_INTELLIGENCE_COMMAND"],
-      verification: "cognibrain adapter doctor intelligence-json-command",
+      verification: "cognibrain connections adapters doctor intelligence-json-command",
       docs: "docs/configuration.md#intelligence-provider-adapter",
       fields: [
         { name: "commandEnv", label: "JSON command env var", env: "MEMORY_INTELLIGENCE_COMMAND", secret: true, default: "MEMORY_INTELLIGENCE_COMMAND" },
@@ -1001,7 +1114,7 @@ function adapterDefinitions() {
       kind: "storage",
       status: "remote-driver",
       requiredEnv: [],
-      verification: "cognibrain adapter doctor storage-cassandra",
+      verification: "cognibrain connections adapters doctor storage-cassandra",
       docs: "docs/production/storage.md",
       fields: [
         { name: "backend", label: "Storage backend", env: "MEMORY_STORAGE_BACKEND", default: "cassandra-remote" },
@@ -1028,7 +1141,7 @@ function adapterDefinitions() {
       kind: "transport",
       status: "available-contract",
       requiredEnv: ["MEMORY_MCP_REMOTE_URL"],
-      verification: "cognibrain adapter doctor mcp-remote",
+      verification: "cognibrain connections adapters doctor mcp-remote",
       docs: "docs/integrations/mcp.md",
       fields: [
         { name: "url", label: "Remote MCP URL", env: "MEMORY_MCP_REMOTE_URL", default: "https://memory.example.com/mcp" },
@@ -1064,8 +1177,8 @@ function configCatalog() {
     runtimeRoot,
     packageRoot: root,
     harnesses: harnessTargets().map((target) => ({ target, command: `cognibrain config ${target}` })),
-    connectors: Object.keys(connectorDefinitions()).map((provider) => ({ provider, status: connectorDefinitions()[provider].status, command: `cognibrain connector add ${provider}` })),
-    adapters: Object.keys(adapterDefinitions()).map((adapter) => ({ adapter, status: adapterDefinitions()[adapter].status, command: `cognibrain adapter add ${adapter}` })),
+    connectors: Object.keys(connectorDefinitions()).map((provider) => ({ provider, status: connectorDefinitions()[provider].status, command: `cognibrain connections add ${provider}` })),
+    adapters: Object.keys(adapterDefinitions()).map((adapter) => ({ adapter, status: adapterDefinitions()[adapter].status, command: `cognibrain connections add ${adapter}` })),
     skill: { command: "cognibrain skill install", path: paths.codexSkill },
     paths
   };
@@ -1083,12 +1196,157 @@ function readConfigurationState() {
   };
 }
 
+async function cliHomeData() {
+  const config = readConfigurationState();
+  const connections = connectionsDashboardData();
+  const memories = await memoryDashboardData(["--limit", "5"]);
+  return {
+    schemaVersion: "1.0",
+    package: packageInfo(),
+    runtime: runtimeStatus(),
+    config,
+    memories,
+    connections,
+    primaryInterface: "cli",
+    dashboard: {
+      optional: true,
+      command: "cognibrain dashboard",
+      note: "The web dashboard is opt-in; every operator surface is reachable from this CLI."
+    },
+    commands: [
+      "cognibrain",
+      "cognibrain status",
+      "cognibrain memories",
+      "cognibrain memories search <query>",
+      "cognibrain connections",
+      "cognibrain connections add github --set repo=owner/repo",
+      "cognibrain config show",
+      "cognibrain dashboard"
+    ]
+  };
+}
+
+function packageInfo() {
+  const manifest = readJson(join(root, "package.json"), {});
+  return {
+    name: manifest.name ?? "cognibrain",
+    version: manifest.version ?? "0.0.0",
+    bin: manifest.bin?.cognibrain ?? "./bin/cognibrain.mjs",
+    install: `npm i ${manifest.name ?? "@cognilabz/cognibrain"}`,
+    open: "cognibrain"
+  };
+}
+
+function runtimeStatus() {
+  const state = readRuntimeState();
+  const apiAlive = state?.api?.pid ? isAlive(state.api.pid) : false;
+  const uiAlive = state?.ui?.pid ? isAlive(state.ui.pid) : false;
+  return {
+    runtimeRoot,
+    statePath: join(runtimeRoot, ".cognibrain", "local-runtime.json"),
+    dbPath: process.env.MEMORY_DB_PATH ?? join(runtimeRoot, ".memory-harness.json"),
+    api: {
+      alive: apiAlive,
+      url: state?.api?.url ?? null,
+      pid: state?.api?.pid ?? null
+    },
+    dashboard: {
+      alive: uiAlive,
+      url: state?.ui?.url ?? null,
+      pid: state?.ui?.pid ?? null,
+      optional: true
+    },
+    mode: apiAlive ? (uiAlive ? "api+optional-dashboard" : "api-only") : "stopped"
+  };
+}
+
+async function memoryDashboardData(memoryArgs = []) {
+  const limit = Number(optionValue(memoryArgs, "--limit") ?? process.env.MEMORY_LIMIT ?? 8);
+  const health = captureMemoryJson(["health"]);
+  const maintenance = captureMemoryJson(["maintenance"]);
+  const recent = captureMemoryJson(["list", "--limit", String(limit)]);
+  return {
+    userId: process.env.MEMORY_USER_ID ?? process.env.USER ?? "local",
+    health,
+    maintenance,
+    recent: Array.isArray(recent) ? recent : [],
+    commands: [
+      "cognibrain memories add <text>",
+      "cognibrain memories search <query>",
+      "cognibrain memories coding-context <query>",
+      "cognibrain memories verify",
+      "cognibrain memories dream",
+      "cognibrain memories export"
+    ],
+    dashboardParity: [
+      "inspect/add/archive/delete/confirm/retract memories through memory subcommands",
+      "recall/context/evidence through search, coding-context, evidence-pack and why-used",
+      "graph/timeline/dream/marketplace through graph, timeline, dream and marketplace subcommands",
+      "connector sync/writeback/health through connections plus memory connector-* subcommands"
+    ]
+  };
+}
+
+function connectionsDashboardData() {
+  const config = readConfigurationState();
+  const connectorItems = connectorCatalog();
+  const adapterItems = adapterCatalog();
+  const configuredConnectors = config.connectors.map((item) => item.provider).filter(Boolean);
+  const configuredAdapters = config.adapters.map((item) => item.adapter).filter(Boolean);
+  return {
+    runtimeRoot,
+    connectors: {
+      configured: configuredConnectors,
+      available: connectorItems,
+      doctor: connectorDoctor()
+    },
+    adapters: {
+      configured: configuredAdapters,
+      available: adapterItems,
+      doctor: adapterDoctor()
+    },
+    harnesses: {
+      targets: harnessTargets(),
+      manifest: config.harnessManifest ? "present" : "missing",
+      skill: config.skill
+    },
+    commands: [
+      "cognibrain connections add github --set repo=owner/repo",
+      "cognibrain connections add storage-postgres --set urlEnv=MEMORY_POSTGRES_URL",
+      "cognibrain connections connectors list",
+      "cognibrain connections adapters list",
+      "cognibrain connections doctor",
+      "cognibrain config all"
+    ]
+  };
+}
+
+function combinedConnectionsDoctor() {
+  const config = configurationDoctor();
+  const connectors = connectorDoctor();
+  const adapters = adapterDoctor();
+  const ok = config.ok && (connectors.ok || connectors.checks.length === 0) && (adapters.ok || adapters.checks.length === 0);
+  return { ok, config, connectors, adapters };
+}
+
+function captureMemoryJson(memoryArgs) {
+  const tsx = resolveExecutable("tsx");
+  if (!tsx) return null;
+  const result = runCapture(tsx, [join(root, "src", "cli", "memctl.ts"), ...memoryArgs]);
+  if (result.status !== 0) return { error: result.stderr.trim() || result.stdout.trim() || `memctl ${memoryArgs.join(" ")} failed` };
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    return result.stdout.trim();
+  }
+}
+
 function configurationDoctor() {
   const paths = configPaths();
   const checks = [
     { name: "setup state", ok: existsSync(paths.setupState), path: paths.setupState, fix: "cognibrain init --profile solo-dev --yes" },
-    { name: "connector directory", ok: existsSync(paths.connectors), path: paths.connectors, fix: "cognibrain connector add github --set repo=owner/repo" },
-    { name: "adapter directory", ok: existsSync(paths.adapters), path: paths.adapters, fix: "cognibrain adapter add storage-sqlite" },
+    { name: "connector directory", ok: existsSync(paths.connectors), path: paths.connectors, fix: "cognibrain connections add github --set repo=owner/repo" },
+    { name: "adapter directory", ok: existsSync(paths.adapters), path: paths.adapters, fix: "cognibrain connections add storage-sqlite" },
     { name: "harness manifest", ok: existsSync(paths.harnessManifest), path: paths.harnessManifest, fix: "cognibrain config all" },
     { name: "Codex skill", ok: existsSync(paths.codexSkill), path: paths.codexSkill, fix: "cognibrain skill install" }
   ];
@@ -1139,7 +1397,7 @@ function connectorCatalog() {
     status: definition.status,
     docs: definition.docs,
     configured: existsSync(connectorConfigPath(provider)),
-    addCommand: `cognibrain connector add ${provider}`
+    addCommand: `cognibrain connections add ${provider}`
   }));
 }
 
@@ -1184,7 +1442,7 @@ function connectorDoctor(provider) {
 
 function printConnectorCatalog(items) {
   for (const item of items) console.log(`${item.configured ? "ok" : "available"}  ${item.provider} - ${item.connectorId} (${item.status})`);
-  console.log("next: cognibrain connector add <provider> --set key=value");
+  console.log("next: cognibrain connections add <provider> --set key=value");
 }
 
 function printConnectorShow(result) {
@@ -1197,7 +1455,7 @@ function printConnectorShow(result) {
 function printConnectorDoctor(result) {
   if (!result.checks.length) {
     console.log("warn  no connector configs found");
-    console.log("next: cognibrain connector add github --set repo=owner/repo");
+    console.log("next: cognibrain connections add github --set repo=owner/repo");
     return;
   }
   for (const check of result.checks) {
@@ -1221,7 +1479,7 @@ function adapterCatalog() {
     status: definition.status,
     docs: definition.docs,
     configured: existsSync(adapterConfigPath(adapter)),
-    addCommand: `cognibrain adapter add ${adapter}`
+    addCommand: `cognibrain connections add ${adapter}`
   }));
 }
 
@@ -1255,7 +1513,7 @@ function adapterDoctor(adapter) {
       missingEnv,
       missingSettings,
       ok: existsSync(path) && missingSettings.length === 0 && missingEnv.length === 0,
-      healthCommand: `cognibrain adapter doctor ${name}`,
+      healthCommand: `cognibrain connections adapters doctor ${name}`,
       docs: definition.docs
     };
   });
@@ -1264,7 +1522,7 @@ function adapterDoctor(adapter) {
 
 function printAdapterCatalog(items) {
   for (const item of items) console.log(`${item.configured ? "ok" : "available"}  ${item.adapter} - ${item.adapterId} (${item.kind}, ${item.status})`);
-  console.log("next: cognibrain adapter add <adapter> --set key=value");
+  console.log("next: cognibrain connections add <adapter> --set key=value");
 }
 
 function printAdapterShow(result) {
@@ -1277,7 +1535,7 @@ function printAdapterShow(result) {
 function printAdapterDoctor(result) {
   if (!result.checks.length) {
     console.log("warn  no adapter configs found");
-    console.log("next: cognibrain adapter add storage-sqlite");
+    console.log("next: cognibrain connections add storage-sqlite");
     return;
   }
   for (const check of result.checks) {
@@ -1613,7 +1871,7 @@ function writeAdapterConfig(adapter, metadata = {}) {
     preview: {
       sampleMemoryEvents: definition.sampleEvents ?? []
     },
-    healthCommand: `cognibrain adapter doctor ${adapter}`,
+    healthCommand: `cognibrain connections adapters doctor ${adapter}`,
     nextSteps: adapterNextSteps(definition, missing, missingSettings),
     metadata: { writtenAt: new Date().toISOString(), ...safeMetadata }
   };
@@ -2106,6 +2364,15 @@ function optionValue(argv, name) {
   return index >= 0 ? argv[index + 1] : undefined;
 }
 
+function firstSubcommand(argv, fallback = "overview") {
+  const index = firstSubcommandIndex(argv);
+  return index >= 0 ? argv[index] : fallback;
+}
+
+function firstSubcommandIndex(argv) {
+  return argv.findIndex((item) => !item.startsWith("--"));
+}
+
 function optionValues(argv, name) {
   const values = [];
   for (let index = 0; index < argv.length; index += 1) {
@@ -2178,6 +2445,110 @@ async function renderCliPanel(kind, payload, options = {}) {
   }
 }
 
+async function renderCliSurface(kind, payload, options = {}) {
+  if (process.stdout.isTTY !== true && process.env.COGNIBRAIN_FORCE_INK !== "true") {
+    renderPlainSurface(kind, payload, options);
+    return;
+  }
+  try {
+    const React = await import("react");
+    const ink = await import("ink");
+    const h = React.createElement;
+    const Text = ink.Text;
+    const Box = ink.Box;
+    const line = (label, value, color = "white") => h(Box, { gap: 1 }, h(Text, { color: "gray" }, `${label}:`), h(Text, { color }, String(value)));
+    const section = (title, items = []) => h(
+      Box,
+      { key: title, flexDirection: "column", marginTop: 1 },
+      h(Text, { bold: true, color: "cyan" }, title),
+      ...items.map((item, index) => h(Text, { key: `${title}-${index}` }, `  ${item}`))
+    );
+    const body = surfaceLines(kind, payload);
+    const element = h(
+      Box,
+      { flexDirection: "column", borderStyle: "round", borderColor: "cyan", paddingX: 1, paddingY: 0 },
+      h(Text, { bold: true, color: "cyan" }, options.title ?? "cognibrain"),
+      ...body.metrics.map(([label, value, color]) => line(label, value, color)),
+      ...body.sections.map((item) => section(item.title, item.items))
+    );
+    const instance = ink.render(element, { exitOnCtrlC: false });
+    await new Promise((resolveTimeout) => setTimeout(resolveTimeout, 20));
+    instance.unmount();
+  } catch {
+    renderPlainSurface(kind, payload, options);
+  }
+}
+
+function surfaceLines(kind, payload) {
+  if (kind === "memories") {
+    const health = payload.health ?? {};
+    return {
+      metrics: [
+        ["user", payload.userId ?? "local", "cyan"],
+        ["memories", health.memories ?? health.total ?? payload.recent?.length ?? 0, "green"],
+        ["quality", health.qualityScore ?? health.freshness ?? "n/a", "white"]
+      ],
+      sections: [
+        { title: "Recent", items: (payload.recent ?? []).slice(0, 5).map((memory) => `${shortMemoryId(memory)} ${memory.content}`) },
+        { title: "Commands", items: payload.commands ?? [] },
+        { title: "Dashboard Parity", items: payload.dashboardParity ?? [] }
+      ]
+    };
+  }
+  if (kind === "connections") {
+    const configuredConnectors = payload.connectors?.configured ?? [];
+    const configuredAdapters = payload.adapters?.configured ?? [];
+    return {
+      metrics: [
+        ["connectors", `${configuredConnectors.length}/${payload.connectors?.available?.length ?? 0}`, configuredConnectors.length ? "green" : "yellow"],
+        ["adapters", `${configuredAdapters.length}/${payload.adapters?.available?.length ?? 0}`, configuredAdapters.length ? "green" : "yellow"],
+        ["skill", payload.harnesses?.skill?.installed ? "installed" : "missing", payload.harnesses?.skill?.installed ? "green" : "yellow"]
+      ],
+      sections: [
+        { title: "Configured Connectors", items: configuredConnectors.length ? configuredConnectors : ["none yet"] },
+        { title: "Configured Adapters", items: configuredAdapters.length ? configuredAdapters : ["none yet"] },
+        { title: "Commands", items: payload.commands ?? [] }
+      ]
+    };
+  }
+  const runtime = payload.runtime ?? {};
+  const config = payload.config ?? {};
+  return {
+    metrics: [
+      ["package", `${payload.package?.name ?? "cognibrain"} ${payload.package?.version ?? ""}`.trim(), "cyan"],
+      ["runtime", runtime.mode ?? "unknown", runtime.api?.alive ? "green" : "yellow"],
+      ["dashboard", runtime.dashboard?.alive ? "running" : "optional", runtime.dashboard?.alive ? "green" : "gray"],
+      ["setup", config.setupState?.profile ?? "missing", config.setupState ? "green" : "yellow"]
+    ],
+    sections: [
+      { title: "Memories", items: [`${payload.memories?.health?.memories ?? payload.memories?.recent?.length ?? 0} stored`, "cognibrain memories search <query>", "cognibrain memories add <text>"] },
+      { title: "Connections", items: [`${payload.connections?.connectors?.configured?.length ?? 0} connectors configured`, `${payload.connections?.adapters?.configured?.length ?? 0} adapters configured`, "cognibrain connections add github --set repo=owner/repo"] },
+      { title: "Commands", items: payload.commands ?? [] }
+    ]
+  };
+}
+
+function renderPlainSurface(kind, payload, options = {}) {
+  const lines = surfaceLines(kind, payload);
+  console.log(options.title ?? "cognibrain CLI home");
+  for (const [label, value] of lines.metrics) console.log(`${label}: ${value}`);
+  for (const section of lines.sections) {
+    console.log(`\n${section.title}`);
+    for (const item of section.items) console.log(`  - ${item}`);
+  }
+}
+
+function printCombinedConnectionsDoctor(result) {
+  console.log(`${result.ok ? "ok" : "fail"}  connections`);
+  printConfigurationDoctor(result.config);
+  printConnectorDoctor(result.connectors);
+  printAdapterDoctor(result.adapters);
+}
+
+function shortMemoryId(memory) {
+  return String(memory?.id ?? "memory").slice(0, 8);
+}
+
 function renderPlainPanel(kind, payload, options = {}) {
   if (kind === "connector") {
     console.log(`${options.title ?? "connector"}: ${payload.connectorId} (${payload.status})`);
@@ -2199,7 +2570,7 @@ function renderPlainPanel(kind, payload, options = {}) {
 function printInitSummary(profile) {
   console.log("ready: setup state, native connector configs, adapter configs, skill path, and harness config are in place");
   console.log(`next: ${profile.nextSteps.join(" -> ")}`);
-  console.log("proof: cognibrain config doctor, cognibrain connector doctor, cognibrain adapter doctor, npm run demo:first-win");
+  console.log("proof: cognibrain config doctor, cognibrain connections doctor, npm run demo:first-win");
 }
 
 function readRuntimeState() {
@@ -2249,17 +2620,27 @@ function usage(exitCode) {
   console.log(`cognibrain
 
 Usage:
+  cognibrain
+      Open the React/Ink CLI home with runtime, memories, connections, config, and next actions
   cognibrain [--runtime-root <path>] <command>
-  cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--no-start] [--no-doctor] [--no-skill]
-      React/Ink guided self-hosted install that writes setup state, native connector configs, harness config, starts runtime, and runs doctor
+  cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dashboard] [--no-start] [--no-doctor] [--no-skill]
+      React/Ink guided self-hosted install that writes setup state, native connector configs, harness config, starts the API, and runs doctor
   cognibrain setup [--profile local|team|production|benchmark] [--yes]
       Starts the same guided wizard; legacy flags below still work for scripted installs
   cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--all-harnesses]
       Scripted install path for CI and package smoke tests
   cognibrain doctor [--publish] [--fix] [--no-start]
       Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
-  cognibrain start | dev | status | stop
-      Manage the local API + dashboard runtime
+  cognibrain start [--dashboard] | dev [--dashboard] | dashboard | status | stop
+      Manage the local API runtime; the web dashboard is optional and starts only with dashboard opt-in
+  cognibrain memories [list|status] [--json]
+      CLI memory workbench with recent memories, health, maintenance, and dashboard-equivalent memory actions
+  cognibrain memories <add|search|coding-context|evidence-pack|why-used|graph|timeline|dream|marketplace|...>
+      Run any memory operation from the CLI; equivalent to cognibrain memory <subcommand>
+  cognibrain connections [list|status|doctor] [--json]
+      CLI connections workbench for connectors, adapters, harnesses, skill state, and configuration health
+  cognibrain connections add <connector-or-adapter> [--dry-run] [--set key=value]
+      Configure native vendor drivers, adapters, or SDK-backed sources from one connection surface
   cognibrain config list|show|paths|doctor
       Inspect setup state, harness packages, connector configs, adapter configs, and skill paths
   cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>
@@ -2298,7 +2679,29 @@ Usage:
 }
 
 function initUsage(exitCode) {
-  console.log(`Usage: cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dry-run] [--no-start] [--no-doctor] [--no-skill] [--no-demo]`);
+  console.log(`Usage: cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dry-run] [--dashboard] [--no-start] [--no-doctor] [--no-skill] [--no-demo]`);
+  process.exit(exitCode);
+}
+
+function memoriesUsage(exitCode) {
+  console.log(`Usage:
+  cognibrain memories [list|status] [--json] [--limit 20]
+  cognibrain memories add <text>
+  cognibrain memories search <query>
+  cognibrain memories coding-context <query>
+  cognibrain memories evidence-pack <query>
+  cognibrain memories why-used <query>
+  cognibrain memories graph|timeline|dream|marketplace|health|maintenance|export ...`);
+  process.exit(exitCode);
+}
+
+function connectionsUsage(exitCode) {
+  console.log(`Usage:
+  cognibrain connections [list|status] [--json]
+  cognibrain connections doctor [--json]
+  cognibrain connections add <connector-or-adapter> [--dry-run] [--set key=value]
+  cognibrain connections connectors <list|show|doctor|add|remove> ...
+  cognibrain connections adapters <list|show|doctor|add|remove> ...`);
   process.exit(exitCode);
 }
 

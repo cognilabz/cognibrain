@@ -5,10 +5,10 @@ cognibrain ships first-class self-hosted vendor drivers for engineering planning
 ## Setup
 
 ```bash
-npx cognibrain connector add jira --set baseUrl=https://example.atlassian.net --set project=ENG
-npx cognibrain connector add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
-npx cognibrain connector add notion --set databaseId=notion_database_id
-npx cognibrain connector add linear --set teamId=linear_team_id
+npx cognibrain connections add jira --set baseUrl=https://example.atlassian.net --set project=ENG
+npx cognibrain connections add confluence --set baseUrl=https://example.atlassian.net --set space=ENG
+npx cognibrain connections add notion --set databaseId=notion_database_id
+npx cognibrain connections add linear --set teamId=linear_team_id
 npm run verify:vendor-connectors
 ```
 

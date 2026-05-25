@@ -44,6 +44,8 @@ The query contains only the benchmark question. The runner does not use the grou
 
 This suite is intentionally different from ordinary recall accuracy. It measures whether a retrieved memory can be proved, governed and reused safely.
 
+The same benchmark command also includes `retrieval-calibration`, which checks that search results expose calibrated confidence, weak memories fall below the injection threshold, and unsafe low-confidence memories are excluded from context packs.
+
 ## Official LongMemEval-S Runner
 
 LongMemEval is a long-term memory benchmark released with "LongMemEval: Benchmarking Chat Assistants on Long-Term Interactive Memory." The repo uses the public LongMemEval-S cleaned dataset.
@@ -116,6 +118,26 @@ npm run benchmark:market -- --competitors path/to/competitors.json --out artifac
 
 The competitor artifact format is documented in `docs/market-comparison.md` and illustrated by `docs/market-claims.sample.json`. Any artifact that sets `comparable:true` must include per-question rows, so the market gate and dashboard can inspect failed or unmatched questions instead of relying on headline scores.
 
+## Production Load Smoke
+
+Local production-readiness runs can generate latency, throughput, connector-sync, dream, and memory-usage proof:
+
+```bash
+npm run benchmark:load -- --memories 10000 --concurrent-writes 50 --concurrent-searches 20 --connector-events 20 --out artifacts/load-benchmark-10k-dream.json
+npm run benchmark:load -- --memories 100000 --concurrent-writes 100 --concurrent-searches 20 --connector-events 20 --no-dream --out artifacts/load-benchmark-100k.json
+NODE_OPTIONS=--max-old-space-size=8192 npm run benchmark:load -- --memories 1000000 --concurrent-writes 200 --concurrent-searches 20 --connector-events 20 --no-dream --out artifacts/load-benchmark-1m.json
+```
+
+The artifact reports P50/P95/P99 latency for writes, searches, connector sync, and dream maintenance; write/search/sync throughput; failure count; RSS and heap usage. The default command is intentionally local and deterministic. The 1M local run is a self-hosted process proof; managed-service capacity certification should run the same artifact schema against the target storage backend and deployment profile.
+
+For real PostgreSQL storage proof, run:
+
+```bash
+npm run verify:postgres
+```
+
+This starts or reuses a local Postgres 16 container, resets the cognibrain schema, applies the remote-driver migrations, verifies the generated `tsvector` plus GIN index, checks cross-user tenant isolation, and writes `artifacts/postgres-live.json`. The 2026-05-24 local run passed with 25 writes, 10 searches, zero failures, migration count `3 -> 3`, and no Bob-search leak of Alice's Atlas memory. This is self-hosted Postgres proof; managed-service capacity certification still belongs to the target deployment.
+
 ## Current Market Context
 
 The public market is noisy. Mem0's benchmark suite documents LoCoMo, LongMemEval, and BEAM as benchmark targets, and its public material reports strong LoCoMo and LongMemEval numbers. Other vendors publish their own numbers, often with different answerers, judges, datasets, and retrieval budgets.
@@ -162,6 +184,8 @@ Best included baseline: 495/500 answer-session recall@20 = 99.00%
 ```
 
 The improvement comes from a query-only retrieval selector: lexical recall for ordinary factual questions, semantic retrieval for advice and temporal follow-up questions, and vector retrieval for ordinal list recall. The selector does not use answer text or evidence IDs.
+
+For local production-load proof, `artifacts/load-benchmark-10k-dream.json`, `artifacts/load-benchmark-100k.json`, and `artifacts/load-benchmark-1m.json` cover the planv1 10k/100k/1M matrix. The 2026-05-25 10k run passed with 18 dream actions, zero failures, search p95 `63.92ms`, connector-sync p95 `2.83ms`, RSS `243.80MB`, and heap `95.09MB`. The refreshed 100k run passed with zero failures, write p95 `0.09ms`, search p95 `418.28ms`, connector-sync p95 `22.57ms`, RSS `689.56MB`, and heap `460.14MB`. The 1M run passed with zero failures, write p95 `0.08ms`, search p95 `3908.88ms`, connector-sync p95 `283.05ms`, RSS `2026.81MB`, and heap `3816.85MB`. This is local process proof, not managed-service capacity certification.
 
 ## Latest BEAM Result
 

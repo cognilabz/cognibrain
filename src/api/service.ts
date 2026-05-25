@@ -19,7 +19,9 @@ import {
   EntityRegistry,
   activateGraph,
   citationFor,
+  classifyDurability,
   extractAddOnlyMemories,
+  extractClaim,
   exportMemoryGraph,
   findGraphPaths,
   healthReport,
@@ -39,7 +41,10 @@ import {
 import type {
   DomainEvaluationReport,
   AgentRegistration,
+  AuditChainExport,
   AuditEvent,
+  AuditJournalEvent,
+  AuditReplayMemoryState,
   Brain,
   ComplianceReport,
   ContradictionDetector,
@@ -53,6 +58,7 @@ import type {
   EntityRecord,
   EvidencePack,
   ExtractionReport,
+  DurabilityDecision,
   FeedbackKind,
   FeedbackEvent,
   FederatedSearchReport,
@@ -65,6 +71,7 @@ import type {
   IdentityLink,
   LearnedProfileReport,
   Memory,
+  MemoryClaim,
   MemoryExtractionEvent,
   MemoryExtractor,
   MemoryInput,
@@ -98,9 +105,12 @@ import type {
   StorageBackendStatus,
   SyncReport,
   ConsentPolicy,
+  ConsentVisibility,
   CrossBrainPrivacyComputeReport,
   QueryExpander,
   QueryIntentReport,
+  QueryPlan,
+  QueryPlanStrategy,
   TranslationProvider,
   ProviderAdapterStatus,
   TranslationReport,
@@ -357,9 +367,26 @@ export class MemoryService {
         ? [{ stage: "provider" as const, inputEvents: normalizedEvents.length, extracted: providerInputs.length, confidence: providerInputs.length ? 0.78 : 0.2, reason: providerInputs.length ? "fallback extractor produced candidate memories" : "fallback extractor returned no candidates" }]
         : [])
     ];
+    const claims: MemoryClaim[] = [];
+    const durabilityDecisions: DurabilityDecision[] = [];
+    const classifiedInputs = [...ruleInputs, ...providerInputs].flatMap((input) => {
+      const event = syntheticExtractionEvent(input);
+      const claim = (input.metadata?.claim as MemoryClaim | undefined) ?? extractClaim(input.content, event, scope, input.source, input.entities ?? []);
+      const decision = (input.metadata?.durabilityDecision as DurabilityDecision | undefined) ?? classifyDurability(input.content, event, claim);
+      claims.push(claim);
+      durabilityDecisions.push(decision);
+      if (decision.action === "ignore" || decision.action === "ask_user") return [];
+      const next: MemoryInput = {
+        ...input,
+        layer: decision.action === "session_only" || decision.action === "working_memory" ? "working" as const : input.layer,
+        tags: decision.action === "session_only" || decision.action === "working_memory" ? [...(input.tags ?? []), "session-only"] : input.tags,
+        metadata: { ...(input.metadata ?? {}), claim, durabilityDecision: decision }
+      };
+      return [next];
+    });
     const existingHashes = new Set(existing.map((memory) => memory.metadata.contentHash).filter(Boolean));
     const seenHashes = new Set<string>();
-    const inputs = [...ruleInputs, ...providerInputs].filter((input) => {
+    const inputs = classifiedInputs.filter((input) => {
       const hash = contentHash(`${input.content}:${input.source?.kind ?? ""}:${input.timestamp ?? ""}`);
       input.metadata = { ...(input.metadata ?? {}), contentHash: hash, episodeId: episode.id };
       if (existingHashes.has(hash) || seenHashes.has(hash)) return false;
@@ -367,6 +394,7 @@ export class MemoryService {
       return true;
     });
     const memories = inputs.map((input) => this.add(linkStateChange(input, this.store.list(scope.userId))));
+    for (const memory of memories) this.applySupersession(memory);
     this.episodes.set(episode.id, { ...episode, memoryIds: memories.map((memory) => memory.id) });
     this.persist();
     const enrichmentCandidates = enrichmentCandidatesFor(this.store.list(scope.userId));
@@ -378,7 +406,7 @@ export class MemoryService {
       confidence: enrichmentCandidates.length ? 0.72 : 1,
       reason: enrichmentCandidates.length ? "entity attention threshold produced candidates" : "no entity crossed enrichment threshold"
     });
-    this.recordAudit("extract.run", { userId: scope.userId, brainId: scope.brainId, sourceId: scope.sourceId, metadata: { events: normalizedEvents.length, memories: memories.length, stages, failures: failures.length, learnedRules: learnedRules.length } });
+    this.recordAudit("extract.run", { userId: scope.userId, brainId: scope.brainId, sourceId: scope.sourceId, metadata: { events: normalizedEvents.length, memories: memories.length, claims: claims.length, durabilityDecisions, stages, failures: failures.length, learnedRules: learnedRules.length } });
     const entityLinks: Record<string, string[]> = {};
     for (const memory of memories) {
       for (const entity of memory.entities) {
@@ -386,7 +414,7 @@ export class MemoryService {
         entityLinks[entity].push(memory.id);
       }
     }
-    return { memories, entityLinks, stages, failures, enrichmentCandidates, learnedRules };
+    return { memories, entityLinks, stages, failures, claims, durabilityDecisions, enrichmentCandidates, learnedRules };
   }
 
   list(userId?: string) {
@@ -403,6 +431,38 @@ export class MemoryService {
     this.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { before, after: memory } });
     this.afterWrite(memory.userId);
     return memory;
+  }
+
+  archive(id: string) {
+    const before = this.store.get(id);
+    const memory = this.store.archive(id);
+    this.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "archive", before, after: memory } });
+    this.afterWrite(memory.userId);
+    return memory;
+  }
+
+  private applySupersession(memory: Memory): void {
+    const supersedes = memory.relations.filter((relation) => relation.type === "supersedes" && relation.targetId);
+    if (!supersedes.length) return;
+    const validUntil = new Date(memory.temporal.validFrom ?? memory.createdAt).toISOString();
+    for (const relation of supersedes) {
+      const target = safeGet(this.store, relation.targetId!);
+      if (!target || target.beliefState === "retracted") continue;
+      const updated = this.store.update(target.id, {
+        beliefState: "superseded",
+        temporal: {
+          ...target.temporal,
+          validUntil,
+          supersededAt: validUntil
+        },
+        metadata: {
+          ...target.metadata,
+          supersededBy: memory.id,
+          supersessionReason: `Superseded by ${memory.id}`
+        }
+      });
+      this.recordAudit("memory.update", { userId: updated.userId, brainId: updated.brainId, sourceId: updated.sourceId, memoryId: updated.id, metadata: { action: "superseded", supersededBy: memory.id } });
+    }
   }
 
   delete(id: string) {
@@ -430,7 +490,11 @@ export class MemoryService {
       : undefined;
     const profile = effectiveOptions.profileId ? this.retrievalProfiles.get(effectiveOptions.profileId) : personaProfile ?? this.profileFor(effectiveOptions);
     const linkedUserIds = effectiveOptions.includeLinkedIdentities ? this.identities.resolve(effectiveOptions.userId).filter((id) => id !== effectiveOptions.userId) : [];
-    const federatedBrainIds = effectiveOptions.includeSharedBrains ? effectiveOptions.brainIds ?? this.accessibleBrainIds(effectiveOptions) : effectiveOptions.brainIds;
+    const accessibleBrainIds = this.accessibleBrainIds(effectiveOptions);
+    const requestedBrainIds = effectiveOptions.brainIds ?? (effectiveOptions.brainId ? [effectiveOptions.brainId] : undefined);
+    const federatedBrainIds = effectiveOptions.includeSharedBrains
+      ? (requestedBrainIds ? requestedBrainIds.filter((brainId) => accessibleBrainIds.includes(brainId)) : accessibleBrainIds)
+      : effectiveOptions.brainIds;
     const queryExpansions = this.expandSearchQuery(effectiveOptions);
     const rawResults = this.retrieval.search({
       ...effectiveOptions,
@@ -439,10 +503,12 @@ export class MemoryService {
       queryExpansions,
       weights: options.weights ?? profile?.weights ?? intent.recommendedWeights,
       reranker: effectiveOptions.reranker ?? this.defaultReranker,
-      verifier: effectiveOptions.verifier ?? this.defaultVerifier
+      verifier: effectiveOptions.verifier ?? this.defaultVerifier,
+      lexicalProvider: effectiveOptions.lexicalProvider ?? this.lexicalProviderForPersistence()
     });
+    const plannedResults = rawResults.map((result) => ({ ...result, queryPlan: intent.plan }));
     const denied: PolicyDecision[] = [];
-    const results = rawResults.filter((result) => {
+    const results = plannedResults.filter((result) => {
       const decision = this.evaluatePolicy("retrieve", result.memory, { userId: effectiveOptions.userId, orgId: effectiveOptions.orgId, agentId: effectiveOptions.agentId });
       if (decision.allowed) return true;
       denied.push(decision);
@@ -469,48 +535,16 @@ export class MemoryService {
   }
 
   classifyQueryIntent(query: string): QueryIntentReport {
-    const text = query.toLowerCase();
-    const reasons: string[] = [];
-    let intent: QueryIntentReport["intent"] = "fact_lookup";
-    let confidence = 0.62;
-    let recommendedMode: QueryIntentReport["recommendedMode"] = "hybrid";
-    let recommendedWeights: QueryIntentReport["recommendedWeights"] | undefined;
-    const match = (pattern: RegExp, reason: string) => {
-      if (!pattern.test(text)) return false;
-      reasons.push(reason);
-      return true;
+    const plan = buildQueryPlan(query);
+    return {
+      query,
+      intent: plan.intent,
+      confidence: plan.confidence,
+      recommendedMode: plan.recommendedMode,
+      recommendedWeights: plan.recommendedWeights,
+      reasons: plan.explanation,
+      plan
     };
-    if (match(/\b(when|last week|yesterday|today|since|changed|history|timeline|before|after)\b/, "temporal language detected")) {
-      intent = "temporal_question";
-      confidence = 0.78;
-      recommendedWeights = { temporal: 0.28, trust: 0.22, semantic: 0.18 };
-    }
-    if (match(/\b(connected|related|relationship|path|why.*depend|how.*connect|between)\b/, "connection language detected")) {
-      intent = "connection_explanation";
-      confidence = 0.82;
-      recommendedMode = "path";
-      recommendedWeights = { graph: 0.42, entity: 0.22, trust: 0.18 };
-    } else if (match(/\b(multi[- ]?hop|depends on|imports|calls|linked through)\b/, "multi-hop graph language detected")) {
-      intent = "multi_hop_question";
-      confidence = 0.8;
-      recommendedMode = "path";
-      recommendedWeights = { graph: 0.38, entity: 0.22, semantic: 0.16 };
-    }
-    if (match(/\b(contradict|conflict|wrong|outdated|superseded|disagree)\b/, "contradiction language detected")) {
-      intent = "contradiction_check";
-      confidence = 0.84;
-      recommendedWeights = { trust: 0.3, temporal: 0.22, entity: 0.18 };
-    }
-    if (match(/\b(should|how do i|workflow|procedure|checklist|before release|deploy|run tests|always)\b/, "procedural language detected")) {
-      intent = "preference_procedural";
-      confidence = Math.max(confidence, 0.76);
-      recommendedWeights = { trust: 0.26, keyword: 0.22, entity: 0.18, semantic: 0.18 };
-    }
-    if (match(/\b(repo|repository|project|workspace|codebase|branch)\b/, "project context language detected") && intent === "fact_lookup") intent = "project_context";
-    if (match(/\b(team|org|shared|everyone|company)\b/, "team context language detected") && (intent === "fact_lookup" || intent === "project_context")) intent = "team_context";
-    if (match(/\b(my|me|i prefer|personal)\b/, "personal context language detected") && intent === "fact_lookup") intent = "personal_context";
-    if (!reasons.length) reasons.push("default fact lookup");
-    return { query, intent, confidence, recommendedMode, recommendedWeights, reasons };
   }
 
   routeMemory(options: SearchOptions): MemoryRouteReport {
@@ -569,15 +603,46 @@ export class MemoryService {
     const context = this.retrieval.contextPack(results, tokenBudget);
     const includedResults = results.filter((result) => result.decision !== "exclude" && context.includes(`[${result.memory.id}]`));
     const id = `ctx_${contentHash(`${options.userId}:${options.query}:${includedResults.map((result) => result.memory.id).join(",")}:${tokenBudget}`).slice(2, 14)}`;
+    const policyDecisions = results.map((result) => this.evaluatePolicy("retrieve", result.memory, { userId: options.userId, orgId: options.orgId, agentId: options.agentId }));
+    const temporalState = {
+      generatedAt: new Date().toISOString(),
+      stale: includedResults.filter((result) => result.stale).length,
+      valid: includedResults.filter((result) => !result.stale).length,
+      needsVerification: includedResults.filter((result) => result.memory.beliefState === "needs_verification").length,
+      contradicted: includedResults.filter((result) => result.memory.beliefState === "contradicted" || result.contradiction).length
+    };
+    const hash = contentHash(JSON.stringify({
+      query: options.query,
+      userId: options.userId,
+      tokenBudget,
+      resultIds: includedResults.map((result) => result.memory.id),
+      policy: policyDecisions.map((decision) => ({ memoryId: decision.memoryId, allowed: decision.allowed, reasons: decision.reasons })),
+      temporalState
+    }));
     const pack: EvidencePack = {
       schemaVersion: "1.0",
       id,
       generatedAt: new Date().toISOString(),
       query: options.query,
+      actor: { userId: options.userId, orgId: options.orgId, agentId: options.agentId },
       userId: options.userId,
+      scope: {
+        userId: options.userId,
+        brainId: options.brainId,
+        sourceId: options.sourceId,
+        agentId: options.agentId,
+        sessionId: options.sessionId,
+        appId: options.appId,
+        orgId: options.orgId,
+        projectId: options.projectId,
+        deviceId: options.deviceId,
+        runId: options.runId
+      },
       profileId: options.profileId,
+      retrievalProfile: options.profileId ? this.retrievalProfiles.get(options.profileId) : this.profileFor(options),
       queryIntent: this.classifyQueryIntent(options.query),
       tokenBudget,
+      hash,
       context,
       results: includedResults.map((result) => ({
         memoryId: result.memory.id,
@@ -612,15 +677,34 @@ export class MemoryService {
         },
         retrieval: {
           score: result.score,
+          confidence: result.confidence,
           initialScore: result.initialScore,
           mode: result.retrievalMode,
           signals: result.signals,
           explanation: result.explanation ?? [],
           graphPaths: result.graphPaths ?? [],
           citation: result.citation,
-          contradiction: result.contradiction
+          contradiction: result.contradiction,
+          plan: result.queryPlan,
+          unsafeToInject: result.unsafeToInject
         }
       })),
+      excludedResults: results
+        .filter((result) => result.decision === "exclude" || !context.includes(`[${result.memory.id}]`))
+        .map((result) => ({
+          memoryId: result.memory.id,
+          reason: result.decision === "exclude"
+            ? "retrieval decision excluded this memory"
+            : (result.confidence ?? 1) < 0.5
+              ? "calibrated confidence below injection threshold"
+              : "token budget or reranking kept this memory outside the context body",
+          decision: result.decision,
+          policyDecision: policyDecisions.find((decision) => decision.memoryId === result.memory.id),
+          score: result.score
+        })),
+      policyDecisions,
+      graphPaths: [...new Set(includedResults.flatMap((result) => result.graphPaths ?? []))],
+      temporalState,
       summary: {
         included: includedResults.filter((result) => !result.decision || result.decision === "include").length,
         warnings: includedResults.filter((result) => result.decision === "warn" || result.decision === "review").length,
@@ -1000,6 +1084,31 @@ export class MemoryService {
     return [...this.sources.values()].filter((source) => !brainId || source.brainId === brainId).sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  deleteSource(sourceId: string, actorId = "system"): { sourceId: string; affectedMemoryIds: string[] } {
+    const source = this.sources.get(sourceId);
+    if (!source) throw new Error(`Source not found: ${sourceId}`);
+    this.sources.delete(sourceId);
+    const timestamp = new Date().toISOString();
+    const affectedMemoryIds: string[] = [];
+    for (const memory of this.store.list().filter((item) => item.sourceId === sourceId)) {
+      const updated = this.store.update(memory.id, {
+        beliefState: "needs_verification",
+        metadata: {
+          ...memory.metadata,
+          deletedSourceId: sourceId,
+          deletedSourceName: source.name,
+          sourceDeletedAt: timestamp,
+          verificationReason: "source_deleted"
+        }
+      });
+      affectedMemoryIds.push(updated.id);
+      this.recordAudit("memory.update", { actorId, userId: updated.userId, brainId: updated.brainId, sourceId, memoryId: updated.id, metadata: { action: "source_deleted_revalidation", sourceName: source.name } });
+    }
+    this.recordAudit("memory.delete", { actorId, brainId: source.brainId, sourceId, metadata: { resource: "source", kind: source.kind, affectedMemoryIds } });
+    this.persist();
+    return { sourceId, affectedMemoryIds };
+  }
+
   registerConnectorManifest(input: Omit<ConnectorManifest, "createdAt" | "updatedAt"> & { createdAt?: Date | string; updatedAt?: Date | string }): ConnectorManifest {
     validateConnectorManifest(input);
     const now = new Date().toISOString();
@@ -1077,6 +1186,36 @@ export class MemoryService {
     return updated;
   }
 
+  revokeConnectorAuth(connectorId: string, actorId = "system"): ConnectorAuthSession[] {
+    const now = new Date().toISOString();
+    const revoked: ConnectorAuthSession[] = [];
+    for (const session of this.connectorAuthSessions.values()) {
+      if (session.connectorId !== connectorId || session.status === "revoked") continue;
+      const updated: ConnectorAuthSession = {
+        ...session,
+        status: "revoked",
+        tokenRef: undefined,
+        updatedAt: now,
+        error: undefined
+      };
+      this.connectorAuthSessions.set(session.id, updated);
+      revoked.push(updated);
+    }
+    const manifest = this.connectorManifests.get(connectorId);
+    if (manifest) {
+      this.connectorManifests.set(connectorId, {
+        ...manifest,
+        updatedAt: now,
+        list: manifest.list ? { ...manifest.list, authRef: undefined } : manifest.list,
+        poll: manifest.poll ? { ...manifest.poll, authRef: undefined } : manifest.poll,
+        writeback: manifest.writeback ? { ...manifest.writeback, authRef: undefined } : manifest.writeback
+      });
+    }
+    this.recordAudit("connector.auth", { actorId, metadata: { connectorId, status: "revoked", sessions: revoked.length } });
+    this.persist();
+    return revoked;
+  }
+
   connectorAuthStatus(connectorId?: string): ConnectorAuthSession[] {
     return [...this.connectorAuthSessions.values()]
       .filter((session) => !connectorId || session.connectorId === connectorId)
@@ -1117,9 +1256,38 @@ export class MemoryService {
       const mapped = events.map((event) => ({
         ...event,
         source: event.source ?? { kind: manifest.defaultSourceKind, uri: event.uri, confidence: 0.82 },
+        sourceRef: event.sourceRef ?? {
+          connectorId,
+          externalId: event.externalId,
+          url: event.uri ?? (typeof event.metadata?.url === "string" ? event.metadata.url : undefined),
+          author: typeof event.metadata?.author === "string" ? event.metadata.author : undefined,
+          timestamp: event.timestamp,
+          version: typeof event.metadata?.version === "string" ? event.metadata.version : undefined,
+          hash: contentHash(JSON.stringify({ connectorId, externalId: event.externalId, content: event.content, timestamp: event.timestamp }))
+        },
         metadata: { ...(event.metadata ?? {}), connectorId, externalId: event.externalId, mapping: manifest.metadataMapping, privacyPolicy: manifest.privacyPolicy ?? "project" }
       }));
       const report = this.extract(mapped, scope);
+      const eventsByExternalId = new Map(events.map((event) => [event.externalId, event]));
+      for (const memory of report.memories) {
+        const externalId = typeof memory.metadata.externalId === "string" ? memory.metadata.externalId : undefined;
+        const event = externalId ? eventsByExternalId.get(externalId) : undefined;
+        if (!event) continue;
+        const reviewRequired = connectorReviewRequired(manifest, event);
+        const visibility = connectorEventVisibility(event);
+        const tags = connectorEventTags(manifest, event);
+        if (!reviewRequired && !visibility && !tags.length) continue;
+        this.store.update(memory.id, {
+          beliefState: reviewRequired ? "needs_verification" : memory.beliefState,
+          consent: visibility ? { ...memory.consent, visibility } : memory.consent,
+          tags: [...new Set([...memory.tags, ...tags])],
+          metadata: {
+            ...memory.metadata,
+            ...(reviewRequired ? { reviewQueue: { status: "pending", connectorId, reason: "connector_candidate_review" } } : {}),
+            ...(visibility ? { channelVisibility: visibility } : {})
+          }
+        });
+      }
       const record: ConnectorSyncRecord = {
         id: `sync_${contentHash(`${connectorId}:${Date.now()}:${this.connectorSyncRecords.length}`).slice(2)}`,
         connectorId,
@@ -1433,11 +1601,25 @@ export class MemoryService {
           sql: true,
           encryptedAtRest: false,
           migrationSafe: false,
+          lexical: { strategy: "none" as const, indexed: false, notes: ["SQLite FTS5 is unavailable in this Node runtime."] },
+          vector: { strategy: "in-memory" as const, indexed: false, notes: ["Optional embedding providers can score vectors in memory for development without API keys."] },
           notes: ["Unavailable in this Node runtime; use Node with node:sqlite or another SQL adapter."]
         };
     return {
       active: this.persistence?.kind ?? "memory",
       adapters: [memory, json, jsonl, sqlite, postgres, cockroach, cassandra, postgresRemote, cockroachRemote, cassandraRemote]
+    };
+  }
+
+  private lexicalProviderForPersistence(): SearchOptions["lexicalProvider"] | undefined {
+    if (!this.persistence?.lexicalSearch) return undefined;
+    return {
+      id: `${this.persistence.kind}-fts`,
+      search: ({ query, memories, limit }) =>
+        this.persistence?.lexicalSearch?.(query, {
+          memoryIds: memories.map((memory) => memory.id),
+          limit: Math.max(limit ?? 8, Math.min(memories.length, 1000))
+        }) ?? []
     };
   }
 
@@ -1447,6 +1629,26 @@ export class MemoryService {
       .filter((event) => !filter.memoryId || event.memoryId === filter.memoryId)
       .filter((event) => !filter.type || event.type === filter.type)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  auditChain(filter: { userId?: string; memoryId?: string; type?: AuditEvent["type"] } = {}): AuditChainExport {
+    const events = this.auditTrail(filter)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+      .map((event) => this.toJournalEvent(event));
+    const replay = this.replayAuditEvents(events);
+    return {
+      schemaVersion: "1.0",
+      generatedAt: new Date().toISOString(),
+      eventCount: events.length,
+      headHash: events.at(-1)?.hash,
+      valid: replay.valid,
+      events,
+      replay
+    };
+  }
+
+  replayAuditState(events: AuditEvent[] = this.auditEvents): AuditChainExport["replay"] {
+    return this.replayAuditEvents(events.map((event) => this.toJournalEvent(event)));
   }
 
   updateConsent(memoryId: string, consent: Partial<ConsentPolicy>): Memory {
@@ -1923,53 +2125,101 @@ export class MemoryService {
     return submission;
   }
 
-  apiDescription() {
+  apiDescription(auth?: { mode: "open-local-dev" | "api-key"; protected: boolean; warning?: string }) {
+    const protectedAuth: Array<Record<string, string[]>> = auth?.protected ? [{ ApiKeyAuth: [] }, { BearerAuth: [] }] : [];
+    const routeMethods: Record<string, string[]> = {
+      "/memories": ["GET", "POST"],
+      "/episodes": ["GET"],
+      "/episodes/{id}": ["GET"],
+      "/actions": ["POST"],
+      "/search": ["POST"],
+      "/route": ["POST"],
+      "/intent": ["POST"],
+      "/evidence-pack": ["POST"],
+      "/evidence-pack/{id}": ["GET"],
+      "/context-packs/{id}": ["GET"],
+      "/context-packs/{id}/evidence": ["GET"],
+      "/feedback": ["POST"],
+      "/feedback/injection": ["POST"],
+      "/verification/{userId}": ["GET"],
+      "/memories/{id}": ["GET", "PATCH", "DELETE"],
+      "/memories/{id}/archive": ["POST"],
+      "/memories/{id}/confirm": ["POST"],
+      "/memories/{id}/retract": ["POST"],
+      "/memories/{id}/consent": ["POST"],
+      "/memories/{id}/revert": ["POST"],
+      "/graph": ["GET"],
+      "/graph/paths": ["GET"],
+      "/graph/explain": ["GET"],
+      "/graph/activate": ["GET"],
+      "/graph/export": ["GET"],
+      "/graph/query": ["POST"],
+      "/audit": ["GET"],
+      "/audit/chain": ["GET"],
+      "/events": ["GET"],
+      "/webhooks": ["POST"],
+      "/webhooks/deliveries": ["GET"],
+      "/webhooks/deliver": ["POST"],
+      "/marketplace": ["GET"],
+      "/marketplace/submissions": ["GET", "POST"],
+      "/marketplace/scan": ["POST"],
+      "/marketplace/review": ["POST"],
+      "/marketplace/publish": ["POST"],
+      "/marketplace/rate": ["POST"],
+      "/marketplace/install": ["POST"],
+      "/marketplace/plan": ["POST"],
+      "/managed/tenants": ["GET", "POST"],
+      "/managed/control-plane": ["GET"],
+      "/connectors": ["GET"],
+      "/connectors/register": ["POST"],
+      "/connectors/sync": ["POST"],
+      "/connectors/health": ["GET"],
+      "/connectors/auth": ["GET"],
+      "/connectors/auth/begin": ["POST"],
+      "/connectors/auth/callback": ["POST"],
+      "/connectors/auth/revoke": ["POST"],
+      "/connectors/list": ["POST"],
+      "/connectors/poll": ["POST"],
+      "/connectors/writeback": ["POST"],
+      "/connectors/feedback": ["POST"],
+      "/connectors/telemetry": ["POST"],
+      "/profiles": ["GET", "PUT"],
+      "/profiles/learn": ["POST"],
+      "/profiles/training-samples": ["POST"],
+      "/migration/export": ["POST"],
+      "/migration/import": ["POST"],
+      "/backup/verify": ["POST"],
+      "/policy/rules": ["GET", "POST"],
+      "/policy/evaluate": ["POST"],
+      "/privacy/insights": ["GET"],
+      "/privacy/cross-brain-compute": ["POST"],
+      "/security/key-provider": ["GET"],
+      "/security/transport": ["GET"],
+      "/compliance/export": ["GET"],
+      "/auth/status": ["GET"],
+      "/storage": ["GET"],
+      "/providers": ["GET"],
+      "/translate": ["POST"],
+      "/ingest/media": ["POST"],
+      "/sdk/openapi": ["GET"]
+    };
     return {
       openapi: "3.1.0",
       info: { title: "cognibrain API", version: "0.1.0" },
-      paths: {
-        "/memories": ["GET", "POST"],
-        "/episodes": ["GET"],
-        "/episodes/{id}": ["GET"],
-        "/actions": ["POST"],
-        "/search": ["POST"],
-        "/route": ["POST"],
-        "/intent": ["POST"],
-        "/evidence-pack": ["POST"],
-        "/feedback": ["POST"],
-        "/feedback/injection": ["POST"],
-        "/verification/{userId}": ["GET"],
-        "/memories/{id}/confirm": ["POST"],
-        "/memories/{id}/retract": ["POST"],
-        "/graph": ["GET"],
-        "/graph/paths": ["GET"],
-        "/graph/explain": ["GET"],
-        "/graph/activate": ["GET"],
-        "/graph/export": ["GET"],
-        "/graph/query": ["POST"],
-        "/marketplace": ["GET"],
-        "/marketplace/submissions": ["GET", "POST"],
-        "/marketplace/scan": ["POST"],
-        "/marketplace/review": ["POST"],
-        "/marketplace/publish": ["POST"],
-        "/marketplace/rate": ["POST"],
-        "/marketplace/install": ["POST"],
-        "/marketplace/plan": ["POST"],
-        "/managed/tenants": ["GET", "POST"],
-        "/managed/control-plane": ["GET"],
-        "/connectors/auth": ["GET"],
-        "/connectors/auth/begin": ["POST"],
-        "/connectors/auth/callback": ["POST"],
-        "/migration/export": ["POST"],
-        "/migration/import": ["POST"],
-        "/backup/verify": ["POST"],
-        "/policy/rules": ["GET", "POST"],
-        "/policy/evaluate": ["POST"],
-        "/privacy/insights": ["GET"],
-        "/privacy/cross-brain-compute": ["POST"],
-        "/security/key-provider": ["GET"],
-        "/security/transport": ["GET"],
-        "/compliance/export": ["GET"]
+      security: protectedAuth,
+      paths: openApiPaths(routeMethods, protectedAuth),
+      components: {
+        securitySchemes: {
+          ApiKeyAuth: { type: "apiKey", in: "header", name: "x-api-key" },
+          BearerAuth: { type: "http", scheme: "bearer" }
+        },
+        schemas: openApiSchemas()
+      },
+      "x-cognibrain-generatedFrom": ["src/api/server.ts route registry", "src/core/types.ts public contracts", "src/api/service.ts apiDescription"],
+      "x-cognibrain-auth": auth ?? {
+        mode: "open-local-dev",
+        protected: false,
+        warning: "API authentication is disabled for local development. Set MEMORY_API_KEYS or MEMORY_REQUIRE_AUTH=true before exposing this server."
       },
       clients: {
         typescript: "src/sdk/client.ts",
@@ -3131,7 +3381,6 @@ export class MemoryService {
     const agent = options.agentId ? this.agents.get(options.agentId) : undefined;
     return [...this.brains.values()]
       .filter((brain) => {
-        if (brain.id === options.brainId) return true;
         if (brain.ownerUserId === options.userId || brain.memberUserIds?.includes(options.userId)) return true;
         if (agent?.brainIds.includes(brain.id)) return true;
         if (options.agentId && brain.allowedAgentIds?.includes(options.agentId)) return true;
@@ -3232,12 +3481,12 @@ export class MemoryService {
   }
 
   private recordAudit(type: AuditEvent["type"], event: Partial<AuditEvent>): AuditEvent {
-    const saved: AuditEvent = {
+    const saved = this.sealAuditEvent({
       id: `audit_${contentHash(`${type}:${Date.now()}:${this.auditEvents.length}`).slice(2)}`,
       type,
       timestamp: new Date().toISOString(),
       ...event
-    };
+    });
     this.auditEvents.push(saved);
     for (const webhook of this.webhooks.values()) {
       if (webhook.disabledAt || !webhook.events.includes(type)) continue;
@@ -3250,6 +3499,120 @@ export class MemoryService {
       });
     }
     return saved;
+  }
+
+  private sealAuditEvent(event: AuditEvent, previousEvent = this.auditEvents.at(-1), sequence = this.auditEvents.length + 1): AuditJournalEvent {
+    const journalType = event.journalType ?? canonicalAuditJournalType(event);
+    const previousHash = event.previousHash ?? previousEvent?.hash;
+    const unsigned = auditEventForHash({ ...event, journalType, sequence, previousHash });
+    const payloadHash = contentHash(stableStringify(unsigned));
+    const hash = contentHash(stableStringify({
+      id: event.id,
+      type: event.type,
+      journalType,
+      sequence,
+      previousHash,
+      payloadHash
+    }));
+    return {
+      ...event,
+      journalType,
+      sequence,
+      previousHash,
+      payloadHash,
+      hash
+    };
+  }
+
+  private rebuildAuditChain(events: AuditEvent[]): AuditJournalEvent[] {
+    const rebuilt: AuditJournalEvent[] = [];
+    for (const [index, event] of events.entries()) {
+      rebuilt.push(this.sealAuditEvent(event, rebuilt.at(-1), index + 1));
+    }
+    return rebuilt;
+  }
+
+  private toJournalEvent(event: AuditEvent): AuditJournalEvent {
+    if (event.journalType && event.sequence && event.hash && event.payloadHash) return event as AuditJournalEvent;
+    return this.rebuildAuditChain([event])[0];
+  }
+
+  private replayAuditEvents(events: AuditJournalEvent[]): AuditChainExport["replay"] {
+    const memories: AuditChainExport["replay"]["memories"] = {};
+    const contextPacks: AuditChainExport["replay"]["contextPacks"] = {};
+    const denied: AuditChainExport["replay"]["denied"] = [];
+    const connectorEvents: AuditChainExport["replay"]["connectorEvents"] = [];
+    const dreamEvents: AuditChainExport["replay"]["dreamEvents"] = [];
+    const errors: string[] = [];
+    let previous: AuditJournalEvent | undefined;
+
+    for (const event of events) {
+      const expectedPayloadHash = contentHash(stableStringify(auditEventForHash(event)));
+      const expectedHash = contentHash(stableStringify({
+        id: event.id,
+        type: event.type,
+        journalType: event.journalType,
+        sequence: event.sequence,
+        previousHash: event.previousHash,
+        payloadHash: expectedPayloadHash
+      }));
+      if (event.payloadHash !== expectedPayloadHash) errors.push(`payload hash mismatch for ${event.id}`);
+      if (event.hash !== expectedHash) errors.push(`chain hash mismatch for ${event.id}`);
+      if (previous && event.sequence === previous.sequence + 1 && event.previousHash !== previous.hash) errors.push(`previous hash mismatch for ${event.id}`);
+
+      if (event.memoryId && event.journalType.startsWith("memory.")) {
+        const current = memories[event.memoryId] ?? {
+          exists: false,
+          archived: false,
+          retracted: false,
+          superseded: false,
+          userId: event.userId,
+          brainId: event.brainId,
+          sourceId: event.sourceId,
+          lastEventId: event.id,
+          lastHash: event.hash,
+          versions: 0
+        };
+        memories[event.memoryId] = applyMemoryJournalEvent(current, event);
+      }
+
+      if (event.journalType === "context_pack.created") {
+        const contextPackId = typeof event.metadata?.contextPackId === "string" ? event.metadata.contextPackId : event.id;
+        contextPacks[contextPackId] = {
+          createdAt: event.timestamp,
+          query: typeof event.metadata?.query === "string" ? event.metadata.query : undefined,
+          memoryCount: typeof event.metadata?.memories === "number" ? event.metadata.memories : undefined,
+          hash: event.hash
+        };
+      }
+
+      if (event.journalType === "policy.denied") {
+        denied.push({
+          eventId: event.id,
+          operation: event.metadata?.operation,
+          memoryId: event.memoryId,
+          reason: typeof event.metadata?.reason === "string" ? event.metadata.reason : undefined
+        });
+      }
+      if (event.journalType === "connector.ingested") {
+        connectorEvents.push({ eventId: event.id, connectorId: event.metadata?.connectorId, status: event.metadata?.status, hash: event.hash });
+      }
+      if (event.journalType === "dream.action") {
+        dreamEvents.push({ eventId: event.id, action: event.metadata?.action ?? event.metadata?.resource, hash: event.hash });
+      }
+      previous = event;
+    }
+
+    return {
+      valid: errors.length === 0,
+      eventsApplied: events.length,
+      memories,
+      contextPacks,
+      denied,
+      connectorEvents,
+      dreamEvents,
+      errors
+    };
   }
 
   private recanonicalizeMemory(memory: Memory): void {
@@ -3329,7 +3692,7 @@ export class MemoryService {
     this.sources = new Map((raw.sources ?? []).map((source) => [source.id, source]));
     this.agents = new Map((raw.agents ?? []).map((agent) => [agent.id, agent]));
     this.personas = new Map((raw.personas ?? []).map((persona) => [persona.id, persona]));
-    this.auditEvents = raw.auditEvents ?? [];
+    this.auditEvents = this.rebuildAuditChain(raw.auditEvents ?? []);
     this.webhooks = new Map((raw.webhooks ?? []).map((webhook) => [webhook.id, webhook]));
     this.webhookDeliveries = raw.webhookDeliveries ?? [];
     this.marketplaceModules = new Map([...officialMarketplaceModules(), ...(raw.marketplaceModules ?? [])].map((module) => [module.id, module]));
@@ -3640,12 +4003,275 @@ function contentHash(value: string): string {
   return `c_${(hash >>> 0).toString(36)}`;
 }
 
+function syntheticExtractionEvent(input: MemoryInput): MemoryExtractionEvent {
+  return {
+    role: input.source?.kind === "tool" ? "tool" : input.source?.kind === "agent" ? "assistant" : "user",
+    content: input.content,
+    timestamp: input.timestamp,
+    source: input.source,
+    uri: input.source?.uri,
+    metadata: input.metadata
+  };
+}
+
+function auditEventForHash(event: AuditEvent): Record<string, unknown> {
+  const { hash: _hash, payloadHash: _payloadHash, ...rest } = event;
+  return rest;
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .filter((key) => record[key] !== undefined)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(",")}}`;
+}
+
+function canonicalAuditJournalType(event: AuditEvent): AuditJournalEvent["journalType"] {
+  if (event.type === "memory.write" && event.memoryId) return "memory.created";
+  if (event.type === "memory.update" || event.type === "memory.consent" || event.type === "memory.revert") {
+    if (event.metadata?.action === "archive") return "memory.archived";
+    if (event.metadata?.action === "retract") return "memory.retracted";
+    const after = event.metadata?.after as Memory | undefined;
+    if (after?.beliefState === "superseded") return "memory.superseded";
+    return "memory.updated";
+  }
+  if (event.type === "memory.delete") return "memory.deleted";
+  if (event.type === "search.run") return event.metadata?.resource === "evidence-pack" ? "context_pack.created" : "memory.retrieved";
+  if (event.type === "policy.violation") return "policy.denied";
+  if (event.type === "reflect.run" || event.type === "retention.enforce") return "dream.action";
+  if (event.type === "connector.sync") return "connector.ingested";
+  return "system.event";
+}
+
+function applyMemoryJournalEvent(current: AuditReplayMemoryState, event: AuditJournalEvent): AuditReplayMemoryState {
+  const next: AuditReplayMemoryState = {
+    ...current,
+    userId: current.userId ?? event.userId,
+    brainId: current.brainId ?? event.brainId,
+    sourceId: current.sourceId ?? event.sourceId,
+    lastEventId: event.id,
+    lastHash: event.hash,
+    versions: current.versions + (event.journalType === "memory.retrieved" ? 0 : 1)
+  };
+  if (event.journalType === "memory.created" || event.journalType === "memory.updated") return { ...next, exists: true };
+  if (event.journalType === "memory.archived") return { ...next, exists: true, archived: true };
+  if (event.journalType === "memory.retracted") return { ...next, exists: true, retracted: true };
+  if (event.journalType === "memory.superseded") return { ...next, exists: true, superseded: true };
+  if (event.journalType === "memory.deleted") return { ...next, exists: false };
+  return next;
+}
+
+function openApiPaths(routeMethods: Record<string, string[]>, security: Array<Record<string, string[]>>): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(
+    Object.entries(routeMethods).map(([path, methods]) => [
+      path,
+      Object.fromEntries(methods.map((method) => [method.toLowerCase(), openApiOperation(path, method, security)]))
+    ])
+  );
+}
+
+function openApiOperation(path: string, method: string, security: Array<Record<string, string[]>>): Record<string, unknown> {
+  const operationId = `${method.toLowerCase()}${path
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replace(/[{}-](.)/g, (_match, char: string) => char.toUpperCase()).replace(/[{}]/g, ""))
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("")}`;
+  const parameters = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => ({
+    name: match[1],
+    in: "path",
+    required: true,
+    schema: { type: "string" }
+  }));
+  return {
+    operationId,
+    summary: `${method} ${path}`,
+    ...(security.length && path !== "/auth/status" ? { security } : {}),
+    ...(parameters.length ? { parameters } : {}),
+    ...(method !== "GET" && method !== "DELETE" ? { requestBody: jsonBody(schemaRef(requestSchemaFor(path))) } : {}),
+    responses: {
+      "200": jsonResponse(responseSchemaFor(path, method)),
+      "201": jsonResponse(responseSchemaFor(path, method)),
+      "202": jsonResponse(responseSchemaFor(path, method)),
+      "400": jsonResponse("ErrorResponse"),
+      "401": jsonResponse("ErrorResponse"),
+      "404": jsonResponse("ErrorResponse")
+    }
+  };
+}
+
+function requestSchemaFor(path: string): string {
+  if (path === "/memories" || path === "/ingest/media") return "MemoryInput";
+  if (path === "/search" || path === "/route" || path === "/evidence-pack") return "SearchRequest";
+  if (path === "/policy/evaluate") return "PolicyEvaluateRequest";
+  if (path === "/policy/rules") return "MemoryPolicyRule";
+  if (path === "/connectors/register") return "ConnectorManifest";
+  if (path.includes("connector")) return "ConnectorRequest";
+  if (path.includes("graph")) return "GraphRequest";
+  if (path.includes("migration")) return "ManagedMigrationBundle";
+  return "GenericObject";
+}
+
+function responseSchemaFor(path: string, method: string): string {
+  if (path === "/memories" && method === "GET") return "MemoryList";
+  if (path === "/memories" || path.startsWith("/memories/{id}")) return "Memory";
+  if (path.includes("evidence") || path.includes("context-packs")) return "EvidencePack";
+  if (path === "/audit/chain") return "AuditChain";
+  if (path === "/audit") return "AuditEventList";
+  if (path.includes("policy")) return "PolicyDecision";
+  if (path.includes("connectors")) return "ConnectorResponse";
+  if (path.includes("graph")) return "GraphResponse";
+  if (path === "/sdk/openapi") return "OpenAPI";
+  if (method === "DELETE") return "EmptyResponse";
+  return "GenericObject";
+}
+
+function jsonBody(schema: Record<string, unknown>): Record<string, unknown> {
+  return { required: true, content: { "application/json": { schema } } };
+}
+
+function jsonResponse(schemaName: string): Record<string, unknown> {
+  return { description: schemaName, content: { "application/json": { schema: schemaRef(schemaName) } } };
+}
+
+function schemaRef(name: string): Record<string, string> {
+  return { "$ref": `#/components/schemas/${name}` };
+}
+
+function openApiSchemas(): Record<string, Record<string, unknown>> {
+  return {
+    GenericObject: { type: "object", additionalProperties: true },
+    EmptyResponse: { type: "object", additionalProperties: false },
+    ErrorResponse: { type: "object", required: ["error"], properties: { error: { type: "string" } } },
+    MemoryInput: {
+      type: "object",
+      required: ["userId", "content"],
+      properties: {
+        userId: { type: "string" },
+        brainId: { type: "string" },
+        sourceId: { type: "string" },
+        agentId: { type: "string" },
+        orgId: { type: "string" },
+        projectId: { type: "string" },
+        content: { type: "string" },
+        type: { enum: ["user", "feedback", "project", "reference", "episodic", "procedural"] },
+        layer: { enum: ["working", "episodic", "long_term", "procedural", "reflection"] },
+        tags: { type: "array", items: { type: "string" } },
+        entities: { type: "array", items: { type: "string" } },
+        consent: { "$ref": "#/components/schemas/ConsentPolicy" },
+        source: { "$ref": "#/components/schemas/Provenance" }
+      }
+    },
+    Memory: {
+      allOf: [
+        { "$ref": "#/components/schemas/MemoryInput" },
+        {
+          type: "object",
+          required: ["id", "schemaVersion", "createdAt", "updatedAt", "trust", "importance", "audit"],
+          properties: {
+            id: { type: "string" },
+            schemaVersion: { const: "2.0" },
+            beliefState: { enum: ["active", "stale", "superseded", "contradicted", "needs_verification", "retracted"] },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+            trust: { type: "number" },
+            importance: { type: "number" },
+            audit: { type: "array", items: { "$ref": "#/components/schemas/MemoryAuditEvent" } }
+          }
+        }
+      ]
+    },
+    MemoryList: { type: "array", items: { "$ref": "#/components/schemas/Memory" } },
+    ConsentPolicy: {
+      type: "object",
+      properties: {
+        visibility: { enum: ["private", "user", "org", "public"] },
+        allowTraining: { type: "boolean" },
+        retentionUntil: { type: "string", format: "date-time" },
+        deleteOnRequest: { type: "boolean" }
+      }
+    },
+    Provenance: {
+      type: "object",
+      required: ["kind", "confidence"],
+      properties: {
+        kind: { enum: ["human", "reviewed_code", "tool", "agent", "transcript", "import"] },
+        uri: { type: "string" },
+        commit: { type: "string" },
+        lineStart: { type: "number" },
+        lineEnd: { type: "number" },
+        confidence: { type: "number", minimum: 0, maximum: 1 }
+      }
+    },
+    MemoryAuditEvent: { type: "object", additionalProperties: true },
+    SearchRequest: {
+      type: "object",
+      required: ["userId", "query"],
+      properties: {
+        userId: { type: "string" },
+        query: { type: "string" },
+        limit: { type: "integer", minimum: 1, maximum: 50 },
+        includePrivate: { type: "boolean" },
+        includeSharedBrains: { type: "boolean" },
+        brainId: { type: "string" },
+        brainIds: { type: "array", items: { type: "string" } },
+        orgId: { type: "string" },
+        projectId: { type: "string" },
+        mode: { enum: ["hybrid", "rrf", "graph", "path"] }
+      }
+    },
+    EvidencePack: { type: "object", required: ["schemaVersion", "id", "query", "context", "results", "hash"], additionalProperties: true },
+    AuditEvent: { type: "object", required: ["id", "type", "timestamp"], additionalProperties: true },
+    AuditEventList: { type: "array", items: { "$ref": "#/components/schemas/AuditEvent" } },
+    AuditChain: { type: "object", required: ["schemaVersion", "eventCount", "valid", "events", "replay"], additionalProperties: true },
+    MemoryPolicyRule: { type: "object", required: ["label", "effect", "operations"], additionalProperties: true },
+    PolicyEvaluateRequest: { type: "object", required: ["operation"], additionalProperties: true },
+    PolicyDecision: { type: "object", required: ["operation", "allowed", "matchedRules", "reasons"], additionalProperties: true },
+    ConnectorManifest: { type: "object", required: ["id", "name", "kind", "version", "direction", "capabilities", "auth"], additionalProperties: true },
+    ConnectorRequest: { type: "object", additionalProperties: true },
+    ConnectorResponse: { type: "object", additionalProperties: true },
+    GraphRequest: { type: "object", additionalProperties: true },
+    GraphResponse: { type: "object", additionalProperties: true },
+    ManagedMigrationBundle: { type: "object", additionalProperties: true },
+    OpenAPI: { type: "object", required: ["openapi", "info", "paths", "components"], additionalProperties: true }
+  };
+}
+
 function safeGet(store: MemoryStore, id: string): Memory | undefined {
   try {
     return store.get(id);
   } catch {
     return undefined;
   }
+}
+
+function connectorReviewRequired(manifest: ConnectorManifest, event: MemoryExtractionEvent & { externalId?: string }): boolean {
+  if (event.metadata?.reviewRequired === true) return true;
+  if (manifest.kind === "chat" && /\b(decision|decided|approved|must|should)\b/i.test(event.content)) return true;
+  return false;
+}
+
+function connectorEventVisibility(event: MemoryExtractionEvent & { externalId?: string }): ConsentVisibility | undefined {
+  const value = event.metadata?.visibility ?? event.metadata?.channelVisibility;
+  if (value === "private" || value === "user" || value === "org" || value === "public") return value;
+  if (value === "team") return "org";
+  return undefined;
+}
+
+function connectorEventTags(manifest: ConnectorManifest, event: MemoryExtractionEvent & { externalId?: string }): string[] {
+  const eventType = typeof event.metadata?.eventType === "string" ? event.metadata.eventType : "";
+  const tags = [manifest.id, manifest.kind];
+  if (manifest.id.includes("github")) tags.push("github");
+  if (manifest.id.includes("slack")) tags.push("slack");
+  if (manifest.id.includes("discord")) tags.push("discord");
+  if (/pr[_-]?decision/i.test(eventType) || /\bPR\b.*\b(decision|approved|merged)\b/i.test(event.content)) tags.push("pr-decision", "connector-decision");
+  if (/test[_-]?failure|actions[_-]?failure/i.test(eventType) || /\b(test|actions?)\b.*\b(failed|failure)\b/i.test(event.content)) tags.push("test-failure", "harness-action");
+  if (connectorReviewRequired(manifest, event)) tags.push("memory-candidate", "review-required");
+  return [...new Set(tags)];
 }
 
 function connectorWritebackPayload(
@@ -3870,6 +4496,7 @@ function officialConnectorManifests(): ConnectorManifest[] {
     service("official-jira", "Jira", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueKey: "externalId", status: "metadata.status", assignee: "entities.assignee", sprint: "metadata.sprint", project: "metadata.project", url: "source.uri" }, "import", ["read:jira-work", "write:jira-work"]),
     service("official-linear", "Linear", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueId: "externalId", team: "metadata.team", status: "metadata.status", assignee: "entities.assignee", label: "tags", url: "source.uri" }, "import", ["read", "write"]),
     service("official-slack", "Slack", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageTs: "externalId", threadTs: "metadata.threadId", permalink: "source.uri" }, "transcript", ["channels:history", "groups:history", "chat:write"]),
+    service("official-discord", "Discord", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageId: "externalId", threadId: "metadata.threadId", jumpUrl: "source.uri" }, "transcript", ["messages.read", "messages.write"]),
     service("official-notion", "Notion", "docs", ["ingest", "webhook", "poll", "writeback"], { pageId: "externalId", workspace: "metadata.workspace", title: "content.title", url: "source.uri", lastEditedBy: "source.author" }, "import", ["read_content", "update_content"]),
     service("official-google-drive", "Google Drive", "cloud_storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title", owner: "source.author" }, "import", ["drive.readonly"]),
     service("official-gmail", "Gmail", "email", ["ingest", "export", "webhook", "poll", "writeback"], { messageId: "externalId", threadId: "metadata.threadId", subject: "content.title", from: "source.author", labelIds: "tags" }, "human", ["gmail.readonly", "gmail.modify"]),
@@ -4058,6 +4685,58 @@ function memoryMatchesProfileScope(memory: Memory, scope: RetrievalProfile["scop
 function sampleMatchesProfileScope(sample: RetrievalTrainingSample, scope: RetrievalProfile["scope"] | undefined): boolean {
   if (!scope) return true;
   return !scope.userId || sample.userId === scope.userId;
+}
+
+function buildQueryPlan(query: string): QueryPlan {
+  const text = query.toLowerCase();
+  const rules: Array<{
+    queryType: string;
+    pattern: RegExp;
+    intent: QueryIntentReport["intent"];
+    strategies: QueryPlanStrategy[];
+    confidence: number;
+    recommendedMode?: QueryIntentReport["recommendedMode"];
+    recommendedWeights?: Partial<RetrievalWeights>;
+    reason: string;
+  }> = [
+    { queryType: "temporal_recent", pattern: /\b(today|yesterday|last week|recent|latest|now)\b/, intent: "temporal_question", strategies: ["temporal", "keyword"], confidence: 0.8, recommendedWeights: { temporal: 0.3, trust: 0.22, keyword: 0.18 }, reason: "recent-time language detected" },
+    { queryType: "temporal_range", pattern: /\b(before|after|since|between|from .* to|valid until|gültig|seit|vor|nach)\b/, intent: "temporal_question", strategies: ["temporal", "timeline"], confidence: 0.8, recommendedWeights: { temporal: 0.34, trust: 0.2, semantic: 0.16 }, reason: "time-window language detected" },
+    { queryType: "change_summary", pattern: /\b(what changed|changed|history|timeline|changelog|difference|diff|was hat sich geändert)\b/, intent: "temporal_question", strategies: ["timeline", "temporal", "entity"], confidence: 0.78, reason: "change-summary language detected" },
+    { queryType: "connection_explanation", pattern: /\b(connected|related|relationship|path|how.*connect|between|zusammenhang|verbunden)\b/, intent: "connection_explanation", strategies: ["graph_path", "activation", "entity"], confidence: 0.84, recommendedMode: "path", recommendedWeights: { graph: 0.42, entity: 0.22, trust: 0.18 }, reason: "connection language detected" },
+    { queryType: "graph_multi_hop", pattern: /\b(multi[- ]?hop|linked through|über .* verbunden|transitive)\b/, intent: "multi_hop_question", strategies: ["graph_path", "activation"], confidence: 0.82, recommendedMode: "path", recommendedWeights: { graph: 0.4, entity: 0.22, semantic: 0.16 }, reason: "multi-hop graph language detected" },
+    { queryType: "dependency_path", pattern: /\b(depends on|dependency|imports|calls|blocked by|requires|abhängig)\b/, intent: "multi_hop_question", strategies: ["graph_path", "entity", "keyword"], confidence: 0.82, recommendedMode: "path", recommendedWeights: { graph: 0.38, entity: 0.24, keyword: 0.18 }, reason: "dependency language detected" },
+    { queryType: "procedure_recall", pattern: /\b(how do i|procedure|workflow|runbook|steps|before i|wie mache ich|ablauf)\b/, intent: "preference_procedural", strategies: ["procedure", "keyword", "semantic"], confidence: 0.78, recommendedWeights: { trust: 0.26, keyword: 0.22, entity: 0.18, semantic: 0.18 }, reason: "procedural language detected" },
+    { queryType: "checklist_release", pattern: /\b(checklist|before release|deploy|ship|release gate|run tests|verify before)\b/, intent: "preference_procedural", strategies: ["procedure", "pattern", "policy"], confidence: 0.78, recommendedWeights: { trust: 0.28, keyword: 0.22, temporal: 0.16 }, reason: "release/checklist language detected" },
+    { queryType: "contradiction_check", pattern: /\b(contradict|conflict|disagree|widerspruch|conflicting)\b/, intent: "contradiction_check", strategies: ["contradiction", "temporal", "entity"], confidence: 0.84, recommendedWeights: { trust: 0.3, temporal: 0.22, entity: 0.18 }, reason: "contradiction language detected" },
+    { queryType: "stale_or_outdated", pattern: /\b(outdated|stale|superseded|old|no longer|nicht mehr|veraltet)\b/, intent: "contradiction_check", strategies: ["contradiction", "temporal", "timeline"], confidence: 0.82, recommendedWeights: { temporal: 0.3, trust: 0.22, entity: 0.16 }, reason: "staleness language detected" },
+    { queryType: "person_entity", pattern: /\b(who|person|owner|author|maintainer|contact|wer|person)\b/, intent: "personal_context", strategies: ["entity", "keyword", "semantic"], confidence: 0.74, reason: "person/entity language detected" },
+    { queryType: "project_state", pattern: /\b(repo|repository|project|workspace|codebase|branch|milestone|projekt)\b/, intent: "project_context", strategies: ["project", "keyword", "temporal"], confidence: 0.74, reason: "project context language detected" },
+    { queryType: "team_memory", pattern: /\b(team|org|shared|everyone|company|kollektiv|firma)\b/, intent: "team_context", strategies: ["team", "policy", "keyword"], confidence: 0.74, reason: "team context language detected" },
+    { queryType: "personal_preference", pattern: /\b(my|me|i prefer|preference|always use|never use|ich bevorzuge|immer|nie)\b/, intent: "personal_context", strategies: ["personal", "pattern", "trust"], confidence: 0.76, reason: "personal preference language detected" },
+    { queryType: "source_provenance", pattern: /\b(source|citation|evidence|where did|provenance|beweis|quelle)\b/, intent: "fact_lookup", strategies: ["source", "keyword", "entity"], confidence: 0.76, reason: "source/provenance language detected" },
+    { queryType: "policy_permission", pattern: /\b(allowed|permission|policy|consent|private|public|dürfen|erlaubt)\b/, intent: "team_context", strategies: ["policy", "team", "source"], confidence: 0.78, reason: "policy/permission language detected" },
+    { queryType: "pattern_behavior", pattern: /\b(pattern|habit|usually|recurring|often|typical|gewöhnlich)\b/, intent: "preference_procedural", strategies: ["pattern", "temporal", "semantic"], confidence: 0.76, reason: "behavioral pattern language detected" },
+    { queryType: "incident_root_cause", pattern: /\b(root cause|why did|incident|failure|regression|broken|warum.*kaputt)\b/, intent: "multi_hop_question", strategies: ["graph_path", "timeline", "source"], confidence: 0.8, recommendedMode: "path", reason: "incident/root-cause language detected" },
+    { queryType: "action_history", pattern: /\b(what did i do|actions|commits|changed by me|last action|was habe ich gemacht)\b/, intent: "temporal_question", strategies: ["timeline", "source", "personal"], confidence: 0.78, reason: "action-history language detected" },
+    { queryType: "direct_fact", pattern: /\b(what is|which|tell me|show me|fact|value|status|was ist|welche)\b/, intent: "fact_lookup", strategies: ["semantic", "keyword"], confidence: 0.68, reason: "direct fact language detected" }
+  ];
+  const matches = rules.filter((rule) => rule.pattern.test(text));
+  const selected = matches[0] ?? rules.at(-1)!;
+  const secondaryTypes = matches.slice(1).map((rule) => rule.queryType);
+  const strategies = [...new Set((matches.length ? matches : [selected]).flatMap((rule) => rule.strategies))];
+  if (!strategies.includes("semantic")) strategies.push("semantic");
+  const recommendedMode = selected.recommendedMode ?? (strategies.includes("graph_path") ? "path" : "hybrid");
+  return {
+    query,
+    queryType: selected.queryType,
+    secondaryTypes,
+    intent: selected.intent,
+    recommendedMode,
+    strategies,
+    recommendedWeights: selected.recommendedWeights,
+    explanation: matches.length ? matches.map((rule) => rule.reason) : ["default direct fact lookup"],
+    confidence: selected.confidence
+  };
 }
 
 function deterministicQueryExpansions(query: string): string[] {

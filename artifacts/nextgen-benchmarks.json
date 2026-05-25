@@ -1,0 +1,369 @@
+{
+  "passed": true,
+  "generatedAt": "2026-05-25T05:02:06.547Z",
+  "suites": [
+    {
+      "id": "answer-generation",
+      "passed": true,
+      "score": 1,
+      "details": [
+        {
+          "id": "direct-answer",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "redis"
+          ],
+          "actual": "Project Atlas uses TypeScript and Redis for cache reads. Project Atlas moved away from SQLite for cache reads."
+        },
+        {
+          "id": "language-answer",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "typescript"
+          ],
+          "actual": "Project Atlas uses TypeScript and Redis for cache reads. Project Atlas moved away from SQLite for cache reads."
+        }
+      ]
+    },
+    {
+      "id": "multi-hop-temporal",
+      "passed": true,
+      "score": 1,
+      "details": [
+        {
+          "id": "multi-hop-path",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "transitive_depends_on"
+          ],
+          "actual": "[\"atlas -transitive_depends_on-> redisadapter\"]"
+        },
+        {
+          "id": "temporal-interval",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "2 events"
+          ],
+          "actual": "2 events"
+        }
+      ]
+    },
+    {
+      "id": "behavioral-patterns",
+      "passed": true,
+      "score": 0.845,
+      "details": [
+        {
+          "id": "weekly-friday-detection",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "weekly:friday"
+          ],
+          "actual": "[\"weekly:friday\",\"weekly:friday\",\"weekly:friday\",\"weekly:friday\"]"
+        },
+        {
+          "id": "false-positive-risk",
+          "passed": true,
+          "score": 0.69,
+          "expected": [
+            "risk<=0.5"
+          ],
+          "actual": "0.31000000000000005"
+        }
+      ]
+    },
+    {
+      "id": "retrieval-calibration",
+      "passed": true,
+      "score": 0.9347931696550242,
+      "details": [
+        {
+          "id": "confidence-field",
+          "passed": true,
+          "score": 0.8043795089650726,
+          "expected": [
+            "confidence>0.5"
+          ],
+          "actual": "0.8043795089650726"
+        },
+        {
+          "id": "unsafe-threshold",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "unsafe low-confidence"
+          ],
+          "actual": "{\"confidence\":0.47556951312703927,\"unsafeToInject\":true}"
+        },
+        {
+          "id": "context-exclusion",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "weak memory excluded"
+          ],
+          "actual": "[ce89892c-b064-4973-bd51-90f5c4b7dcfd] trust=0.94 score=0.75 confidence=0.80 Atlas deployment requires reviewed npm test evidence before release."
+        }
+      ]
+    },
+    {
+      "id": "usp-evidence-pack",
+      "passed": true,
+      "score": 1,
+      "details": [
+        {
+          "id": "why-used-explanation",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "explanation",
+            "trust signal"
+          ],
+          "actual": "[\"keyword 1.00\",\"temporal 1.00\",\"graph 0.67\",\"graph Atlas deploys require npm test before release. -mentions-> deploys require\",\"mode hybrid\",\"rerank coverage 0.67\",\"calibration confidence 0.78\"]"
+        },
+        {
+          "id": "source-citation",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "file citation"
+          ],
+          "actual": "file://AGENTS.md:12-14"
+        },
+        {
+          "id": "temporal-validity",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "validFrom",
+            "not stale"
+          ],
+          "actual": "{\"validFrom\":\"2026-05-01T00:00:00.000Z\",\"lastConfirmedAt\":\"2026-05-20T00:00:00.000Z\",\"stale\":false,\"decision\":\"include\"}"
+        },
+        {
+          "id": "consent-boundary",
+          "passed": true,
+          "score": 1,
+          "expected": [
+            "private excluded"
+          ],
+          "actual": "org"
+        }
+      ]
+    }
+  ],
+  "trend": {
+    "points": [
+      {
+        "generatedAt": "2026-05-24T16:44:39.354Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T16:47:04.172Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T17:24:21.947Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T17:26:44.509Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T18:05:28.042Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T18:09:59.148Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T18:16:50.890Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T18:22:32.066Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T18:35:48.127Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T18:41:32.599Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T18:43:14.530Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T18:45:07.693Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T18:53:02.100Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T19:04:46.681Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T19:12:18.176Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9612499999999999
+      },
+      {
+        "generatedAt": "2026-05-24T19:47:23.978Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9347931696555415,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9559586339311081
+      },
+      {
+        "generatedAt": "2026-05-24T19:49:08.739Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9347931696560589,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9559586339312117
+      },
+      {
+        "generatedAt": "2026-05-24T20:15:27.943Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9347931696555415,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9559586339311081
+      },
+      {
+        "generatedAt": "2026-05-25T05:00:24.740Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9347931696550242,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9559586339310048
+      },
+      {
+        "generatedAt": "2026-05-25T05:02:06.546Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9347931696550242,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9559586339310048
+      }
+    ]
+  }
+}

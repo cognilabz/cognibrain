@@ -3,6 +3,7 @@ import type { EntityMergeSuggestion, EntityRecord, GraphReport, Memory } from ".
 export class EntityRegistry {
   private readonly aliases = new Map<string, string>();
   private readonly records = new Map<string, EntityRecord>();
+  private readonly memoryIdSets = new Map<string, Set<string>>();
 
   constructor(aliasMap: Record<string, string[]> = {}) {
     this.configureAliases(aliasMap);
@@ -26,11 +27,17 @@ export class EntityRegistry {
     const entities = [...new Set(memory.entities.map((entity) => this.canonicalize(entity)).filter(Boolean))];
     for (const entity of entities) {
       const current = this.records.get(entity);
+      const memoryIds = current?.memoryIds ?? [];
+      const memoryIdSet = this.memoryIdsFor(entity, memoryIds);
+      if (!memoryIdSet.has(memory.id)) {
+        memoryIdSet.add(memory.id);
+        memoryIds.push(memory.id);
+      }
       this.records.set(entity, {
         id: `ent_${hash(entity).slice(0, 14)}`,
         canonical: entity,
         aliases: current?.aliases ?? aliasesFor(entity, this.aliases),
-        memoryIds: [...new Set([...(current?.memoryIds ?? []), memory.id])],
+        memoryIds,
         firstSeenAt: current?.firstSeenAt ?? now,
         lastSeenAt: now
       });
@@ -47,10 +54,12 @@ export class EntityRegistry {
 
   import(records: EntityRecord[] = []): void {
     this.records.clear();
+    this.memoryIdSets.clear();
     for (const record of records) {
       const canonical = normalizeEntity(record.canonical);
       const normalizedRecord = { ...record, canonical, aliases: record.aliases.map(normalizeEntity) };
       this.records.set(canonical, normalizedRecord);
+      this.memoryIdSets.set(canonical, new Set(normalizedRecord.memoryIds));
       this.aliases.set(canonical, canonical);
       for (const alias of normalizedRecord.aliases) this.aliases.set(alias, canonical);
     }
@@ -110,6 +119,7 @@ export class EntityRegistry {
       lastSeenAt: now
     };
     this.records.set(target, record);
+    this.memoryIdSets.set(target, new Set(record.memoryIds));
     return record;
   }
 
@@ -124,6 +134,14 @@ export class EntityRegistry {
     const updated = { ...current, aliases: aliasesFor(target, this.aliases), lastSeenAt: new Date().toISOString() };
     this.records.set(target, updated);
     return updated;
+  }
+
+  private memoryIdsFor(entity: string, current: string[]): Set<string> {
+    const existing = this.memoryIdSets.get(entity);
+    if (existing) return existing;
+    const next = new Set(current);
+    this.memoryIdSets.set(entity, next);
+    return next;
   }
 
   suggestMerges(memories: Memory[] = []): EntityMergeSuggestion[] {

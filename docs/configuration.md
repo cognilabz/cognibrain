@@ -1,6 +1,6 @@
 # Configuration
 
-cognibrain is intentionally local-first. The current implementation runs without API keys, databases, or hosted vector stores.
+cognibrain is intentionally local-first. The current implementation can run without API keys, databases, or hosted vector stores for private development. Set `MEMORY_API_KEYS` before exposing the HTTP API to a team or network.
 
 ## Runtime
 
@@ -27,10 +27,17 @@ Environment variables:
 | `NODE_ENV` | unset | Set to `production` in Docker |
 | `COGNIBRAIN_RUNTIME_ROOT` | launch directory | Directory for `.cognibrain/` runtime state and default memory JSON |
 | `MEMORY_DB_PATH` | `.memory-harness.json` | Local API and CLI persistence file |
+| `MEMORY_API_KEY` | unset | Single API key accepted by the HTTP API |
+| `MEMORY_API_KEYS` | unset | Comma-separated API keys accepted by the HTTP API |
+| `MEMORY_REQUIRE_AUTH` | `false` | Set to `true` to reject non-health routes unless an API key is configured and supplied |
 | `MEMORY_STORAGE_BACKEND` | `json` | Persistence backend: `json`, `jsonl`/`append-only`, `sqlite`, `postgres`/`postgres-compatible`, or `cockroach` |
 | `MEMORY_EVENT_LOG_PATH` | `.memory-harness.jsonl` | Append-only persistence log when `MEMORY_STORAGE_BACKEND=jsonl` |
 | `MEMORY_SQLITE_PATH` | `.memory-harness.sqlite` | SQLite database path when `MEMORY_STORAGE_BACKEND=sqlite` |
 | `MEMORY_POSTGRES_COMPAT_PATH` | `.memory-harness.postgres.json` | Local Postgres-compatible SQL emulator path for CI/offline tests |
+| `MEMORY_POSTGRES_URL` | unset | PostgreSQL/CockroachDB URL for `postgres-remote` or `cockroach-remote` storage |
+| `MEMORY_PSQL_COMMAND` | `psql` | Override psql binary used by the remote PostgreSQL/CockroachDB driver and live verifier |
+| `MEMORY_POSTGRES_CONTAINER_NAME` | `cognibrain-planv1-postgres` | Container name used by `npm run verify:postgres` |
+| `MEMORY_POSTGRES_IMAGE` | `docker.io/library/postgres:16-alpine` | Postgres image used by `npm run verify:postgres` |
 | `MEMORY_STORAGE_REPLICATION_MODE` | `logical` | Replication mode reported by the Postgres-compatible adapter |
 | `MEMORY_STORAGE_SHARDS` | `1` | Shard count used in storage capability reports |
 | `MEMORY_AUTO_DREAM` | `true` | Set to `false` to disable automatic dream-cycle maintenance |
@@ -42,6 +49,9 @@ Environment variables:
 | `MEMORY_ENCRYPTION_KEY_ID` | `local` | Non-secret key id stored in encrypted-memory metadata |
 | `MEMORY_ENCRYPTION_KEY_VERSION` | `1` | Non-secret key version stored in encrypted-memory metadata |
 | `MEMORY_DEFAULT_TOKEN_BUDGET` | `900` | Suggested context budget for harness connectors |
+| `MEMORY_DISABLE_EMBEDDINGS` / `MEMORY_PRIVACY_DISABLE_EMBEDDINGS` | unset | Disable optional embedding providers while keeping token-semantic fallback retrieval |
+| `MEMORY_OPENAI_BASE_URL` / `MEMORY_OPENAI_EMBEDDINGS_URL` | OpenAI-compatible default | Optional OpenAI-compatible embedding endpoint |
+| `MEMORY_OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Optional embedding model for OpenAI-compatible providers |
 | `MEMORY_NEVER_STORE_SECRETS` | `true` | Policy flag host connectors should honor before writing memories |
 | `MEMORY_WEBHOOK_TIMEOUT_MS` | `10000` | Timeout for real HTTP webhook delivery |
 | `MEMORY_CONNECTOR_TIMEOUT_MS` | `10000` | Timeout for connector writeback HTTP delivery |
@@ -84,6 +94,10 @@ The current ranker combines:
 - evidence gating so trust alone cannot retrieve unrelated memories.
 
 The default benchmarked profile is semantic `0.26`, keyword `0.24`, entity `0.16`, temporal `0.08`, behavioural `0.05`, trust `0.18`, graph `0.06`, and access `0.02`; values are normalized before scoring. API search requests, service constructors, and `MEMORY_CONFIG_PATH` can pass weight overrides.
+
+Semantic scoring is deterministic by default, but embedded callers can pass an `embeddingProvider` on `search()` to replace token-cosine semantic scoring with vector similarity. The built-in `LocalHashEmbeddingProvider` requires no API key and is useful for smoke tests; production deployments can implement the same synchronous `embed(input): number[]` interface for local or OpenAI-compatible embedding backends. Persisted ANN indexes and pgvector-backed search remain a separate deployment hardening step.
+
+Lexical scoring uses an in-process BM25 fallback for JSON/JSONL and memory-only runtimes. When `MEMORY_STORAGE_BACKEND=sqlite` is active and Node exposes `node:sqlite`, the SQLite adapter refreshes a `memory_fts` FTS5 virtual table in the same transaction as the snapshot and the service automatically passes SQLite BM25 scores into retrieval through the `lexicalProvider` hook. `storageStatus()` reports the active lexical strategy so production claims can distinguish indexed SQLite FTS5 from fallback scoring. Remote Postgres deployments create a generated `search_vector` column and GIN index on `cognibrain_memories`; the retrieval service consumes the same `lexicalProvider` hook with `postgres-tsvector` scores.
 
 Search can also receive optional reranker and verifier implementations in the TypeScript API. The built-in reranker is deterministic and favors candidates with stronger post-retrieval query coverage before the verifier marks stale or contradiction-tagged results for warning or review. For production adapters, set `MEMORY_INTELLIGENCE_COMMAND` to a JSON-command provider. The command receives stdin JSON with a `task` of `rerank`, `verify`, `contradiction`, `summarize`, or `extract` and returns JSON decisions. Timeouts fail closed to the deterministic fallback.
 
@@ -175,7 +189,7 @@ Durable audit mode appends each saved snapshot to JSONL and reloads the latest v
 MEMORY_STORAGE_BACKEND=jsonl MEMORY_EVENT_LOG_PATH=.memory-harness.jsonl npm run start:local
 ```
 
-SQLite mode stores snapshots transactionally and records each saved payload in an append-only SQL event table:
+SQLite mode stores snapshots transactionally, records each saved payload in an append-only SQL event table, and refreshes the `memory_fts` FTS5 index used for BM25 lexical retrieval:
 
 ```bash
 MEMORY_STORAGE_BACKEND=sqlite MEMORY_SQLITE_PATH=.memory-harness.sqlite npm run start:local
@@ -193,6 +207,14 @@ Remote Postgres and CockroachDB deployments can use the psql-backed production d
 MEMORY_STORAGE_BACKEND=postgres-remote MEMORY_POSTGRES_URL=postgres://user:pass@host:5432/cognibrain npm run start:local
 MEMORY_STORAGE_BACKEND=cockroach-remote MEMORY_POSTGRES_URL=postgres://user:pass@host:26257/cognibrain npm run start:local
 ```
+
+Verify the remote Postgres path locally with a real container:
+
+```bash
+npm run verify:postgres
+```
+
+The verifier uses Apple `container` when available and falls back to Docker. It applies idempotent migrations, writes tenant-scoped memories, checks isolation, runs a write/search smoke benchmark, verifies indexed `tsvector` retrieval, and writes `artifacts/postgres-live.json`. Set `MEMORY_POSTGRES_URL` to point it at an existing cluster instead of the ad-hoc local container.
 
 Cassandra-compatible mode stores wide-column shaped snapshots and append-only events in a local file for CI, migration, and package validation. It models keyspace, partition key, clustering key, quorum consistency and range sharding:
 

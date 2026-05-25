@@ -466,6 +466,11 @@ const connectorOAuthCallbackSchema = z.object({
   error: z.string().optional()
 });
 
+const connectorOAuthRevokeSchema = z.object({
+  connectorId: z.string().min(1),
+  actorId: z.string().optional()
+});
+
 const connectorSyncSchema = z.object({
   connectorId: z.string().min(1),
   userId: z.string().min(1),
@@ -630,8 +635,19 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  const auth = authenticate(request, url.pathname);
+  if (!auth.allowed) {
+    send(response, auth.status, { error: auth.error, code: auth.code });
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/health") {
-    send(response, 200, { ok: true, ...defaultService.health(url.searchParams.get("userId") ?? undefined) });
+    send(response, 200, { ok: true, auth: auth.statusReport, ...defaultService.health(url.searchParams.get("userId") ?? undefined) });
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/auth/status") {
+    send(response, 200, auth.statusReport);
     return;
   }
 
@@ -822,6 +838,15 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && url.pathname === "/audit/chain") {
+    send(response, 200, defaultService.auditChain({
+      userId: url.searchParams.get("userId") ?? undefined,
+      memoryId: url.searchParams.get("memoryId") ?? undefined,
+      type: url.searchParams.get("type") ? auditTypeSchema.parse(url.searchParams.get("type")) : undefined
+    }));
+    return;
+  }
+
   if (method === "POST" && url.pathname === "/webhooks") {
     send(response, 201, defaultService.registerWebhook(webhookSchema.parse(await json(request))));
     return;
@@ -895,7 +920,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (method === "GET" && url.pathname === "/sdk/openapi") {
-    send(response, 200, defaultService.apiDescription());
+    send(response, 200, defaultService.apiDescription(auth.statusReport));
     return;
   }
 
@@ -1082,6 +1107,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "POST" && url.pathname === "/connectors/auth/revoke") {
+    const body = connectorOAuthRevokeSchema.parse(await json(request));
+    send(response, 202, defaultService.revokeConnectorAuth(body.connectorId, body.actorId));
+    return;
+  }
+
   if (method === "GET" && url.pathname === "/connectors/list") {
     const connectorId = url.searchParams.get("connectorId");
     if (!connectorId) {
@@ -1237,6 +1268,10 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       send(response, 202, serialize(defaultService.revertMemory(parts[1], body.auditEventId)));
       return;
     }
+    if (method === "POST" && parts[2] === "archive") {
+      send(response, 202, serialize(defaultService.archive(parts[1])));
+      return;
+    }
     if (method === "DELETE") {
       send(response, defaultService.delete(parts[1]) ? 204 : 404, null);
       return;
@@ -1288,6 +1323,16 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (method === "GET" && parts[0] === "evidence-pack" && parts[1]) {
+    send(response, 200, defaultService.getEvidencePack(parts[1]));
+    return;
+  }
+
+  if (method === "GET" && parts[0] === "context-packs" && parts[1] && parts[2] === "evidence") {
+    send(response, 200, defaultService.getEvidencePack(parts[1]));
+    return;
+  }
+
+  if (method === "GET" && parts[0] === "context-packs" && parts[1]) {
     send(response, 200, defaultService.getEvidencePack(parts[1]));
     return;
   }
@@ -1472,7 +1517,7 @@ function json(request: IncomingMessage): Promise<unknown> {
 function send(response: ServerResponse, status: number, payload: unknown): void {
   response.statusCode = status;
   response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Headers", "content-type, authorization");
+  response.setHeader("Access-Control-Allow-Headers", "content-type, authorization, x-api-key, x-actor-id");
   response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   if (status === 204 || payload === null) {
     response.end();
@@ -1485,10 +1530,42 @@ function send(response: ServerResponse, status: number, payload: unknown): void 
 function sendText(response: ServerResponse, status: number, payload: string, contentType = "text/plain"): void {
   response.statusCode = status;
   response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Headers", "content-type, authorization");
+  response.setHeader("Access-Control-Allow-Headers", "content-type, authorization, x-api-key, x-actor-id");
   response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   response.setHeader("Content-Type", contentType);
   response.end(payload);
+}
+
+function authenticate(request: IncomingMessage, pathname: string): {
+  allowed: boolean;
+  status: number;
+  error?: string;
+  code?: string;
+  statusReport: { mode: "open-local-dev" | "api-key"; protected: boolean; actorId?: string; warning?: string };
+} {
+  const configured = configuredApiKeys();
+  const requiresAuth = process.env.MEMORY_REQUIRE_AUTH === "true" || configured.length > 0;
+  const statusReport = requiresAuth
+    ? { mode: "api-key" as const, protected: true, actorId: request.headers["x-actor-id"]?.toString() }
+    : { mode: "open-local-dev" as const, protected: false, warning: "API authentication is disabled for local development. Set MEMORY_API_KEYS or MEMORY_REQUIRE_AUTH=true before exposing this server." };
+  if (!requiresAuth || pathname === "/health") return { allowed: true, status: 200, statusReport };
+  const token = request.headers["x-api-key"]?.toString() ?? bearerToken(request.headers.authorization);
+  if (!token) return { allowed: false, status: 401, error: "API key required", code: "auth_required", statusReport };
+  if (!configured.length) return { allowed: false, status: 403, error: "No API keys are configured", code: "auth_not_configured", statusReport };
+  if (!configured.includes(token)) return { allowed: false, status: 403, error: "Invalid API key", code: "auth_invalid", statusReport };
+  return { allowed: true, status: 200, statusReport: { ...statusReport, actorId: request.headers["x-actor-id"]?.toString() ?? "api-key" } };
+}
+
+function configuredApiKeys(): string[] {
+  return (process.env.MEMORY_API_KEYS ?? process.env.MEMORY_API_KEY ?? "")
+    .split(",")
+    .map((key) => key.trim())
+    .filter(Boolean);
+}
+
+function bearerToken(header?: string): string | undefined {
+  const match = header?.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim();
 }
 
 function parseRelationTypes(value: string | null): z.infer<typeof relationTypeSchema>[] | undefined {
@@ -1516,6 +1593,8 @@ function serializeExtractionReport(report: ExtractionReport) {
     entityLinks: report.entityLinks,
     stages: report.stages,
     failures: report.failures,
+    claims: report.claims,
+    durabilityDecisions: report.durabilityDecisions,
     enrichmentCandidates: report.enrichmentCandidates,
     learnedRules: report.learnedRules
   };

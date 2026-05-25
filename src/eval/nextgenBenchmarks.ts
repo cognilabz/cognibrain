@@ -10,7 +10,7 @@ interface SuiteScore {
 }
 
 export function runNextgenBenchmarkSuites(outputPath = "artifacts/nextgen-benchmarks.json", trendPath = "artifacts/benchmark-trend.json") {
-  const suites = [answerGenerationSuite(), multiHopTemporalSuite(), behavioralPatternSuite(), uspEvidenceSuite()];
+  const suites = [answerGenerationSuite(), multiHopTemporalSuite(), behavioralPatternSuite(), retrievalCalibrationSuite(), uspEvidenceSuite()];
   const trend = benchmarkTrend(suites, trendPath);
   const report = {
     passed: suites.every((suite) => suite.passed),
@@ -74,6 +74,23 @@ function behavioralPatternSuite(): SuiteScore {
     { id: "false-positive-risk", passed: Boolean(friday && (friday.falsePositiveRisk ?? 1) <= 0.5), score: friday ? 1 - (friday.falsePositiveRisk ?? 1) : 0, expected: ["risk<=0.5"], actual: String(friday?.falsePositiveRisk ?? "missing") }
   ];
   return finalizeSuite("behavioral-patterns", details);
+}
+
+function retrievalCalibrationSuite(): SuiteScore {
+  const service = new MemoryService();
+  service.add({ userId: "calibration", content: "Atlas deployment requires reviewed npm test evidence before release.", entities: ["atlas", "deployment"], source: { kind: "reviewed_code", confidence: 0.99 } });
+  const weak = service.add({ userId: "calibration", content: "Atlas deployment maybe skips tests according to a weak note.", entities: ["atlas", "deployment"], source: { kind: "agent", confidence: 0.08 } });
+  service.update(weak.id, { trust: 0.04, importance: 0.1 });
+  const results = service.search({ userId: "calibration", query: "Atlas deployment tests", limit: 2 });
+  const high = results.find((result) => result.memory.id !== weak.id);
+  const low = results.find((result) => result.memory.id === weak.id);
+  const pack = service.evidencePack({ userId: "calibration", query: "Atlas deployment tests", limit: 2, tokenBudget: 500 });
+  const details = [
+    { id: "confidence-field", passed: typeof high?.confidence === "number" && high.confidence > 0.5, score: high?.confidence ?? 0, expected: ["confidence>0.5"], actual: String(high?.confidence ?? "missing") },
+    { id: "unsafe-threshold", passed: Boolean(low?.unsafeToInject && (low.confidence ?? 1) < 0.5), score: low?.unsafeToInject ? 1 : 0, expected: ["unsafe low-confidence"], actual: JSON.stringify({ confidence: low?.confidence, unsafeToInject: low?.unsafeToInject }) },
+    { id: "context-exclusion", passed: !pack.context.includes(weak.id), score: pack.context.includes(weak.id) ? 0 : 1, expected: ["weak memory excluded"], actual: pack.context }
+  ];
+  return finalizeSuite("retrieval-calibration", details);
 }
 
 function uspEvidenceSuite(): SuiteScore {

@@ -1,0 +1,46 @@
+# Implementation Status Matrix
+
+This matrix is the code-verified status surface for the Evidence-Grade Agent Memory OS plan. It should be updated when tests, API routes, CLI commands, MCP tools, or dashboard surfaces change.
+
+| Feature | Code implemented | API exposed | CLI exposed | MCP exposed | Dashboard exposed | Tests | Docs | Production ready? |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| MemoryRecordV2 | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Local-ready |
+| SQLite storage schema | Yes | Status only | Via env | N/A | Status only | Yes, runtime-gated | Yes | Local production candidate |
+| Postgres-compatible storage | Yes | Status only | Via env | N/A | Status only | Yes, including live Postgres container proof | Yes | Self-hosted production candidate; managed service still separate |
+| Event-sourced audit journal | Yes | Yes | Yes | Not required by planv1 | Audit feed | Yes | Yes | Local signable chain with replay |
+| API key authentication | Yes | Yes | Not required by planv1 | Not required by planv1 | Runtime health status | Yes | Yes | Local/team-ready when `MEMORY_API_KEYS` is set |
+| Policy engine and tenant isolation | Yes | Yes | Yes | Policy check tool | Scope/route preview | Yes, includes cross-scope fuzz matrix | Yes | Local/team-ready isolation surface |
+| Context/Evidence pack object model | Yes | Yes | Yes | Context pack tool | Context Pack Preview | Yes | Yes | Audit-ready local object |
+| Evidence pack export by id | Yes | Yes | Yes | Evidence pack tool | Context Pack Preview and Artifact Inspector | Yes | Yes | Local-ready |
+| Query intent planner | Yes | Yes | Yes | Available through context/search outputs | Route Preview | Yes, 20 query-type plan coverage | Yes | Deterministic plan with strategy/explanation |
+| Graph path explanation | Yes | Yes | Yes | Graph path and explain tools | Graph Explorer | Yes | Yes | Local-ready |
+| Real BM25/FTS backend | Yes for SQLite FTS5 and live Postgres tsvector | Storage status plus retrieval provider | Via storage/env commands | Not required by planv1 | Runtime storage status | Yes, indexed SQLite BM25 and live Postgres tsvector covered | Yes | Local/self-hosted production candidate |
+| Vector backend | Interface plus local and OpenAI-compatible providers | Search option | Via env/config | Not required by planv1 | Runtime storage capability status | Yes, including privacy-disable proof | This page | Optional no-key local/provider hook plus pgvector capability flag for Postgres deployments |
+| Retrieval calibration | Yes | Search/evidence result fields | Context/evidence output | Context/evidence output | Context Pack Preview confidence and unsafe flags | Yes, benchmark suite plus context exclusion test | Yes | Deterministic confidence with unsafe-to-inject threshold |
+| Connector SDK | Yes | Yes | Yes | Not required by planv1 | Connector health and writeback metrics | Yes, manifest builder/auth/poll/writeback plus live HTTP verifier | Yes | Local connector-author SDK plus HTTP lifecycle, OAuth hash/revoke, status visibility |
+| Source connector provenance | Yes | Yes | Yes | Evidence/context output | Evidence lines and verification queue | Yes, including source-deletion revalidation | Yes | Standard `sourceRef` plus source deletion verification queue |
+| Claim extraction schema | Yes | Yes | CLI via `extract` | Claim verification tool | Memory detail metadata | Yes | Yes | Deterministic schema plus provider fallback hook |
+| Durable vs ephemeral classifier | Yes | Yes | CLI via `extract` | Memory add/extract path | Memory detail/lifecycle state | Yes | Yes | Local rules classify store/ignore/session/working/ask-user |
+| GitHub/Slack/Discord connectors | Yes for local HTTP adapters and official manifests | Manifest/poll/writeback/auth boundaries | Yes | Not required by planv1 | Connector health and writeback metrics | Yes, `verify:connectors` live HTTP proof | Yes | Self-hostable connector proof |
+| MCP v2 graph/policy/procedure tools | Yes | N/A | N/A | Yes, includes graph/evidence/policy/claim/procedure/action tools | N/A | Yes | Yes | Local MCP Memory OS surface |
+| Python SDK | Yes | N/A | N/A | N/A | N/A | Yes | Yes | Local/client-ready subset |
+| TypeScript SDK v1 | Yes | Uses HTTP API | N/A | N/A | N/A | Yes, retry/error/page and surface tests | Yes | Local/client-ready with auth headers, retries, typed errors, pagination helper, graph/evidence/connectors/policy |
+| OpenAPI contract | Yes | Yes | CLI via `api-spec` | N/A | N/A | Yes | Yes | Structured local SDK-generation contract |
+| USP benchmarks | Yes, certified public-baseline gate plus import format | Artifacts | Yes | Not required by planv1 | Artifact Inspector and proof scores | Yes, `benchmark:market` | Yes | Public-baseline proof with importable comparable artifacts |
+| Production load benchmarks | Yes, local deterministic runner plus 10k/100k/1M artifacts and live Postgres smoke | Artifacts | Yes | Not required by planv1 | Artifact Inspector | Yes, includes 10k dream, 100k, 1M write/search/connector, and Postgres migration gate | Yes | Local/self-hosted proof |
+
+Open roadmap tracking lives in GitHub issues #166-#211.
+
+Latest Postgres proof: `npm run verify:postgres` starts or reuses a local Postgres 16 container, applies idempotent migrations, writes real rows into tenant-indexed tables, uses a generated `tsvector` plus GIN index for lexical retrieval, checks cross-user isolation, and writes `artifacts/postgres-live.json`. The 2026-05-24 run passed all acceptance checks with 25 writes, 10 searches, zero failures, migration count `3 -> 3`, `aliceAtlasRows=1`, `bobAtlasRows=0`, and `bobSearchLeaks=0`.
+
+Latest Query Planner proof: `npm test -- tests/core.test.ts` verifies 20 query examples across direct fact, temporal, graph, dependency, procedure, release checklist, contradiction, stale, person/entity, project, team, personal preference, source/provenance, policy, behavior pattern, incident/root-cause, and action-history retrieval. `SearchResult.queryPlan` and evidence-pack retrieval entries carry the selected plan with query type, secondary types, strategies, mode, confidence, weights, and explanation.
+
+Latest Retrieval Calibration proof: search results expose calibrated `confidence` and `unsafeToInject`; context-pack generation excludes results below the injection threshold and records a confidence-based exclusion reason. `npm run benchmark:nextgen` includes the `retrieval-calibration` suite, which passed on 2026-05-24 with a high-confidence result above threshold, a weak memory marked unsafe, and the weak memory excluded from context.
+
+Latest Belief Revision proof: extraction-driven supersession now transitions the prior memory to `superseded`, sets `validUntil`/`supersededAt`, stores `metadata.supersededBy`, records an audit update, and keeps historical temporal queries able to find the old state. `npm test -- tests/core.test.ts` verifies the “Mira lives in Vienna, now Berlin” journey from planv1.
+
+Latest Vector proof: `npm test -- tests/core.test.ts` verifies optional embedding providers without API keys, the OpenAI-compatible embedding adapter through an injected local request function, and `MEMORY_PRIVACY_DISABLE_EMBEDDINGS=true` preventing provider invocation while preserving token-semantic fallback retrieval. Postgres remote storage reports a pgvector deployment capability so self-hosted installations can add indexed vector columns without making embeddings mandatory.
+
+Latest Connector proof: `npm run verify:connectors` starts a local HTTP connector target, installs GitHub, Slack, and Discord manifests, completes OAuth using token references plus hashes, pulls real HTTP events, writes back over HTTP, revokes auth, confirms visible sync health, promotes GitHub PR decisions and test failures into tagged memories, verifies repo graph edges, keeps Slack/Discord decisions in the verification queue before promotion, and runs the harness package installer in a temporary project. The 2026-05-25 run passed all 12 checks and wrote `artifacts/connectors-live.json`.
+
+Latest Load proof: `npm run benchmark:load -- --out artifacts/load-benchmark-10k-dream.json --memories 10000 --concurrent-writes 50 --concurrent-searches 20 --connector-events 20` passed with zero failures, 18 dream actions, search p95 `63.92ms`, connector-sync p95 `2.83ms`, RSS `243.80MB`, and heap `95.09MB`. `npm run benchmark:load -- --out artifacts/load-benchmark-100k.json --memories 100000 --concurrent-writes 100 --concurrent-searches 20 --connector-events 20 --no-dream` passed with zero failures, write p95 `0.09ms`, search p95 `418.28ms`, connector-sync p95 `22.57ms`, RSS `689.56MB`, and heap `460.14MB`. `NODE_OPTIONS=--max-old-space-size=8192 npm run benchmark:load -- --out artifacts/load-benchmark-1m.json --memories 1000000 --concurrent-writes 200 --concurrent-searches 20 --connector-events 20 --no-dream` passed with zero failures, write p95 `0.08ms`, search p95 `3908.88ms`, connector-sync p95 `283.05ms`, RSS `2026.81MB`, and heap `3816.85MB`.

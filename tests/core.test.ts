@@ -7,8 +7,9 @@ import { join } from "node:path";
 import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities } from "../src/core";
 import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
+import { connectorAuthHeaders, createConnectorManifest, createWritebackPlan, runConnectorPoll } from "../src/connectors/sdk";
 import { MemoryService } from "../src/api/service";
-import { CognibrainClient } from "../src/sdk/client";
+import { CognibrainClient, CognibrainError } from "../src/sdk/client";
 import { AppendOnlyLogPersistenceAdapter, CassandraCompatiblePersistenceAdapter, CassandraRemotePersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, PostgresRemotePersistenceAdapter, SQLitePersistenceAdapter, createPersistenceFromEnv, sqliteAvailable } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
 import { buildLeaderboardArtifact, validateLeaderboardArtifact } from "../src/eval/leaderboard";
@@ -16,6 +17,8 @@ import { publishLeaderboardArtifact } from "../src/eval/publishLeaderboard";
 import { runNextgenBenchmarkSuites } from "../src/eval/nextgenBenchmarks";
 import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
 import { runMarketGate } from "../src/eval/marketGate";
+import { runProductionLoadBenchmark } from "../src/eval/load";
+import { OpenAICompatibleEmbeddingProvider } from "../src/core/openaiEmbeddings";
 
 describe("TypeScript memory core", () => {
   it("retrieves with trust-aware multi-signal ranking", () => {
@@ -148,6 +151,95 @@ describe("TypeScript memory core", () => {
     const results = new RetrievalEngine(store, { keyword: 1, semantic: 0, entity: 0, temporal: 0, trust: 0, graph: 0, access: 0 }).search({ userId: "u1", query: "cache cache Redis", limit: 2 });
     expect(results[0].memory.content).toContain("Redis");
     expect(results[0].signals.keyword).toBeGreaterThan(results[1].signals.keyword);
+  });
+
+  it("uses SQLite FTS5 BM25 scores as an indexed lexical retrieval provider", () => {
+    if (!sqliteAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-fts-"));
+    try {
+      const sqlite = new SQLitePersistenceAdapter(join(dir, "memory.sqlite"));
+      const service = new MemoryService({ persistence: sqlite });
+      const target = service.add({ userId: "u1", content: "Orion release release release postmortem names Bluebird as the blocking migration.", source: { kind: "human", confidence: 0.95 } });
+      service.add({ userId: "u1", content: "Orion release notes mention cache cleanup and deployment owners.", source: { kind: "human", confidence: 0.95 } });
+
+      const indexedHits = sqlite.lexicalSearch("release Bluebird", { memoryIds: service.store.list().map((memory) => memory.id), limit: 2 });
+      expect(indexedHits[0].memoryId).toBe(target.id);
+      expect(indexedHits[0].explanation).toContain("fts5");
+
+      const results = service.search({
+        userId: "u1",
+        query: "release Bluebird",
+        weights: { keyword: 1, semantic: 0, entity: 0, temporal: 0, behavioral: 0, trust: 0, graph: 0, access: 0 },
+        limit: 2
+      });
+      expect(results[0].memory.id).toBe(target.id);
+      expect(results[0].explanation?.join(" ")).toContain("lexical sqlite-fts");
+      expect(service.storageStatus().adapters.find((adapter) => adapter.kind === "sqlite")?.lexical?.strategy).toBe("sqlite-fts5");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("uses an optional vector backend to improve semantic retrieval without API keys", () => {
+    const store = new MemoryStore();
+    store.add({ userId: "u1", content: "The automobile maintenance checklist lives in the garage binder.", source: { kind: "human", confidence: 0.95 } });
+    store.add({ userId: "u1", content: "Banana bread recipes use ripe fruit and cinnamon.", source: { kind: "human", confidence: 0.95 } });
+    const embeddingProvider = {
+      id: "test-synonym-vector",
+      embed(input: string) {
+        const lower = input.toLowerCase();
+        if (/(car|automobile|vehicle|garage)/.test(lower)) return [1, 0, 0];
+        if (/(banana|fruit|recipe)/.test(lower)) return [0, 1, 0];
+        return [0, 0, 1];
+      }
+    };
+    const results = new RetrievalEngine(store, { semantic: 1, keyword: 0, entity: 0, temporal: 0, behavioral: 0, trust: 0, graph: 0, access: 0 }).search({
+      userId: "u1",
+      query: "car checklist",
+      embeddingProvider,
+      limit: 2
+    });
+    expect(results[0].memory.content).toContain("automobile");
+    expect(results[0].signals.semantic).toBe(1);
+    expect(results[0].explanation?.join(" ")).toContain("vector test-synonym-vector");
+  });
+
+  it("supports OpenAI-compatible embedding adapters and privacy embedding disable", () => {
+    const store = new MemoryStore();
+    store.add({ userId: "u1", content: "The automobile maintenance checklist lives in the garage binder.", source: { kind: "human", confidence: 0.95 } });
+    store.add({ userId: "u1", content: "Banana bread recipes use ripe fruit and cinnamon.", source: { kind: "human", confidence: 0.95 } });
+    const provider = new OpenAICompatibleEmbeddingProvider({
+      model: "local-test-embedding",
+      request: (payload) => {
+        const input = String(payload.input).toLowerCase();
+        const embedding = /(car|automobile|vehicle|garage)/.test(input) ? [1, 0, 0] : /(banana|fruit|recipe)/.test(input) ? [0, 1, 0] : [0, 0, 1];
+        return { data: [{ embedding }] };
+      }
+    });
+    const vectorResults = new RetrievalEngine(store, { semantic: 1, keyword: 0, entity: 0, temporal: 0, behavioral: 0, trust: 0, graph: 0, access: 0 }).search({
+      userId: "u1",
+      query: "car checklist",
+      embeddingProvider: provider,
+      limit: 2
+    });
+    expect(vectorResults[0].memory.content).toContain("automobile");
+    expect(vectorResults[0].explanation?.join(" ")).toContain("openai-compatible:local-test-embedding");
+
+    const previous = process.env.MEMORY_PRIVACY_DISABLE_EMBEDDINGS;
+    process.env.MEMORY_PRIVACY_DISABLE_EMBEDDINGS = "true";
+    try {
+      const disabledResults = new RetrievalEngine(store, { semantic: 1, keyword: 1, entity: 0, temporal: 0, behavioral: 0, trust: 0, graph: 0, access: 0 }).search({
+        userId: "u1",
+        query: "automobile checklist",
+        embeddingProvider: { id: "must-not-run", embed: () => { throw new Error("embedding provider should be disabled"); } },
+        limit: 1
+      });
+      expect(disabledResults[0].memory.content).toContain("automobile");
+      expect(disabledResults[0].explanation?.join(" ")).not.toContain("must-not-run");
+    } finally {
+      if (previous === undefined) delete process.env.MEMORY_PRIVACY_DISABLE_EMBEDDINGS;
+      else process.env.MEMORY_PRIVACY_DISABLE_EMBEDDINGS = previous;
+    }
   });
 
   it("keeps scoped and private memories out of unrelated retrieval", () => {
@@ -428,8 +520,28 @@ describe("TypeScript memory core", () => {
     expect(pack.evidencePack.results[0].retrieval.explanation.length).toBeGreaterThan(0);
     expect(pack.evidencePack.results[0].retrieval.citation).toBeTruthy();
 
+    const evidence = handlers.evidencePack({ contextPackId: pack.evidencePack.id });
+    expect(evidence.id).toBe(pack.evidencePack.id);
+
+    const policy = handlers.policyCheck({ operation: "retrieve", memoryId: added.id, actor: { userId: "u1" } });
+    expect(policy.allowed).toBe(true);
+    const verified = handlers.verifyClaim({ userId: "u1", claim: "Codex should use LoCoMo evidence recall", limit: 3 });
+    expect(verified.verdict).toBe("supported");
+    expect(verified.evidence[0].citation).toBeTruthy();
+
+    handlers.add({
+      userId: "u1",
+      content: "Before certified benchmark release, run npm test and npm run benchmark:nextgen.",
+      type: "procedural",
+      layer: "procedural",
+      sourceKind: "human",
+      sourceConfidence: 0.98
+    });
+    expect(handlers.procedureRecall({ userId: "u1", query: "before benchmark release" })[0].memory.type).toBe("procedural");
+    expect(handlers.actionRecord({ userId: "u1", command: "npm test", tests: [{ name: "vitest", status: "passed" }] }).tags).toContain("harness-action");
+
     const health = handlers.health({ userId: "u1" });
-    expect(health.active).toBe(1);
+    expect(health.active).toBeGreaterThanOrEqual(3);
 
     const dream = handlers.dream({ userId: "u1" });
     expect(dream.lifecycle.evaluated).toBeGreaterThan(0);
@@ -466,6 +578,11 @@ describe("TypeScript memory core", () => {
     expect(pack.results[0].retrieval.citation).toContain("AGENTS.md:7");
     expect(pack.results[0].validity.validFrom).toBe("2026-05-01T00:00:00.000Z");
     expect(pack.results.some((result) => result.content.includes("private draft"))).toBe(false);
+    expect(pack.hash).toBeTruthy();
+    expect(pack.actor?.userId).toBe("u1");
+    expect(pack.scope?.orgId).toBe("org1");
+    expect(pack.policyDecisions?.some((decision) => decision.allowed)).toBe(true);
+    expect(pack.temporalState?.valid).toBeGreaterThan(0);
     expect(service.getEvidencePack(pack.id).id).toBe(pack.id);
   });
 
@@ -523,6 +640,41 @@ describe("TypeScript memory core", () => {
     expect(service.search({ userId: "u1", query: "Vitest release" }).some((result) => result.memory.id === active.id)).toBe(false);
   });
 
+  it("exports a hash-linked audit journal that replays memory state", () => {
+    const service = new MemoryService();
+    const memory = service.add({
+      userId: "audit-user",
+      content: "Audit journal records every mutation as replayable evidence.",
+      source: { kind: "human", confidence: 0.95 }
+    });
+
+    service.update(memory.id, { content: "Audit journal records every mutation with a signable chain." });
+    service.archive(memory.id);
+    expect(service.delete(memory.id)).toBe(true);
+
+    const chain = service.auditChain();
+    expect(chain.valid).toBe(true);
+    expect(chain.headHash).toBe(chain.events.at(-1)?.hash);
+    expect(chain.events.map((event) => event.journalType)).toEqual([
+      "memory.created",
+      "memory.updated",
+      "memory.archived",
+      "memory.deleted"
+    ]);
+    expect(chain.events[0].previousHash).toBeUndefined();
+    expect(chain.events[1].previousHash).toBe(chain.events[0].hash);
+    expect(chain.events.every((event) => event.hash && event.payloadHash && event.sequence > 0)).toBe(true);
+
+    const replayed = service.replayAuditState();
+    expect(replayed.valid).toBe(true);
+    expect(replayed.memories[memory.id]).toMatchObject({
+      exists: false,
+      archived: true,
+      versions: 4,
+      userId: "audit-user"
+    });
+  });
+
   it("records harness actions as episodic memory evidence", () => {
     const service = new MemoryService();
     const action = service.recordHarnessAction({
@@ -577,14 +729,21 @@ describe("TypeScript memory core", () => {
     const extracted = service.extract(
       [
         { role: "user", content: "Atlas now uses Redis for cache. The API calls /v1/cache." },
-        { role: "tool", content: "Verified npm test passed for Atlas." }
+        { role: "tool", content: "Verified npm test passed for Atlas." },
+        { role: "user", content: "Thanks for the quick update." },
+        { role: "assistant", content: "Temporary scratch note for this session: inspect Redis later." }
       ],
       { userId: "u1", sessionId: "s1", appId: "app-a" }
     );
     expect(extracted.memories.length).toBeGreaterThan(1);
     expect(Object.keys(extracted.entityLinks).length).toBeGreaterThan(0);
+    expect(extracted.claims?.some((claim) => claim.subject.toLowerCase().includes("atlas") && claim.predicate === "uses" && claim.object.toLowerCase().includes("redis"))).toBe(true);
+    expect(extracted.durabilityDecisions?.some((decision) => decision.action === "ignore" && decision.reason.includes("smalltalk"))).toBe(true);
+    expect(extracted.durabilityDecisions?.some((decision) => decision.action === "working_memory")).toBe(true);
+    expect(extracted.memories.some((memory) => memory.content.includes("Thanks for the quick update"))).toBe(false);
+    expect(extracted.memories.some((memory) => memory.tags.includes("session-only"))).toBe(true);
     const episode = service.listEpisodes("u1")[0];
-    expect(episode.rawConversation).toHaveLength(2);
+    expect(episode.rawConversation).toHaveLength(4);
     expect(episode.toolCalls.length).toBe(1);
     expect(episode.memoryIds).toEqual(extracted.memories.map((memory) => memory.id));
     expect(extracted.memories.every((memory) => memory.metadata.episodeId === episode.id && memory.provenance.extractedFromEpisodeId === episode.id)).toBe(true);
@@ -753,6 +912,111 @@ describe("TypeScript memory core", () => {
     expect(service.auditTrail({ type: "policy.violation" }).length).toBeGreaterThan(0);
   });
 
+  it("fuzzes tenant isolation across private, org, project, connector, graph, and context-pack surfaces", () => {
+    const service = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "tenant-isolation-test-key" } });
+    const privateBrain = service.createBrain({ id: "brain-private-a", name: "Private A", ownerUserId: "alice", visibility: "private" });
+    const orgBrain = service.createBrain({ id: "brain-org-a", name: "Org A", ownerUserId: "alice", memberUserIds: ["carol"], orgId: "org-a", visibility: "org" });
+    const connectorSource = service.createSource({ id: "src-connector-a", brainId: orgBrain.id, name: "Connector A", kind: "connector", defaultConsent: { visibility: "org" } });
+    const records = [
+      service.add({
+        userId: "alice",
+        brainId: privateBrain.id,
+        content: "TENANT_PRIVATE_A must never leak to Bob.",
+        consent: { visibility: "private" },
+        source: { kind: "human", confidence: 0.99 },
+        entities: ["TenantSecretA"],
+        relations: [{ type: "mentions", sourceEntity: "TenantSecretA", targetEntity: "BobForbidden", confidence: 0.9 }]
+      }),
+      service.add({
+        userId: "alice",
+        brainId: privateBrain.id,
+        content: "TENANT_PUBLIC_IN_PRIVATE_BRAIN still requires brain access.",
+        consent: { visibility: "public" },
+        source: { kind: "human", confidence: 0.99 },
+        entities: ["PrivateBrainPublic"]
+      }),
+      service.add({
+        userId: "alice",
+        brainId: orgBrain.id,
+        orgId: "org-a",
+        projectId: "project-a",
+        content: "TENANT_ORG_PROJECT_A is available only inside org-a project-a context.",
+        consent: { visibility: "org" },
+        source: { kind: "human", confidence: 0.97 },
+        entities: ["TenantOrgProjectA"]
+      }),
+      service.add({
+        userId: "alice",
+        brainId: orgBrain.id,
+        sourceId: connectorSource.id,
+        orgId: "org-a",
+        content: "TENANT_CONNECTOR_A came from an org-scoped connector.",
+        source: { kind: "import", confidence: 0.94 },
+        entities: ["TenantConnectorA"]
+      }),
+      service.add({
+        userId: "alice",
+        brainId: privateBrain.id,
+        content: "api_key=TENANT_ENCRYPTED_A belongs to Alice.",
+        consent: { visibility: "private" },
+        source: { kind: "human", confidence: 0.98 },
+        entities: ["TenantEncryptedA"]
+      })
+    ];
+
+    const bobSearch = service.search({
+      userId: "bob",
+      query: "TENANT",
+      includePrivate: true,
+      includeSharedBrains: true,
+      brainIds: [privateBrain.id, orgBrain.id],
+      orgId: "org-b",
+      projectId: "project-b",
+      limit: 20
+    });
+    expect(bobSearch).toHaveLength(0);
+
+    const sameOrgWrongProject = service.search({
+      userId: "bob",
+      query: "TENANT_ORG_PROJECT_A",
+      includeSharedBrains: true,
+      brainIds: [orgBrain.id],
+      orgId: "org-a",
+      projectId: "project-b"
+    });
+    expect(sameOrgWrongProject.every((result) => result.memory.id !== records[2].id)).toBe(true);
+    expect(sameOrgWrongProject.every((result) => !result.memory.content.includes("TENANT_ORG_PROJECT_A"))).toBe(true);
+
+    const carolOrg = service.search({
+      userId: "carol",
+      query: "TENANT_CONNECTOR_A",
+      includeSharedBrains: true,
+      brainIds: [orgBrain.id],
+      orgId: "org-a",
+      projectId: "project-a"
+    });
+    expect(carolOrg.some((result) => result.memory.id === records[3].id)).toBe(true);
+    expect(carolOrg.every((result) => !result.memory.content.includes("TENANT_PRIVATE_A"))).toBe(true);
+
+    const blockedFederation = service.federatedSearch({ userId: "bob", query: "TENANT_PUBLIC_IN_PRIVATE_BRAIN", brainIds: [privateBrain.id], includeSharedBrains: true });
+    expect(blockedFederation.searchedBrainIds).toEqual([]);
+    expect(blockedFederation.blockedBrainIds).toEqual([privateBrain.id]);
+    expect(blockedFederation.results).toHaveLength(0);
+
+    const route = service.routeMemory({ userId: "bob", query: "TENANT", brainId: privateBrain.id, includeSharedBrains: true });
+    expect(route.excludedScopes.some((scope) => scope.kind === "brain" && scope.id === privateBrain.id)).toBe(true);
+
+    const bobGraph = service.graphExport({ userId: "bob" });
+    expect(JSON.stringify(bobGraph)).not.toContain("TENANT_PRIVATE_A");
+    expect(service.graphPaths("TenantSecretA", "BobForbidden", { userId: "bob" })).toHaveLength(0);
+
+    const pack = service.evidencePack({ userId: "bob", orgId: "org-b", query: "TENANT", includeSharedBrains: true, brainIds: [privateBrain.id, orgBrain.id], limit: 10 });
+    expect(pack.results).toHaveLength(0);
+    expect(pack.context).not.toContain("TENANT_PRIVATE_A");
+
+    expect(records.every((record) => service.get(record.id))).toBe(true);
+  });
+
   it("enforces retention, rotates encrypted key metadata, and emits privacy-safe insights", () => {
     const service = new MemoryService({ redactionPolicy: { mode: "encrypt", encryptionKey: "test-key-with-enough-length", encryptionKeyId: "primary", encryptionKeyVersion: "1" } });
     const staleSearch = service.add({
@@ -887,8 +1151,12 @@ describe("TypeScript memory core", () => {
     const intent = service.classifyQueryIntent("How are Atlas and Redis connected?");
     expect(intent.intent).toBe("connection_explanation");
     expect(intent.recommendedMode).toBe("path");
+    expect(intent.plan.strategies).toEqual(expect.arrayContaining(["graph_path", "activation", "entity"]));
     const intentDriven = service.search({ userId: "u1", query: "How are Atlas and Redis connected?" });
     expect(intentDriven.some((result) => result.retrievalMode === "path")).toBe(true);
+    expect(intentDriven[0].queryPlan?.queryType).toBe("connection_explanation");
+    expect(intentDriven[0].queryPlan?.explanation.length).toBeGreaterThan(0);
+    expect(intentDriven[0].confidence).toBeGreaterThan(0);
 
     const contradictions = service.search({ userId: "u1", query: "Atlas Redis shared cache", mode: "path" });
     expect(contradictions.some((result) => result.contradiction && result.decision === "exclude")).toBe(true);
@@ -899,6 +1167,53 @@ describe("TypeScript memory core", () => {
     const learned = service.learnRetrievalProfile("p1-learned", "Project profile", { scope: { userId: "u1", projectId: "p1" } });
     expect(learned.samples).toBe(1);
     expect(learned.profile.scope?.projectId).toBe("p1");
+  });
+
+  it("calibrates retrieval confidence and avoids injecting unsafe low-confidence results", () => {
+    const service = new MemoryService();
+    service.add({ userId: "u1", content: "Atlas deployment gate requires reviewed npm test evidence.", entities: ["atlas", "deployment"], source: { kind: "reviewed_code", confidence: 0.99 } });
+    const weak = service.add({ userId: "u1", content: "Atlas deployment maybe skips tests according to an unreviewed note.", entities: ["atlas", "deployment"], source: { kind: "agent", confidence: 0.08 } });
+    service.update(weak.id, { trust: 0.04, importance: 0.1 });
+
+    const results = service.search({ userId: "u1", query: "Atlas deployment tests", includePrivate: true, limit: 2 });
+    expect(results[0].confidence).toBeGreaterThan(results[1].confidence ?? 0);
+    expect(results.find((result) => result.memory.id === weak.id)?.unsafeToInject).toBe(true);
+
+    const pack = service.evidencePack({ userId: "u1", query: "Atlas deployment tests", includePrivate: true, limit: 2, tokenBudget: 500 });
+    expect(pack.context).not.toContain(weak.id);
+    expect(pack.excludedResults?.find((result) => result.memoryId === weak.id)?.reason).toContain("confidence");
+    expect(pack.results[0].retrieval.confidence).toBeGreaterThan(0.5);
+  });
+
+  it("plans at least twenty query types for retrieval strategy selection", () => {
+    const service = new MemoryService();
+    const examples = [
+      ["What is the Atlas cache?", "direct_fact"],
+      ["What happened yesterday?", "temporal_recent"],
+      ["What was valid between March and April?", "temporal_range"],
+      ["What changed in the release history?", "change_summary"],
+      ["How are Atlas and Redis connected?", "connection_explanation"],
+      ["Which services are linked through Redis?", "graph_multi_hop"],
+      ["What depends on the billing package?", "dependency_path"],
+      ["How do I run the deploy workflow?", "procedure_recall"],
+      ["Which release checklist should I use?", "checklist_release"],
+      ["Does this contradict the old decision?", "contradiction_check"],
+      ["Is this guidance outdated?", "stale_or_outdated"],
+      ["Who owns the migration?", "person_entity"],
+      ["What is the repo branch status?", "project_state"],
+      ["What did the team decide?", "team_memory"],
+      ["What do I prefer for tests?", "personal_preference"],
+      ["Where did this evidence come from?", "source_provenance"],
+      ["Am I allowed to use private memory?", "policy_permission"],
+      ["What pattern usually happens on Mondays?", "pattern_behavior"],
+      ["Why did the incident fail?", "incident_root_cause"],
+      ["What did I do last action?", "action_history"]
+    ] as const;
+    const planned = examples.map(([query, expected]) => service.classifyQueryIntent(query).plan);
+    expect(planned).toHaveLength(20);
+    expect(new Set(planned.map((plan) => plan.queryType)).size).toBeGreaterThanOrEqual(18);
+    examples.forEach(([, expected], index) => expect(planned[index].queryType).toBe(expected));
+    expect(planned.every((plan) => plan.strategies.length > 0 && plan.explanation.length > 0)).toBe(true);
   });
 
   it("loads retrieval profiles and aliases from runtime config", () => {
@@ -1034,6 +1349,25 @@ describe("TypeScript memory core", () => {
     expect(first.memories).toHaveLength(1);
     expect(second.memories).toHaveLength(0);
     expect(first.memories[0].relations.some((relation) => relation.type === "supersedes")).toBe(true);
+  });
+
+  it("models belief revision as a supersession journey with historical validity", () => {
+    const service = new MemoryService();
+    const vienna = service.add({
+      userId: "u1",
+      content: "Mira lives in Vienna.",
+      entities: ["mira"],
+      temporal: { validFrom: "2026-01-01T00:00:00.000Z" },
+      source: { kind: "human", confidence: 0.96 }
+    });
+    const berlin = service.extract([{ role: "user", content: "Mira now lives in Berlin.", timestamp: "2026-05-01T00:00:00.000Z" }], { userId: "u1" }).memories[0];
+
+    expect(service.get(vienna.id).beliefState).toBe("superseded");
+    expect(new Date(service.get(vienna.id).temporal.validUntil!).toISOString()).toContain("2026-05-01");
+    expect(service.get(vienna.id).metadata.supersededBy).toBe(berlin.id);
+    expect(berlin.relations.some((relation) => relation.type === "supersedes" && relation.targetId === vienna.id)).toBe(true);
+    expect(service.search({ userId: "u1", query: "Mira lives", now: new Date("2026-05-20T00:00:00.000Z") })[0].memory.content).toContain("Berlin");
+    expect(service.temporalQuery("u1", { before: "2026-04-01T00:00:00.000Z" }).events.some((event) => event.content.includes("Vienna"))).toBe(true);
   });
 
   it("persists memories and maintenance state across service restarts", () => {
@@ -1382,21 +1716,68 @@ describe("TypeScript memory core", () => {
     expect(bundle.deployment?.secretManager).toBe("vault");
     expect(bundle.deployment?.artifacts.dockerCompose).toBe("docker/docker-compose.yml");
     expect(bundle.counts.connectors).toBeGreaterThan(0);
-    expect(service.apiDescription().clients.typescript).toContain("src/sdk/client.ts");
+    const openapi = service.apiDescription();
+    expect(openapi.clients.typescript).toContain("src/sdk/client.ts");
+    expect(openapi.openapi).toBe("3.1.0");
+    expect(openapi.paths["/memories/{id}/archive"].post).toMatchObject({ operationId: "postMemoriesIdArchive" });
+    expect(openapi.paths["/audit/chain"].get).toBeDefined();
+    expect(openapi.components.schemas.MemoryInput.required).toEqual(["userId", "content"]);
+    expect(openapi.components.schemas.AuditChain.required).toContain("replay");
 
-    const calls: Array<{ url: string; body?: string }> = [];
+    const calls: Array<{ url: string; body?: string; headers?: HeadersInit }> = [];
     const client = new CognibrainClient({
       baseUrl: "http://memory.local",
+      apiKey: "sdk-key",
+      actorId: "sdk-agent",
       fetchImpl: (async (url, init) => {
-        calls.push({ url: String(url), body: String(init?.body ?? "") });
+        calls.push({ url: String(url), body: String(init?.body ?? ""), headers: init?.headers });
         return new Response(JSON.stringify({ id: "mem_sdk", content: "SDK memory" }), { status: 200, headers: { "content-type": "application/json" } });
       }) as typeof fetch
     });
     const added = await client.add({ userId: "sdk", content: "SDK memory" });
     await client.feedback("mem_sdk", "helpful", "sdk");
+    await client.archive("mem_sdk");
+    await client.getEvidencePack("ctx_sdk");
     await client.graphQuery("MATCH (a)-[:mentions]->(b) RETURN a,b", "sdk");
+    await client.listPolicyRules();
+    await client.evaluatePolicy("retrieve", { memoryId: "mem_sdk" }, { userId: "sdk" });
+    await client.listConnectors("code");
+    await client.connectorHealth("official-github");
     expect(added.id).toBe("mem_sdk");
-    expect(calls.map((call) => call.url)).toEqual(["http://memory.local/memories", "http://memory.local/feedback", "http://memory.local/graph/query"]);
+    expect(calls.map((call) => call.url)).toEqual([
+      "http://memory.local/memories",
+      "http://memory.local/feedback",
+      "http://memory.local/memories/mem_sdk/archive",
+      "http://memory.local/context-packs/ctx_sdk/evidence",
+      "http://memory.local/graph/query",
+      "http://memory.local/policy/rules",
+      "http://memory.local/policy/evaluate",
+      "http://memory.local/connectors?kind=code",
+      "http://memory.local/connectors/health?connectorId=official-github"
+    ]);
+    expect(calls.every((call) => (call.headers as Record<string, string> | undefined)?.["x-api-key"] === "sdk-key")).toBe(true);
+  });
+
+  it("retries transient SDK failures, returns local pages, and raises typed errors", async () => {
+    let attempts = 0;
+    const client = new CognibrainClient({
+      baseUrl: "http://memory.local",
+      retries: 1,
+      retryDelayMs: 0,
+      fetchImpl: (async (url) => {
+        attempts += 1;
+        if (String(url).endsWith("/search") && attempts === 1) return new Response(JSON.stringify({ error: "temporary" }), { status: 503 });
+        if (String(url).startsWith("http://memory.local/memories")) {
+          return new Response(JSON.stringify([{ id: "m1", userId: "sdk", content: "one" }, { id: "m2", userId: "sdk", content: "two" }]), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        if (String(url).endsWith("/policy/rules")) return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
+        return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+      }) as typeof fetch
+    });
+    await expect(client.search({ userId: "sdk", query: "retry" })).resolves.toEqual([]);
+    expect(attempts).toBe(2);
+    await expect(client.listMemoriesPage({ userId: "sdk", limit: 1 })).resolves.toMatchObject({ nextCursor: "1", items: [{ id: "m1" }] });
+    await expect(client.listPolicyRules()).rejects.toMatchObject({ name: "CognibrainError", status: 403, path: "/policy/rules" } satisfies Partial<CognibrainError>);
   });
 
   it("persists managed tenants and reports hosted control-plane readiness", () => {
@@ -1421,7 +1802,7 @@ describe("TypeScript memory core", () => {
       expect(report.readiness.sso).toBe(true);
       expect(report.readiness.backup).toBe(true);
       expect(report.autoscaling).toMatchObject({ enabled: true, minReplicas: 2, maxReplicas: 8, targetCpuUtilization: 65 });
-      expect(service.apiDescription().paths["/managed/control-plane"]).toContain("GET");
+      expect(service.apiDescription().paths["/managed/control-plane"].get).toBeDefined();
 
       const reloaded = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path) });
       expect(reloaded.listManagedTenants()[0].id).toBe(tenant.id);
@@ -1484,8 +1865,30 @@ describe("TypeScript memory core", () => {
     try {
       const report = runNextgenBenchmarkSuites(join(dir, "nextgen-benchmarks.json"), join(dir, "benchmark-trend.json"));
       expect(report.passed).toBe(true);
-      expect(report.suites.map((suite) => suite.id)).toEqual(["answer-generation", "multi-hop-temporal", "behavioral-patterns", "usp-evidence-pack"]);
+      expect(report.suites.map((suite) => suite.id)).toEqual(["answer-generation", "multi-hop-temporal", "behavioral-patterns", "retrieval-calibration", "usp-evidence-pack"]);
       expect(report.trend.points.at(-1)?.meanScore).toBeGreaterThan(0.9);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("generates production load benchmark latency and throughput artifacts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "memory-load-bench-"));
+    try {
+      const report = runProductionLoadBenchmark({
+        out: join(dir, "load-benchmark.json"),
+        memories: 120,
+        concurrentWrites: 12,
+        concurrentSearches: 24,
+        connectorEvents: 8,
+        dream: true
+      });
+      expect(report.passed).toBe(true);
+      expect(report.latencyMs.write.p95).toBeGreaterThanOrEqual(0);
+      expect(report.latencyMs.search.p99).toBeGreaterThanOrEqual(report.latencyMs.search.p50);
+      expect(report.throughputPerSecond.write).toBeGreaterThan(0);
+      expect(report.totals.connectorEvents).toBe(8);
+      expect(readFileSync(join(dir, "load-benchmark.json"), "utf8")).toContain("\"schemaVersion\"");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -1535,6 +1938,49 @@ describe("TypeScript memory core", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("packages a connector author SDK for manifests, auth headers, polling, and writeback plans", async () => {
+    const service = new MemoryService();
+    const manifest = createConnectorManifest({
+      id: "sdk-chat",
+      name: "SDK Chat",
+      kind: "chat",
+      version: "1.0.0",
+      direction: "two_way",
+      capabilities: ["ingest", "poll", "writeback"],
+      auth: "token",
+      defaultSourceKind: "import",
+      metadataMapping: { thread: "externalId" },
+      privacyPolicy: "team",
+      poll: { endpoint: "https://chat.example.invalid/poll", authRef: "token-ref" },
+      writeback: { endpoint: "https://chat.example.invalid/messages/{thread}", operations: ["comment"], authRef: "token-ref" }
+    });
+    service.registerConnectorManifest(manifest);
+    const events = await runConnectorPoll(
+      {
+        poll: () => [{ content: "SDK connector poll captured the release approval.", externalId: "thread-1", author: "reviewer" }]
+      },
+      { manifest, scope: { userId: "u1", orgId: "org1" } }
+    );
+    const record = service.syncConnectorEvents(manifest.id, events, { userId: "u1", orgId: "org1" });
+    expect(record.status).toBe("applied");
+    expect(service.get(record.memoryIds[0]).metadata.connectorId).toBe("sdk-chat");
+    expect(connectorAuthHeaders(manifest)).toEqual({ authorization: "Bearer token-ref" });
+    expect(createWritebackPlan(manifest, { text: "Linked memory evidence" })).toMatchObject({ connectorId: "sdk-chat", operation: "comment", dryRun: true });
+    expect(() =>
+      createConnectorManifest({
+        id: "bad",
+        name: "Bad",
+        kind: "custom",
+        version: "1.0.0",
+        direction: "ingest",
+        capabilities: ["writeback"],
+        auth: "none",
+        defaultSourceKind: "import",
+        metadataMapping: {}
+      })
+    ).toThrow(/writeback/i);
   });
 
   it("validates connector manifests, syncs connector events, retries webhooks, and ingests translated media", () => {
@@ -1619,7 +2065,18 @@ describe("TypeScript memory core", () => {
     expect(sync.status).toBe("applied");
     expect(sync.memoryIds.length).toBe(1);
     expect(sync.externalIds).toContain("msg-1");
+    const syncedMemory = service.get(sync.memoryIds[0]);
+    expect(syncedMemory.provenance.sourceRef).toMatchObject({ connectorId: manifest.id, externalId: "msg-1" });
+    expect(syncedMemory.provenance.sourceRef?.hash).toBeTruthy();
     expect(service.listConnectorSyncRecords("unit-chat")[0].id).toBe(sync.id);
+
+    const brain = service.createBrain({ name: "Connector Source Brain", ownerUserId: "u1", visibility: "private" });
+    const source = service.createSource({ brainId: brain.id, name: "GitHub Issues", kind: "connector", uri: "https://github.com/acme/repo" });
+    const sourced = service.add({ userId: "u1", brainId: brain.id, sourceId: source.id, content: "GitHub PR #12 approved the release gate.", source: { kind: "reviewed_code", confidence: 0.96 } });
+    const deletion = service.deleteSource(source.id, "operator");
+    expect(deletion.affectedMemoryIds).toContain(sourced.id);
+    expect(service.get(sourced.id).beliefState).toBe("needs_verification");
+    expect(service.verificationQueue("u1").items.some((item) => item.memoryId === sourced.id && item.reason.includes("requires verification"))).toBe(true);
 
     const failed = service.deliverWebhookQueue(() => ({ ok: false, error: "offline" }));
     expect(failed.failed).toBeGreaterThan(0);

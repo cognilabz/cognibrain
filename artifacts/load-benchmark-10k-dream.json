@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-25T05:21:37.155Z",
+  "workload": {
+    "memories": 10000,
+    "concurrentWrites": 50,
+    "concurrentSearches": 20,
+    "connectorEvents": 20,
+    "dream": true
+  },
+  "totals": {
+    "writes": 10000,
+    "searches": 20,
+    "connectorEvents": 20,
+    "dreamActions": 18,
+    "failures": 0
+  },
+  "latencyMs": {
+    "write": {
+      "count": 10000,
+      "min": 0.04,
+      "p50": 0.06,
+      "p95": 0.08,
+      "p99": 0.19,
+      "max": 12.28,
+      "mean": 0.06
+    },
+    "search": {
+      "count": 20,
+      "min": 53.12,
+      "p50": 57.67,
+      "p95": 63.92,
+      "p99": 83.63,
+      "max": 83.63,
+      "mean": 59.15
+    },
+    "connectorSync": {
+      "count": 20,
+      "min": 1.36,
+      "p50": 1.62,
+      "p95": 2.83,
+      "p99": 7.63,
+      "max": 7.63,
+      "mean": 2.03
+    },
+    "dream": {
+      "count": 1,
+      "min": 15.11,
+      "p50": 15.11,
+      "p95": 15.11,
+      "p99": 15.11,
+      "max": 15.11,
+      "mean": 15.11
+    }
+  },
+  "throughputPerSecond": {
+    "write": 15432.95,
+    "search": 16.9,
+    "connectorSync": 493.1
+  },
+  "memoryUsageMb": {
+    "rss": 243.8,
+    "heapUsed": 95.09
+  },
+  "passed": true
+}

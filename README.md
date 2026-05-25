@@ -12,7 +12,8 @@
   <a href="#quick-start">Quick Start</a> ·
   <a href="#proof">Proof</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="#documentation">Documentation</a>
+  <a href="#documentation">Documentation</a> ·
+  <a href="docs/implementation-status.md">Status Matrix</a>
 </p>
 
 cognibrain is a local-first TypeScript Agent Memory OS for teams that need durable context without opaque recall. It remembers across agent harnesses, proves every memory with source and retrieval evidence, explains why context was selected, respects scope and consent boundaries, and keeps memory valid over time through graph, temporal, contradiction and dream-maintenance surfaces.
@@ -20,6 +21,8 @@ cognibrain is a local-first TypeScript Agent Memory OS for teams that need durab
 The project includes the memory engine, HTTP API, CLI, official connector manifests, provider adapters, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
 
 **Claim:** memory you can prove, route, govern, and reuse across every agent.
+
+Implementation status is tracked in [`docs/implementation-status.md`](docs/implementation-status.md), which separates local-ready surfaces from roadmap items so market claims stay tied to code, tests and exposed APIs.
 
 ![cognibrain desktop dashboard](docs/assets/dashboard-desktop.png)
 
@@ -123,6 +126,16 @@ npx cognibrain-connect crewai --no-start
 npx cognibrain-connect all
 ```
 
+Python clients can use the dependency-free SDK in [`sdk/python`](sdk/python):
+
+```python
+from cognibrain_client import CognibrainClient
+
+client = CognibrainClient(api_key="dev-secret", actor_id="codex")
+pack = client.evidence_pack({"userId": "dev", "query": "release checklist"})
+print(pack["context"])
+```
+
 `setup` installs the Codex Skill, optionally writes MCP/config/helper packages for Codex, Claude Code, Cursor, GitHub Copilot, VS Code, OpenCode, OpenClaw, LangGraph, and CrewAI, starts the API plus dashboard, and runs `doctor`.
 `cognibrain-connect` is the dedicated package-style connector installer: it writes the same reviewable harness package manifest, starts the local API/dashboard unless disabled, and prints the publish doctor command so teams can verify connector health after installation.
 
@@ -170,6 +183,13 @@ Explain why memories were used and export the same evidence an agent would recei
 ```
 
 The returned evidence pack is the first-five-minutes proof surface: it contains the compact context block plus per-memory source citation, consent boundary, scope, validity window, stale/decision state, retrieval signals, graph paths and reason phrases. Evidence packs are stored by `ctx_*` id, reloadable through `memory evidence <context-pack-id>`, and available through `POST /evidence-pack`, `GET /evidence-pack/:id`, and MCP `memory_context_pack`, so CLI, dashboard and harness integrations can all answer: “why was this memory used?”
+
+Export the signable audit chain and replay memory lifecycle state:
+
+```bash
+./bin/cognibrain.mjs memory audit-chain
+curl http://localhost:8787/audit/chain
+```
 
 Extract add-only memories from an event or conversation:
 

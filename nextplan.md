@@ -1,460 +1,1114 @@
-Next‑Generation Memory Platform – Comprehensive Work‑Package Plan
+Hier eine Marktanalyse & Implementierungsplan für cognibrain
 
-This plan sets out a vision and implementation roadmap for a memory platform that aspires to be the most capable, adaptable and trustworthy memory system on the market.  It draws inspiration from existing solutions (Mem0, GBrain, Hindsight, neural‑graph memory) yet goes further, solving their limitations and adding capabilities not yet seen in any product.  The work packages below are organised by theme and can be tracked as discrete GitHub issues.  No dates are given; prioritise according to strategic goals and team capacity.
+Kurzfazit
 
-Vision & Objectives
+cognibrain ist inzwischen kein frühes MVP mehr. Das Repo beschreibt aktuell eine lokale TypeScript-Memory-Plattform mit Memory Engine, HTTP API, CLI, MCP Connector, Harness Hook, Operator Dashboard, Benchmark Suite und einem dream-Wartungsloop. Besonders stark ist, dass cognibrain nicht nur Erinnerungen speichert, sondern bereits source quality, trust, citations, lifecycle state, retrieval evidence, graph paths, brain/source scope, audit events und pluggable persistence im Datenmodell und in der Plattformpositionierung erwähnt.
 
-* Graph‑native, reasoning‑ready memory.  Memories are stored in a knowledge graph with typed relations and canonical entities, enabling multi‑hop traversal and inference.  Users can ask questions like “Who invested in companies founded by people I met?” or request an explanation of how two concepts are connected.
-* Temporal and behavioural awareness.  Every fact carries timestamps and is summarised into multi‑granularity timelines; patterns and habits are detected automatically and become first‑class memories.  This addresses the temporal abstraction and pattern detection gaps noted in current systems .
-* Multi‑tenant, multi‑agent collaboration.  Brains and sources can be created for individuals, teams or organisations.  Agents can share, query and augment memories across brains while preserving privacy and consent.  This overcomes the single‑operator scope of systems like GBrain .
-* Adaptive, self‑improving retrieval.  Retrieval combines semantic, keyword, graph, temporal and behavioural signals; weights are learned from user feedback and benchmark results.  Optional spreading activation can traverse the neural graph to surface chains of related facts .
-* Cross‑language and multi‑modal ingestion.  Memories can ingest text, audio, images and code from a wide range of connectors.  Extraction starts with zero‑LLM rules (as in GBrain’s cost‑efficient pipeline ) and graduates to LLM‑powered extraction when necessary.  Multilingual contradiction checks and translation pipelines allow the system to operate across languages.
-* Privacy, consent and compliance by design.  Every memory includes provenance, source quality, trust and consent flags.  Encryption, differential privacy and fine‑grained retention policies make the platform usable in regulated environments.
+Der Markt ist aber inzwischen sehr schnell und sehr aggressiv. Mem0 besetzt “drop-in memory infrastructure”, GBrain besetzt “personal markdown brain”, Hindsight besetzt “production memory with observations + integrations”, Zep besetzt “temporal knowledge graph”, Cognee besetzt “graph/vector memory control plane”. Gleichzeitig tauchen Forschungsprojekte wie MemMachine, SAGE, Kumiho und WorldDB auf, die mit Ground-Truth-Preservation, selbst-evolvierenden Graph-Memories, formaler Belief Revision und rekursiven World-Graphs in Richtung “Memory als echtes Wissensbetriebssystem” gehen.
 
-Unique Selling Proposition (USP)
+Meine Empfehlung: cognibrain sollte nicht als “noch ein Memory Layer” positioniert werden. Der klare USP sollte sein:
 
-While Mem0, GBrain and others provide strong foundations, none offer all of the following in a unified, open source system:
+cognibrain ist das erste inspectable Memory Operating System für Agenten: jede Erinnerung ist beweisbar, zeitlich gültig, graph-basiert erklärbar, widerspruchsbewusst, teamfähig und über alle Harnesses hinweg nutzbar.
 
-1. True multi‑hop graph reasoning.  Existing systems use typed edges to boost ranking but don’t traverse paths during retrieval .  Our platform offers multi‑hop queries, a connection explainer, rule‑based inference and declarative graph queries.
-2. Temporal and behavioural intelligence baked into retrieval.  Memories know when something was true, can detect patterns (e.g., weekly habits), and rank context accordingly.  This goes beyond simple recency decay and addresses an open problem in the field .
-3. Multi‑tenant, team‑ready architecture.  Brains and sources can be federated across users and organisations with permissions, cross‑brain queries and shared memory pools, overcoming the single‑operator limitation of current tools .
-4. Adaptive retrieval and self‑improvement.  We combine hybrid search, spreading activation, cross‑encoder reranking and user feedback to learn optimal retrieval weights over time.  This self‑improving loop is absent from GBrain’s fixed heuristic ranking .
-5. Comprehensive privacy and compliance controls.  Memories include consent flags, encryption at rest, differential privacy and audit logs.  This level of privacy integration is not found in open alternatives.
-6. Cross‑language, multi‑modal ingestion and summarisation.  Input can come from text, code, images and speech across languages, with automatic translation and contradiction checks.
+Oder kürzer als Claim:
 
-Work Packages
+Memory you can prove, route, govern, and reuse across every agent.
 
-1. Graph & Reasoning
-Work Package
+Das ist stärker als “wir haben bessere Retrieval Scores”. Scores sind wichtig, aber austauschbar. Der Markt braucht vor allem Vertrauen, Governance, Tool-übergreifende Wiederverwendbarkeit und erklärbare Erinnerungen.
 
-Goals & Implementation
+⸻
 
-Rationale
+1. Aktueller Stand von cognibrain
 
-1.1 Multi‑Hop Graph Retrieval
+Was bereits stark ist
 
-Implement multi‑hop traversal algorithms (personalised PageRank, spreading activation, BFS/DFS) over the typed knowledge graph.  Expose API parameters for max depth and relation filters.  Allow retrieval functions to combine direct matches with multi‑hop paths.
+cognibrain hat inzwischen eine beachtliche Feature-Tiefe. Das Repo beschreibt die Plattform als local-first TypeScript Memory Platform für Agenten, inklusive Engine, HTTP API, CLI, Connector Manifests, Provider Adapters, MCP Connector, Harness Hook, Dashboard, Benchmarks und dream Maintenance Loop. Das ist schon deutlich mehr als “ein Vektorstore mit Search”.
 
-Overcomes the limitation of typed‑edge ranking without reasoning .
+Besonders wichtig: Das README positioniert cognibrain als inspectable memory infrastructure. Es erwähnt explizit graph-native path explanation, rule-based inferred relations, brain/source/agent/persona primitives, official connector manifests, provider adapters, pluggable storage, audit/webhook/marketplace/compliance surfaces und lifecycle maintenance. Diese Kombination zeigt, dass cognibrain schon in Richtung “Memory OS” geht, nicht nur “Memory API”.
 
-1.2 Connection Explainer
+Die Roadmap zeigt, dass sehr viele fundamentale Bausteine bereits als “Done” geführt werden: TypeScript Core Engine, HTTP API, CLI, React Dashboard, Harness Hook, stdio MCP, LoCoMo/LongMemEval/BEAM Runner, Provider Adapter, Retrieval Profiles, Canonical Entity Registry, Typed Graph Report, encrypted sensitive-memory mode, dashboard tuning controls, streamable HTTP MCP, pluggable persistence, graph path search, spreading activation, temporal interval queries, behavioural retrieval scoring, recurring behavioural pattern mining, brain/source/agent/persona primitives, webhook queues, marketplace modules und verify:nextgen.
 
-Build endpoints and UI that return the sequence of nodes and relations linking two entities, including timestamps and trust values.  Provide multiple path options (shortest path, highest confidence path).
+Auch die Konfigurationsdokumentation ist bereits recht weit: Retrieval kombiniert semantic token overlap, keyword coverage, entity match, temporal decay, behavioural cadence, approved pattern fit, trust/importance, graph boost, typed relationship hints, access frequency und evidence gating. Außerdem existieren konfigurierbare Gewichte, JSON-command Provider Tasks für rerank, verify, contradiction, summarize und extract, Privacy/Retention Regeln, AES-GCM Encryption Labels, Identity Links, MCP Streamable HTTP und Offline Sync.
 
-Inspired by neural memory’s connection explainer ; fosters trust and interpretability.
+Was noch nicht “marktführend” ist
 
-1.3 Declarative Graph Query Language
+Die aktuelle Schwäche ist nicht, dass Features fehlen. Die Schwäche ist, dass das Produkt noch kein glasklares Markt-Narrativ und keine unwiderlegbare Proof-Story hat.
 
-Define a GraphQL‑like syntax for querying the memory graph (e.g., MATCH (a:Person)-[:INVESTED_IN]->(b:Company) WHERE a.trust>0.8 RETURN a,b).  Offer client libraries to compose queries programmatically.
+Aktuell wirkt cognibrain sehr breit: Memory Engine, Graph, Dream, Provider, Marketplace, Compliance, Benchmarks, Connectors, Personas. Das ist technisch beeindruckend, kann aber für Außenstehende unklar wirken. Der Markt versteht schnelle Kategorien: “Mem0 = managed memory API”, “GBrain = markdown personal brain”, “Zep = temporal graph”, “Hindsight = production memory infrastructure”. cognibrain braucht eine ähnlich einfache Kategorie.
 
-Empowers developers and agents to perform structured queries beyond full‑text search.
+Mein Vorschlag:
 
-1.4 Rule‑Based Inference Engine
+cognibrain = Inspectable Memory OS for AI Agents.
 
-Provide a rule engine where users can define inference rules on relation types (e.g., works_at + invested_in -> advisor_of).  Run these rules during maintenance cycles to create new edges or summarised facts.
+Nicht “Memory Layer”, nicht “Brain”, nicht “RAG”, nicht “Graph DB”. Sondern ein Memory Operating System, das Agenten sagt:
 
-Adds domain‑specific reasoning and supports customised knowledge graphs.
+“Was darf ich wissen? Was ist bewiesen? Seit wann gilt es? Wem gehört es? Warum wurde es retrieved? Darf ich es verwenden? Was widerspricht dem?”
 
-1.5 Graph Visualisation & API
+⸻
 
-Develop visualisation components (web UI and API) to render subgraphs.  Include filtering by relation, time, trust and source.  Allow exporting to standard formats (GraphML, JSON).
+2. Marktanalyse
 
-Helps users understand their knowledge graph and debug retrieval.
-2. Temporal & Behavioural Intelligence
-Work Package
+2.1 Mem0
 
-Goals & Implementation
+Mem0 ist aktuell einer der sichtbarsten kommerziellen Memory Player. Der eigene State-of-AI-Agent-Memory-Report nennt LoCoMo, LongMemEval und BEAM als Standardbenchmarks und berichtet für den neuen Algorithmus 92.5 auf LoCoMo, 94.4 auf LongMemEval und ca. 6.9k Tokens pro Query. Mem0 nennt als größte Verbesserungen Temporal Reasoning und Multi-Hop, basierend auf Single-Pass ADD-only Extraction und Multi-Signal Retrieval.
 
-Rationale
+Die Stärken von Mem0 sind:
 
-2.1 Temporal Index & Timeline
+* sehr starke Distribution,
+* breite Framework- und Vector-Store-Abdeckung,
+* klare Managed-Service-Story,
+* einfache API,
+* gute Benchmarks,
+* viele Integrationen.
 
-Create a temporal index that tags memories with start/end timestamps and supports interval queries.  Build timeline views at multiple scales (hour/day/week/month).
+Die Schwächen von Mem0 sind zugleich Chancen für cognibrain: Mem0 selbst beschreibt, dass der neue Algorithmus Entity Linking nutzt, aber keine direkt traversierbare Graph-API mehr bietet; Beziehungen beeinflussen das Ranking, können aber nicht direkt als Graph abgefragt werden. Außerdem nennt Mem0 selbst offene Probleme: temporal abstraction at scale, cross-session structure, application-level evaluation, privacy/consent architecture, cross-session identity resolution und memory staleness.
 
-Enables queries like “What changed last week?” and addresses temporal abstraction gaps .
+Chance für cognibrain:
+Nicht Mem0 kopieren. Stattdessen: explorable, auditable, temporally valid graph memory. Mem0 sagt “we remember”. cognibrain sollte sagen: “we can prove why this memory is valid and usable now.”
 
-2.2 Behavioural Pattern Mining
+2.2 GBrain
 
-Implement sequence mining algorithms (e.g., frequent pattern growth) to detect recurring habits (e.g., weekly code reviews).  Elevate patterns to high‑level memories with trust scores and citations.  Provide user approval workflow.
+GBrain ist stark als “personal brain”. Laut Review hat GBrain drei starke Loops: Tiered Enrichment, Fail-Improve Loop und backlink-boosted ranking. Es extrahiert typed entity references per Regex ohne LLM Calls und nutzt Hybrid Retrieval aus HNSW/pgvector, Postgres tsvector, RRF, Dedup, Backlinks und optionaler Query Expansion.
 
-Inspired by neural memory’s habit tracking .
+GBrains größter Vorteil ist Plain-Text Ownership: Markdown in Git, diffbar, versionierbar, auditierbar. Das ist emotional und praktisch stark. Der “compiled truth + timeline” Page-Pattern löst das Problem, dass Memory entweder stale oder unendlich lang wird.
 
-2.3 Temporal & Behavioural Reasoning in Retrieval
+Aber GBrain ist bewusst ein anderes Produkt: single-operator, self-host only, enge OpenClaw/Hermes-Integration, operator-authored skills, keine breite Integration, kein Managed Cloud, keine primäre Multi-Hop-Graph-Traversal- oder Temporal-Retrieval-Strategie.
 
-Extend retrieval to incorporate temporal relevance (e.g., boosting recent facts, decaying stale ones) and behavioural patterns (e.g., prefer Fridays for tasks that align with user habits).  Expose weights for tuning.
+Chance für cognibrain:
+GBrain zeigt, wie wertvoll “Brain als Eigentum” ist. cognibrain kann das stärker machen, indem es git/markdown/artifact ownership optional anbietet, aber gleichzeitig teamfähig, multi-agent, API-first, graph-traversable und compliance-ready bleibt.
 
-Provides context‑aware recall beyond recency heuristics.
+2.3 Hindsight
 
-2.4 Timeline Summarisation
+Hindsight wird im Vergleich als Production Agent Memory Platform beschrieben, mit retain, recall, reflect, Observations, Mental Models, automatischer Konsolidierung, Multi-Strategy Retrieval aus semantic, BM25, graph traversal und temporal reasoning, plus RRF und Cross-Encoder Reranking.
 
-Develop summarisation routines that aggregate events into daily, weekly and monthly summaries.  Use LLMs to generate human‑readable narratives with provenance metadata.
+Die starke Marktposition von Hindsight ist “Production Memory Infrastructure” mit vielen Integrationen. Im Vergleich wird Hindsight als Option genannt, wenn man automatische Struktur-Synthese, Managed Cloud und 25+ Integrationen braucht.
 
-Serves as high‑level memory and reduces noise during context injection.
-3. Extraction & Enrichment
-Work Package
+Chance für cognibrain:
+Hindsight ist sehr stark. cognibrain kann nur gewinnen, wenn es nicht “Hindsight in klein” wird, sondern inspectability + governance + local-first ownership + universal agent brain routing als Kategorie besetzt. Hindsight wirkt eher “memory infrastructure that learns”. cognibrain sollte “memory OS you can inspect, govern, and prove” sein.
 
-Goals & Implementation
+2.4 Zep / Graphiti
 
-Rationale
+Zep positioniert sich über Temporal Knowledge Graphs. Der arXiv-Abstract beschreibt Graphiti als temporally-aware knowledge graph engine, die unstrukturierte Konversationen und strukturierte Business-Daten dynamisch integriert und historische Beziehungen erhält. In LongMemEval berichtet Zep Verbesserungen bei temporal reasoning und enterprise-kritischen Aufgaben wie cross-session synthesis und long-term context maintenance.
 
-3.1 Hybrid Extraction Pipeline
+Chance für cognibrain:
+Zep ist stark bei Zeit. cognibrain muss Zeit nicht nur als “timestamped facts” bauen, sondern als validity-aware truth state: gültig ab, gültig bis, zuletzt bestätigt, widersprochen durch, superseded by, verification due, retrieval allowed now.
 
-Start with rule‑based extraction of entities and relations from text (zero‑LLM) as GBrain does .  Fall back to LLM‑based extractors when new entity types or relation patterns are detected.  Log extraction failures and use them to refine both rules and models.
+2.5 Cognee
 
-Balances cost, coverage and adaptability.
+Cognee positioniert sich als graph-based memory engine für cross-session persistence. Die Quelle nennt Knowledge Graphs oder Vector Databases als durable storage und hebt graph-based relationships, semantic embeddings, multi-hop reasoning, self-host/cloud, multi-tenancy und feedback-driven improvement als Kernkriterien hervor.
 
-3.2 Enrichment & Compounding Loops
+Chance für cognibrain:
+Cognee ist stark in “Graph + Vector”. cognibrain sollte sich davon absetzen über Memory Governance + Evidence + Tool/Harness Universality + Inspectability.
 
-Implement tiered enrichment: create stub entities on first mention; enrich with external data (e.g., API calls, web search) after repeated mentions; run a full enrichment pipeline when a concept crosses an attention threshold.  Integrate backlink boosting and learned regex improvement loops, as seen in GBrain’s compounding loops .
+2.6 Neue Forschungsrichtung: Memory wird graph-nativ, evolutiv und beweisorientiert
 
-Ensures important entities are richly described and the system improves itself over time.
+Die neueren Forschungsarbeiten zeigen klar, wohin der Markt geht:
 
-3.3 Canonical Entity Registry & Disambiguation
+* MemMachine setzt auf Ground-Truth-Preservation, episodische Speicherung, Profil-Memory und retrieval-stage Optimierungen. Das adressiert das Problem, dass reine Extraktion und Summarisierung Information verlieren kann.
+* SAGE beschreibt einen self-evolving graph-memory engine mit writer/reader feedback loop, um evidence recovery, answer grounding und retrieval efficiency zu verbessern.
+* Kumiho verbindet graph-native cognitive memory mit formaler Belief Revision, versionierten Erinnerungen, typed dependency edges und Retrieval über Fulltext + Vector; besonders relevant ist die Idee, Memory als Versionierungs- und Belief-Revision-System zu behandeln.
+* WorldDB beschreibt “Worlds” als rekursive Graph-Container, content-addressed immutable nodes und edge types mit Verhalten wie on_insert, on_delete und on_query_rewrite. Das geht in Richtung eines programmierbaren Memory Graphs, nicht nur eines Graph Stores.
 
-Maintain a registry that maps aliases to canonical entities.  Provide functions to merge or split entities manually.  Use heuristics (string similarity, context) to auto‑suggest merges.
+Interpretation:
+Der Markt bewegt sich weg von “memory = vector search” und hin zu memory = evolving, governed, temporal belief graph. Genau hier kann cognibrain gewinnen.
 
-Fundamental for graph reasoning and cross‑session identity resolution.
+⸻
 
-3.4 Multi‑Modal & Multilingual Extraction
+3. Wie weit ist cognibrain wirklich?
 
-Extend extraction to handle images (via OCR), audio (speech‑to‑text), code (syntax parsing) and documents.  Incorporate translation and multilingual contradiction checks so facts can be stored and queried across languages.
+Aktueller Reifegrad
 
-Achieves cross‑language, cross‑modal ingestion unmatched by current systems.
-4. Persistence & Architecture
-Work Package
+Ich würde cognibrain aktuell so einstufen:
 
-Goals & Implementation
+Technische Tiefe: hoch
+Produktklarheit: mittel
+Markt-Trust: niedrig bis mittel
+Benchmark-Proof: mittel
+Distribution/Integrationen: mittel
+USP-Schärfe: noch nicht ausreichend eindeutig
 
-Rationale
+Die Codebasis und Dokumentation zeigen viele richtige Bausteine: lokale Installation, API, CLI, Dashboard, MCP, Provider Adapter, Retrieval Profiles, Privacy/Retention, Identity Links, Dream Cycle, Streamable HTTP, Offline Queue, Storage Boundary, Graph/Relations, Behavioural Patterns und Benchmarks.
 
-4.1 Multi‑Tenant Brains & Sources
+Was fehlt, um “beste Plattform” glaubwürdig zu behaupten, ist vor allem:
 
-Formalise the “brain” and “source” abstractions: a brain is a logical database; a source is a content repository within a brain .  Support multiple brains per user and multi‑user brains with access controls.  Allow cross‑brain queries via explicit consent.
+1. Eine messerscharfe Kategorie.
+    “Inspectable memory infrastructure” ist gut, aber noch zu technisch. “Memory OS for Agents” ist stärker.
+2. End-to-end Proof.
+    Das Repo selbst sagt, dass breite Marktführerschaft erst behauptet werden sollte, wenn vergleichbare Benchmark-Methodik vorliegt: gleicher Datensatz, gleiche Questions, gleicher Answerer/Judge oder klar getrennte Retrieval-Metrik, gleiche Top-K/Token-Budget, veröffentlichte Per-Question-Resultate.
+3. Offizielle Connector Packages.
+    Die Roadmap nennt Connector Packages für Claude Code, Codex, Copilot und Cursor als “Next”. Das ist entscheidend, weil Distribution in diesem Markt mindestens so wichtig ist wie Algorithmik.
+4. SQL/Postgres Adapters.
+    Das Repo ist local-first und läuft ohne Datenbanken, was gut für Adoption ist; für Teams und Enterprise braucht es aber SQLite/Postgres und später Cloud/managed paths. Die Roadmap nennt SQLite/Postgres hinter der Persistence Boundary explizit als nächsten Schritt.
+5. UX, die den USP sofort zeigt.
+    Der Nutzer muss beim ersten Öffnen sehen: “Ah, das ist nicht nur Memory Search. Ich sehe Beweise, Zeit, Graphpfad, Widersprüche, Consent, Ownership.”
 
-Enables team and organisational use, beyond GBrain’s single‑user design .
+⸻
 
-4.2 Distributed & Pluggable Storage
+4. Eindeutiger USP: meine Empfehlung
 
-Provide storage backends for local (SQLite), team (Postgres), and large‑scale (CockroachDB or Cassandra) deployments.  Support automatic sharding, replication and encryption at rest.  Ensure add‑only append logs for auditability.
+Produktkategorie
 
-Scalability and resilience across environments.
+cognibrain sollte nicht als “Memory Layer” auftreten, sondern als:
 
-4.3 Offline & Sync Operations
+Agent Memory OS
 
-Allow local brains to operate offline, caching writes and reads.  When online, synchronise with remote brains using CRDT‑like conflict resolution (timestamp and trust).
+Oder ausführlicher:
 
-Supports offline development and cross‑device use.
+Inspectable Memory OS for AI Agents
 
-4.4 Audit & Provenance Logs
+Kernversprechen
 
-Record every write, extraction, enrichment and reflection step in an append‑only log.  Provide APIs to inspect change history, revert operations and export logs for compliance audits.
+cognibrain ist die Memory-Plattform, die Agenten nicht nur erinnert, sondern jede Erinnerung beweist, zeitlich einordnet, über Graphpfade erklärt, gegen Widersprüche prüft und über alle Harnesses nutzbar macht.
 
-Critical for trust and regulatory compliance.
+Warum das stark ist
 
-4.5 Identity & Consent Management
+Mem0 verkauft “drop-in memory”.
+GBrain verkauft “personal markdown brain”.
+Hindsight verkauft “production memory that learns”.
+Zep verkauft “temporal graph memory”.
+Cognee verkauft “graph-based memory engine”.
 
-Implement privacy‑preserving identity resolution (secure hashes or user‑linked tokens).  Attach consent flags to memories (private, shared, restricted).  Enforce consent during retrieval and reflection.
+cognibrain sollte verkaufen:
 
-Addresses privacy and multi‑tenant concerns.
-5. Retrieval & Ranking
-Work Package
+The Memory OS that makes agent context inspectable, governable, and reusable.
 
-Goals & Implementation
+Das ist offensichtlich und relevant für alle ernsthaften Teams, weil es das echte Problem trifft: Nicht “kann mein Agent irgendwas erinnern?”, sondern:
 
-Rationale
+* Darf er das erinnern?
+* Stimmt es noch?
+* Woher kommt es?
+* Warum wurde es retrieved?
+* Für wen gilt es?
+* Seit wann gilt es?
+* Was widerspricht dem?
+* Welcher Agent darf es verwenden?
+* Kann ich es löschen, exportieren, auditieren?
 
-5.1 Multi‑Strategy Retrieval & Fusion
+Das ist ein besserer USP als “wir haben auch Graph + RAG”.
 
-Combine semantic embedding search, keyword (BM25) search, graph traversal, temporal scoring and behavioural pattern matches.  Fuse results via reciprocal rank fusion and optional cross‑encoder reranking.  Provide configurable weighting profiles.
+⸻
 
-Improves recall and precision, drawing from GBrain’s hybrid search  and Hindsight’s retrieval techniques .
+5. Strategische Zielarchitektur
 
-5.2 Adaptive Retrieval Learning
+Die Zielarchitektur sollte fünf Ebenen haben:
 
-Implement a learning module that tunes retrieval weights based on user feedback and benchmark performance.  Use simple models (e.g., logistic regression) or reinforcement learning.  Support per‑user, per‑agent and per‑domain profiles.
+5.1 Evidence Memory Store
 
-Enables continuous improvement and personalisation absent in current systems.
+Jede Memory ist kein Text-Snippet, sondern ein Evidence Object:
 
-5.3 Spreading Activation & Path‑Based Retrieval
+* Inhalt
+* Quelle
+* Scope
+* Eigentümer
+* Consent
+* Trust
+* Importance
+* Validity Window
+* Relations
+* Contradictions
+* Supersession
+* Retrieval Evidence
+* Audit History
 
-Offer an optional retrieval mode that propagates activation through the graph, emphasising chain connections.  Limit depth and breadth heuristically to manage cost.
+Das ist bereits teilweise da. Es muss zur Kernabstraktion werden.
 
-Adopts neural memory’s spreading activation for deeper reasoning .
+5.2 Temporal Belief Graph
 
-5.4 Query Expansion & Paraphrasing
+Der Graph ist nicht nur Entity-Linking. Er ist ein zeitlicher Belief Graph:
 
-Use small LLMs to generate alternative phrasings and synonyms for queries, improving recall for ambiguous or colloquial queries.
+* Nodes: Personen, Projekte, Repos, Tools, Entscheidungen, Präferenzen, Workflows
+* Edges: uses, depends_on, confirmed_by, supersedes, contradicts, owned_by, works_on, prefers, blocked_by
+* Zeit: valid from/until, last confirmed, verification due
+* Belief Revision: neue Fakten überschreiben nicht, sondern erzeugen Zustandsübergänge
 
-Extends the system to handle diverse user phrasing.
+Hier kann cognibrain deutlich besser werden als Mem0 und GBrain.
 
-5.5 Weighted Temporal & Behavioural Scoring
+5.3 Memory Router
 
-Incorporate time decay and pattern relevance into scoring.  For example, boost recent facts or facts matching a user’s weekly routine; decay old facts unless re‑affirmed.
+Ein Agent fragt nicht “search memory”, sondern der Memory Router entscheidet:
 
-Aligns retrieval with user context and reduces staleness.
+* Session Memory
+* Project Memory
+* User Memory
+* Team Memory
+* Org Memory
+* Procedural Memory
+* Evidence Graph
+* Timeline
+* Pattern Memory
 
-5.6 Contradiction Detection & Resolution
+Das ist besonders wichtig für CLIs/Harnesses. Der Agent soll nicht überlegen müssen, ob etwas in CLAUDE.md, MCP, GBrain, project docs oder context gehört.
 
-Use natural‑language inference models to detect contradictions between retrieved memories.  Suppress low‑trust conflicting facts and surface high‑trust ones.  Allow agents to ask clarifying questions.
+5.4 Inspectable Context Pack
 
-Goes beyond simple pattern rules and protects against repeating wrong information.
-6. Multi‑Agent & Collaboration
-Work Package
+Jedes Context Pack, das an einen Agenten geht, muss erklärbar sein:
 
-Goals & Implementation
+* warum enthalten,
+* Score pro Signal,
+* Graphpfad,
+* Zeitstatus,
+* Consent/Scope,
+* mögliche Widersprüche,
+* “unsafe to use” Flag,
+* “needs verification” Flag.
 
-Rationale
+Das ist ein extrem starker Markt-USP, weil es Vertrauen schafft.
 
-6.1 Multi‑Agent Memory Hub
+5.5 Operator + Marketplace Layer
 
-Expose APIs for agents to register themselves, with namespaces and permissions.  Agents can write, query and subscribe to memory events.  Provide cross‑agent context sharing with isolation controls.
+Operator Dashboard plus Module Marketplace:
 
-Supports integrated workflows across coding assistants, chatbots and orchestrators.
+* Connector installieren
+* Domain Pack installieren
+* Persona wählen
+* Retrieval Profile wählen
+* Retention Policy setzen
+* Benchmark vergleichen
+* Graph ansehen
+* Pattern genehmigen
+* Memory löschen/exportieren
 
-6.2 Shared & Team Memories
+Das macht aus der Engine ein Produkt.
 
-Introduce shared memory pools where approved facts can be promoted.  Provide workflows for reviewing and promoting private memories to shared status and revoking them if necessary.
+⸻
 
-Enables collaboration while respecting individual privacy.
+6. Workpackages für die Implementierung
 
-6.3 Cross‑Brain Federation
+Die Workpackages sind so formuliert, dass du sie direkt als GitHub Issues anlegen kannst.
 
-Allow queries across multiple brains (e.g., team, organisation) with explicit permissions.  Use secure identity resolution to link entities across brains.  Support queries that join information from multiple sources.
+⸻
 
-Facilitates knowledge transfer across projects and teams.
+EPIC 1 — Product Positioning & UX Narrative
 
-6.4 Multi‑Persona Support
+WP 1.1 — Repositionierung zu “Agent Memory OS”
 
-Let each agent or user adopt personas (developer, researcher, support) with default retrieval weights, summarisation styles and privacy settings.  Offer UI controls to switch personas on demand.
+Ziel:
+Aus cognibrain eine klar verständliche Produktkategorie machen: Inspectable Memory OS for AI Agents.
 
-Simplifies context‑appropriate behaviour and customisation.
-7. Connectors, Ingestion & Sync
-Work Package
+Scope:
 
-Goals & Implementation
+* README Hero aktualisieren.
+* Produktclaim schärfen.
+* “Why cognibrain” auf 5 klare Differenzierungsargumente reduzieren.
+* Vergleichsseite “cognibrain vs Mem0 vs GBrain vs Hindsight vs Zep” erstellen.
+* Visuelles Diagramm: Agent → Memory Router → Evidence Graph → Context Pack.
+* “First 5 minutes” Demo definieren.
 
-Rationale
+Akzeptanzkriterien:
 
-7.1 Two‑Way Connectors
+* Ein neuer Besucher versteht innerhalb von 30 Sekunden, warum cognibrain anders ist.
+* README erklärt nicht nur Features, sondern die Kategorie.
+* Eine Vergleichstabelle zeigt klar: cognibrain = inspectable/governed/cross-agent Memory OS.
 
-Provide official connectors for email (Gmail/Outlook), chat (Slack, MS Teams, Discord), project management (Jira, Asana), docs (Notion, Confluence), code (GitHub, GitLab), calendars and cloud storage.  Support two‑way sync: ingest messages and events into memory; optionally update source systems with insights or tags.  Offer metadata mapping templates.
+⸻
 
-Addresses manual ingestion criticism and enables real‑time collaboration .
+WP 1.2 — “Why was this memory used?” als Hauptdemo
 
-7.2 Event Hooks & Webhooks
+Ziel:
+Die erste Demo soll nicht “memory search” sein, sondern explainable recall.
 
-Implement hooks for before/after LLM calls, code execution, or external events.  Let harnesses push and pull relevant memories at these points.  Offer webhooks for memory events (e.g., new fact added, reflection summary ready).
+Scope:
 
-Facilitates deep integration with coding tools and orchestrators.
+* Demo Seed Dataset erstellen.
+* Query ausführen.
+* Context Pack anzeigen.
+* Pro Memory anzeigen:
+    * Source
+    * Trust
+    * Validity
+    * Graph Path
+    * Contradiction Status
+    * Consent
+    * Retrieval Signals
+* Screenshot/GIF in README.
 
-7.3 Provider & LLM Adapters
+Akzeptanzkriterien:
 
-Support multiple LLM providers (OpenAI, Anthropic, Google, local models) via adapter interfaces.  Provide configuration for prompts used in extraction, summarisation, classification and query expansion.  Allow fallback and cost optimisation strategies.
+* Demo zeigt sichtbar, dass cognibrain mehr ist als Vector Search.
+* Jede Memory im Context Pack ist erklärbar.
+* Dashboard und CLI zeigen dieselbe Evidence.
 
-Ensures vendor neutrality and adaptability.
+⸻
 
-7.4 Multi‑Modal Ingestion
+EPIC 2 — Evidence Object Model
 
-Develop ingestion pipelines for images, video and audio: use OCR, ASR and image embedding to extract content; link it to textual memories.  Provide connectors to domain‑specific systems (e.g., design tools, meeting recordings).
+WP 2.1 — MemoryRecord v2 als canonical schema
 
-Expands memory beyond text and code.
+Ziel:
+Ein klares, stabil versioniertes Datenmodell für beweisbare Memories.
 
-7.5 Cross‑Language Translation & Contradiction Checks
+Scope:
 
-Implement translation pipelines so memories from different languages can be stored in a canonical language (e.g., English) with original text preserved.  Use contradiction checks across languages to avoid conflicting facts.
+* MemoryRecordV2 definieren.
+* Pflichtfelder:
+    * id
+    * content
+    * source
+    * scope
+    * createdAt
+    * validFrom
+    * validUntil
+    * trust
+    * confidence
+    * importance
+    * consent
+    * relations
+    * provenance
+    * audit
+* Migration von bestehenden Records.
+* JSON Schema veröffentlichen.
+* TypeScript Types exportieren.
 
-Makes memory platform truly global and multi‑lingual.
-8. User Interface & Experience
-Work Package
+Akzeptanzkriterien:
 
-Goals & Implementation
+* Alle APIs liefern MemoryRecordV2.
+* CLI memory inspect <id> zeigt alle Felder.
+* Tests validieren Schema und Migration.
 
-Rationale
+⸻
 
-8.1 Knowledge Graph Explorer
+WP 2.2 — Validity & Belief State
 
-Build an interactive visual explorer for the graph; allow filtering by entity type, relation type, trust level, time range and brain/source.  Support path search and highlight patterns or summarised nodes.
+Ziel:
+Memory soll nicht nur “alt/neu” kennen, sondern “gültig”, “veraltet”, “widersprochen”, “ersetzt”, “unsicher”.
 
-Helps users audit and navigate their knowledge graph.
+Scope:
 
-8.2 Temporal & Pattern Explorer
+* Belief States einführen:
+    * active
+    * stale
+    * superseded
+    * contradicted
+    * needs_verification
+    * retracted
+* State Transition Rules definieren.
+* Dream Cycle nutzt diese States.
+* Retrieval filtert oder warnt anhand dieser States.
 
-Provide a timeline interface with zoom controls and overlays for behavioural patterns.  Let users drill into specific events, see related entities and edit or annotate memories.
+Akzeptanzkriterien:
 
-Makes temporal reasoning tangible and actionable.
+* Eine neue Memory kann eine alte superseden, ohne sie zu löschen.
+* Widersprüche erzeugen State Change statt Blind Retrieval.
+* Context Pack markiert unsichere Memories.
 
-8.3 Retrieval Dashboard & Tuning
+⸻
 
-Present retrieval results with per‑signal scores (semantic, keyword, graph, temporal, behavioural).  Offer controls for adjusting weights, max graph depth and time windows.  Include an interactive preview of how changes affect results.
+EPIC 3 — Temporal Belief Graph
 
-Empowers users to fine‑tune behaviour without code changes.
+WP 3.1 — Temporal Graph Core
 
-8.4 Reflection & Maintenance Monitor
+Ziel:
+Der Graph soll zeitliche Wahrheit modellieren: was galt wann, warum und bis wann.
 
-Show ongoing maintenance cycles: what contradictions were resolved, what summaries were created, what memories were faded.  Offer manual override and pin/unpin options.
+Scope:
 
-Builds trust and transparency.
+* Graph Edge Model erweitern:
+    * type
+    * from
+    * to
+    * validFrom
+    * validUntil
+    * confidence
+    * evidenceIds
+    * createdBy
+* Query-Funktionen:
+    * “gültig jetzt”
+    * “gültig am Datum”
+    * “geändert seit”
+    * “widersprochen durch”
+* CLI:
+    * graph query
+    * graph path
+    * graph changes
 
-8.5 Consent & Feedback Tools
+Akzeptanzkriterien:
 
-Provide UI for consenting to memory storage, viewing and deleting personal data, exporting memory snapshots and marking memories as sensitive.  Add buttons for “helpful”, “wrong” or “always include” on retrieved memories.
+* Query “Was war letzte Woche wahr?” funktioniert.
+* Query “Was hat sich seit X geändert?” funktioniert.
+* Graphpfade enthalten Zeitfenster.
 
-Supports privacy compliance and learning loops.
+⸻
 
-8.6 Marketplace UI & Persona Gallery
+WP 3.2 — Multi-Hop Retrieval als primäre Strategie
 
-Integrate a marketplace browser and installer for connectors, domain modules and personas.  Allow users to preview modules and configure settings before installation.
+Ziel:
+Graph Traversal darf nicht nur Ranking-Boost sein. Es muss eine echte Retrieval-Strategie sein.
 
-Simplifies adoption and customisation.
-9. Learning & Adaptation
-Work Package
+Scope:
 
-Goals & Implementation
+* Retrieval Strategy graph_path.
+* Max Depth konfigurierbar.
+* Path Scoring:
+    * edge confidence
+    * trust
+    * recency
+    * path length penalty
+    * source quality
+* Ausgabe enthält Reasoning Path.
 
-Rationale
+Akzeptanzkriterien:
 
-9.1 Feedback‑Driven Learning
+* Multi-Hop Query findet Memories, die keine direkten Keyword-Hits haben.
+* Result zeigt den Pfad.
+* Benchmark für Multi-Hop Recall existiert.
 
-Collect explicit feedback from users after suggestions or retrieval injections.  Update trust and importance scores accordingly and retrain retrieval weights periodically.  Surface misclassifications for manual review.
+⸻
 
-Moves beyond static heuristics and fosters continuous improvement.
+WP 3.3 — Connection Explainer
 
-9.2 Adaptive Dream & Reflection Policies
+Ziel:
+Nutzer und Agenten können fragen: “Wie hängen A und B zusammen?”
 
-Allow reflection frequency, summarisation depth and decay thresholds to adapt based on memory health (size, error rate), agent behaviour and user feedback.  Provide UI controls to adjust policies and preview impact.
+Scope:
 
-Ensures maintenance stays efficient and relevant.
+* API GET /graph/explain?from=A&to=B.
+* CLI memory explain A B.
+* Dashboard Path View.
+* Mehrere Pfadtypen:
+    * shortest
+    * strongest
+    * most recent
+    * highest trust
 
-9.3 Auto‑Generated Summaries & Observations
+Akzeptanzkriterien:
 
-Use small LLMs to generate coherent summaries of clusters of memories during reflection.  Maintain provenance by embedding citations and trust metadata.  Provide configurable summarisation styles (concise, descriptive, narrative).
+* Explainer liefert Pfad plus Evidenz.
+* Explainer funktioniert für Personen, Projekte, Repos, Tools, Entscheidungen.
+* UI zeigt Pfad verständlich.
 
-Produces readable reflections and reduces token usage during context injection.
+⸻
 
-9.4 Behavioural & Temporal Model Learning
+EPIC 4 — Memory Router & Scopes
 
-Train models to predict next actions or questions based on behavioural patterns.  Use these predictions to prefetch relevant memories or highlight anomalies (e.g., when a usual habit is absent).
+WP 4.1 — Brain/Source/Agent/Persona Router
 
-Adds proactive intelligence beyond reactive retrieval.
-10. Security & Compliance
-Work Package
+Ziel:
+cognibrain entscheidet automatisch, welcher Memory Scope relevant ist.
 
-Goals & Implementation
+Scope:
 
-Rationale
+* Router Inputs:
+    * query
+    * current repo
+    * agent id
+    * user id
+    * project id
+    * org id
+    * persona
+* Router Output:
+    * selected scopes
+    * excluded scopes
+    * reasoning
+* CLI memory route "<query>".
+* Dashboard Route Preview.
 
-10.1 Per‑Memory Consent & Retention Policies
+Akzeptanzkriterien:
 
-Attach consent flags to each memory (e.g., private, shared, anonymous).  Implement retention policies per domain (e.g., 90‑day expiry for Slack messages, indefinite for documentation) and enforce them during retrieval and reflection.  Offer opt‑in and opt‑out workflows.
+* Query in einem Repo bevorzugt Project Memory.
+* Team Query kann Shared Memory einbeziehen.
+* Private Memory wird nicht ohne Consent gerouted.
 
-Meets regulatory and ethical requirements.
+⸻
 
-10.2 Encryption & Key Management
+WP 4.2 — Shared Team Memory Workflow
 
-Encrypt data at rest and in transit.  Support per‑user or per‑organisation keys.  Provide key rotation, backup and recovery tools.  Expose secure multi‑party compute for cross‑brain queries without revealing raw data.
+Ziel:
+Team Memory darf nicht einfach ein globaler Dump sein. Es braucht Review und Governance.
 
-Protects sensitive information and supports enterprise deployment.
+Scope:
 
-10.3 Differential Privacy & Aggregated Insights
+* Personal → Team Promotion Flow.
+* Review States:
+    * pending
+    * approved
+    * rejected
+    * revoked
+* Team-visible Memories mit Owner.
+* Audit Trail.
+* CLI:
+    * memory promote
+    * memory review
+    * memory revoke
 
-Offer optional differential‑privacy mechanisms for analytics (e.g., aggregated retrieval statistics) so organisations can monitor usage without exposing individual data.  Use noise addition and k‑anonymity techniques.
+Akzeptanzkriterien:
 
-Allows safe analytics and research.
+* Private Memory wird nie automatisch Team Memory.
+* Team Memory hat Reviewer und Approval.
+* Revoked Memories verschwinden aus Team Retrieval.
 
-10.4 Audit Logs & Compliance Reports
+⸻
 
-Generate reports detailing data flows, retention actions, consent status and encryption usage.  Provide APIs for regulators and internal auditors.  Include version histories of extraction rules, retrieval weights and maintenance operations.
+EPIC 5 — Retrieval Engine vNext
 
-Demonstrates accountability and readiness for audits.
-11. Marketplace & Ecosystem
-Work Package
+WP 5.1 — Multi-Strategy Retrieval Fusion
 
-Goals & Implementation
+Ziel:
+Retrieval kombiniert alle relevanten Signale: semantic, keyword, graph, temporal, behavioural, procedural, trust.
 
-Rationale
+Scope:
 
-11.1 Connector & Module Marketplace
+* Strategien:
+    * semantic
+    * BM25/keyword
+    * entity
+    * graph path
+    * temporal
+    * behavioural pattern
+    * procedural
+* RRF Fusion.
+* Cross-Encoder optional.
+* Context Verifier nach Fusion.
 
-Create a marketplace where developers can submit connectors, domain modules (custom entity lists, extraction rules, contradiction patterns) and retrieval profiles.  Include ratings, reviews and automated security scanning.
+Akzeptanzkriterien:
 
-Encourages community contributions and domain specialisation.
+* Jede Strategie kann isoliert getestet werden.
+* Fusion erzeugt erklärbare Scores.
+* Query kann Retrieval Profile wählen.
 
-11.2 SDKs & API Clients
+⸻
 
-Publish client libraries in TypeScript, Python, Rust and Go that wrap the HTTP, streaming and graph query APIs.  Provide examples for integrating with popular orchestrators and frameworks.
+WP 5.2 — Query Intent Classifier
 
-Lowers the barrier to adoption and integration.
+Ziel:
+Vor Retrieval erkennen, welche Art Query vorliegt.
 
-11.3 Managed Service Offering
+Query-Typen:
 
-Offer a hosted version of the platform with auto‑scaling, backups, enterprise support and compliance certifications.  Provide smooth migration between local and hosted instances.  Support integration with secret management and single sign‑on.
+* fact lookup
+* temporal question
+* multi-hop question
+* preference/procedural question
+* contradiction check
+* project context
+* personal context
+* team context
+* “why/how connected” question
 
-Addresses the need for a managed cloud option not offered by GBrain .
+Scope:
 
-11.4 Domain‑Specific Modules
+* Deterministischer Classifier.
+* Optional Provider Classifier.
+* Retrieval Strategy je Intent anpassen.
 
-Facilitate creation of modules for coding, legal, finance, healthcare and research domains.  Each module can supply domain ontologies, specialised extraction rules, retrieval profiles and summarisation styles.  Enable bundling and distribution via the marketplace.
+Akzeptanzkriterien:
 
-12. Benchmarking & Evaluation
-Work Package
+* Temporal Queries triggern Timeline Strategy.
+* Multi-Hop Queries triggern Graph Path Strategy.
+* Procedural Queries triggern procedural memory.
 
-Goals & Implementation
+⸻
 
-Rationale
+WP 5.3 — Retrieval Learning mit Accepted/Rejected Context Packs
 
-12.1 Answer‑Generation & End‑to‑End Benchmarks
+Ziel:
+cognibrain soll aus echten Agentenläufen lernen, welche Memories hilfreich waren.
 
-Extend retrieval benchmarks (LoCoMo, LongMemEval, BEAM) with answer‑generation tests that evaluate the quality of final responses.  Compare against Mem0, GBrain, Hindsight and others.  Publish results publicly.
+Scope:
 
-Demonstrates competitive advantage and guides optimisation.
+* Context Pack ID speichern.
+* Agent/User Feedback:
+    * accepted
+    * rejected
+    * partially useful
+    * harmful
+* Labeled Samples erzeugen.
+* Weight Optimizer erweitern.
+* Regression Tests gegen Overfitting.
 
-12.2 Multi‑Hop & Temporal Benchmark Suites
+Akzeptanzkriterien:
 
-Develop synthetic and real‑world tasks that require multi‑hop reasoning and time‑aware queries.  Measure precision, recall and latency at different depths and time windows.  Provide open datasets for community use.
+* Retrieval Profile verbessert sich mit Feedback.
+* Schlechte Memories verlieren Gewicht.
+* Always/Never Include bleibt explainable.
 
-Highlights strengths in graph and temporal reasoning.
+⸻
 
-12.3 Behavioural & Pattern Evaluation
+EPIC 6 — Ground Truth Preservation
 
-Assemble datasets capturing recurring behaviours and evaluate detection accuracy, false positives and user satisfaction.  Include multilingual scenarios.
+WP 6.1 — Episode Store
 
-Validates behavioural intelligence features.
+Ziel:
+Neben extrahierten Facts sollen vollständige Episoden erhalten bleiben, damit keine Ground Truth verloren geht.
 
-12.4 Continuous Benchmark Pipeline
+Scope:
 
-Automate benchmark execution in CI; display results in the dashboard and README.  Track regressions and improvements across versions.  Provide configurable benchmarking profiles to simulate various workloads.
+* Episode Record:
+    * raw conversation
+    * tool calls
+    * files touched
+    * timestamps
+    * source
+    * hash
+* Facts referenzieren Episode IDs.
+* Retrieval kann Episode Context nachladen.
+* Datenschutzregeln beachten.
 
-13. Community & Adoption
-Work Package
+Akzeptanzkriterien:
 
-Goals & Implementation
+* Jede extrahierte Memory ist auf Episode zurückführbar.
+* User kann Originalkontext sehen.
+* Export enthält Episode + Facts + Graph.
 
-Rationale
+⸻
 
-13.1 Comprehensive Documentation & Tutorials
+WP 6.2 — Evidence Pack Export
 
-Produce extensive documentation covering setup, configuration, API usage, graph queries, temporal reasoning, pattern mining, connectors, privacy and extension building.  Include video tutorials and sample projects.
+Ziel:
+Für jede Antwort kann ein beweisbares Paket erzeugt werden.
 
-Reduces friction and encourages adoption.
+Scope:
 
-13.2 Community Engagement & Incentives
+* Context Pack
+* Memory IDs
+* Source citations
+* Graph paths
+* Validity windows
+* Contradiction states
+* Token budget
+* Retrieval profile
+* Answer output optional
 
-Host webinars, hackathons and office hours.  Offer bounties or recognition for top contributors.  Provide a Slack/Discord community and encourage discussions around domain modules.
+Akzeptanzkriterien:
 
-Builds a vibrant ecosystem and fosters innovation.
+* memory evidence <contextPackId> erzeugt JSON.
+* Dashboard Export möglich.
+* Benchmark-Artefakte nutzen dasselbe Format.
 
-13.3 Partnerships & Official Integrations
+⸻
 
-Collaborate with harness providers (e.g., GitHub Copilot, OpenAI Codex, Claude Code, Cursor) and orchestrators to ship built‑in memory hooks.  Publish joint case studies demonstrating productivity gains.
+EPIC 7 — Dream / Reflection vNext
 
-Drives mainstream adoption and positions the platform as a default memory layer.
+WP 7.1 — Dream Cycle als Belief Revision Engine
 
-13.4 Open Benchmark Data & Leaderboards
+Ziel:
+Dream ist nicht nur Cleanup, sondern aktives Belief Management.
 
-Release anonymised benchmark datasets and maintain public leaderboards for retrieval, reasoning and pattern detection tasks.  Encourage external researchers to evaluate and improve the system.
+Scope:
 
-Promotes transparency and pushes the field forward.
+* Tasks:
+    * contradiction resolution
+    * supersession
+    * timeline summary
+    * pattern promotion
+    * stale verification scheduling
+    * procedural extraction
+    * team promotion suggestions
+* Jeder Task erzeugt Audit Events.
 
-Conclusion
+Akzeptanzkriterien:
 
-This plan lays out a completely new roadmap for a next‑generation memory platform that goes beyond the current state of the art.  By combining multi‑hop graph reasoning, temporal and behavioural intelligence, multi‑tenant collaboration, adaptive retrieval learning, rich connectors, cross‑language ingestion and robust privacy controls, the platform aims to deliver a market‑leading memory solution.  It addresses known limitations in existing systems (lack of temporal reasoning, single‑user scope, fixed retrieval heuristics)  and introduces novel capabilities such as rule‑based inference, behavioural pattern mining and multi‑modal, multilingual extraction.  With clear work packages and a strong USP, this plan can guide development toward a product that developers and organisations will want to adopt as their default memory layer.
+* Dream Report erklärt alle Änderungen.
+* Keine Memory wird still gelöscht.
+* Supersession wird als Journey modelliert.
+
+⸻
+
+WP 7.2 — Verification Queue
+
+Ziel:
+Wichtige, aber unsichere Memories sollen verifiziert werden.
+
+Scope:
+
+* Verification Due Date.
+* Queue im Dashboard.
+* CLI:
+    * memory verify
+    * memory confirm
+    * memory retract
+* Connector-basierte Revalidation möglich.
+
+Akzeptanzkriterien:
+
+* High-impact stale facts werden nicht blind retrieved.
+* Nutzer kann Fakten bestätigen oder zurückziehen.
+* Agent erhält “needs verification” Warnung.
+
+⸻
+
+EPIC 8 — Procedural Memory
+
+WP 8.1 — Procedural Memory First-Class
+
+Ziel:
+Workflow-Wissen separat und stärker behandeln.
+
+Beispiele:
+
+* “Vor Release immer npm test ausführen”
+* “PRs brauchen Changelog”
+* “Bei diesem Repo keine pnpm verwenden”
+* “Deploy erst staging, dann prod”
+
+Scope:
+
+* Eigener Memory Type procedure.
+* Trigger Conditions.
+* Applicability Scope.
+* Confidence.
+* Last success/failure.
+* Feedback Loop.
+
+Akzeptanzkriterien:
+
+* Agent kann passende Prozedur vor Tool Call abrufen.
+* Prozeduren haben Erfolgshistorie.
+* Fehlgeschlagene Prozeduren werden überprüft.
+
+⸻
+
+WP 8.2 — Harness Action Memory
+
+Ziel:
+Agentenaktionen selbst werden Memory.
+
+Scope:
+
+* Speichern:
+    * command executed
+    * file changed
+    * tests passed/failed
+    * PR created
+    * error fixed
+* Agent-generated facts bekommen eigenen Source Kind.
+* Tool Result wird Evidence.
+
+Akzeptanzkriterien:
+
+* Agent merkt, was er getan hat.
+* Wiederholte Fehler werden als Pattern erkannt.
+* Retrieval kann “what fixed this last time?” beantworten.
+
+⸻
+
+EPIC 9 — Connectors & Distribution
+
+WP 9.1 — Official Connector Packages
+
+Ziel:
+Nicht nur Templates, sondern installierbare Packages.
+
+Priorität:
+
+1. Claude Code
+2. OpenAI Codex
+3. Cursor
+4. GitHub Copilot
+5. VS Code
+6. OpenCode / OpenClaw
+7. LangGraph / CrewAI
+
+Scope:
+
+* npm packages.
+* One-command setup.
+* Health check.
+* Example repo.
+* Context Pack integration.
+* Feedback integration.
+
+Akzeptanzkriterien:
+
+* npx cognibrain-connect claude-code funktioniert.
+* Connector zeigt Status im Dashboard.
+* Connector sendet Feedback zurück.
+
+⸻
+
+WP 9.2 — Two-Way System Connectors
+
+Ziel:
+cognibrain lernt nicht nur aus Chat, sondern aus echten Arbeitssystemen.
+
+Connectors:
+
+* GitHub
+* Jira
+* Linear
+* Slack
+* Notion
+* Google Drive
+* Gmail
+* Calendar
+
+Scope:
+
+* Ingest Events.
+* Respect Permissions.
+* Map Entities.
+* Source Links.
+* Optional write-back.
+
+Akzeptanzkriterien:
+
+* GitHub Issue wird Memory Event.
+* Slack Decision wird Memory mit Source.
+* Jira Statuswechsel aktualisiert Timeline.
+
+⸻
+
+EPIC 10 — Privacy, Security, Compliance
+
+WP 10.1 — Consent & Policy Engine
+
+Ziel:
+Memory darf nur genutzt werden, wenn Policy es erlaubt.
+
+Scope:
+
+* Policy Rules:
+    * by user
+    * by org
+    * by source
+    * by tag
+    * by memory type
+    * by connector
+* Retrieval Enforcement.
+* Dream Enforcement.
+* Export/Delete Enforcement.
+
+Akzeptanzkriterien:
+
+* Private Memory bleibt privat.
+* Org Memory nur in org scope.
+* Policy Violations werden geloggt.
+
+⸻
+
+WP 10.2 — Encrypted Memory Vault
+
+Ziel:
+Sensible Memories sicher speichern und kontrolliert verwenden.
+
+Scope:
+
+* Per-memory encryption.
+* Key IDs.
+* Rotation.
+* Decrypt only on authorized retrieval.
+* Vault Audit.
+
+Akzeptanzkriterien:
+
+* Encrypted Memory ist im Store nicht lesbar.
+* Retrieval benötigt Berechtigung.
+* Key Rotation wird dokumentiert.
+
+⸻
+
+EPIC 11 — Benchmarks & Proof
+
+WP 11.1 — Full Answer Benchmarks
+
+Ziel:
+Nicht nur Evidence Recall, sondern echte Antwortqualität messen.
+
+Benchmarks:
+
+* LoCoMo
+* LongMemEval
+* BEAM
+* Custom temporal graph
+* Custom coding agent benchmark
+
+Scope:
+
+* Same question set.
+* Same answerer.
+* Same judge.
+* Same top-K.
+* Same token budget.
+* Per-question artifacts.
+
+Akzeptanzkriterien:
+
+* Ergebnisse sind reproduzierbar.
+* README claim hängt an Benchmark Level.
+* Vendor comparisons sind methodisch getrennt.
+
+⸻
+
+WP 11.2 — USP Benchmarks
+
+Ziel:
+Benchmarks bauen, die genau cognibrains USP messen.
+
+Benchmark-Kategorien:
+
+* “Why was this memory retrieved?”
+* Multi-hop graph path accuracy
+* Temporal validity accuracy
+* Contradiction suppression
+* Consent enforcement
+* Procedure recall before action
+* Cross-agent memory reuse
+* Source citation correctness
+
+Akzeptanzkriterien:
+
+* cognibrain zeigt klare Stärken, die andere Systeme kaum messen.
+* Benchmarks sind öffentlich.
+* Tests laufen in CI.
+
+⸻
+
+EPIC 12 — Marketplace & Extensibility
+
+WP 12.1 — Domain Modules
+
+Ziel:
+cognibrain wird erweiterbar für Branchen und Workflows.
+
+Module:
+
+* Coding
+* Research
+* Legal
+* Sales
+* Support
+* Finance
+* Healthcare
+
+Jedes Modul enthält:
+
+* entity types
+* relation types
+* extraction rules
+* retrieval profile
+* retention policy
+* benchmark fixtures
+* dashboard views
+
+Akzeptanzkriterien:
+
+* Module können installiert/deinstalliert werden.
+* Module beeinflussen Extraction und Retrieval.
+* Module sind versioniert.
+
+⸻
+
+WP 12.2 — Marketplace Governance
+
+Ziel:
+Marketplace darf nicht unsicher oder chaotisch werden.
+
+Scope:
+
+* Module manifest.
+* Signature.
+* Security scan.
+* Permissions requested.
+* Version compatibility.
+* Ratings.
+
+Akzeptanzkriterien:
+
+* User sieht, was ein Modul darf.
+* Unsichere Module werden blockiert.
+* Marketplace ist auditierbar.
+
+⸻
+
+7. Priorisierung
+
+Sofortige Top-Prioritäten
+
+Priorität 1 — USP sichtbar machen
+
+* WP 1.1 Repositionierung
+* WP 1.2 Why-used Demo
+* WP 6.2 Evidence Pack Export
+* WP 11.2 USP Benchmarks
+
+Ohne das versteht der Markt nicht, warum cognibrain anders ist.
+
+Priorität 2 — Retrieval/Graph beweisbar besser machen
+
+* WP 3.2 Multi-Hop Retrieval
+* WP 3.3 Connection Explainer
+* WP 5.1 Multi-Strategy Retrieval Fusion
+* WP 5.2 Query Intent Classifier
+
+Das ist die technische Kern-Differenzierung.
+
+Priorität 3 — Distribution
+
+* WP 9.1 Official Connector Packages
+* WP 9.2 System Connectors
+* Setup Demo für Claude Code / Codex / Cursor
+
+Ohne Distribution gewinnt das technisch beste Produkt nicht.
+
+Priorität 4 — Enterprise Trust
+
+* WP 10.1 Policy Engine
+* WP 10.2 Encrypted Vault
+* WP 11.1 Full Answer Benchmarks
+* WP 11.2 USP Benchmarks
+
+Das macht cognibrain “serious” für Teams.
+
+⸻
+
+8. Empfohlene neue GitHub Epics
+
+Ich würde folgende Epics direkt im Repo anlegen:
+
+1. Epic: Product Positioning — Agent Memory OS
+2. Epic: Evidence Object Model v2
+3. Epic: Temporal Belief Graph
+4. Epic: Memory Router & Scopes
+5. Epic: Retrieval Engine vNext
+6. Epic: Ground Truth Preservation
+7. Epic: Dream as Belief Revision
+8. Epic: Procedural & Action Memory
+9. Epic: Official Connectors
+10. Epic: Privacy & Policy Engine
+11. Epic: USP Benchmark Suite
+12. Epic: Domain Module Marketplace
+
+⸻
+
+9. Was cognibrain vermeiden sollte
+
+Nicht einfach Mem0 nachbauen
+
+Mem0 hat Distribution, Cloud, SDKs und Benchmarks. Ein “Mem0, aber lokal” reicht nicht.
+
+Nicht einfach GBrain nachbauen
+
+GBrain hat Markdown, persönliche Brain-DNA, Celebrity Momentum. Ein “GBrain, aber TypeScript” reicht nicht.
+
+Nicht nur Benchmarks jagen
+
+Benchmark-Führung ohne Produktvertrauen ist kurzlebig. Besser: Benchmarks + Inspectability + Governance.
+
+Nicht zu viele Features ohne Story
+
+cognibrain hat schon viele Features. Jetzt braucht es eine Produktstory, die alle Features bündelt:
+
+“Every agent memory must be explainable, valid, governed, and reusable.”
+
+⸻
+
+10. Endgültige Empfehlung
+
+Der Markt ist offen für eine Plattform, die die Lücke zwischen persönlichem Brain, kommerzieller Memory API und Enterprise Knowledge Graph schließt.
+
+cognibrain sollte diese Kategorie besetzen:
+
+Inspectable Agent Memory OS
+
+Mit diesem Kernversprechen:
+
+cognibrain remembers across agents, proves every memory, explains every retrieval, respects every boundary, and learns from every run.
+
+Das ist der offensichtlichste USP:
+
+* Für Entwickler: ein Memory für alle CLIs/Harnesses.
+* Für Teams: shared memory mit Governance.
+* Für Enterprises: auditierbare, consent-aware, verschlüsselte Memory.
+* Für Agenten: context packs mit Beweisen, Zeit, Graphpfad und Verlässlichkeit.
+* Für den Markt: nicht nur Retrieval, sondern ein echtes Memory Operating System.
+
+Wenn ihr das konsequent baut, kann cognibrain eine eigene Kategorie definieren statt nur gegen Mem0, GBrain oder Hindsight verglichen zu werden

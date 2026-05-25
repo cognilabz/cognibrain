@@ -20,6 +20,9 @@ async function close(): Promise<void> {
 describe("cognibrain HTTP API contract", () => {
   afterEach(async () => {
     await close();
+    delete process.env.MEMORY_API_KEY;
+    delete process.env.MEMORY_API_KEYS;
+    delete process.env.MEMORY_REQUIRE_AUTH;
   });
 
   it("accepts governed marketplace module metadata over HTTP", async () => {
@@ -94,6 +97,103 @@ describe("cognibrain HTTP API contract", () => {
     const body = (await response.json()) as { record: { payload: { telemetryKind: string; harnessId: string } }; createdMemories: Array<{ tags: string[] }> };
     expect(body.record.payload).toMatchObject({ telemetryKind: "accepted_suggestion", harnessId: "codex" });
     expect(body.createdMemories[0]?.tags).toContain("connector-feedback");
+  });
+
+  it("archives memories over HTTP while preserving audit history", async () => {
+    const baseUrl = await listen();
+    const create = await fetch(`${baseUrl}/memories`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "dash",
+        content: "Dashboard archive uses the runtime API.",
+        source: { kind: "human", confidence: 0.93 }
+      })
+    });
+    expect(create.status).toBe(201);
+    const memory = (await create.json()) as { id: string };
+
+    const archive = await fetch(`${baseUrl}/memories/${memory.id}/archive`, { method: "POST" });
+    expect(archive.status).toBe(202);
+    const archived = (await archive.json()) as { archivedAt?: string };
+    expect(archived.archivedAt).toBeTruthy();
+
+    const audit = await fetch(`${baseUrl}/audit?memoryId=${memory.id}`);
+    expect(audit.status).toBe(200);
+    const events = (await audit.json()) as Array<{ metadata?: { action?: string } }>;
+    expect(events.some((event) => event.metadata?.action === "archive")).toBe(true);
+
+    const chainResponse = await fetch(`${baseUrl}/audit/chain?memoryId=${memory.id}`);
+    expect(chainResponse.status).toBe(200);
+    const chain = (await chainResponse.json()) as { valid: boolean; events: Array<{ hash?: string; previousHash?: string; journalType?: string }>; replay: { memories: Record<string, { archived: boolean }> } };
+    expect(chain.valid).toBe(true);
+    expect(chain.events.some((event) => event.journalType === "memory.archived")).toBe(true);
+    expect(chain.events.every((event) => event.hash)).toBe(true);
+    expect(chain.replay.memories[memory.id]?.archived).toBe(true);
+  });
+
+  it("protects non-health routes when API keys are configured", async () => {
+    process.env.MEMORY_API_KEYS = "test-secret";
+    const baseUrl = await listen();
+
+    const health = await fetch(`${baseUrl}/health`);
+    expect(health.status).toBe(200);
+    const healthBody = (await health.json()) as { auth?: { protected?: boolean } };
+    expect(healthBody.auth?.protected).toBe(true);
+
+    const denied = await fetch(`${baseUrl}/memories`);
+    expect(denied.status).toBe(401);
+
+    const allowed = await fetch(`${baseUrl}/memories`, { headers: { "x-api-key": "test-secret", "x-actor-id": "api-test" } });
+    expect(allowed.status).toBe(200);
+  });
+
+  it("exposes a structured OpenAPI contract for SDK generation", async () => {
+    const baseUrl = await listen();
+    const response = await fetch(`${baseUrl}/sdk/openapi`);
+    expect(response.status).toBe(200);
+    const spec = (await response.json()) as {
+      openapi: string;
+      paths: Record<string, Record<string, { operationId?: string; responses?: Record<string, unknown> }>>;
+      components: { schemas: Record<string, unknown>; securitySchemes: Record<string, unknown> };
+    };
+    expect(spec.openapi).toBe("3.1.0");
+    expect(spec.paths["/memories"].post.operationId).toBe("postMemories");
+    expect(spec.paths["/audit/chain"].get.responses?.["200"]).toBeDefined();
+    expect(spec.components.schemas.MemoryInput).toBeDefined();
+    expect(spec.components.schemas.EvidencePack).toBeDefined();
+    expect(spec.components.securitySchemes.ApiKeyAuth).toBeDefined();
+  });
+
+  it("exports persisted context packs through evidence endpoints", async () => {
+    const baseUrl = await listen();
+    await fetch(`${baseUrl}/memories`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "evidence-user",
+        content: "Evidence packs include source, temporal state, policy decisions, and graph paths.",
+        source: { kind: "human", confidence: 0.96 },
+        entities: ["EvidencePack"]
+      })
+    });
+
+    const created = await fetch(`${baseUrl}/evidence-pack`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId: "evidence-user", query: "why evidence packs", tokenBudget: 1200 })
+    });
+    expect(created.status).toBe(200);
+    const pack = (await created.json()) as { id: string; hash?: string; policyDecisions?: unknown[]; temporalState?: { valid: number } };
+    expect(pack.hash).toBeTruthy();
+    expect(pack.policyDecisions?.length).toBeGreaterThan(0);
+    expect(pack.temporalState?.valid).toBeGreaterThan(0);
+
+    const exported = await fetch(`${baseUrl}/context-packs/${pack.id}/evidence`);
+    expect(exported.status).toBe(200);
+    const evidence = (await exported.json()) as { id: string; results: unknown[] };
+    expect(evidence.id).toBe(pack.id);
+    expect(evidence.results.length).toBeGreaterThan(0);
   });
 
   it("gates entity enrichment over HTTP until external approval is explicit", async () => {

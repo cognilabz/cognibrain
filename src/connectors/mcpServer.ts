@@ -81,6 +81,195 @@ export function createOpenMemoryMcpServer(service = createDefaultMemoryService()
   );
 
   server.registerTool(
+    "memory_evidence_pack",
+    {
+      title: "Export Evidence Pack",
+      description: "Return a persisted evidence pack by contextPackId, or create one from a query with source, policy, temporal, and graph evidence.",
+      inputSchema: {
+        contextPackId: z.string().optional(),
+        userId: z.string().min(1).optional(),
+        query: z.string().min(1).optional(),
+        agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
+        limit: z.number().int().positive().max(50).optional(),
+        includeArchived: z.boolean().optional(),
+        tokenBudget: z.number().int().positive().max(8000).optional()
+      }
+    },
+    async (args) => jsonText(handlers.evidencePack(args))
+  );
+
+  server.registerTool(
+    "memory_policy_check",
+    {
+      title: "Check Memory Policy",
+      description: "Evaluate whether an actor may write, retrieve, dream, export, delete, or otherwise use a memory.",
+      inputSchema: {
+        operation: z.enum(["write", "retrieve", "dream", "export", "delete", "all"]),
+        memoryId: z.string().optional(),
+        input: z.record(z.string(), z.unknown()).optional(),
+        actor: z.record(z.string(), z.unknown()).optional()
+      }
+    },
+    async (args) => jsonText(handlers.policyCheck(args))
+  );
+
+  server.registerTool(
+    "memory_verify_claim",
+    {
+      title: "Verify Claim",
+      description: "Check whether a claim is supported, contradicted, or missing evidence, returning citations and policy decisions.",
+      inputSchema: {
+        userId: z.string().min(1),
+        claim: z.string().min(1),
+        agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
+        limit: z.number().int().positive().max(50).optional(),
+        includeArchived: z.boolean().optional(),
+        tokenBudget: z.number().int().positive().max(8000).optional()
+      }
+    },
+    async (args) => jsonText(handlers.verifyClaim(args))
+  );
+
+  server.registerTool(
+    "memory_graph_path",
+    {
+      title: "Find Memory Graph Path",
+      description: "Find citation-rich graph paths between two entities or memories.",
+      inputSchema: {
+        from: z.string().min(1),
+        to: z.string().min(1),
+        userId: z.string().optional(),
+        maxDepth: z.number().int().positive().max(8).optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        validAt: z.string().optional()
+      }
+    },
+    async (args) => jsonText(handlers.graphPath(args))
+  );
+
+  server.registerTool(
+    "memory_graph_query",
+    {
+      title: "Query Memory Graph",
+      description: "Run the safe memory graph query surface with policy-aware filtering.",
+      inputSchema: {
+        query: z.string().min(1),
+        userId: z.string().optional()
+      }
+    },
+    async (args) => jsonText(handlers.graphQuery(args))
+  );
+
+  server.registerTool(
+    "memory_graph_activation",
+    {
+      title: "Activate Memory Graph",
+      description: "Run spreading activation over the memory graph for a query.",
+      inputSchema: {
+        query: z.string().min(1),
+        userId: z.string().optional(),
+        maxDepth: z.number().int().positive().max(8).optional(),
+        limit: z.number().int().positive().max(50).optional(),
+        validAt: z.string().optional()
+      }
+    },
+    async (args) => jsonText(handlers.graphActivation(args))
+  );
+
+  server.registerTool(
+    "memory_explain_connection",
+    {
+      title: "Explain Memory Connection",
+      description: "Explain why two entities or memories are connected, including graph paths and evidence.",
+      inputSchema: {
+        from: z.string().min(1),
+        to: z.string().min(1),
+        userId: z.string().optional(),
+        maxDepth: z.number().int().positive().max(8).optional(),
+        limit: z.number().int().positive().max(20).optional(),
+        validAt: z.string().optional()
+      }
+    },
+    async (args) => jsonText(handlers.explainConnection(args))
+  );
+
+  server.registerTool(
+    "memory_procedure_recall",
+    {
+      title: "Recall Procedures",
+      description: "Retrieve procedural memories that should guide an agent before a tool call or workflow.",
+      inputSchema: {
+        userId: z.string().min(1),
+        query: z.string().min(1),
+        agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
+        limit: z.number().int().positive().max(50).optional(),
+        includeArchived: z.boolean().optional()
+      }
+    },
+    async (args) => jsonText(handlers.procedureRecall(args))
+  );
+
+  server.registerTool(
+    "memory_action_record",
+    {
+      title: "Record Agent Action",
+      description: "Store a harness action memory with command, files, tests, PR, and fix evidence.",
+      inputSchema: {
+        userId: z.string().min(1),
+        agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
+        command: z.string().optional(),
+        filesChanged: z.array(z.string()).optional(),
+        tests: z.array(z.object({ name: z.string(), status: z.enum(["passed", "failed", "skipped"]), output: z.string().optional() })).optional(),
+        pullRequest: z.string().optional(),
+        errorFixed: z.string().optional(),
+        content: z.string().optional(),
+        timestamp: z.string().optional()
+      }
+    },
+    async (args) => jsonText(handlers.actionRecord(args))
+  );
+
+  server.registerTool(
+    "memory_action_outcome",
+    {
+      title: "Record Agent Action Outcome",
+      description: "Store the outcome of a harness action so repeated failures and successes can become patterns.",
+      inputSchema: {
+        userId: z.string().min(1),
+        agentId: z.string().optional(),
+        sessionId: z.string().optional(),
+        appId: z.string().optional(),
+        orgId: z.string().optional(),
+        projectId: z.string().optional(),
+        command: z.string().optional(),
+        filesChanged: z.array(z.string()).optional(),
+        tests: z.array(z.object({ name: z.string(), status: z.enum(["passed", "failed", "skipped"]), output: z.string().optional() })).optional(),
+        pullRequest: z.string().optional(),
+        errorFixed: z.string().optional(),
+        content: z.string().optional(),
+        timestamp: z.string().optional()
+      }
+    },
+    async (args) => jsonText(handlers.actionOutcome(args))
+  );
+
+  server.registerTool(
     "memory_list",
     {
       title: "List Memories",

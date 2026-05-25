@@ -71,12 +71,15 @@ The runtime seeds official manifests for common work systems:
 - `official-jira`
 - `official-linear`
 - `official-slack`
+- `official-discord`
 - `official-notion`
 - `official-google-drive`
 - `official-gmail`
 - `official-google-calendar`
 
-Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, OAuth scope references, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, list/poll endpoints, and writeback configuration when supported. Service-specific manifests map GitHub issues and pull requests, Jira and Linear work items, Slack decisions, Notion pages, Google Drive files, Gmail threads, and Google Calendar events into auditable memory events. Custom manifests can be registered through the CLI or HTTP API:
+Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, OAuth scope references, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, list/poll endpoints, and writeback configuration when supported. Service-specific manifests map GitHub issues and pull requests, Jira and Linear work items, Slack and Discord decisions, Notion pages, Google Drive files, Gmail threads, and Google Calendar events into auditable memory events. Custom manifests can be registered through the CLI or HTTP API:
+
+Connector authors can use `src/connectors/sdk.ts` to keep local integrations consistent before exposing an HTTP endpoint. The SDK provides `createConnectorManifest()`, `normalizeConnectorEvent()`, `runConnectorPoll()`, `connectorAuthHeaders()`, and `createWritebackPlan()` so adapters can share manifest validation, sourceRef provenance, auth-reference headers, poll normalization, and dry-run writeback planning with the built-in service lifecycle.
 
 ```bash
 ./bin/cognibrain.mjs memory connector-register '{"id":"support-chat","name":"Support Chat","kind":"chat","version":"1.0.0","direction":"two_way","capabilities":["ingest","webhook","writeback"],"auth":"token","defaultSourceKind":"transcript","metadataMapping":{"channel":"metadata.channel","messageId":"externalId"}}'
@@ -91,17 +94,28 @@ MEMORY_MEMORY_IDS=mem_123 MEMORY_EXTERNAL_ID=thread-1 ./bin/cognibrain.mjs memor
 
 Connector sync records preserve external ids, applied memory ids, timestamps, export payloads, HTTP request plans, status codes, and failure text. Invalid manifests are rejected before they can write memory, for example writeback on an ingest-only connector.
 
+Connector-backed sources are revalidation boundaries. When a source is removed through the service layer, dependent memories are kept for auditability but moved to `needs_verification` with source-deletion metadata, so verification queues can force an operator or agent to confirm, retract, or replace those memories before reuse.
+
 OAuth connectors can declare an `oauth` block. The runtime then manages a stateful local OAuth lifecycle without storing plaintext tokens:
 
 ```bash
 ./bin/cognibrain.mjs memory connector-auth-begin support-docs
 ./bin/cognibrain.mjs memory connector-auth-callback support-docs <state> <code-or-token-ref>
 ./bin/cognibrain.mjs memory connector-auth support-docs
+./bin/cognibrain.mjs memory connector-auth-revoke support-docs
 ```
 
-`connector-auth-begin` emits an authorization URL with state, redirect URI and scopes. `connector-auth-callback` stores only a token reference plus hash, then attaches that `authRef` to list/poll/writeback blocks that need it.
+`connector-auth-begin` emits an authorization URL with state, redirect URI and scopes. `connector-auth-callback` stores only a token reference plus hash, then attaches that `authRef` to list/poll/writeback blocks that need it. `connector-auth-revoke` marks matching sessions revoked and clears endpoint auth references without exposing the prior token.
 
-List/poll-capable manifests can include endpoint blocks. `connector-list` returns external items without writing memory. `connector-poll` expects a JSON body with `events`, then routes those events through the same add-only extraction path as `connector-sync`. Set `privacyPolicy:"never_store"` for connectors that should prove polling without storing any event content. Writeback-capable manifests can include a `writeback` block with an endpoint, method, auth reference, and allowed operations. Without an endpoint, `connector-writeback` and `/connectors/writeback` create a queued dry-run plan for review. With an endpoint and `dryRun:false`, Cognibrain sends the source-specific payload as HTTP using `x-cognibrain-connector`, `x-cognibrain-operation`, and optional HMAC `x-cognibrain-signature` headers. `connector-feedback` and `/connectors/feedback` convert accepted changes, rejected suggestions, failing tests, and user corrections into trust/importance updates plus a durable feedback memory.
+List/poll-capable manifests can include endpoint blocks. `connector-list` returns external items without writing memory. `connector-poll` expects a JSON body with `events`, then routes those events through the same add-only extraction path as `connector-sync`. GitHub PR decisions and Actions failures are tagged as decision/action memories; chat decisions from Slack or Discord are kept as `needs_verification` memory candidates when a channel or event requires review, and channel visibility metadata is mapped to consent visibility before reuse. Set `privacyPolicy:"never_store"` for connectors that should prove polling without storing any event content. Writeback-capable manifests can include a `writeback` block with an endpoint, method, auth reference, and allowed operations. Without an endpoint, `connector-writeback` and `/connectors/writeback` create a queued dry-run plan for review. With an endpoint and `dryRun:false`, Cognibrain sends the source-specific payload as HTTP using `x-cognibrain-connector`, `x-cognibrain-operation`, and optional HMAC `x-cognibrain-signature` headers. `connector-feedback` and `/connectors/feedback` convert accepted changes, rejected suggestions, failing tests, and user corrections into trust/importance updates plus a durable feedback memory.
+
+Run the live connector gate with:
+
+```bash
+npm run verify:connectors
+```
+
+The gate starts a local HTTP connector target, verifies OAuth hash/revoke, pulls GitHub/Slack/Discord events, sends writebacks, checks connector health, and runs the harness package installer in a temporary project.
 
 Native harness packages should prefer `connector-telemetry` or `POST /connectors/telemetry` over asking users to run manual feedback commands. The telemetry endpoint accepts `accepted_suggestion`, `rejected_suggestion`, `context_pack_feedback`, and `tool_outcome` events. Accepted/rejected suggestion events become connector feedback memories and update linked memory trust. Context-pack feedback creates retrieval training samples and learned profile updates. Tool outcomes become first-class harness action memories, so retrieval can answer what command, test, or fix worked last time.
 

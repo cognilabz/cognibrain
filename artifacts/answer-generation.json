@@ -1,0 +1,341 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-25T05:02:07.140Z",
+  "mode": "answer-generation",
+  "privacy": {
+    "benchmarkQuestionsOnly": true,
+    "includesUserData": false
+  },
+  "datasets": [
+    {
+      "dataset": "nextgen:answer-generation",
+      "sourceArtifact": "artifacts/nextgen-benchmarks.json",
+      "metric": "answer_generation_quality",
+      "answerer": "deterministic-extractive-v1",
+      "judge": "deterministic-coverage-v1",
+      "methodology": {
+        "sameDataset": true,
+        "sameQuestionSet": true,
+        "tokenBudget": 1200,
+        "answererConfigurable": true,
+        "judgeConfigurable": true
+      },
+      "score": 1,
+      "total": 2,
+      "questions": [
+        {
+          "id": "direct-answer",
+          "dataset": "nextgen:answer-generation",
+          "prompt": "direct-answer",
+          "promptHash": "0f593553efcecb24",
+          "generatedAnswer": "Project Atlas uses TypeScript and Redis for cache reads. Project Atlas moved away from SQLite for cache reads.",
+          "expected": [
+            "redis"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        },
+        {
+          "id": "language-answer",
+          "dataset": "nextgen:answer-generation",
+          "prompt": "language-answer",
+          "promptHash": "e18c142bdaebfefd",
+          "generatedAnswer": "Project Atlas uses TypeScript and Redis for cache reads. Project Atlas moved away from SQLite for cache reads.",
+          "expected": [
+            "typescript"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        }
+      ]
+    },
+    {
+      "dataset": "nextgen:multi-hop-temporal",
+      "sourceArtifact": "artifacts/nextgen-benchmarks.json",
+      "metric": "answer_generation_quality",
+      "answerer": "deterministic-extractive-v1",
+      "judge": "deterministic-coverage-v1",
+      "methodology": {
+        "sameDataset": true,
+        "sameQuestionSet": true,
+        "tokenBudget": 1200,
+        "answererConfigurable": true,
+        "judgeConfigurable": true
+      },
+      "score": 1,
+      "total": 2,
+      "questions": [
+        {
+          "id": "multi-hop-path",
+          "dataset": "nextgen:multi-hop-temporal",
+          "prompt": "multi-hop-path",
+          "promptHash": "688deed323f7c196",
+          "generatedAnswer": "[\"atlas -transitive_depends_on-> redisadapter\"]",
+          "expected": [
+            "transitive_depends_on"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        },
+        {
+          "id": "temporal-interval",
+          "dataset": "nextgen:multi-hop-temporal",
+          "prompt": "temporal-interval",
+          "promptHash": "6923f0917d55c7f7",
+          "generatedAnswer": "2 events",
+          "expected": [
+            "2 events"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        }
+      ]
+    },
+    {
+      "dataset": "nextgen:behavioral-patterns",
+      "sourceArtifact": "artifacts/nextgen-benchmarks.json",
+      "metric": "answer_generation_quality",
+      "answerer": "deterministic-extractive-v1",
+      "judge": "deterministic-coverage-v1",
+      "methodology": {
+        "sameDataset": true,
+        "sameQuestionSet": true,
+        "tokenBudget": 1200,
+        "answererConfigurable": true,
+        "judgeConfigurable": true
+      },
+      "score": 0.845,
+      "total": 2,
+      "questions": [
+        {
+          "id": "weekly-friday-detection",
+          "dataset": "nextgen:behavioral-patterns",
+          "prompt": "weekly-friday-detection",
+          "promptHash": "e56a697dbe6670c3",
+          "generatedAnswer": "[\"weekly:friday\",\"weekly:friday\",\"weekly:friday\",\"weekly:friday\"]",
+          "expected": [
+            "weekly:friday"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        },
+        {
+          "id": "false-positive-risk",
+          "dataset": "nextgen:behavioral-patterns",
+          "prompt": "false-positive-risk",
+          "promptHash": "c7b4b236fbca4c22",
+          "generatedAnswer": "0.31000000000000005",
+          "expected": [
+            "risk<=0.5"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 0.69,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        }
+      ]
+    },
+    {
+      "dataset": "nextgen:retrieval-calibration",
+      "sourceArtifact": "artifacts/nextgen-benchmarks.json",
+      "metric": "answer_generation_quality",
+      "answerer": "deterministic-extractive-v1",
+      "judge": "deterministic-coverage-v1",
+      "methodology": {
+        "sameDataset": true,
+        "sameQuestionSet": true,
+        "tokenBudget": 1200,
+        "answererConfigurable": true,
+        "judgeConfigurable": true
+      },
+      "score": 0.9347931696550242,
+      "total": 3,
+      "questions": [
+        {
+          "id": "confidence-field",
+          "dataset": "nextgen:retrieval-calibration",
+          "prompt": "confidence-field",
+          "promptHash": "7edab43956caed24",
+          "generatedAnswer": "0.8043795089650726",
+          "expected": [
+            "confidence>0.5"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 0.8043795089650726,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        },
+        {
+          "id": "unsafe-threshold",
+          "dataset": "nextgen:retrieval-calibration",
+          "prompt": "unsafe-threshold",
+          "promptHash": "b0759428d97efd29",
+          "generatedAnswer": "{\"confidence\":0.47556951312703927,\"unsafeToInject\":true}",
+          "expected": [
+            "unsafe low-confidence"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        },
+        {
+          "id": "context-exclusion",
+          "dataset": "nextgen:retrieval-calibration",
+          "prompt": "context-exclusion",
+          "promptHash": "8a061a8c1bbacb95",
+          "generatedAnswer": "[ce89892c-b064-4973-bd51-90f5c4b7dcfd] trust=0.94 score=0.75 confidence=0.80 Atlas deployment requires reviewed npm test evidence before release.",
+          "expected": [
+            "weak memory excluded"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        }
+      ]
+    },
+    {
+      "dataset": "nextgen:usp-evidence-pack",
+      "sourceArtifact": "artifacts/nextgen-benchmarks.json",
+      "metric": "answer_generation_quality",
+      "answerer": "deterministic-extractive-v1",
+      "judge": "deterministic-coverage-v1",
+      "methodology": {
+        "sameDataset": true,
+        "sameQuestionSet": true,
+        "tokenBudget": 1200,
+        "answererConfigurable": true,
+        "judgeConfigurable": true
+      },
+      "score": 1,
+      "total": 4,
+      "questions": [
+        {
+          "id": "why-used-explanation",
+          "dataset": "nextgen:usp-evidence-pack",
+          "prompt": "why-used-explanation",
+          "promptHash": "e929979a60f71819",
+          "generatedAnswer": "[\"keyword 1.00\",\"temporal 1.00\",\"graph 0.67\",\"graph Atlas deploys require npm test before release. -mentions-> deploys require\",\"mode hybrid\",\"rerank coverage 0.67\",\"calibration confidence 0.78\"]",
+          "expected": [
+            "explanation",
+            "trust signal"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        },
+        {
+          "id": "source-citation",
+          "dataset": "nextgen:usp-evidence-pack",
+          "prompt": "source-citation",
+          "promptHash": "b8c843ea59547b73",
+          "generatedAnswer": "file://AGENTS.md:12-14",
+          "expected": [
+            "file citation"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        },
+        {
+          "id": "temporal-validity",
+          "dataset": "nextgen:usp-evidence-pack",
+          "prompt": "temporal-validity",
+          "promptHash": "52f1a57a2136ae0b",
+          "generatedAnswer": "{\"validFrom\":\"2026-05-01T00:00:00.000Z\",\"lastConfirmedAt\":\"2026-05-20T00:00:00.000Z\",\"stale\":false,\"decision\":\"include\"}",
+          "expected": [
+            "validFrom",
+            "not stale"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        },
+        {
+          "id": "consent-boundary",
+          "dataset": "nextgen:usp-evidence-pack",
+          "prompt": "consent-boundary",
+          "promptHash": "69745629fa0468d0",
+          "generatedAnswer": "org",
+          "expected": [
+            "private excluded"
+          ],
+          "retrievedEvidenceIds": [],
+          "retrievedEvidence": [],
+          "judge": {
+            "name": "deterministic-coverage-v1",
+            "score": 1,
+            "passed": true,
+            "reason": "deterministic-extractive-v1 answer judged against benchmark expected terms/evidence."
+          }
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalQuestions": 13,
+    "meanScore": 0.9611061160742362
+  }
+}

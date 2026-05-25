@@ -318,6 +318,10 @@ function App() {
   const [connectorHealth, setConnectorHealth] = useState<ConnectorHealth[]>([]);
   const [installingModuleId, setInstallingModuleId] = useState<string | null>(null);
   const [marketplaceNotice, setMarketplaceNotice] = useState("Live runtime required for module installation.");
+  const [liveMemories, setLiveMemories] = useState<Memory[] | null>(null);
+  const [liveResults, setLiveResults] = useState<SearchResult[] | null>(null);
+  const [liveRoutePreview, setLiveRoutePreview] = useState<RoutePreview | null>(null);
+  const [runtimeNotice, setRuntimeNotice] = useState("Using bundled demo data until the API runtime is online.");
 
   const { store, retrieval, reflection } = useMemo(() => {
     const store = new MemoryStore();
@@ -325,12 +329,15 @@ function App() {
     return { store, retrieval: new RetrievalEngine(store), reflection: new ReflectionEngine(store) };
   }, []);
 
-  const memories = store.list("demo");
-  const health = healthReport(store, "demo");
+  const localMemories = store.list("demo");
+  const usingRuntime = runtime.state === "online" && liveMemories !== null;
+  const memories = usingRuntime ? liveMemories : localMemories;
+  const health = usingRuntime ? healthFromMemories(memories) : healthReport(store, "demo");
   const filteredMemories = filterMemories(memories, filter);
   const selectedMemory = selectedId ? findMemory(memories, selectedId) : filteredMemories[0] ?? memories[0] ?? null;
-  const results = retrieval.search({ userId: "demo", query, limit: 5, weights: retrievalWeights, graphDepth });
-  const routePreview = useMemo(() => previewRoute(query, memories, results), [query, memories, results]);
+  const localResults = retrieval.search({ userId: "demo", query, limit: 5, weights: retrievalWeights, graphDepth });
+  const results = usingRuntime ? liveResults ?? [] : localResults;
+  const routePreview = useMemo(() => usingRuntime && liveRoutePreview ? liveRoutePreview : previewRoute(query, memories, results), [usingRuntime, liveRoutePreview, query, memories, results]);
   const artifactSummary = useMemo(() => summarizeArtifact(artifactText), [artifactText]);
   const reviewCount = memories.filter(needsReview).length;
 
@@ -343,12 +350,13 @@ function App() {
           fetch(`${apiUrl}/maintenance`)
         ]);
         if (!healthResponse.ok || !maintenanceResponse.ok) throw new Error("runtime unavailable");
-        const [metricsResponse, connectorResponse, marketplaceResponse, storageResponse, managedResponse] = await Promise.all([
+        const [metricsResponse, connectorResponse, marketplaceResponse, storageResponse, managedResponse, memoriesResponse] = await Promise.all([
           fetch(`${apiUrl}/metrics`),
           fetch(`${apiUrl}/connectors/health`),
           fetch(`${apiUrl}/marketplace`),
           fetch(`${apiUrl}/storage`),
-          fetch(`${apiUrl}/managed/control-plane`)
+          fetch(`${apiUrl}/managed/control-plane`),
+          fetch(`${apiUrl}/memories?userId=demo`)
         ]);
         const maintenance = (await maintenanceResponse.json()) as RuntimeStatus["maintenance"];
         const metrics = metricsResponse.ok ? ((await metricsResponse.json()) as MetricsReport) : undefined;
@@ -356,16 +364,23 @@ function App() {
         const liveModules = marketplaceResponse.ok ? ((await marketplaceResponse.json()) as unknown[]) : undefined;
         const storage = storageResponse.ok ? ((await storageResponse.json()) as RuntimeStatus["storage"]) : undefined;
         const managed = managedResponse.ok ? ((await managedResponse.json()) as RuntimeStatus["managed"]) : undefined;
+        const runtimeMemories = memoriesResponse.ok ? reviveMemories(await memoriesResponse.json()) : [];
         if (!cancelled) {
           setRuntime({ state: "online", label: "online", maintenance, metrics, storage, managed });
           setConnectorHealth(connectors);
+          setLiveMemories(runtimeMemories);
           if (liveModules?.length) setModules(liveModules.map(mapMarketplaceModule));
+          setRuntimeNotice(`Using live API store at ${apiUrl}.`);
           setMarketplaceNotice("Marketplace is backed by the live runtime.");
         }
       } catch {
         if (!cancelled) {
           setRuntime({ state: "offline", label: "offline" });
           setConnectorHealth([]);
+          setLiveMemories(null);
+          setLiveResults(null);
+          setLiveRoutePreview(null);
+          setRuntimeNotice("API runtime unavailable. Using in-browser demo data.");
           setMarketplaceNotice("Live runtime unavailable. Module install is disabled until the API is online.");
         }
       }
@@ -378,14 +393,85 @@ function App() {
     };
   }, [apiUrl]);
 
+  useEffect(() => {
+    if (!usingRuntime) {
+      setLiveResults(null);
+      setLiveRoutePreview(null);
+      return;
+    }
+    let cancelled = false;
+    async function loadRuntimeRecall() {
+      try {
+        const payload = { userId: "demo", query, limit: 5, weights: retrievalWeights, graphDepth };
+        const [searchResponse, routeResponse] = await Promise.all([
+          fetch(`${apiUrl}/search`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }),
+          fetch(`${apiUrl}/route`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
+        ]);
+        if (!searchResponse.ok || !routeResponse.ok) throw new Error("runtime recall unavailable");
+        const [searchJson, routeJson] = await Promise.all([searchResponse.json(), routeResponse.json()]);
+        if (!cancelled) {
+          setLiveResults(reviveSearchResults(searchJson));
+          setLiveRoutePreview(routeJson as RoutePreview);
+        }
+      } catch {
+        if (!cancelled) {
+          setLiveResults([]);
+          setLiveRoutePreview(null);
+        }
+      }
+    }
+    loadRuntimeRecall();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiUrl, query, retrievalWeights, graphDepth, usingRuntime, liveMemories?.length, version]);
+
   function refresh(nextSelectedId = selectedMemory?.id ?? null) {
     setSelectedId(nextSelectedId);
     setVersion((value) => value + 1);
   }
 
-  function addMemory() {
+  async function refreshRuntimeMemories(nextSelectedId = selectedMemory?.id ?? null) {
+    const response = await fetch(`${apiUrl}/memories?userId=demo`);
+    if (!response.ok) throw new Error(await response.text());
+    const nextMemories = reviveMemories(await response.json());
+    setLiveMemories(nextMemories);
+    refresh(nextSelectedId);
+  }
+
+  async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+    const response = await fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers: { "content-type": "application/json", ...(init?.headers ?? {}) }
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
+  }
+
+  async function addMemory() {
     const content = newMemory.trim();
     if (!content) return;
+    if (usingRuntime) {
+      try {
+        const created = reviveMemory(await apiJson<unknown>("/memories", {
+          method: "POST",
+          body: JSON.stringify({
+            userId: "demo",
+            content,
+            source: { kind: "human", confidence: 0.9 },
+            tags: ["manual"],
+            timestamp: new Date().toISOString()
+          })
+        }));
+        setNewMemory("");
+        setFilter("active");
+        await refreshRuntimeMemories(created.id);
+        setLastClean([`Added ${shortId(created)} through ${apiUrl}/memories.`]);
+      } catch (error) {
+        setLastClean([error instanceof Error ? error.message : "Runtime add failed."]);
+      }
+      return;
+    }
     const created = store.add({
       userId: "demo",
       content,
@@ -398,19 +484,49 @@ function App() {
     refresh(created.id);
   }
 
-  function archiveMemory(memory: Memory) {
+  async function archiveMemory(memory: Memory) {
+    if (usingRuntime) {
+      try {
+        const archived = reviveMemory(await apiJson<unknown>(`/memories/${memory.id}/archive`, { method: "POST" }));
+        await refreshRuntimeMemories(null);
+        setLastClean([`Archived ${shortId(archived)} through the live API.`]);
+      } catch (error) {
+        setLastClean([error instanceof Error ? error.message : "Runtime archive failed."]);
+      }
+      return;
+    }
     store.archive(memory.id);
     setLastClean([`Archived ${shortId(memory)} because it should no longer be injected.`]);
     refresh(null);
   }
 
-  function deleteMemory(memory: Memory) {
+  async function deleteMemory(memory: Memory) {
+    if (usingRuntime) {
+      try {
+        await apiJson<void>(`/memories/${memory.id}`, { method: "DELETE" });
+        await refreshRuntimeMemories(null);
+        setLastClean([`Deleted ${shortId(memory)} through the live API.`]);
+      } catch (error) {
+        setLastClean([error instanceof Error ? error.message : "Runtime delete failed."]);
+      }
+      return;
+    }
     store.delete(memory.id);
     setLastClean([`Deleted ${shortId(memory)} from the local store.`]);
     refresh(null);
   }
 
-  function verifyMemory(memory: Memory) {
+  async function verifyMemory(memory: Memory) {
+    if (usingRuntime) {
+      try {
+        const updated = reviveMemory(await apiJson<unknown>(`/memories/${memory.id}/confirm`, { method: "POST", body: JSON.stringify({ userId: "demo" }) }));
+        await refreshRuntimeMemories(updated.id);
+        setLastClean([`Confirmed ${shortId(updated)} through the live verification API.`]);
+      } catch (error) {
+        setLastClean([error instanceof Error ? error.message : "Runtime verify failed."]);
+      }
+      return;
+    }
     const updated = store.update(memory.id, {
       source: { kind: "human", confidence: 0.96 },
       trust: 0.94,
@@ -421,13 +537,33 @@ function App() {
     refresh(updated.id);
   }
 
-  function togglePin(memory: Memory) {
+  async function togglePin(memory: Memory) {
+    if (usingRuntime) {
+      try {
+        const updated = reviveMemory(await apiJson<unknown>(`/memories/${memory.id}`, { method: "PATCH", body: JSON.stringify({ pinned: !memory.pinned }) }));
+        await refreshRuntimeMemories(updated.id);
+        setLastClean([`${updated.pinned ? "Pinned" : "Unpinned"} ${shortId(updated)} through the live API.`]);
+      } catch (error) {
+        setLastClean([error instanceof Error ? error.message : "Runtime pin update failed."]);
+      }
+      return;
+    }
     const updated = store.update(memory.id, { pinned: !memory.pinned });
     setLastClean([`${updated.pinned ? "Pinned" : "Unpinned"} ${shortId(updated)}.`]);
     refresh(updated.id);
   }
 
-  function applyFeedback(memory: Memory, kind: FeedbackKind) {
+  async function applyFeedback(memory: Memory, kind: FeedbackKind) {
+    if (usingRuntime) {
+      try {
+        const updated = reviveMemory(await apiJson<unknown>("/feedback", { method: "POST", body: JSON.stringify({ userId: "demo", memoryId: memory.id, kind }) }));
+        await refreshRuntimeMemories(updated.id);
+        setLastClean([`Recorded ${kind.replace("_", " ")} feedback through the live API.`]);
+      } catch (error) {
+        setLastClean([error instanceof Error ? error.message : "Runtime feedback failed."]);
+      }
+      return;
+    }
     const delta =
       kind === "helpful" ? { trust: 0.04, importance: 0.06 } :
       kind === "wrong" ? { trust: -0.18, importance: -0.08 } :
@@ -452,7 +588,17 @@ function App() {
     refresh(updated.id);
   }
 
-  function updateConsent(memory: Memory, visibility: Memory["consent"]["visibility"]) {
+  async function updateConsent(memory: Memory, visibility: Memory["consent"]["visibility"]) {
+    if (usingRuntime) {
+      try {
+        const updated = reviveMemory(await apiJson<unknown>(`/memories/${memory.id}/consent`, { method: "POST", body: JSON.stringify({ visibility }) }));
+        await refreshRuntimeMemories(updated.id);
+        setLastClean([`Updated consent for ${shortId(updated)} to ${visibility} through the live API.`]);
+      } catch (error) {
+        setLastClean([error instanceof Error ? error.message : "Runtime consent update failed."]);
+      }
+      return;
+    }
     const updated = store.update(memory.id, {
       consent: { ...memory.consent, visibility },
       metadata: { ...memory.metadata, consentUpdatedAt: new Date().toISOString() }
@@ -461,7 +607,23 @@ function App() {
     refresh(updated.id);
   }
 
-  function markSensitive(memory: Memory) {
+  async function markSensitive(memory: Memory) {
+    if (usingRuntime) {
+      try {
+        const updated = reviveMemory(await apiJson<unknown>(`/memories/${memory.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            tags: Array.from(new Set([...memory.tags, "needs-review", "sensitive"])),
+            metadata: { ...memory.metadata, privacy: { action: "encrypt", reviewedAt: new Date().toISOString() } }
+          })
+        }));
+        await refreshRuntimeMemories(updated.id);
+        setLastClean([`Marked ${shortId(updated)} as sensitive through the live API.`]);
+      } catch (error) {
+        setLastClean([error instanceof Error ? error.message : "Runtime sensitive update failed."]);
+      }
+      return;
+    }
     const updated = store.update(memory.id, {
       trust: Math.min(memory.trust, 0.5),
       tags: Array.from(new Set([...memory.tags, "needs-review", "sensitive"])),
@@ -471,8 +633,15 @@ function App() {
     refresh(updated.id);
   }
 
-  function exportUserMemories() {
-    const payload = JSON.stringify(store.list("demo").map((memory) => ({
+  async function exportUserMemories() {
+    let exportMemories: Memory[];
+    try {
+      exportMemories = usingRuntime ? reviveMemories(await apiJson<unknown>("/export/demo")) : store.list("demo");
+    } catch (error) {
+      setLastClean([error instanceof Error ? error.message : "Runtime export failed."]);
+      return;
+    }
+    const payload = JSON.stringify(exportMemories.map((memory) => ({
       id: memory.id,
       content: memory.content,
       trust: memory.trust,
@@ -482,7 +651,7 @@ function App() {
       archived: Boolean(memory.archivedAt)
     })), null, 2);
     setExportPayload(payload);
-    setLastClean([`Prepared export with ${store.list("demo").length} memories.`]);
+    setLastClean([`Prepared export with ${exportMemories.length} memories.`]);
   }
 
   async function installModule(moduleId: string) {
@@ -510,8 +679,23 @@ function App() {
     }
   }
 
-  function cleanRiskyMemories() {
+  async function cleanRiskyMemories() {
     const candidates = store.list("demo").filter((memory) => !memory.archivedAt && !memory.pinned && needsReview(memory));
+    if (usingRuntime) {
+      const liveCandidates = memories.filter((memory) => !memory.archivedAt && !memory.pinned && needsReview(memory));
+      const actions: string[] = [];
+      for (const memory of liveCandidates) {
+        try {
+          const archived = reviveMemory(await apiJson<unknown>(`/memories/${memory.id}/archive`, { method: "POST" }));
+          actions.push(`Archived ${shortId(archived)}: ${reviewReason(memory)}.`);
+        } catch (error) {
+          actions.push(error instanceof Error ? error.message : `Failed to archive ${shortId(memory)}.`);
+        }
+      }
+      await refreshRuntimeMemories(null);
+      setLastClean(actions.length ? actions : ["No risky active memories found."]);
+      return;
+    }
     const actions = candidates.map((memory) => {
       const archived = store.archive(memory.id);
       return `Archived ${shortId(archived)}: ${reviewReason(memory)}.`;
@@ -520,7 +704,20 @@ function App() {
     refresh(null);
   }
 
-  function runDreamCycle() {
+  async function runDreamCycle() {
+    if (usingRuntime) {
+      try {
+        const report = reviveReflectionReport(await apiJson<unknown>("/dream", { method: "POST", body: JSON.stringify({ userId: "demo" }) }));
+        setLastCycle(report);
+        setLastClean(report.lifecycle.actions.length ? report.lifecycle.actions : ["Dream cycle evaluated runtime memory quality."]);
+        setFilter("all");
+        setView("dream");
+        await refreshRuntimeMemories(null);
+      } catch (error) {
+        setLastClean([error instanceof Error ? error.message : "Runtime dream failed."]);
+      }
+      return;
+    }
     const report = new ReflectionEngine(store, lifecyclePolicy).run("demo");
     setLastCycle(report);
     setLastClean(report.lifecycle.actions.length ? report.lifecycle.actions : ["Dream cycle evaluated memory quality. No structural action was needed."]);
@@ -578,7 +775,7 @@ function App() {
               <span>Operator gate</span>
             </div>
             <strong>{Math.round(health.healthScore * 100)}% ready for context</strong>
-            <p>{health.active} active memories, {reviewCount} need review. Context is inspected before it reaches an agent.</p>
+            <p>{health.active} active memories, {reviewCount} need review. {runtimeNotice}</p>
             <div className="operator-flow" aria-label="Operator workflow">
               <span>Capture</span>
               <span>Rank</span>
@@ -713,6 +910,60 @@ function App() {
 function getApiUrl(): string {
   const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
   return (env?.VITE_API_URL ?? "http://localhost:8787").replace(/\/$/, "");
+}
+
+function reviveMemories(raw: unknown): Memory[] {
+  return Array.isArray(raw) ? raw.map(reviveMemory) : [];
+}
+
+function reviveMemory(raw: unknown): Memory {
+  const memory = raw as Memory & { createdAt: string | Date; updatedAt: string | Date; lastAccessedAt?: string | Date; archivedAt?: string | Date };
+  return {
+    ...memory,
+    createdAt: toDate(memory.createdAt),
+    updatedAt: toDate(memory.updatedAt),
+    lastAccessedAt: memory.lastAccessedAt ? toDate(memory.lastAccessedAt) : undefined,
+    archivedAt: memory.archivedAt ? toDate(memory.archivedAt) : undefined
+  };
+}
+
+function reviveSearchResults(raw: unknown): SearchResult[] {
+  return Array.isArray(raw)
+    ? raw.map((result) => {
+        const item = result as SearchResult & { memory: unknown };
+        return { ...item, memory: reviveMemory(item.memory) };
+      })
+    : [];
+}
+
+function reviveReflectionReport(raw: unknown): ReflectionReport {
+  const report = raw as ReflectionReport;
+  return {
+    ...report,
+    created: reviveMemories(report.created),
+    demoted: reviveMemories(report.demoted),
+    contradictions: (report.contradictions ?? []).map((item) => ({
+      ...item,
+      kept: reviveMemory(item.kept),
+      demoted: reviveMemory(item.demoted)
+    }))
+  };
+}
+
+function toDate(value: string | Date | undefined): Date {
+  if (value instanceof Date) return value;
+  return value ? new Date(value) : new Date();
+}
+
+function healthFromMemories(memories: Memory[]) {
+  const active = memories.filter((memory) => !memory.archivedAt);
+  const averageTrust = active.length ? active.reduce((total, memory) => total + memory.trust, 0) / active.length : 1;
+  const now = Date.now();
+  const freshness = active.length
+    ? active.reduce((total, memory) => total + Math.max(0, 1 - ((now - memory.updatedAt.getTime()) / (90 * 86_400_000))), 0) / active.length
+    : 1;
+  const healthScore = Math.max(0, Math.min(1, averageTrust * 0.7 + freshness * 0.3));
+  return { active: active.length, averageTrust, freshness, healthScore };
 }
 
 function mapMarketplaceModule(raw: unknown): MarketplaceModuleCard {
@@ -962,12 +1213,16 @@ function RecallView({
         <div className="signal-list">
           {results.slice(0, 3).map((result) => (
             <article key={result.memory.id}>
-              <strong>{shortId(result.memory)} · {result.score.toFixed(2)}</strong>
+              <strong>{shortId(result.memory)} · {result.score.toFixed(2)} · confidence {(result.confidence ?? result.score).toFixed(2)}</strong>
               <span>semantic {result.signals.semantic.toFixed(2)}</span>
               <span>keyword {result.signals.keyword.toFixed(2)}</span>
               <span>trust {result.signals.trust.toFixed(2)}</span>
               <span>graph {result.signals.graph.toFixed(2)}</span>
+              <span>{result.queryPlan?.queryType ?? "direct_fact"}</span>
+              <span>{result.unsafeToInject ? "unsafe" : "injectable"}</span>
               <span>{result.decision ?? "include"}</span>
+              <p className="why-used-line">Why used: {(result.explanation ?? []).slice(0, 4).join(" · ") || "direct match"}</p>
+              <p className="why-used-line">Evidence: {result.citation}{result.graphPaths?.length ? ` · ${result.graphPaths[0]}` : ""}</p>
               <p>{result.memory.content}</p>
             </article>
           ))}

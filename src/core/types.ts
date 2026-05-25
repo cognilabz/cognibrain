@@ -41,6 +41,36 @@ export type QueryIntent =
   | "team_context"
   | "connection_explanation";
 
+export type QueryPlanStrategy =
+  | "semantic"
+  | "keyword"
+  | "graph_path"
+  | "activation"
+  | "temporal"
+  | "procedure"
+  | "pattern"
+  | "contradiction"
+  | "entity"
+  | "project"
+  | "team"
+  | "personal"
+  | "source"
+  | "policy"
+  | "trust"
+  | "timeline";
+
+export interface QueryPlan {
+  query: string;
+  queryType: string;
+  secondaryTypes: string[];
+  intent: QueryIntent;
+  recommendedMode: RetrievalMode;
+  strategies: QueryPlanStrategy[];
+  recommendedWeights?: Partial<RetrievalWeights>;
+  explanation: string[];
+  confidence: number;
+}
+
 export interface Provenance {
   kind: SourceKind;
   uri?: string;
@@ -156,6 +186,17 @@ export interface MemoryProvenance {
   citations: string[];
   summaryOf?: string[];
   extractedFromEpisodeId?: string;
+  sourceRef?: SourceRef;
+}
+
+export interface SourceRef {
+  connectorId?: string;
+  externalId?: string;
+  url?: string;
+  author?: string;
+  timestamp?: Date | string;
+  version?: string;
+  hash?: string;
 }
 
 export interface MemoryAuditEvent {
@@ -204,6 +245,7 @@ export interface MemoryInput {
   confidence?: number;
   beliefState?: BeliefState;
   metadata?: Record<string, unknown>;
+  sourceRef?: SourceRef;
 }
 
 export interface Memory {
@@ -277,6 +319,9 @@ export interface SearchOptions {
   profileId?: string;
   verifier?: ContextVerifier;
   reranker?: ContextReranker;
+  embeddingProvider?: EmbeddingProvider;
+  disableEmbeddings?: boolean;
+  lexicalProvider?: LexicalScoreProvider;
   filters?: {
     type?: MemoryType;
     layer?: MemoryLayer;
@@ -285,6 +330,16 @@ export interface SearchOptions {
   };
   graphDepth?: number;
   relationTypes?: RelationType[];
+}
+
+export interface EmbeddingProvider {
+  readonly id?: string;
+  embed(input: string): number[];
+}
+
+export interface LexicalScoreProvider {
+  readonly id?: string;
+  search(input: { query: string; memories: Memory[]; limit?: number }): Array<{ memoryId: string; score: number; explanation?: string }>;
 }
 
 export interface MemoryRouteReport {
@@ -303,6 +358,7 @@ export interface QueryIntentReport {
   recommendedMode: RetrievalMode;
   recommendedWeights?: Partial<RetrievalWeights>;
   reasons: string[];
+  plan: QueryPlan;
 }
 
 export interface VerificationQueueReport {
@@ -322,6 +378,8 @@ export interface VerificationQueueReport {
 export interface SearchResult {
   memory: Memory;
   score: number;
+  confidence?: number;
+  unsafeToInject?: boolean;
   initialScore?: number;
   decision?: "include" | "exclude" | "warn" | "review";
   explanation?: string[];
@@ -351,6 +409,7 @@ export interface SearchResult {
   graphPaths?: string[];
   citation: string;
   stale: boolean;
+  queryPlan?: QueryPlan;
 }
 
 export interface EvidencePack {
@@ -358,10 +417,14 @@ export interface EvidencePack {
   id: string;
   generatedAt: string;
   query: string;
+  actor?: Partial<MemoryScope> & { permissions?: string[] };
   userId: string;
+  scope?: Partial<MemoryScope>;
   profileId?: string;
+  retrievalProfile?: RetrievalProfile;
   queryIntent?: QueryIntentReport;
   tokenBudget: number;
+  hash?: string;
   context: string;
   results: Array<{
     memoryId: string;
@@ -385,6 +448,8 @@ export interface EvidencePack {
     };
     retrieval: {
       score: number;
+      confidence?: number;
+      unsafeToInject?: boolean;
       initialScore?: number;
       mode?: RetrievalMode;
       signals: SearchResult["signals"];
@@ -392,8 +457,25 @@ export interface EvidencePack {
       graphPaths: string[];
       citation: string;
       contradiction?: SearchResult["contradiction"];
+      plan?: QueryPlan;
     };
   }>;
+  excludedResults?: Array<{
+    memoryId: string;
+    reason: string;
+    decision?: SearchResult["decision"];
+    policyDecision?: PolicyDecision;
+    score?: number;
+  }>;
+  policyDecisions?: PolicyDecision[];
+  graphPaths?: string[];
+  temporalState?: {
+    generatedAt: string;
+    stale: number;
+    valid: number;
+    needsVerification: number;
+    contradicted: number;
+  };
   summary: {
     included: number;
     warnings: number;
@@ -790,6 +872,11 @@ export interface AuditEvent {
     | "security.key.rotate"
     | "privacy.insights"
     | "privacy.compute";
+  journalType?: AuditJournalEventType;
+  sequence?: number;
+  previousHash?: string;
+  hash?: string;
+  payloadHash?: string;
   actorId?: string;
   userId?: string;
   brainId?: string;
@@ -797,6 +884,61 @@ export interface AuditEvent {
   memoryId?: string;
   timestamp: Date | string;
   metadata?: Record<string, unknown>;
+}
+
+export type AuditJournalEventType =
+  | "memory.created"
+  | "memory.updated"
+  | "memory.deleted"
+  | "memory.archived"
+  | "memory.retracted"
+  | "memory.superseded"
+  | "memory.retrieved"
+  | "context_pack.created"
+  | "policy.denied"
+  | "dream.action"
+  | "connector.ingested"
+  | "system.event";
+
+export interface AuditJournalEvent extends AuditEvent {
+  journalType: AuditJournalEventType;
+  sequence: number;
+  hash: string;
+  payloadHash: string;
+}
+
+export interface AuditReplayMemoryState {
+  exists: boolean;
+  archived: boolean;
+  retracted: boolean;
+  superseded: boolean;
+  userId?: string;
+  brainId?: string;
+  sourceId?: string;
+  lastEventId: string;
+  lastHash: string;
+  versions: number;
+}
+
+export interface AuditReplayReport {
+  valid: boolean;
+  eventsApplied: number;
+  memories: Record<string, AuditReplayMemoryState>;
+  contextPacks: Record<string, { createdAt: Date | string; query?: string; memoryCount?: number; hash: string }>;
+  denied: Array<{ eventId: string; operation?: unknown; memoryId?: string; reason?: string }>;
+  connectorEvents: Array<{ eventId: string; connectorId?: unknown; status?: unknown; hash: string }>;
+  dreamEvents: Array<{ eventId: string; action?: unknown; hash: string }>;
+  errors: string[];
+}
+
+export interface AuditChainExport {
+  schemaVersion: "1.0";
+  generatedAt: Date | string;
+  eventCount: number;
+  headHash?: string;
+  valid: boolean;
+  events: AuditJournalEvent[];
+  replay: AuditReplayReport;
 }
 
 export interface StorageBackendStatus {
@@ -810,6 +952,16 @@ export interface StorageBackendStatus {
     sql?: boolean;
     encryptedAtRest?: boolean;
     migrationSafe?: boolean;
+    lexical?: {
+      strategy: "none" | "sqlite-fts5" | "postgres-tsvector" | "bm25-fallback";
+      indexed: boolean;
+      notes: string[];
+    };
+    vector?: {
+      strategy: "none" | "in-memory" | "pgvector";
+      indexed: boolean;
+      notes: string[];
+    };
     encryptedAppendLog?: boolean;
     replication?: "none" | "logical" | "quorum" | "external";
     sharding?: "none" | "hash" | "range" | "external";
@@ -1276,6 +1428,7 @@ export interface MemoryExtractionEvent {
   language?: string;
   uri?: string;
   mimeType?: string;
+  sourceRef?: SourceRef;
   metadata?: Record<string, unknown>;
 }
 
@@ -1322,6 +1475,32 @@ export interface ExtractionRuleSuggestion {
   confidence: number;
 }
 
+export type MemoryClaimDurability = "durable" | "ephemeral" | "session_only" | "ask_user";
+export type MemorySensitivity = "none" | "personal" | "secret" | "regulated";
+
+export interface MemoryClaim {
+  id: string;
+  subject: string;
+  predicate: string;
+  object: string;
+  qualifiers: Record<string, string>;
+  time?: Date | string;
+  source: Provenance;
+  confidence: number;
+  durability: MemoryClaimDurability;
+  sensitivity: MemorySensitivity;
+  scope: Partial<MemoryScope>;
+}
+
+export interface DurabilityDecision {
+  contentPreview: string;
+  action: "store" | "ignore" | "session_only" | "working_memory" | "ask_user";
+  reason: string;
+  durability: MemoryClaimDurability;
+  sensitivity: MemorySensitivity;
+  confidence: number;
+}
+
 export interface EntityMergeSuggestion {
   canonical: string;
   alias: string;
@@ -1335,6 +1514,8 @@ export interface ExtractionReport {
   entityLinks: Record<string, string[]>;
   stages: ExtractionStage[];
   failures: ExtractionFailure[];
+  claims?: MemoryClaim[];
+  durabilityDecisions?: DurabilityDecision[];
   enrichmentCandidates: EnrichmentCandidate[];
   learnedRules: ExtractionRuleSuggestion[];
 }

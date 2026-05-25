@@ -1,10 +1,12 @@
 import { normalizeRetrievalWeights } from "./config";
+import { cosineVector, embeddingsDisabled } from "./embeddings";
 import { activateGraph } from "./graphReasoning";
 import { clamp, MemoryStore } from "./store";
 import { cosineLike, estimateTokens, keywordCoverage, tokenize } from "./text";
-import type { Memory, RetrievalWeights, SearchOptions, SearchResult } from "./types";
+import type { LexicalScoreProvider, Memory, RetrievalWeights, SearchOptions, SearchResult } from "./types";
 
 const STALE_DAYS = 30;
+const INJECTION_CONFIDENCE_THRESHOLD = 0.5;
 
 export class RetrievalEngine {
   constructor(private readonly store: MemoryStore, private readonly defaultWeights?: Partial<RetrievalWeights>) {}
@@ -44,10 +46,13 @@ export class RetrievalEngine {
     const weights = weightsForMode(mode, normalizeRetrievalWeights({ ...this.defaultWeights, ...(options.weights ?? {}) }));
     const graphBoosts = this.graphBoosts(candidates, queryTokens, queryText, options);
     const bm25 = bm25Index(candidates, queryTokens);
+    const lexical = lexicalProviderScores(options.lexicalProvider, expandedQueryText, candidates, options.limit);
+    const vectorSemantic = vectorSemanticScores(options, queryText, candidates);
     const scored = candidates
       .map((memory) => {
         const graph = graphBoosts.get(memory.id);
-        return this.score(memory, queryTokens, queryEntities, queryText, now, graph?.score ?? 0, graph?.paths ?? [], weights, mode, expandedQueries, bm25);
+        const vectorScore = vectorSemantic.get(memory.id);
+        return this.score(memory, queryTokens, queryEntities, queryText, now, graph?.score ?? 0, graph?.paths ?? [], weights, mode, expandedQueries, bm25, lexical, vectorScore, vectorScore === undefined ? undefined : options.embeddingProvider?.id);
       })
       .filter((result) => result.score > 0.05 && relevanceEvidence(result) > 0.08)
       .sort((a, b) => b.score - a.score)
@@ -58,9 +63,10 @@ export class RetrievalEngine {
     const reranked = options.reranker ? options.reranker.rerank({ query: options.query, results, now }) : heuristicRerank(options.query, results);
     const contradicted = applyContradictionDecisions(reranked);
     const verified = options.verifier ? options.verifier.verify({ query: options.query, results: contradicted, now }) : heuristicVerify(options.query, contradicted);
+    const calibrated = calibrateResults(verified);
 
-    for (const result of verified) this.store.markAccessed(result.memory.id);
-    return verified;
+    for (const result of calibrated) this.store.markAccessed(result.memory.id);
+    return calibrated;
   }
 
   contextPack(results: SearchResult[], tokenBudget = 900): string {
@@ -68,9 +74,12 @@ export class RetrievalEngine {
     let spent = 0;
     for (const result of results) {
       if (result.decision === "exclude") continue;
+      if ((result.confidence ?? 1) < INJECTION_CONFIDENCE_THRESHOLD) continue;
       const stale = result.stale ? " stale=true" : "";
       const decision = result.decision && result.decision !== "include" ? ` decision=${result.decision}` : "";
-      const line = `[${result.memory.id}] trust=${result.memory.trust.toFixed(2)} score=${result.score.toFixed(2)}${stale}${decision} ${result.memory.content}`;
+      const confidence = typeof result.confidence === "number" ? ` confidence=${result.confidence.toFixed(2)}` : "";
+      const unsafe = result.unsafeToInject ? " unsafe=true" : "";
+      const line = `[${result.memory.id}] trust=${result.memory.trust.toFixed(2)} score=${result.score.toFixed(2)}${confidence}${unsafe}${stale}${decision} ${result.memory.content}`;
       const tokens = estimateTokens(line);
       if (spent + tokens > tokenBudget) break;
       spent += tokens;
@@ -90,11 +99,15 @@ export class RetrievalEngine {
     weights: RetrievalWeights,
     mode: NonNullable<SearchOptions["mode"]>,
     expandedQueries: string[],
-    bm25: Map<string, number>
+    bm25: Map<string, number>,
+    lexical: Map<string, { score: number; explanation?: string; providerId?: string }>,
+    vectorSemantic?: number,
+    vectorProviderId?: string
   ): SearchResult {
     const memoryTokens = tokenize(`${memory.content} ${memory.tags.join(" ")}`);
-    const semantic = cosineLike(queryTokens, memoryTokens);
-    const keyword = Math.max(keywordCoverage(queryTokens, memoryTokens), bm25.get(memory.id) ?? 0);
+    const semantic = vectorSemantic ?? cosineLike(queryTokens, memoryTokens);
+    const lexicalScore = lexical.get(memory.id);
+    const keyword = Math.max(keywordCoverage(queryTokens, memoryTokens), bm25.get(memory.id) ?? 0, lexicalScore?.score ?? 0);
     const entityHits = memory.entities.filter((entity) => entityMatchesQuery(entity, queryEntities, queryText)).length;
     const entity = memory.entities.length ? clamp(entityHits / Math.min(4, memory.entities.length)) : 0;
     const eventAt = memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt;
@@ -119,7 +132,13 @@ export class RetrievalEngine {
       score,
       initialScore: score,
       decision: "include",
-      explanation: [...explainSignals({ semantic, keyword, entity, temporal, behavioral, trust, graph, access }, graphPaths), ...(expandedQueries.length > 1 ? [`expanded ${expandedQueries.slice(1, 3).join(" | ")}`] : []), `mode ${mode}`],
+      explanation: [
+        ...explainSignals({ semantic, keyword, entity, temporal, behavioral, trust, graph, access }, graphPaths),
+        ...(lexicalScore?.providerId ? [`lexical ${lexicalScore.providerId}${lexicalScore.explanation ? ` ${lexicalScore.explanation}` : ""}`] : []),
+        ...(vectorProviderId ? [`vector ${vectorProviderId}`] : []),
+        ...(expandedQueries.length > 1 ? [`expanded ${expandedQueries.slice(1, 3).join(" | ")}`] : []),
+        `mode ${mode}`
+      ],
       retrievalMode: mode,
       expandedQueries: expandedQueries.length > 1 ? expandedQueries : undefined,
       fusion: { strategy: mode, scoreBeforeFusion: score, components: { semantic, keyword, entity, temporal, behavioral, trust, graph, access } },
@@ -379,6 +398,37 @@ function bm25Index(memories: Memory[], queryTokens: string[]): Map<string, numbe
   return new Map([...raw.entries()].map(([id, score]) => [id, max ? clamp(score / max) : 0]));
 }
 
+function lexicalProviderScores(provider: LexicalScoreProvider | undefined, query: string, memories: Memory[], limit?: number): Map<string, { score: number; explanation?: string; providerId?: string }> {
+  if (!provider || !memories.length) return new Map();
+  const allowed = new Set(memories.map((memory) => memory.id));
+  const hits = provider.search({ query, memories, limit: Math.max(limit ?? 8, Math.min(memories.length, 1000)) }).filter((hit) => allowed.has(hit.memoryId));
+  const max = hits.reduce((current, hit) => Math.max(current, hit.score), 0);
+  return new Map(
+    hits.map((hit) => [
+      hit.memoryId,
+      {
+        score: max ? clamp(hit.score / max) : clamp(hit.score),
+        explanation: hit.explanation,
+        providerId: provider.id
+      }
+    ])
+  );
+}
+
+function vectorSemanticScores(options: SearchOptions, queryText: string, memories: Memory[]): Map<string, number> {
+  if (!options.embeddingProvider || embeddingsDisabled(options)) return new Map();
+  const queryEmbedding = options.embeddingProvider.embed(queryText);
+  const raw = new Map<string, number>();
+  let max = 0;
+  for (const memory of memories) {
+    const embedding = options.embeddingProvider.embed(`${memory.content} ${memory.tags.join(" ")} ${memory.entities.join(" ")}`);
+    const score = cosineVector(queryEmbedding, embedding);
+    raw.set(memory.id, score);
+    max = Math.max(max, score);
+  }
+  return new Map([...raw.entries()].map(([id, score]) => [id, max ? clamp(score / max) : 0]));
+}
+
 function scopeMatches(memory: Memory, options: SearchOptions): boolean {
   if (options.scopeMode === "all") return true;
   if (options.sessionId && memory.sessionId && memory.sessionId !== options.sessionId) return false;
@@ -441,6 +491,29 @@ function heuristicVerify(query: string, results: SearchResult[]): SearchResult[]
     }
     return result;
   });
+}
+
+function calibrateResults(results: SearchResult[]): SearchResult[] {
+  return results.map((result) => {
+    const confidence = calibrateConfidence(result);
+    const unsafeToInject = confidence < INJECTION_CONFIDENCE_THRESHOLD || result.decision === "exclude" || result.decision === "review";
+    return {
+      ...result,
+      confidence,
+      unsafeToInject,
+      explanation: unsafeToInject ? [...(result.explanation ?? []), `calibration unsafe confidence ${confidence.toFixed(2)}`] : [...(result.explanation ?? []), `calibration confidence ${confidence.toFixed(2)}`]
+    };
+  });
+}
+
+function calibrateConfidence(result: SearchResult): number {
+  const evidence = clamp(relevanceEvidence(result) / 2.5);
+  const trust = clamp(result.memory.trust * result.memory.importance);
+  const source = clamp(result.memory.source.confidence);
+  const score = clamp(result.score);
+  const decisionPenalty = result.decision === "exclude" ? 0.45 : result.decision === "review" ? 0.25 : result.decision === "warn" ? 0.12 : 0;
+  const stalePenalty = result.stale ? 0.08 : 0;
+  return clamp(score * 0.44 + evidence * 0.2 + trust * 0.2 + source * 0.16 - decisionPenalty - stalePenalty);
 }
 
 function heuristicRerank(query: string, results: SearchResult[]): SearchResult[] {

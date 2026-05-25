@@ -12,7 +12,7 @@ export async function runNextgenEvaluation() {
   const service = new MemoryService();
   const checks: Check[] = [];
 
-  const brain = service.createBrain({ name: "Nextgen Team Brain", ownerUserId: "bench", orgId: "org-bench", visibility: "team" });
+  const brain = service.createBrain({ name: "Nextgen Team Brain", ownerUserId: "bench", memberUserIds: ["bench-peer"], orgId: "org-bench", visibility: "team" });
   const source = service.createSource({ brainId: brain.id, name: "Benchmark Source", kind: "docs" });
   service.registerAgent({
     id: "agent-bench",

@@ -497,6 +497,10 @@ switch (command) {
     console.log(JSON.stringify(service.auditTrail({ memoryId: args[0], userId: process.env.MEMORY_AUDIT_USER_ID }), null, 2));
     break;
   }
+  case "audit-chain": {
+    console.log(JSON.stringify(service.auditChain({ memoryId: args[0], userId: process.env.MEMORY_AUDIT_USER_ID }), null, 2));
+    break;
+  }
   case "compliance": {
     console.log(JSON.stringify(service.complianceReport(), null, 2));
     break;
@@ -785,6 +789,12 @@ switch (command) {
     }), null, 2));
     break;
   }
+  case "connector-auth-revoke": {
+    const connectorId = args[0];
+    if (!connectorId) fail("Usage: memctl connector-auth-revoke <connector-id>");
+    console.log(JSON.stringify(service.revokeConnectorAuth(connectorId, process.env.MEMORY_ACTOR_ID ?? "cli"), null, 2));
+    break;
+  }
   case "connector-list": {
     const connectorId = args[0];
     if (!connectorId) fail("Usage: memctl connector-list <connector-id>");
@@ -992,7 +1002,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|action|search|inspect|route|intent|evidence|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-enrich|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|connector-telemetry|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|action|search|inspect|route|intent|evidence|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-enrich|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|audit-chain|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|connector-telemetry|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {

@@ -838,6 +838,14 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.signal-list article .why-used-line {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.45;
+  margin: 0;
+}
+
 .signal-list article span,
 .memory-mini small {
   color: var(--muted);

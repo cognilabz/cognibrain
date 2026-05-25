@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cognibrain"
+version = "0.1.0"
+description = "Dependency-free Python client for the cognibrain Agent Memory OS HTTP API."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Cognilabz" }]
+keywords = ["agents", "memory", "retrieval", "cognibrain"]
+
+[tool.setuptools]
+py-modules = ["cognibrain_client"]

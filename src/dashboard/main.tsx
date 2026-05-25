@@ -45,6 +45,7 @@ import "./styles/app.css";
 type ViewId = "memories" | "recall" | "graph" | "timeline" | "dream" | "marketplace" | "proof";
 type MemoryFilter = "active" | "all" | "archived" | "needs-review";
 type TimeZoom = "day" | "week" | "month" | "all";
+type EngineeringKindFilter = "all" | "repo_policy" | "architecture_decision" | "review_correction" | "tool_outcome" | "procedure" | "forbidden_action" | "migration_note" | "test_strategy" | "dependency_rule" | "generated_file_rule";
 type RuntimeStatus = {
   state: "checking" | "online" | "offline";
   label: string;
@@ -90,6 +91,20 @@ const viewItems: Array<{ id: ViewId; label: string; icon: React.ElementType; not
   { id: "dream", label: "Dream", icon: Sparkles, note: "Repair memory" },
   { id: "marketplace", label: "Market", icon: ShoppingBag, note: "Modules" },
   { id: "proof", label: "Proof", icon: BarChart3, note: "Verify claims" }
+];
+
+const engineeringKindFilters: EngineeringKindFilter[] = [
+  "all",
+  "repo_policy",
+  "architecture_decision",
+  "review_correction",
+  "tool_outcome",
+  "procedure",
+  "forbidden_action",
+  "migration_note",
+  "test_strategy",
+  "dependency_rule",
+  "generated_file_rule"
 ];
 
 const logoUrl = new URL("../../docs/assets/cognilabz-logo.png", import.meta.url).href;
@@ -165,6 +180,22 @@ const seedMemories: MemoryInput[] = [
     entities: ["operator", "memory graph", "benchmark proof"],
     timestamp: daysAgo(10),
     temporal: { eventAt: daysAgo(10).toISOString() }
+  },
+  {
+    userId: "demo",
+    content: "Repo policy: before Cognibrain release work, run npm run release:check and keep managed SaaS claims out of self-hosted launch copy.",
+    source: { kind: "reviewed_code", confidence: 0.96 },
+    tags: ["engineering-memory", "engineering:repo_policy", "release"],
+    entities: ["Cognibrain", "release"],
+    timestamp: daysAgo(1),
+    metadata: {
+      engineering: {
+        kind: "repo_policy",
+        codebase: { repo: "cognibrain", branch: "main" },
+        confidence: 0.92,
+        command: "npm run release:check"
+      }
+    }
   },
   {
     userId: "demo",
@@ -327,6 +358,7 @@ function App() {
   const [view, setView] = useState<ViewId>("memories");
   const [query, setQuery] = useState("Avoid stale memories?");
   const [filter, setFilter] = useState<MemoryFilter>("active");
+  const [engineeringFilter, setEngineeringFilter] = useState<EngineeringKindFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newMemory, setNewMemory] = useState("");
   const [artifactText, setArtifactText] = useState("");
@@ -359,7 +391,7 @@ function App() {
   const usingRuntime = runtime.state === "online" && liveMemories !== null;
   const memories = usingRuntime ? liveMemories : localMemories;
   const health = usingRuntime ? healthFromMemories(memories) : healthReport(store, "demo");
-  const filteredMemories = filterMemories(memories, filter);
+  const filteredMemories = filterMemories(memories, filter, engineeringFilter);
   const selectedMemory = selectedId ? findMemory(memories, selectedId) : filteredMemories[0] ?? memories[0] ?? null;
   const localResults = retrieval.search({ userId: "demo", query, limit: 5, weights: retrievalWeights, graphDepth });
   const results = usingRuntime ? liveResults ?? [] : localResults;
@@ -862,6 +894,8 @@ function App() {
           <MemoryView
             filter={filter}
             setFilter={setFilter}
+            engineeringFilter={engineeringFilter}
+            setEngineeringFilter={setEngineeringFilter}
             memories={filteredMemories}
             selectedMemory={selectedMemory}
             newMemory={newMemory}
@@ -1019,6 +1053,8 @@ function mapMarketplaceModule(raw: unknown): MarketplaceModuleCard {
 function MemoryView({
   filter,
   setFilter,
+  engineeringFilter,
+  setEngineeringFilter,
   memories,
   selectedMemory,
   newMemory,
@@ -1038,6 +1074,8 @@ function MemoryView({
 }: {
   filter: MemoryFilter;
   setFilter: (filter: MemoryFilter) => void;
+  engineeringFilter: EngineeringKindFilter;
+  setEngineeringFilter: (filter: EngineeringKindFilter) => void;
   memories: Memory[];
   selectedMemory: Memory | null;
   newMemory: string;
@@ -1072,6 +1110,14 @@ function MemoryView({
             </button>
           ))}
         </div>
+        <label className="select-field" htmlFor="engineering-kind-filter">
+          <span>Engineering type</span>
+          <select id="engineering-kind-filter" value={engineeringFilter} onChange={(event) => setEngineeringFilter(event.target.value as EngineeringKindFilter)}>
+            {engineeringKindFilters.map((kind) => (
+              <option key={kind} value={kind}>{kind === "all" ? "all engineering types" : kind}</option>
+            ))}
+          </select>
+        </label>
         <div className="memory-list">
           {memories.map((memory) => (
             <button
@@ -1938,11 +1984,19 @@ function summarizeArtifact(value: string): string[] {
   }
 }
 
-function filterMemories(memories: Memory[], filter: MemoryFilter): Memory[] {
-  if (filter === "all") return memories;
-  if (filter === "archived") return memories.filter((memory) => memory.archivedAt);
-  if (filter === "needs-review") return memories.filter((memory) => !memory.archivedAt && needsReview(memory));
-  return memories.filter((memory) => !memory.archivedAt);
+function filterMemories(memories: Memory[], filter: MemoryFilter, engineeringFilter: EngineeringKindFilter): Memory[] {
+  const byStatus = filter === "all"
+    ? memories
+    : filter === "archived"
+      ? memories.filter((memory) => memory.archivedAt)
+      : filter === "needs-review"
+        ? memories.filter((memory) => !memory.archivedAt && needsReview(memory))
+        : memories.filter((memory) => !memory.archivedAt);
+  if (engineeringFilter === "all") return byStatus;
+  return byStatus.filter((memory) => {
+    const engineering = memory.metadata.engineering as { kind?: string } | undefined;
+    return engineering?.kind === engineeringFilter;
+  });
 }
 
 function needsReview(memory: Memory): boolean {

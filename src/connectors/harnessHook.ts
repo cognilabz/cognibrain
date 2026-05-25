@@ -54,12 +54,17 @@ export interface HarnessToolCall {
   action?: string;
   cwd?: string;
   envRequirements?: string[];
+  environmentHints?: string[];
   filesChanged?: string[];
+  filesTouched?: string[];
 }
 
 export interface HarnessToolOutcome extends HarnessToolCall {
   exitCode?: number;
+  durationMs?: number;
+  outputSummary?: string;
   failureReason?: string;
+  successReason?: string;
   benchmarkScenarioId?: string;
   evidencePackId?: string;
   tests?: HarnessActionInput["tests"];
@@ -156,11 +161,16 @@ export class HarnessMemoryHook {
         command,
         cwd: outcome.cwd,
         envRequirements: outcome.envRequirements,
+        environmentHints: outcome.environmentHints,
         exitCode: outcome.exitCode,
+        durationMs: outcome.durationMs,
+        outputSummary: outcome.outputSummary,
         failureReason: outcome.failureReason,
+        successReason: outcome.successReason,
         benchmarkScenarioId: outcome.benchmarkScenarioId,
         evidencePackId: outcome.evidencePackId,
         filesChanged: outcome.filesChanged,
+        filesTouched: outcome.filesTouched,
         tests: outcome.tests,
         pullRequest: outcome.pullRequest,
         errorFixed: outcome.errorFixed,

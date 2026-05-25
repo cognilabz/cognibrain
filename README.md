@@ -5,7 +5,7 @@
 <h1 align="center">cognibrain</h1>
 
 <p align="center">
-  <strong>Engineering Memory OS for coding agents.</strong>
+  <strong>Stop fixing the same agent mistake twice.</strong>
 </p>
 
 <p align="center">
@@ -13,22 +13,36 @@
   <a href="#is-it-production-ready">Production Readiness</a> ·
   <a href="#proof">Proof</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="#documentation">Documentation</a> ·
+  <a href="docs/README.md">Documentation</a> ·
   <a href="docs/implementation-status.md">Status Matrix</a> ·
   <a href="docs/claims.md">Claims</a>
 </p>
 
-cognibrain is a local-first TypeScript Engineering Memory OS for teams that need coding agents to stop repeating the same mistake. It is still an Inspectable Agent Memory OS at the platform layer: every memory can be routed, governed, cited and audited before injection. It captures corrections, repo policies, architecture decisions, review feedback and tool outcomes as evidence-grade memory, then injects the right context before the next change. It remembers across agent harnesses, proves every memory with source and retrieval evidence, explains why context was selected, respects scope and consent boundaries, and keeps memory valid over time through graph, temporal, contradiction and dream-maintenance surfaces.
+cognibrain is a local-first TypeScript Engineering Memory OS for coding agents. It captures corrections, repo policies, architecture decisions, review feedback and tool outcomes as evidence-grade memory, then injects the right context before the next code change. It is still an Inspectable Agent Memory OS at the platform layer: every memory can be routed, governed, cited and audited before injection. It remembers across agent harnesses, proves every memory with source and retrieval evidence, explains why context was selected, respects scope and consent boundaries, and keeps memory valid over time through graph, temporal, contradiction and dream-maintenance surfaces.
 
 The project includes the memory engine, HTTP API, CLI, official connector manifests, built-in GitHub/Slack/Discord vendor drivers, provider adapters, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
 
-**Claim:** coding-agent memory you can prove, route, govern, benchmark, and reuse across every agent.
+**Claim:** coding-agent memory you can prove, route, govern, benchmark, and reuse across every agent. Claim IDs: `CB-CLAIM-CONTEXT`, `CB-CLAIM-EVIDENCE`, `CB-CLAIM-PATCH-EVIDENCE`.
 
 **USP:** Stop fixing the same agent mistake twice.
 
 Implementation status is tracked in [`docs/implementation-status.md`](docs/implementation-status.md), which separates local-ready surfaces from roadmap items so market claims stay tied to code, tests and exposed APIs.
 Claim evidence is mapped in [`docs/claims.md`](docs/claims.md), so README, product, benchmark, and market statements stay tied to verifier output instead of aspirational copy.
 Production setup and the exact claim boundary are documented in [`docs/production-readiness.md`](docs/production-readiness.md).
+
+## Five-Minute Proof
+
+```bash
+npm install
+./bin/cognibrain.mjs setup --self-hosted
+./bin/cognibrain.mjs memory action "pnpm test failed because this repo uses npm test"
+MEMORY_PREVIOUS_WRONG_ACTION="pnpm test" MEMORY_CORRECT_ACTION="npm test" ./bin/cognibrain.mjs memory code-correction "Do not use pnpm in this repo; use npm test."
+./bin/cognibrain.mjs memory evidence-pack "What command should I run before release?"
+./bin/cognibrain.mjs memory action-guard "pnpm test"
+./bin/cognibrain.mjs memory patch-evidence "release validation"
+```
+
+CogniCodeBench is the flagship benchmark for this loop: mistake -> correction -> memory -> next patch -> correct action. The checked-in artifact is synthetic proof, not a claim about arbitrary customer repositories. See [`docs/benchmarks/cognicodebench.md`](docs/benchmarks/cognicodebench.md), [`docs/benchmarks/results.md`](docs/benchmarks/results.md), and [`docs/claims.md`](docs/claims.md).
 
 ![cognibrain desktop dashboard](docs/assets/dashboard-desktop.png)
 
@@ -457,14 +471,27 @@ docker/            Container and compose files
 
 ## Documentation
 
+- [Docs Home](docs/README.md)
+- [Quickstart](docs/getting-started/quickstart.md)
+- [First Engineering Memory](docs/getting-started/first-engineering-memory.md)
+- [Canonical Messaging](docs/marketing/messaging.md)
+- [Launch Narrative](docs/marketing/launch-narrative.md)
 - [API Reference](docs/api-reference.md)
 - [Agent Memory OS](docs/agent-memory-os.md)
 - [Configuration](docs/configuration.md)
 - [Production Readiness](docs/production-readiness.md)
+- [Production Overview](docs/production/overview.md)
+- [Release Checklist](docs/production/release-checklist.md)
 - [Integration Guide](docs/integration-guide.md)
+- [MCP Integration](docs/integrations/mcp.md)
+- [Codex Integration](docs/integrations/codex.md)
+- [GitHub Connector](docs/integrations/github.md)
 - [Memory Lifecycle](docs/lifecycle.md)
 - [Connectors](docs/connectors.md)
+- [Connector Maturity Matrix](docs/connectors.md#connector-maturity-matrix)
 - [Benchmarking](docs/benchmarking.md)
+- [CogniCodeBench](docs/benchmarks/cognicodebench.md)
+- [CogniCodeBench Results](docs/benchmarks/results.md)
 - [Open Benchmark Leaderboard](docs/leaderboard.md)
 - [Community And Adoption](docs/community.md)
 - [Partner Integration Playbook](docs/partners.md)
@@ -474,6 +501,11 @@ docker/            Container and compose files
 - [Privacy And Retention Tutorial](docs/tutorials/privacy-retention.md)
 - [Domain Module Tutorial](docs/tutorials/domain-module.md)
 - [Market Comparison](docs/market-comparison.md)
+- [Compare: Mem0](docs/compare/mem0.md)
+- [Compare: GBrain](docs/compare/gbrain.md)
+- [Compare: Hindsight](docs/compare/hindsight.md)
+- [Compare: Zep](docs/compare/zep.md)
+- [Compare: Cognee](docs/compare/cognee.md)
 - [Market Analysis Implementation Audit](docs/market-analysis-implementation-audit.md)
 - [Advanced Features](docs/advanced-features.md)
 - [Roadmap](docs/roadmap.md)

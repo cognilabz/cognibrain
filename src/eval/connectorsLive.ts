@@ -188,7 +188,7 @@ function verifyHarnessGoldenPath(): HarnessGoldenPathRun {
   const checks = {
     sessionStartContext: Boolean(session.codingContextPack?.sections.some((section) => section.evidence.length > 0) && session.memoryContext.includes("npm test")),
     preToolProcedureRecall: preTool.procedures.some((result) => result.memory.content.includes("Before tool calls")),
-    actionGuardWarns: preTool.guard?.severity === "warn" && preTool.guard.alternatives.includes("npm test"),
+    actionGuardBlocks: preTool.guard?.severity === "block" && preTool.guard.alternatives.includes("npm test"),
     postToolOutcomeMemory: Boolean(action?.tags.includes("harness-action") && action.tags.includes("success-pattern")),
     userCorrectionCaptured: Boolean(correction?.tags.includes("engineering-correction") && correction.tags.includes("engineering:review_correction")),
     patchEvidenceTrail: Boolean(trail && action && correction && trail.toolOutcomeIds.includes(action.id) && trail.correctionIds.includes(correction.id))

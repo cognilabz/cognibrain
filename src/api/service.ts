@@ -826,8 +826,118 @@ export class MemoryService {
       }
     });
     this.applySupersession(memory);
-    this.recordAudit("memory.write", { userId: input.userId, memoryId: memory.id, metadata: { resource: "engineering-correction", previousMemoryId: previous?.id, kind } });
-    return memory;
+    const derivedMemories = this.derivedCorrectionMemories(input, memory, previous);
+    const finalMemory = derivedMemories.length
+      ? this.update(memory.id, {
+          metadata: {
+            ...memory.metadata,
+            correctionPipeline: {
+              derivedMemoryIds: derivedMemories.map((item) => item.id),
+              derivedKinds: derivedMemories.map((item) => getEngineeringMetadata(item)?.kind).filter(Boolean),
+              previousMemoryId: previous?.id
+            }
+          }
+        })
+      : memory;
+    this.recordAudit("memory.write", { userId: input.userId, memoryId: finalMemory.id, metadata: { resource: "engineering-correction", previousMemoryId: previous?.id, kind, derivedMemoryIds: derivedMemories.map((item) => item.id) } });
+    return finalMemory;
+  }
+
+  private derivedCorrectionMemories(input: {
+    userId: string;
+    agentId?: string;
+    sessionId?: string;
+    appId?: string;
+    orgId?: string;
+    projectId?: string;
+    content: string;
+    previousMemoryId?: string;
+    previousWrongAction?: string;
+    correctAction?: string;
+    kind?: EngineeringMemoryKind;
+    codebase?: CodebaseScope;
+    source?: MemoryInput["source"];
+    timestamp?: Date | string;
+    evidenceIds?: string[];
+  }, correction: Memory, previous?: Memory): Memory[] {
+    const primaryKind = getEngineeringMetadata(correction)?.kind;
+    const codebase = input.codebase ?? { repo: input.projectId };
+    const source = input.source ?? { kind: "reviewed_code" as const, confidence: 0.88 };
+    const timestamp = input.timestamp ?? new Date().toISOString();
+    const correctAction = input.correctAction ?? inferCorrectActionFromCorrection(input.content);
+    const previousWrongAction = input.previousWrongAction ?? (previous ? getEngineeringMetadata(previous)?.command : undefined) ?? previous?.content;
+    const forbiddenAction = inferForbiddenActionFromCorrection(input.content, previousWrongAction);
+    const scope = {
+      userId: input.userId,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      appId: input.appId,
+      orgId: input.orgId,
+      projectId: input.projectId
+    };
+    const baseMetadata = {
+      correctionPipeline: { derivedFromCorrectionId: correction.id, previousMemoryId: previous?.id },
+      evidenceIds: input.evidenceIds ?? []
+    };
+    const derived: MemoryInput[] = [];
+
+    if (repoPolicyFromCorrection(input.content, correctAction) && primaryKind !== "repo_policy") {
+      derived.push({
+        ...scope,
+        content: `Repo policy${codebase.repo ? ` for ${codebase.repo}` : ""}: ${repoPolicyFromCorrection(input.content, correctAction)}`,
+        type: "project",
+        layer: "long_term",
+        source,
+        tags: ["engineering-memory", "engineering:repo_policy", "correction-derived", "repo-policy"],
+        temporal: { eventAt: timestamp, validFrom: timestamp },
+        relations: [{ type: "suggested_by", targetId: correction.id, confidence: 0.82, evidence: "derived from reviewed correction" }],
+        metadata: { ...baseMetadata, engineering: { kind: "repo_policy", codebase, confidence: 0.86, correctAction, evidenceIds: input.evidenceIds ?? [] } }
+      });
+    }
+
+    if (forbiddenAction && primaryKind !== "forbidden_action") {
+      derived.push({
+        ...scope,
+        content: `Forbidden action${codebase.repo ? ` for ${codebase.repo}` : ""}: do not ${forbiddenAction}.`,
+        type: "project",
+        layer: "long_term",
+        source,
+        tags: ["engineering-memory", "engineering:forbidden_action", "correction-derived", "forbidden-action"],
+        temporal: { eventAt: timestamp, validFrom: timestamp },
+        relations: [{ type: "suggested_by", targetId: correction.id, confidence: 0.84, evidence: "derived from reviewed correction" }],
+        metadata: { ...baseMetadata, engineering: { kind: "forbidden_action", codebase, confidence: 0.86, forbiddenAction, correctAction, evidenceIds: input.evidenceIds ?? [] } }
+      });
+    }
+
+    if (/\bgenerated|generated file|\.generated\.|dist\/|build\/|vendor\/|lockfile\b/i.test(input.content) && primaryKind !== "generated_file_rule") {
+      derived.push({
+        ...scope,
+        content: `Generated-file rule${codebase.repo ? ` for ${codebase.repo}` : ""}: do not edit generated files unless the generator is part of the task.`,
+        type: "project",
+        layer: "long_term",
+        source,
+        tags: ["engineering-memory", "engineering:generated_file_rule", "correction-derived", "forbidden-action"],
+        temporal: { eventAt: timestamp, validFrom: timestamp },
+        relations: [{ type: "suggested_by", targetId: correction.id, confidence: 0.84, evidence: "derived from reviewed correction" }],
+        metadata: { ...baseMetadata, engineering: { kind: "generated_file_rule", codebase, confidence: 0.86, forbiddenAction: "edit generated files", correctAction, evidenceIds: input.evidenceIds ?? [] } }
+      });
+    }
+
+    if (correctAction && primaryKind !== "procedure") {
+      derived.push({
+        ...scope,
+        content: `Procedure${codebase.repo ? ` for ${codebase.repo}` : ""}: before the next related code change, use ${correctAction}.`,
+        type: "procedural",
+        layer: "procedural",
+        source,
+        tags: ["engineering-memory", "engineering:procedure", "correction-derived", "procedure"],
+        temporal: { eventAt: timestamp, validFrom: timestamp },
+        relations: [{ type: "suggested_by", targetId: correction.id, confidence: 0.82, evidence: "derived from reviewed correction" }],
+        metadata: { ...baseMetadata, engineering: { kind: "procedure", codebase, confidence: 0.84, command: correctAction, successPattern: correctAction, evidenceIds: input.evidenceIds ?? [] } }
+      });
+    }
+
+    return derived.map((item) => this.add(item));
   }
 
   codingContextPack(options: SearchOptions & { tokenBudget?: number }): CodingContextPack {
@@ -957,11 +1067,13 @@ export class MemoryService {
     const excludedStaleRules = results
       .filter((result) => result.memory.beliefState === "superseded" || result.memory.beliefState === "stale" || result.memory.beliefState === "needs_verification" || result.decision === "exclude")
       .map((result) => ({ memoryId: result.memory.id, reason: `belief=${result.memory.beliefState} decision=${result.decision ?? "include"}` }));
+    const evidenceSource = results.find((result) => typeof getEngineeringMetadata(result.memory)?.evidenceIds?.[0] === "string");
     const trail = buildPatchEvidenceTrail({
       id: `patch_ev_${contentHash(`${input.userId}:${input.task}:${results.map((result) => result.memory.id).join(",")}`).slice(2, 14)}`,
       userId: input.userId,
       task: input.task,
       results,
+      contextPackId: evidenceSource ? getEngineeringMetadata(evidenceSource.memory)?.evidenceIds?.[0] : undefined,
       filesChanged: input.filesChanged,
       commandsRun: input.commandsRun,
       excludedStaleRules
@@ -1052,9 +1164,14 @@ export class MemoryService {
       input.command ? `Command executed: ${input.command}.` : undefined,
       input.cwd ? `Working directory: ${input.cwd}.` : undefined,
       input.envRequirements?.length ? `Environment requirements: ${input.envRequirements.join(", ")}.` : undefined,
+      input.environmentHints?.length ? `Environment hints: ${input.environmentHints.join(", ")}.` : undefined,
       typeof input.exitCode === "number" ? `Exit code: ${input.exitCode}.` : undefined,
+      typeof input.durationMs === "number" ? `Duration: ${input.durationMs}ms.` : undefined,
+      input.outputSummary ? `Output summary: ${input.outputSummary}.` : undefined,
       input.failureReason ? `Failure reason: ${input.failureReason}.` : undefined,
+      input.successReason ? `Success reason: ${input.successReason}.` : undefined,
       input.filesChanged?.length ? `Files changed: ${input.filesChanged.join(", ")}.` : undefined,
+      input.filesTouched?.length ? `Files touched: ${input.filesTouched.join(", ")}.` : undefined,
       passed.length ? `Tests passed: ${passed.join(", ")}.` : undefined,
       failed.length ? `Tests failed: ${failed.join(", ")}.` : undefined,
       input.pullRequest ? `Pull request created: ${input.pullRequest}.` : undefined,
@@ -1087,9 +1204,14 @@ export class MemoryService {
           command: input.command,
           cwd: input.cwd,
           envRequirements: input.envRequirements ?? [],
+          environmentHints: input.environmentHints ?? [],
           exitCode: input.exitCode,
+          durationMs: input.durationMs,
+          outputSummary: input.outputSummary,
           failureReason: input.failureReason,
+          successReason: input.successReason,
           filesChanged: input.filesChanged ?? [],
+          filesTouched: input.filesTouched ?? input.filesChanged ?? [],
           tests: input.tests ?? [],
           pullRequest: input.pullRequest,
           errorFixed: input.errorFixed,
@@ -1103,10 +1225,15 @@ export class MemoryService {
           command: input.command,
           cwd: input.cwd,
           envRequirements: input.envRequirements ?? [],
+          environmentHints: input.environmentHints ?? [],
           exitCode: input.exitCode,
+          durationMs: input.durationMs,
+          outputSummary: input.outputSummary,
           failureReason: input.failureReason,
-          successPattern: passed.length && !failed.length ? `Command ${input.command ?? "tool"} passed ${passed.join(", ")}` : undefined,
+          successReason: input.successReason,
+          successPattern: input.successReason ?? (passed.length && !failed.length ? `Command ${input.command ?? "tool"} passed ${passed.join(", ")}` : undefined),
           filesChanged: input.filesChanged ?? [],
+          filesTouched: input.filesTouched ?? input.filesChanged ?? [],
           testOutputSummary: [...passed.map((name) => `passed:${name}`), ...failed.map((name) => `failed:${name}`)].join(", "),
           evidenceIds: input.evidencePackId ? [input.evidencePackId] : []
         }
@@ -1252,10 +1379,15 @@ export class MemoryService {
         command: input.command ?? input.content,
         cwd: typeof input.metadata?.cwd === "string" ? input.metadata.cwd : undefined,
         envRequirements: Array.isArray(input.metadata?.envRequirements) ? input.metadata.envRequirements.filter((item): item is string => typeof item === "string") : undefined,
+        environmentHints: Array.isArray(input.metadata?.environmentHints) ? input.metadata.environmentHints.filter((item): item is string => typeof item === "string") : undefined,
         exitCode: typeof input.metadata?.exitCode === "number" ? input.metadata.exitCode : undefined,
+        durationMs: typeof input.metadata?.durationMs === "number" ? input.metadata.durationMs : undefined,
+        outputSummary: typeof input.metadata?.outputSummary === "string" ? input.metadata.outputSummary : undefined,
         failureReason: typeof input.metadata?.failureReason === "string" ? input.metadata.failureReason : undefined,
+        successReason: typeof input.metadata?.successReason === "string" ? input.metadata.successReason : undefined,
         evidencePackId: typeof input.metadata?.evidencePackId === "string" ? input.metadata.evidencePackId : undefined,
         filesChanged: input.filesChanged,
+        filesTouched: Array.isArray(input.metadata?.filesTouched) ? input.metadata.filesTouched.filter((item): item is string => typeof item === "string") : input.filesChanged,
         tests: input.tests,
         content: input.content,
         timestamp: new Date().toISOString()
@@ -4807,6 +4939,40 @@ function inferCorrectionKind(content: string): EngineeringMemoryKind {
   if (/\b(migrat|deprecated|moved|renamed|now uses|formerly)\b/.test(lower)) return "migration_note";
   if (/\b(do not|don't|dont|never|must not|should not)\b/.test(lower)) return "forbidden_action";
   return "review_correction";
+}
+
+function inferCorrectActionFromCorrection(content: string): string | undefined {
+  const patterns = [
+    /\buse\s+([^.;]+?)\s+instead\b/i,
+    /\binstead[, ]+\s*([^.;]+)/i,
+    /\bshould\s+(?:use|run|call)\s+([^.;]+)/i,
+    /\brun\s+([^.;]+?)\s+(?:before|after|for|when|instead)\b/i
+  ];
+  for (const pattern of patterns) {
+    const match = content.match(pattern)?.[1]?.trim();
+    if (match) return normalizeActionPhrase(match);
+  }
+  const command = content.match(/\b(?:npm|pnpm|yarn|pytest|go test|make)\b[^.;]*/i)?.[0]?.trim();
+  return command ? normalizeActionPhrase(command) : undefined;
+}
+
+function inferForbiddenActionFromCorrection(content: string, previousWrongAction?: string): string | undefined {
+  if (previousWrongAction && previousWrongAction.length < 120) return normalizeActionPhrase(previousWrongAction);
+  const match = content.match(/\b(?:do not|don't|dont|never|must not|should not)\s+([^.;]+)/i)?.[1]?.trim();
+  if (!match) return undefined;
+  return normalizeActionPhrase(match.replace(/\b(?:in this repo|for this repo|here)\b/gi, "").trim());
+}
+
+function repoPolicyFromCorrection(content: string, correctAction?: string): string | undefined {
+  const lower = content.toLowerCase();
+  if (!/\b(repo|repository|always|never|do not|don't|dont|must|should|use|instead|policy|pnpm|npm|pytest|go test|generated)\b/.test(lower)) return undefined;
+  const trimmed = content.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= 180) return trimmed.endsWith(".") ? trimmed : `${trimmed}.`;
+  return correctAction ? `use ${correctAction} for matching changes.` : `${trimmed.slice(0, 177)}...`;
+}
+
+function normalizeActionPhrase(value: string): string {
+  return value.replace(/\s+/g, " ").replace(/[.]+$/, "").trim();
 }
 
 function codingActionOverlap(action: string, content: string): boolean {

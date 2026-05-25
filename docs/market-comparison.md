@@ -15,13 +15,26 @@ This is stronger than a synthetic demo because the certified runners use public 
 
 The current repo also proves a category-specific Engineering Memory OS loop through CogniCodeBench. That artifact is intentionally synthetic: it measures whether coding-agent corrections, review feedback, commands, tool outcomes, generated-file rules, and codebase migrations carry into the next patch. It should be compared with other coding-agent memory systems only when they run the same scenario schema and report the same correction carryover, repeated mistake, procedure recall, evidence, and stale-rule metrics.
 
-Focused plan1_3 market pages:
+Focused market pages:
 
 - [`docs/market/engineering-memory-os.md`](market/engineering-memory-os.md)
 - [`docs/market/cognibrain-vs-mem0.md`](market/cognibrain-vs-mem0.md)
 - [`docs/market/cognibrain-vs-gbrain.md`](market/cognibrain-vs-gbrain.md)
 - [`docs/market/cognibrain-vs-hindsight.md`](market/cognibrain-vs-hindsight.md)
 - [`docs/market/cognibrain-vs-zep.md`](market/cognibrain-vs-zep.md)
+- [`docs/market/cognibrain-vs-cognee.md`](market/cognibrain-vs-cognee.md)
+- [`docs/market/why-engineering-memory-os.md`](market/why-engineering-memory-os.md)
+- [`docs/market/stop-fixing-same-agent-mistake.md`](market/stop-fixing-same-agent-mistake.md)
+- [`docs/market/cognicodebench-proof.md`](market/cognicodebench-proof.md)
+- [`docs/market/evidence-grade-memory.md`](market/evidence-grade-memory.md)
+
+Product-grade comparison pages:
+
+- [`docs/compare/mem0.md`](compare/mem0.md)
+- [`docs/compare/gbrain.md`](compare/gbrain.md)
+- [`docs/compare/hindsight.md`](compare/hindsight.md)
+- [`docs/compare/zep.md`](compare/zep.md)
+- [`docs/compare/cognee.md`](compare/cognee.md)
 
 ## Proof Boundary
 

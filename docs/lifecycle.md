@@ -42,6 +42,20 @@ Automatic dreaming is enabled by default in the local API and CLI. It is designe
 - the API checks due users every `MEMORY_DREAM_CHECK_INTERVAL_MINUTES`,
 - manual `memory_dream`, `/dream`, or `./bin/cognibrain.mjs memory dream` resets that user's counter.
 
+```mermaid
+flowchart LR
+  Writes["Memory writes"] --> Due["Dream due check"]
+  Due --> Reflect["Reflection pass"]
+  Reflect --> Contradictions["Contradiction review"]
+  Reflect --> Summaries["Summary memories"]
+  Reflect --> Procedures["Procedure promotion"]
+  Reflect --> Fade["Fade or archive stale memory"]
+  Contradictions --> Audit["Audit trail"]
+  Summaries --> Audit
+  Procedures --> Audit
+  Fade --> Audit
+```
+
 Inspect the state:
 
 ```bash

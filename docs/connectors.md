@@ -145,6 +145,32 @@ For live credential checks, keep writeback dry-run until the target issue, pull 
 
 Native harness packages should prefer `connector-telemetry` or `POST /connectors/telemetry` over asking users to run manual feedback commands. The telemetry endpoint accepts `accepted_suggestion`, `rejected_suggestion`, `context_pack_feedback`, and `tool_outcome` events. Accepted/rejected suggestion events become connector feedback memories and update linked memory trust. Context-pack feedback creates retrieval training samples and learned profile updates. Tool outcomes become first-class harness action memories, so retrieval can answer what command, test, or fix worked last time.
 
+```mermaid
+flowchart LR
+  Connector["Connector event"] --> SourceRef["SourceRef provenance"]
+  SourceRef --> Memory["MemoryRecordV2"]
+  Memory --> Evidence["EvidencePack"]
+  Evidence --> Patch["Patch Evidence Trail"]
+```
+
+## Connector Maturity Matrix
+
+| Connector | Manifest | Install helper | Auth lifecycle | Poll/list | Webhook | Writeback | Real vendor smoke | Docs | Production certified |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Codex | Yes | Yes | Local MCP | N/A | N/A | Telemetry via API | N/A | [`integrations/codex.md`](integrations/codex.md) | local-ready |
+| Claude Code | Yes | Yes | Local MCP | N/A | Hook events | Telemetry via API | N/A | [`integrations/claude-code.md`](integrations/claude-code.md) | local-ready |
+| Cursor | Yes | Yes | Local MCP | N/A | N/A | Telemetry via API | N/A | [`integrations/cursor.md`](integrations/cursor.md) | local-ready |
+| GitHub Copilot | Yes | Yes | Instruction-file based | N/A | N/A | Instruction/telemetry path | N/A | [`integrations/github-copilot.md`](integrations/github-copilot.md) | local-ready |
+| VS Code | Yes | Yes | Local MCP | N/A | N/A | Telemetry via API | N/A | [`integrations/vscode.md`](integrations/vscode.md) | local-ready |
+| OpenCode | Yes | Yes | Local MCP | N/A | N/A | Telemetry via API | N/A | [`integrations/opencode.md`](integrations/opencode.md) | local-ready |
+| LangGraph | Yes | Yes | API key when exposed | N/A | Workflow event | Telemetry via API | N/A | [`integrations/langgraph.md`](integrations/langgraph.md) | local-ready |
+| CrewAI | Yes | Yes | API key when exposed | N/A | Agent event | Telemetry via API | N/A | [`integrations/crewai.md`](integrations/crewai.md) | local-ready |
+| GitHub vendor | Yes | N/A | Token reference | Yes | Planned/custom | PR/issue comment | `verify:vendor-live` | [`integrations/github.md`](integrations/github.md) | vendor-smoke required |
+| Slack vendor | Yes | N/A | Token reference | Yes | Planned/custom | `chat.postMessage` | `verify:vendor-live` | [`integrations/slack-discord.md`](integrations/slack-discord.md) | vendor-smoke required |
+| Discord vendor | Yes | N/A | Token reference | Yes | Planned/custom | Channel message | `verify:vendor-live` | [`integrations/slack-discord.md`](integrations/slack-discord.md) | vendor-smoke required |
+
+Claim IDs: `CB-CLAIM-CONNECTORS`, `CB-CLAIM-CONNECTOR-MATURITY`.
+
 ## Provider And Media Hooks
 
 The JSON-command provider adapter supports `extract`, `translate`, `expand`, `rerank`, `verify`, `contradiction`, and `summarize` tasks with deterministic fallbacks. This keeps the one-click install local-first, while letting teams plug in OCR, ASR, vision, NLI, translation, or cross-encoder tools.

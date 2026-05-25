@@ -20,6 +20,8 @@ cognibrain is a local-first Evidence-grade Agent Memory OS for engineering workf
 
 Stop fixing the same agent mistake twice. cognibrain captures corrections, repo policies, architecture decisions, review feedback and tool outcomes as evidence-grade memory, then injects the right context before the next coding change.
 
+Canonical public messaging lives in `docs/marketing/messaging.md`; public claims must map to `docs/claims.md`.
+
 ## Benefits
 
 - Reduces repeated agent onboarding by preserving durable project and user context across harnesses.
@@ -67,5 +69,6 @@ Calm, technical, direct. Avoid hype. Prefer nouns like recall, evidence, source,
 - The Cognilabz logo is visible without making the product name `Cognilabz`.
 - A first-time user understands the three jobs: test recall, run memory hygiene, inspect proof.
 - A public README visitor understands setup, usage, benefits, production-readiness scope, CogniCodeBench, and how cognibrain differs from Mem0/GBrain-style alternatives.
+- Launch copy reuses the canonical messaging pack and keeps self-hosted readiness separate from managed SaaS future claims.
 - The dashboard works on desktop and mobile with no horizontal overflow.
 - README feels like a polished public repo overview, not an internal report.

@@ -50,6 +50,17 @@ For every scenario the runner:
 5. Builds a patch evidence trail.
 6. Scores correction recall, procedure recall, wrong-action suppression, patch correctness, evidence completeness and stale-rule suppression.
 
+```mermaid
+flowchart LR
+  Seed["Synthetic repo seed"] --> Wrong["Wrong action"]
+  Wrong --> Correction["Scoped correction"]
+  Correction --> Memory["Engineering Memory"]
+  Memory --> Next["Next task"]
+  Next --> Guard["Action guard"]
+  Guard --> Trail["Patch Evidence Trail"]
+  Trail --> Score["Scenario score"]
+```
+
 ## Baselines
 
 The artifact includes measured synthetic ablation baselines. Each mode is replayed across the same scenario set with the named memory signal removed or isolated, then scored with the same correction, procedure, patch, evidence and stale-memory checks:
@@ -67,6 +78,26 @@ The artifact includes measured synthetic ablation baselines. Each mode is replay
 - `cognibrain_full`
 
 Claims should compare only these artifact scores unless an external system submits a comparable artifact with the same schema, scenario count and metric definitions.
+
+## Latest Baseline Table
+
+Generated from `artifacts/cognicodebench/run.json` in this checkout:
+
+| Mode | Score | Correction carryover | Repeated mistake rate |
+| --- | ---: | ---: | ---: |
+| `no_memory` | `0.028` | `0` | `1` |
+| `raw_chat_history` | `0.212` | `0.42` | `0.74` |
+| `vector_only` | `0.31` | `0.42` | `1` |
+| `semantic_only` | `0.31` | `0.42` | `1` |
+| `keyword_only` | `0.585` | `0.67` | `0.5` |
+| `graph_only` | `0.448` | `0.67` | `0.67` |
+| `temporal_only` | `0.302` | `0.33` | `0.84` |
+| `procedure_only` | `0.557` | `0.17` | `0.67` |
+| `cognibrain_without_temporal` | `0.947` | `1` | `0` |
+| `cognibrain_without_corrections` | `0.392` | `0` | `0.83` |
+| `cognibrain_full` | `1` | `1` | `0` |
+
+Claim IDs: `CB-CLAIM-COGNICODE`, `CB-CLAIM-ABLATION`.
 
 ## Passing Gate
 
@@ -98,6 +129,18 @@ CogniCodeBench exercises the first-class coding memory kinds:
 - `generated_file_rule`
 
 These are stored under `metadata.engineering`, scoped through `CodebaseScope`, exposed in coding context packs, and used by action guards and patch evidence trails.
+
+## Real Demo Repo Scenarios
+
+Synthetic benchmark scenarios are complemented by replayable demo briefs in [`../../fixtures/cognicodebench/demo-repos.json`](../../fixtures/cognicodebench/demo-repos.json):
+
+- TypeScript API
+- React app
+- Python FastAPI service
+- Monorepo
+- Legacy app
+
+Each demo includes a before task, wrong action, correction, next task and expected next action. These examples are still demo fixtures, not customer-production evidence.
 
 ## Interpreting Results
 

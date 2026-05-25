@@ -103,6 +103,17 @@ curl -X POST http://localhost:8787/patch-evidence \
 
 Engineering Memory stores `repo_policy`, `architecture_decision`, `review_correction`, `tool_outcome`, `procedure`, `forbidden_action`, `migration_note`, `test_strategy`, `dependency_rule`, and `generated_file_rule` under `metadata.engineering`. Retrieval accepts `codebaseScope` plus `filters.engineeringKind` or `filters.engineeringKinds`, and coding context packs group evidence into repo policies, procedures, previous corrections, known pitfalls, architecture decisions, tool commands, forbidden actions, and temporal notes.
 
+CLI equivalents:
+
+```bash
+./bin/cognibrain.mjs memory coding-context "What command should I run before release?"
+MEMORY_PREVIOUS_WRONG_ACTION="pnpm test" MEMORY_CORRECT_ACTION="npm test" ./bin/cognibrain.mjs memory code-correction "Do not use pnpm in this repo; use npm test."
+./bin/cognibrain.mjs memory action-guard "pnpm test"
+MEMORY_COMMANDS_RUN="npm test" ./bin/cognibrain.mjs memory patch-evidence "release validation"
+```
+
+Tool outcome memory stores command, cwd, exit code, output summary, failure reason, success reason, files touched, duration and environment hints when supplied by CLI, API, MCP or connector telemetry.
+
 ## Connectors, Providers, Translation, And Media
 
 ```bash
@@ -216,6 +227,8 @@ curl -X POST http://localhost:8787/evidence-pack \
 ```
 
 Evidence packs are the canonical "why was this memory used?" artifact. The response includes the compact context block plus per-memory source, scope, consent, validity window, stale/decision state, score signals, `scoreBreakdown`, `whyIncluded`, `whyNotExcluded`, policy decision, graph paths, citation and explanation. The persisted object also includes actor, scope, retrieval profile, excluded results, policy decisions, top-level graph paths, temporal state and a stable hash. CLI users can run `cognibrain memory why-used "<query>"` or `cognibrain memory evidence-pack "<query>"`; MCP users receive the same structure through `memory_context_pack` and `memory_evidence_pack`. The schema is available at [`docs/schemas/evidence-pack.schema.json`](schemas/evidence-pack.schema.json).
+
+Patch Evidence Trails are the patch-level companion artifact. They include context pack id when available, memories used, corrections applied, procedures recalled, forbidden actions avoided, commands run, files changed, tool outcomes and stale memories excluded. CLI users can run `cognibrain memory patch-evidence "<task>"`; API callers use `POST /patch-evidence`; MCP callers use `memory_patch_evidence`.
 Each generated pack is stored by its `ctx_*` id. Use `cognibrain memory evidence <context-pack-id>`, `GET /evidence-pack/:id`, or `GET /context-packs/:id/evidence` to reload the exact JSON artifact for audit, benchmark attachment, or handoff.
 
 Episodes preserve the raw extraction ground truth. `memory extract` creates an episode with raw conversation events, tool-call outputs, touched files from metadata, a stable hash and the derived memory ids. Extracted memories reference the episode through `metadata.episodeId` and `provenance.extractedFromEpisodeId`, so operators can inspect the original context before trusting a fact. Extraction reports also include structured `claims` with subject, predicate, object, qualifiers, time, source, confidence, durability, sensitivity, and scope, plus `durabilityDecisions` that classify candidates as `store`, `ignore`, `session_only`, `working_memory`, or `ask_user`. Smalltalk is ignored, temporary notes become working/session-scoped memories, and potential secrets are routed to operator/redaction handling rather than silently becoming long-term memory. Retention policy applies to linked episodes as well: `retention-review` previews affected episode ids and `retention-enforce` archives or deletes episode records with the matched memory. Harness actions are stored through `/actions` or `memory action` with command, file, test, PR and fix metadata.

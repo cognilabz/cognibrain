@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "connectorId": "official-github",
+  "demo": {
+    "pullRequest": "https://github.com/example/atlas/pull/42",
+    "reviewComment": {
+      "url": "https://github.com/example/atlas/pull/42#discussion_r1",
+      "author": "reviewer",
+      "body": "Please use npm test here; pnpm is not supported by CI for this repo."
+    },
+    "memory": {
+      "kind": "review_correction",
+      "content": "Use npm test here; pnpm is not supported by CI for this repo.",
+      "sourceRef": {
+        "connectorId": "official-github",
+        "externalId": "discussion_r1",
+        "url": "https://github.com/example/atlas/pull/42#discussion_r1",
+        "author": "reviewer"
+      }
+    },
+    "nextPatchEvidence": {
+      "commandsRun": ["npm test"],
+      "forbiddenActionsAvoided": ["pnpm test"],
+      "claimIds": ["CB-CLAIM-CONNECTORS", "CB-CLAIM-PATCH-EVIDENCE"]
+    }
+  }
+}

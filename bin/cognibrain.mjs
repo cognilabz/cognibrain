@@ -145,6 +145,14 @@ async function doctor(doctorArgs) {
     add("harness package templates", harnessTemplates.ok, harnessTemplates.detail);
     const harnessGenerated = harnessGeneratedHealth();
     add("harness generated configs", harnessGenerated.ok, harnessGenerated.detail, harnessGenerated.ok ? "ok" : "warn");
+    const productionDocs = [
+      "docs/production-readiness.md",
+      "docs/production/overview.md",
+      "docs/production/release-checklist.md",
+      "docs/production/observability.md",
+      "docs/claims.md"
+    ].filter((path) => existsSync(join(root, path)));
+    add("production docs", productionDocs.length === 5, productionDocs.length === 5 ? "docs/production/overview.md and docs/claims.md" : "missing production docs");
   }
 
   for (const check of checks) {
@@ -618,6 +626,10 @@ Usage:
       Install the Codex skill
   cognibrain memory add <text>
   cognibrain memory search <query>
+  cognibrain memory coding-context <query>
+  cognibrain memory code-correction <text>
+  cognibrain memory action-guard <action>
+  cognibrain memory patch-evidence <task>
   cognibrain memory reflect
   cognibrain memory dream
   cognibrain memory health

@@ -76,10 +76,15 @@ export function withEngineeringMemoryMetadata(input: MemoryInput): MemoryInput {
     command: existing.command ?? stringMetadata(input.metadata, "command") ?? commandFromAction(input.metadata),
     cwd: existing.cwd ?? stringMetadata(input.metadata, "cwd"),
     envRequirements: existing.envRequirements ?? stringArrayMetadata(input.metadata, "envRequirements"),
+    environmentHints: existing.environmentHints ?? stringArrayMetadata(input.metadata, "environmentHints"),
     exitCode: existing.exitCode ?? numberMetadata(input.metadata, "exitCode"),
+    durationMs: existing.durationMs ?? numberMetadata(input.metadata, "durationMs"),
+    outputSummary: existing.outputSummary ?? stringMetadata(input.metadata, "outputSummary"),
     failureReason: existing.failureReason ?? stringMetadata(input.metadata, "failureReason"),
+    successReason: existing.successReason ?? stringMetadata(input.metadata, "successReason"),
     successPattern: existing.successPattern ?? stringMetadata(input.metadata, "successPattern") ?? inferSuccessPattern(input.content),
     filesChanged: existing.filesChanged ?? stringArrayMetadata(input.metadata, "filesChanged"),
+    filesTouched: existing.filesTouched ?? stringArrayMetadata(input.metadata, "filesTouched"),
     testOutputSummary: existing.testOutputSummary ?? stringMetadata(input.metadata, "testOutputSummary"),
     evidenceIds: existing.evidenceIds ?? stringArrayMetadata(input.metadata, "evidenceIds"),
     verificationDueAt: existing.verificationDueAt ?? input.temporal?.verificationDueAt
@@ -248,24 +253,71 @@ export function buildPatchEvidenceTrail(input: {
   userId: string;
   task: string;
   results: SearchResult[];
+  contextPackId?: string;
   filesChanged?: string[];
   commandsRun?: string[];
   excludedStaleRules?: Array<{ memoryId: string; reason: string }>;
 }): PatchEvidenceTrail {
   const engineeringResults = input.results.filter((result) => getEngineeringMetadata(result.memory));
   const idsFor = (kind: EngineeringMemoryKind) => engineeringResults.filter((result) => getEngineeringMetadata(result.memory)?.kind === kind).map((result) => result.memory.id);
+  const itemsFor = (kind: EngineeringMemoryKind) => engineeringResults.filter((result) => getEngineeringMetadata(result.memory)?.kind === kind);
+  const correctionResults = engineeringResults.filter((result) => result.memory.tags.includes("engineering-correction") || Boolean(getEngineeringMetadata(result.memory)?.correctionOfMemoryId) || getEngineeringMetadata(result.memory)?.kind === "review_correction");
+  const procedureResults = engineeringResults.filter((result) => ["procedure", "repo_policy", "test_strategy"].includes(getEngineeringMetadata(result.memory)?.kind ?? ""));
+  const forbiddenResults = engineeringResults.filter((result) => ["forbidden_action", "generated_file_rule"].includes(getEngineeringMetadata(result.memory)?.kind ?? ""));
+  const toolResults = itemsFor("tool_outcome");
+  const staleMemoriesExcluded = input.excludedStaleRules ?? [];
   return {
     schemaVersion: "1.0",
     id: input.id,
     generatedAt: new Date().toISOString(),
     userId: input.userId,
     task: input.task,
+    contextPackId: input.contextPackId,
     memoryIds: [...new Set(engineeringResults.map((result) => result.memory.id))],
     correctionIds: [...new Set([...idsFor("review_correction"), ...engineeringResults.filter((result) => result.memory.tags.includes("engineering-correction") || Boolean(getEngineeringMetadata(result.memory)?.correctionOfMemoryId)).map((result) => result.memory.id)])],
     procedureIds: [...new Set([...idsFor("procedure"), ...idsFor("repo_policy"), ...idsFor("test_strategy")])],
     toolOutcomeIds: idsFor("tool_outcome"),
     graphPaths: [...new Set(engineeringResults.flatMap((result) => result.graphPaths ?? []))],
-    excludedStaleRules: input.excludedStaleRules ?? [],
+    excludedStaleRules: staleMemoriesExcluded,
+    memoriesUsed: engineeringResults.map((result) => ({
+      memoryId: result.memory.id,
+      kind: getEngineeringMetadata(result.memory)?.kind,
+      content: result.memory.content,
+      trust: result.memory.trust,
+      citation: result.citation,
+      graphPaths: result.graphPaths ?? []
+    })),
+    correctionsApplied: correctionResults.map((result) => ({
+      memoryId: result.memory.id,
+      content: result.memory.content,
+      correctAction: getEngineeringMetadata(result.memory)?.correctAction
+    })),
+    proceduresRecalled: procedureResults.map((result) => ({
+      memoryId: result.memory.id,
+      content: result.memory.content,
+      command: getEngineeringMetadata(result.memory)?.command ?? getEngineeringMetadata(result.memory)?.successPattern
+    })),
+    forbiddenActionsAvoided: forbiddenResults.map((result) => ({
+      memoryId: result.memory.id,
+      content: result.memory.content,
+      forbiddenAction: getEngineeringMetadata(result.memory)?.forbiddenAction,
+      alternative: getEngineeringMetadata(result.memory)?.correctAction ?? getEngineeringMetadata(result.memory)?.successPattern
+    })),
+    toolOutcomes: toolResults.map((result) => {
+      const engineering = getEngineeringMetadata(result.memory);
+      return {
+        memoryId: result.memory.id,
+        command: engineering?.command,
+        cwd: engineering?.cwd,
+        exitCode: engineering?.exitCode,
+        durationMs: engineering?.durationMs,
+        outputSummary: engineering?.outputSummary ?? engineering?.testOutputSummary,
+        failureReason: engineering?.failureReason,
+        successReason: engineering?.successReason ?? engineering?.successPattern,
+        filesTouched: engineering?.filesTouched ?? engineering?.filesChanged ?? []
+      };
+    }),
+    staleMemoriesExcluded,
     summary: {
       filesChanged: input.filesChanged ?? [],
       commandsRun: input.commandsRun ?? [],

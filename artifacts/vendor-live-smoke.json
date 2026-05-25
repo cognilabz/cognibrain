@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-25T13:53:11.720Z",
+  "mode": "credential_smoke",
+  "liveRequested": false,
+  "writebackEnabled": false,
+  "providers": [
+    {
+      "provider": "github",
+      "connectorId": "official-github",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "slack",
+      "connectorId": "official-slack",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "discord",
+      "connectorId": "official-discord",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    }
+  ],
+  "passed": true
+}

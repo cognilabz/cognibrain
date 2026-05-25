@@ -522,7 +522,7 @@ describe("TypeScript memory core", () => {
 
     expect(session.codingContextPack?.sections.some((section) => section.evidence.length > 0)).toBe(true);
     expect(preTool.procedures.some((result) => result.memory.content.includes("Before editing validation"))).toBe(true);
-    expect(preTool.guard?.severity).toBe("warn");
+    expect(preTool.guard?.severity).toBe("block");
     expect(preTool.guard?.alternatives).toContain("npm test");
     expect(action?.tags).toEqual(expect.arrayContaining(["harness-action", "success-pattern"]));
     expect(correction?.tags).toEqual(expect.arrayContaining(["engineering-correction", "engineering:review_correction"]));
@@ -750,6 +750,11 @@ describe("TypeScript memory core", () => {
       projectId: "memory",
       command: "npm run test",
       filesChanged: ["src/api/service.ts"],
+      filesTouched: ["src/api/service.ts", "tests/core.test.ts"],
+      durationMs: 842,
+      outputSummary: "vitest completed without failures",
+      successReason: "all unit tests passed",
+      environmentHints: ["node>=20", "CI=true"],
       tests: [{ name: "vitest", status: "passed" }],
       errorFixed: "TypeScript build failure"
     });
@@ -757,6 +762,14 @@ describe("TypeScript memory core", () => {
     expect(action.source.kind).toBe("tool");
     expect(action.tags).toContain("harness-action");
     expect(action.metadata.action).toMatchObject({ command: "npm run test", errorFixed: "TypeScript build failure" });
+    expect(action.metadata.engineering).toMatchObject({
+      kind: "tool_outcome",
+      durationMs: 842,
+      outputSummary: "vitest completed without failures",
+      successReason: "all unit tests passed",
+      filesTouched: ["src/api/service.ts", "tests/core.test.ts"],
+      environmentHints: ["node>=20", "CI=true"]
+    });
     const recalled = service.search({ userId: "u1", query: "what fixed TypeScript build failure last time?", limit: 3 });
     expect(recalled.some((result) => result.memory.id === action.id)).toBe(true);
   });
@@ -2724,6 +2737,9 @@ describe("TypeScript memory core", () => {
     expect(service.get(wrong.id).beliefState).toBe("superseded");
     expect((correction.metadata.engineering as { kind?: string }).kind).toBe("repo_policy");
     expect(correction.temporal.verificationDueAt).toBeTruthy();
+    const derived = (correction.metadata.correctionPipeline as { derivedMemoryIds: string[] }).derivedMemoryIds.map((id) => service.get(id));
+    expect(derived.map((memory) => (memory.metadata.engineering as { kind?: string }).kind)).toEqual(expect.arrayContaining(["forbidden_action", "generated_file_rule", "procedure"]));
+    expect(derived.find((memory) => (memory.metadata.engineering as { kind?: string }).kind === "procedure")?.type).toBe("procedural");
 
     const pack = service.codingContextPack({
       userId: "dev",
@@ -2735,7 +2751,7 @@ describe("TypeScript memory core", () => {
     expect(pack.sections.some((section) => section.id === "repo_policies" && section.evidence.some((item) => item.memoryId === correction.id))).toBe(true);
 
     const guard = service.guardAction({ userId: "dev", projectId: "atlas", action: "pnpm test", codebaseScope: { repo: "atlas" } });
-    expect(guard.severity).toBe("warn");
+    expect(guard.severity).toBe("block");
     expect(guard.alternatives).toContain("npm test");
 
     const trail = service.patchEvidenceTrail({
@@ -2744,9 +2760,13 @@ describe("TypeScript memory core", () => {
       task: "fix validation",
       filesChanged: ["src/validation/userValidation.ts"],
       commandsRun: ["npm test"],
-      memoryIds: [wrong.id, correction.id]
+      memoryIds: [wrong.id, correction.id, ...derived.map((memory) => memory.id)]
     });
     expect(trail.correctionIds).toContain(correction.id);
     expect(trail.toolOutcomeIds).toContain(wrong.id);
+    expect(trail.memoriesUsed.length).toBeGreaterThanOrEqual(4);
+    expect(trail.proceduresRecalled.some((item) => item.command === "npm test")).toBe(true);
+    expect(trail.forbiddenActionsAvoided.some((item) => item.forbiddenAction?.includes("pnpm test"))).toBe(true);
+    expect(trail.toolOutcomes[0]).toMatchObject({ command: "pnpm test", exitCode: 1 });
   });
 });

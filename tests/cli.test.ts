@@ -73,6 +73,64 @@ describe("cognibrain CLI", () => {
     }
   });
 
+  it("records coding corrections, guards actions, and exports patch evidence through the CLI", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-code-"));
+    try {
+      const env = {
+        ...process.env,
+        MEMORY_DB_PATH: join(dir, "memory.json"),
+        MEMORY_USER_ID: "cli-code",
+        MEMORY_PROJECT_ID: "atlas",
+        MEMORY_REPO: "atlas",
+        MEMORY_AUTO_DREAM: "false"
+      };
+      const wrong = JSON.parse(execFileSync(process.execPath, [cli, "memory", "action", "pnpm test"], {
+        cwd: root,
+        env: {
+          ...env,
+          MEMORY_EXIT_CODE: "1",
+          MEMORY_FAILURE_REASON: "CI uses npm test",
+          MEMORY_FILES_TOUCHED: "src/generated/api.generated.ts"
+        },
+        encoding: "utf8"
+      }));
+      const correction = JSON.parse(execFileSync(process.execPath, [cli, "memory", "code-correction", "Do not use pnpm in this repo; use npm test and do not edit generated files."], {
+        cwd: root,
+        env: {
+          ...env,
+          MEMORY_PREVIOUS_MEMORY_ID: wrong.id,
+          MEMORY_PREVIOUS_WRONG_ACTION: "pnpm test",
+          MEMORY_CORRECT_ACTION: "npm test",
+          MEMORY_ENGINEERING_KIND: "repo_policy"
+        },
+        encoding: "utf8"
+      }));
+      expect(correction.metadata.correctionPipeline.derivedMemoryIds.length).toBeGreaterThanOrEqual(2);
+      const guard = JSON.parse(execFileSync(process.execPath, [cli, "memory", "action-guard", "pnpm test"], { cwd: root, env, encoding: "utf8" }));
+      expect(guard.severity).not.toBe("allow");
+      const trail = JSON.parse(execFileSync(process.execPath, [cli, "memory", "patch-evidence", "release validation"], {
+        cwd: root,
+        env: {
+          ...env,
+          MEMORY_MEMORY_IDS: [wrong.id, correction.id, ...correction.metadata.correctionPipeline.derivedMemoryIds].join(","),
+          MEMORY_COMMANDS_RUN: "npm test"
+        },
+        encoding: "utf8"
+      }));
+      expect(trail.correctionsApplied.some((item: { memoryId: string }) => item.memoryId === correction.id)).toBe(true);
+      expect(trail.forbiddenActionsAvoided.length).toBeGreaterThan(0);
+      const procedureOnly = execFileSync(process.execPath, [cli, "memory", "search", "npm test"], {
+        cwd: root,
+        env: { ...env, MEMORY_ENGINEERING_KIND: "procedure" },
+        encoding: "utf8"
+      });
+      expect(procedureOnly).toContain("Procedure");
+      expect(procedureOnly).not.toContain("Forbidden action");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("generates reviewable harness packages for all nextplan connector targets", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-"));
     const codexHome = join(dir, ".codex");

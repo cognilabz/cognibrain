@@ -31,7 +31,20 @@ Do not claim:
 
 ## Production Docs
 
-This page is the production-docs hub for local install, team install, storage backends, auth/security, policies, connectors, CogniCodeBench, backup/restore, migrations, and troubleshooting. Keep it aligned with `docs/implementation-status.md` and `docs/claims.md` before changing public readiness language.
+This page is the production-docs hub for local install, team install, storage backends, auth/security, policies, connectors, CogniCodeBench, backup/restore, migrations, observability, release checks, and troubleshooting. Keep it aligned with `docs/implementation-status.md` and `docs/claims.md` before changing public readiness language.
+
+Detailed production pages:
+
+- [`production/overview.md`](production/overview.md)
+- [`production/storage.md`](production/storage.md)
+- [`production/auth.md`](production/auth.md)
+- [`production/policy.md`](production/policy.md)
+- [`production/backup-restore.md`](production/backup-restore.md)
+- [`production/observability.md`](production/observability.md)
+- [`production/migrations.md`](production/migrations.md)
+- [`production/security.md`](production/security.md)
+- [`production/release-checklist.md`](production/release-checklist.md)
+- [`production/badges.md`](production/badges.md)
 
 ## Setup Paths
 
@@ -92,9 +105,11 @@ For high-concurrency Postgres deployments, point `MEMORY_POSTGRES_URL` at the de
 Run these before tagging a release or calling a deployment production-ready:
 
 ```bash
+npm run release:check
 npm run verify:nextgen
 npm run verify:status
 npm run audit:plan1_3
+npm run audit:plan1_4
 npm run benchmark:cognicode
 npm run verify:postgres
 npm run verify:compatibility
@@ -108,6 +123,8 @@ npm pack --dry-run
 python3 -m unittest discover -s sdk/python/tests
 ```
 
+`npm run release:check` is the single command release gate. It writes `artifacts/release-check.json` and then calls the same underlying checks with actionable step names.
+
 `npm run verify:vendor-live` is safe by default: it writes `artifacts/vendor-live-smoke.json` and skips network calls unless `MEMORY_VENDOR_LIVE_SMOKE=true` or `--live` is supplied. Self-hosted teams can opt into live GitHub, Slack, or Discord checks by setting the corresponding `MEMORY_*` credentials. Real writeback remains dry-run unless `MEMORY_VENDOR_LIVE_WRITE=true` or `--writeback` is supplied.
 
 For larger deployments, repeat the load benchmark at 100k or 1M memories using the commands in `docs/benchmarking.md`, then keep the generated artifacts with the release notes.
@@ -117,7 +134,7 @@ For larger deployments, repeat the load benchmark at 100k or 1M memories using t
 - README explains the Engineering Memory OS claim, benefits, setup, usage, CogniCodeBench proof, production boundary, and status matrix.
 - `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `PRODUCT.md`, Docker, Kubernetes, and `.env.example` are present.
 - `docs/implementation-status.md` matches the current code and does not list closed work as open.
-- `npm run verify:status`, `npm run audit:plan1_1`, `npm run audit:plan1_2`, and `npm run audit:plan1_3` pass after checking product and production readiness text.
+- `npm run verify:status`, `npm run audit:plan1_1`, `npm run audit:plan1_2`, `npm run audit:plan1_3`, `npm run audit:plan1_4`, and `npm run release:check` pass after checking product and production readiness text.
 - GitHub issues for the plan pass are closed only after the related verifier output is fresh.
 - Python SDK remains PyPI-style packageable from `sdk/python`; publish to PyPI only from a release workflow with a real token.
 

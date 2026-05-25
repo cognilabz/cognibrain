@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-25T13:53:13.851Z",
+  "summary": {
+    "total": 11,
+    "passed": 11,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "name": "plan1_4 docs information architecture exists",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "local markdown links resolve",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "canonical marketing and README alignment",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "comparison and market pages are bounded",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "CogniCodeBench is flagship proof with baselines and demos",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "evidence and patch trail product surfaces are complete",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "engineering correction and tool-outcome pipeline is implemented",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "connector docs and maturity matrix are present",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "architecture diagrams cover plan lifecycles",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "production docs, observability and boundary badges are explicit",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "release automation is wired",
+      "passed": true,
+      "failed": []
+    }
+  ]
+}

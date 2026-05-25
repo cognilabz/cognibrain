@@ -5,7 +5,7 @@ import { createPersistenceFromEnv } from "../api/persistence";
 import { MemoryService } from "../api/service";
 import { buildLeaderboardArtifact } from "../eval/leaderboard";
 import { runNextgenBenchmarkSuites } from "../eval/nextgenBenchmarks";
-import type { FeedbackKind } from "../core";
+import type { CodebaseScope, EngineeringMemoryKind, FeedbackKind } from "../core";
 
 const userId = process.env.MEMORY_USER_ID ?? process.env.USER ?? "local";
 const dbPath = resolve(process.env.MEMORY_DB_PATH ?? ".memory-harness.json");
@@ -65,10 +65,89 @@ switch (command) {
       orgId: process.env.MEMORY_ORG_ID,
       projectId: process.env.MEMORY_PROJECT_ID,
       command: commandText,
+      cwd: process.env.MEMORY_CWD,
       filesChanged: csvList(process.env.MEMORY_FILES_CHANGED),
+      filesTouched: csvList(process.env.MEMORY_FILES_TOUCHED),
+      envRequirements: csvList(process.env.MEMORY_ENV_REQUIREMENTS),
+      environmentHints: csvList(process.env.MEMORY_ENVIRONMENT_HINTS),
+      exitCode: process.env.MEMORY_EXIT_CODE ? Number(process.env.MEMORY_EXIT_CODE) : undefined,
+      durationMs: process.env.MEMORY_DURATION_MS ? Number(process.env.MEMORY_DURATION_MS) : undefined,
+      outputSummary: process.env.MEMORY_OUTPUT_SUMMARY,
+      failureReason: process.env.MEMORY_FAILURE_REASON,
+      successReason: process.env.MEMORY_SUCCESS_REASON,
       tests: process.env.MEMORY_TESTS_JSON ? JSON.parse(process.env.MEMORY_TESTS_JSON) : undefined,
       pullRequest: process.env.MEMORY_PULL_REQUEST,
       errorFixed: process.env.MEMORY_ERROR_FIXED
+    }), null, 2));
+    break;
+  }
+  case "coding-context": {
+    const query = args.join(" ");
+    if (!query) fail("Usage: memctl coding-context <query>");
+    console.log(JSON.stringify(service.codingContextPack({
+      userId,
+      query,
+      limit: process.env.MEMORY_LIMIT ? Number(process.env.MEMORY_LIMIT) : 12,
+      tokenBudget: process.env.MEMORY_TOKEN_BUDGET ? Number(process.env.MEMORY_TOKEN_BUDGET) : undefined,
+      agentId: process.env.MEMORY_AGENT_ID,
+      sessionId: process.env.MEMORY_SESSION_ID,
+      appId: process.env.MEMORY_APP_ID,
+      orgId: process.env.MEMORY_ORG_ID,
+      projectId: process.env.MEMORY_PROJECT_ID,
+      codebaseScope: codebaseScopeFromEnv()
+    }), null, 2));
+    break;
+  }
+  case "code-correction": {
+    const content = args.join(" ");
+    if (!content) fail("Usage: memctl code-correction <correction>");
+    console.log(JSON.stringify(service.recordCodeCorrection({
+      userId,
+      content,
+      agentId: process.env.MEMORY_AGENT_ID,
+      sessionId: process.env.MEMORY_SESSION_ID,
+      appId: process.env.MEMORY_APP_ID,
+      orgId: process.env.MEMORY_ORG_ID,
+      projectId: process.env.MEMORY_PROJECT_ID,
+      previousMemoryId: process.env.MEMORY_PREVIOUS_MEMORY_ID,
+      previousWrongAction: process.env.MEMORY_PREVIOUS_WRONG_ACTION,
+      correctAction: process.env.MEMORY_CORRECT_ACTION,
+      kind: engineeringKindFromEnv(),
+      codebase: codebaseScopeFromEnv(),
+      evidenceIds: csvList(process.env.MEMORY_EVIDENCE_IDS)
+    }), null, 2));
+    break;
+  }
+  case "action-guard": {
+    const action = args.join(" ");
+    if (!action) fail("Usage: memctl action-guard <action>");
+    console.log(JSON.stringify(service.guardAction({
+      userId,
+      action,
+      agentId: process.env.MEMORY_AGENT_ID,
+      sessionId: process.env.MEMORY_SESSION_ID,
+      appId: process.env.MEMORY_APP_ID,
+      orgId: process.env.MEMORY_ORG_ID,
+      projectId: process.env.MEMORY_PROJECT_ID,
+      codebaseScope: codebaseScopeFromEnv()
+    }), null, 2));
+    break;
+  }
+  case "patch-evidence": {
+    const task = args.join(" ");
+    if (!task) fail("Usage: memctl patch-evidence <task>");
+    console.log(JSON.stringify(service.patchEvidenceTrail({
+      userId,
+      task,
+      agentId: process.env.MEMORY_AGENT_ID,
+      sessionId: process.env.MEMORY_SESSION_ID,
+      appId: process.env.MEMORY_APP_ID,
+      orgId: process.env.MEMORY_ORG_ID,
+      projectId: process.env.MEMORY_PROJECT_ID,
+      codebaseScope: codebaseScopeFromEnv(),
+      filesChanged: csvList(process.env.MEMORY_FILES_CHANGED),
+      commandsRun: csvList(process.env.MEMORY_COMMANDS_RUN),
+      memoryIds: csvList(process.env.MEMORY_MEMORY_IDS)
     }), null, 2));
     break;
   }
@@ -86,7 +165,8 @@ switch (command) {
       orgId: process.env.MEMORY_ORG_ID,
       mode: retrievalModeFromEnv(),
       expandQuery: process.env.MEMORY_EXPAND_QUERY === "true",
-      queryExpansions: process.env.MEMORY_QUERY_EXPANSIONS ? process.env.MEMORY_QUERY_EXPANSIONS.split("|").map((item) => item.trim()).filter(Boolean) : undefined
+      queryExpansions: process.env.MEMORY_QUERY_EXPANSIONS ? process.env.MEMORY_QUERY_EXPANSIONS.split("|").map((item) => item.trim()).filter(Boolean) : undefined,
+      filters: searchFiltersFromEnv()
     });
     console.log(
       results
@@ -147,7 +227,8 @@ switch (command) {
       brainIds: process.env.MEMORY_BRAIN_IDS ? process.env.MEMORY_BRAIN_IDS.split(",").map((item) => item.trim()).filter(Boolean) : undefined,
       orgId: process.env.MEMORY_ORG_ID,
       mode: retrievalModeFromEnv(),
-      expandQuery: process.env.MEMORY_EXPAND_QUERY === "true"
+      expandQuery: process.env.MEMORY_EXPAND_QUERY === "true",
+      filters: searchFiltersFromEnv()
     }), null, 2));
     break;
   }
@@ -1006,7 +1087,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|action|search|inspect|route|intent|evidence|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-enrich|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|audit-chain|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-review|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|connector-telemetry|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|action|coding-context|code-correction|action-guard|patch-evidence|search|inspect|route|intent|evidence|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-enrich|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|audit-chain|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-review|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|connector-telemetry|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {
@@ -1049,6 +1130,33 @@ function observationStyleFromEnv() {
 
 function csvList(value?: string) {
   return value ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
+}
+
+function codebaseScopeFromEnv(): CodebaseScope | undefined {
+  if (process.env.MEMORY_CODEBASE_JSON) return JSON.parse(process.env.MEMORY_CODEBASE_JSON) as CodebaseScope;
+  const scope: CodebaseScope = {
+    repo: process.env.MEMORY_REPO,
+    branch: process.env.MEMORY_BRANCH,
+    commit: process.env.MEMORY_COMMIT,
+    workspace: process.env.MEMORY_WORKSPACE,
+    directory: process.env.MEMORY_DIRECTORY,
+    filePattern: process.env.MEMORY_FILE_PATTERN,
+    language: process.env.MEMORY_LANGUAGE,
+    framework: process.env.MEMORY_FRAMEWORK,
+    harness: process.env.MEMORY_HARNESS,
+    currentPath: process.env.MEMORY_CURRENT_PATH
+  };
+  return Object.values(scope).some(Boolean) ? scope : undefined;
+}
+
+function engineeringKindFromEnv(): EngineeringMemoryKind | undefined {
+  const value = process.env.MEMORY_ENGINEERING_KIND;
+  return value === "repo_policy" || value === "architecture_decision" || value === "review_correction" || value === "tool_outcome" || value === "procedure" || value === "forbidden_action" || value === "migration_note" || value === "test_strategy" || value === "dependency_rule" || value === "generated_file_rule" ? value : undefined;
+}
+
+function searchFiltersFromEnv() {
+  const engineeringKind = engineeringKindFromEnv();
+  return engineeringKind ? { engineeringKind } : undefined;
 }
 
 function privacyDefaultFromEnv() {

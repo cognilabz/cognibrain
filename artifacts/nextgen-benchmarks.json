@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "generatedAt": "2026-05-25T12:44:47.338Z",
+  "generatedAt": "2026-05-25T13:53:07.169Z",
   "suites": [
     {
       "id": "answer-generation",
@@ -107,7 +107,7 @@
           "expected": [
             "weak memory excluded"
           ],
-          "actual": "[e47f5384-2f51-428b-8085-20a3a094f5ae] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release."
+          "actual": "[073ee514-d818-4fb9-ba19-0c24c1e0b00d] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release."
         }
       ]
     },
@@ -159,28 +159,6 @@
   ],
   "trend": {
     "points": [
-      {
-        "generatedAt": "2026-05-25T05:00:24.740Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "retrieval-calibration": 0.9347931696550242,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9559586339310048
-      },
-      {
-        "generatedAt": "2026-05-25T05:02:06.546Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "retrieval-calibration": 0.9347931696550242,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9559586339310048
-      },
       {
         "generatedAt": "2026-05-25T06:26:34.965Z",
         "suites": {
@@ -370,6 +348,28 @@
       },
       {
         "generatedAt": "2026-05-25T12:44:47.338Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9398860533333333,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9569772106666665
+      },
+      {
+        "generatedAt": "2026-05-25T13:45:24.512Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9398860533328159,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9569772106665632
+      },
+      {
+        "generatedAt": "2026-05-25T13:53:07.169Z",
         "suites": {
           "answer-generation": 1,
           "multi-hop-temporal": 1,

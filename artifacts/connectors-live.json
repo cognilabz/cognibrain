@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T12:44:48.490Z",
+  "generatedAt": "2026-05-25T13:53:10.479Z",
   "checks": {
     "connectorAuthSecretHash": true,
     "connectorRevoke": true,
@@ -60,13 +60,13 @@
       "checks": {
         "sessionStartContext": true,
         "preToolProcedureRecall": true,
-        "actionGuardWarns": true,
+        "actionGuardBlocks": true,
         "postToolOutcomeMemory": true,
         "userCorrectionCaptured": true,
         "patchEvidenceTrail": true
       },
-      "codingContextPackId": "code_ctx_lj4nx1",
-      "patchEvidenceTrailId": "patch_ev_h5aky0",
+      "codingContextPackId": "code_ctx_1civm64",
+      "patchEvidenceTrailId": "patch_ev_hixg4",
       "passed": true
     }
   ],

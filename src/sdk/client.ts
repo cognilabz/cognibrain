@@ -67,6 +67,10 @@ export class CognibrainClient {
     return { items: page, nextCursor: next };
   }
 
+  paginateMemories(input: { userId?: string; limit?: number; cursor?: string } = {}): Promise<MemoryPage> {
+    return this.listMemoriesPage(input);
+  }
+
   getMemory(id: string): Promise<Memory> {
     return this.request(`/memories/${encodeURIComponent(id)}`);
   }

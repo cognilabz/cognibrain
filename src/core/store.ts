@@ -153,7 +153,7 @@ export class MemoryStore {
     const memory = this.get(id);
     if (memory.pinned) return memory;
     const now = new Date();
-    const nextState = memory.beliefState === "active" ? "stale" : memory.beliefState;
+    const nextState: BeliefState = "archived";
     const updated = {
       ...memory,
       beliefState: nextState,
@@ -254,7 +254,7 @@ function beliefStateFor(input: { temporal?: Memory["temporal"]; metadata?: Recor
   const now = Date.now();
   if (input.temporal?.verificationDueAt && new Date(input.temporal.verificationDueAt).getTime() <= now) return "needs_verification";
   if (input.temporal?.validUntil && new Date(input.temporal.validUntil).getTime() < now) return "stale";
-  if (input.archivedAt) return "stale";
+  if (input.archivedAt) return "archived";
   return "active";
 }
 

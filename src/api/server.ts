@@ -77,7 +77,7 @@ const memoryInputSchema = z.object({
   temporal: z.record(z.unknown()).optional(),
   pinned: z.boolean().optional(),
   confidence: z.number().min(0).max(1).optional(),
-  beliefState: z.enum(["active", "stale", "superseded", "contradicted", "needs_verification", "retracted"]).optional(),
+  beliefState: z.enum(["active", "stale", "superseded", "contradicted", "needs_verification", "retracted", "archived"]).optional(),
   metadata: z.record(z.unknown()).optional()
 });
 
@@ -627,6 +627,8 @@ export const server = createServer(async (request, response) => {
 
 async function route(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const url = new URL(request.url ?? "/", `http://${host}:${port}`);
+  if (url.pathname === "/v1") url.pathname = "/";
+  if (url.pathname.startsWith("/v1/")) url.pathname = url.pathname.slice(3) || "/";
   const method = request.method ?? "GET";
   const parts = url.pathname.split("/").filter(Boolean);
 
@@ -919,7 +921,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
-  if (method === "GET" && url.pathname === "/sdk/openapi") {
+  if (method === "GET" && (url.pathname === "/sdk/openapi" || url.pathname === "/openapi.json")) {
     send(response, 200, defaultService.apiDescription(auth.statusReport));
     return;
   }
@@ -1000,6 +1002,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (method === "POST" && url.pathname === "/retention/enforce") {
     const body = z.object({ userId: z.string().optional(), now: z.string().optional() }).parse(await json(request));
     send(response, 202, defaultService.enforceRetention(body.now ? new Date(body.now) : new Date(), body.userId));
+    return;
+  }
+
+  if (method === "GET" && url.pathname === "/retention/review") {
+    const now = url.searchParams.get("now");
+    send(response, 200, defaultService.retentionReview(now ? new Date(now) : new Date(), url.searchParams.get("userId") ?? undefined));
     return;
   }
 

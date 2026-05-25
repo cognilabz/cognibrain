@@ -158,11 +158,17 @@ describe("cognibrain HTTP API contract", () => {
       components: { schemas: Record<string, unknown>; securitySchemes: Record<string, unknown> };
     };
     expect(spec.openapi).toBe("3.1.0");
+    expect(spec.paths["/openapi.json"].get.operationId).toBe("getOpenapi.json");
+    expect(spec.paths["/retention/review"].get.operationId).toBe("getRetentionReview");
     expect(spec.paths["/memories"].post.operationId).toBe("postMemories");
     expect(spec.paths["/audit/chain"].get.responses?.["200"]).toBeDefined();
     expect(spec.components.schemas.MemoryInput).toBeDefined();
     expect(spec.components.schemas.EvidencePack).toBeDefined();
     expect(spec.components.securitySchemes.ApiKeyAuth).toBeDefined();
+
+    const alias = await fetch(`${baseUrl}/v1/openapi.json`);
+    expect(alias.status).toBe(200);
+    expect(((await alias.json()) as { openapi: string }).openapi).toBe("3.1.0");
   });
 
   it("exports persisted context packs through evidence endpoints", async () => {

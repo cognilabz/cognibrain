@@ -26,6 +26,7 @@ import {
   findGraphPaths,
   healthReport,
   IdentityResolver,
+  InMemoryStorageAdapter,
   inferGraphRelations,
   MemoryStore,
   normalizeLifecyclePolicy,
@@ -36,7 +37,8 @@ import {
   ReflectionEngine,
   RetrievalEngine,
   type LifecyclePolicy,
-  type DomainModule
+  type DomainModule,
+  type MemoryStorageAdapter
 } from "../core";
 import type {
   DomainEvaluationReport,
@@ -99,6 +101,7 @@ import type {
   RetrievalWeights,
   RetentionEnforcementReport,
   RetentionRule,
+  RetentionReviewReport,
   SearchOptions,
   SecurityKeyReport,
   ReflectionSummarizer,
@@ -189,6 +192,7 @@ export interface MemoryMaintenanceStatus {
 
 export class MemoryService {
   readonly store = new MemoryStore();
+  readonly storage: MemoryStorageAdapter = new InMemoryStorageAdapter(this.store);
   readonly retrieval: RetrievalEngine;
   readonly reflection: ReflectionEngine;
   readonly identities = new IdentityResolver();
@@ -311,8 +315,8 @@ export class MemoryService {
     if (checked.rejected || !checked.input) {
       throw new Error(`Memory rejected by redaction policy: ${checked.matches.map((match) => match.detector).join(", ")}`);
     }
-    const memory = this.entities.ingest(this.store.add(checked.input));
-    if (memory.metadata.archivedOnWrite) this.store.archive(memory.id);
+    const memory = this.entities.ingest(this.storage.create(checked.input));
+    if (memory.metadata.archivedOnWrite) this.storage.archive(memory.id);
     this.metrics.memoriesAdded += 1;
     this.recordAudit("memory.write", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id });
     this.afterWrite(memory.userId);
@@ -418,24 +422,24 @@ export class MemoryService {
   }
 
   list(userId?: string) {
-    return this.store.list(userId);
+    return this.storage.list(userId);
   }
 
   get(id: string) {
-    return this.store.get(id);
+    return this.storage.get(id);
   }
 
   update(id: string, patch: Partial<MemoryInput> & { trust?: number; importance?: number }) {
-    const before = this.store.get(id);
-    const memory = this.store.update(id, patch);
+    const before = this.storage.get(id);
+    const memory = this.storage.update(id, patch);
     this.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { before, after: memory } });
     this.afterWrite(memory.userId);
     return memory;
   }
 
   archive(id: string) {
-    const before = this.store.get(id);
-    const memory = this.store.archive(id);
+    const before = this.storage.get(id);
+    const memory = this.storage.archive(id);
     this.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "archive", before, after: memory } });
     this.afterWrite(memory.userId);
     return memory;
@@ -466,8 +470,8 @@ export class MemoryService {
   }
 
   delete(id: string) {
-    const memory = this.store.get(id);
-    const deleted = this.store.delete(id);
+    const memory = this.storage.get(id);
+    const deleted = this.storage.delete(id);
     if (deleted) this.recordAudit("memory.delete", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { before: memory } });
     if (deleted) this.afterWrite(memory.userId);
     return deleted;
@@ -644,7 +648,20 @@ export class MemoryService {
       tokenBudget,
       hash,
       context,
-      results: includedResults.map((result) => ({
+      results: includedResults.map((result) => {
+        const policyDecision = policyDecisions.find((decision) => decision.memoryId === result.memory.id);
+        const whyIncluded = [
+          ...((result.explanation ?? []).length ? result.explanation ?? [] : [`final score ${roundMetric(result.score)} selected this memory`]),
+          ...(result.graphPaths?.length ? [`graph path: ${result.graphPaths[0]}`] : []),
+          ...(result.confidence !== undefined ? [`calibrated confidence ${roundMetric(result.confidence)}`] : [])
+        ];
+        const whyNotExcluded = [
+          policyDecision?.allowed === false ? `policy denied: ${policyDecision.reasons.join("; ")}` : "policy allowed for actor and scope",
+          result.unsafeToInject ? "unsafe-to-inject warning is present" : "above unsafe-to-inject threshold",
+          result.stale ? "temporal state is stale but still surfaced with warning" : "temporal validity allows use",
+          result.contradiction ? "contradiction warning requires review" : "no blocking contradiction"
+        ];
+        return {
         memoryId: result.memory.id,
         content: result.memory.content,
         source: result.memory.source,
@@ -681,14 +698,24 @@ export class MemoryService {
           initialScore: result.initialScore,
           mode: result.retrievalMode,
           signals: result.signals,
+          scoreBreakdown: {
+            ...result.signals,
+            finalScore: result.score,
+            initialScore: result.initialScore,
+            confidence: result.confidence
+          },
           explanation: result.explanation ?? [],
+          whyIncluded,
+          whyNotExcluded,
           graphPaths: result.graphPaths ?? [],
           citation: result.citation,
           contradiction: result.contradiction,
           plan: result.queryPlan,
           unsafeToInject: result.unsafeToInject
-        }
-      })),
+        },
+        policyDecision,
+        contradictionWarnings: result.contradiction ? [result.contradiction.reason] : []
+      }; }),
       excludedResults: results
         .filter((result) => result.decision === "exclude" || !context.includes(`[${result.memory.id}]`))
         .map((result) => ({
@@ -2191,6 +2218,9 @@ export class MemoryService {
       "/backup/verify": ["POST"],
       "/policy/rules": ["GET", "POST"],
       "/policy/evaluate": ["POST"],
+      "/retention/rules": ["GET", "POST"],
+      "/retention/enforce": ["POST"],
+      "/retention/review": ["GET"],
       "/privacy/insights": ["GET"],
       "/privacy/cross-brain-compute": ["POST"],
       "/security/key-provider": ["GET"],
@@ -2201,11 +2231,13 @@ export class MemoryService {
       "/providers": ["GET"],
       "/translate": ["POST"],
       "/ingest/media": ["POST"],
-      "/sdk/openapi": ["GET"]
+      "/sdk/openapi": ["GET"],
+      "/openapi.json": ["GET"]
     };
     return {
       openapi: "3.1.0",
       info: { title: "cognibrain API", version: "0.1.0" },
+      servers: [{ url: "/v1", description: "Versioned local API prefix" }],
       security: protectedAuth,
       paths: openApiPaths(routeMethods, protectedAuth),
       components: {
@@ -2352,6 +2384,8 @@ export class MemoryService {
       evaluated: 0,
       archived: [],
       deleted: [],
+      episodeArchived: [],
+      episodeDeleted: [],
       rulesMatched: {}
     };
     const memories = this.store.list(userId).filter((memory) => !memory.archivedAt);
@@ -2363,6 +2397,7 @@ export class MemoryService {
       const deleteRule = matchedRules.find((rule) => rule.action === "delete");
       if (deleteRule) {
         this.store.delete(memory.id);
+        this.applyEpisodeRetention(memory.id, "delete", "retention.rule", deleteRule.id, now, report);
         report.deleted.push(memory.id);
         this.recordAudit("retention.enforce", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "delete", ruleId: deleteRule.id, before: memory } });
         continue;
@@ -2370,12 +2405,73 @@ export class MemoryService {
       const archiveRule = matchedRules[0];
       if (consentExpired || archiveRule) {
         const archived = this.store.archive(memory.id);
+        this.applyEpisodeRetention(memory.id, "archive", consentExpired ? "consent.retentionUntil" : "retention.rule", archiveRule?.id, now, report);
         report.archived.push(memory.id);
         this.recordAudit("retention.enforce", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "archive", reason: consentExpired ? "consent.retentionUntil" : "retention.rule", ruleId: archiveRule?.id, after: archived } });
       }
     }
     if (report.archived.length || report.deleted.length) this.persist();
     return report;
+  }
+
+  retentionReview(now = new Date(), userId?: string): RetentionReviewReport {
+    const expiredMemories: RetentionReviewReport["expiredMemories"] = [];
+    const episodeRiskMap = new Map<string, RetentionReviewReport["episodeRisks"][number]>();
+    for (const memory of this.store.list(userId).filter((item) => !item.archivedAt)) {
+      const consentExpired = memory.consent.retentionUntil && new Date(memory.consent.retentionUntil).getTime() <= now.getTime();
+      const matchedRules = [...this.retentionRules.values()].filter((rule) => retentionRuleMatches(memory, rule, now));
+      if (!consentExpired && !matchedRules.length) continue;
+      const deleteRule = matchedRules.find((rule) => rule.action === "delete");
+      const archiveRule = matchedRules[0];
+      const action = deleteRule ? "delete" : "archive";
+      const reason = consentExpired ? "consent.retentionUntil" : "retention.rule";
+      expiredMemories.push({ memoryId: memory.id, reason, ruleId: deleteRule?.id ?? archiveRule?.id, action });
+      for (const episode of this.episodes.values()) {
+        if (!episode.memoryIds.includes(memory.id)) continue;
+        const existing = episodeRiskMap.get(episode.id);
+        const memoryIds = [...new Set([...(existing?.memoryIds ?? []), memory.id])];
+        episodeRiskMap.set(episode.id, { episodeId: episode.id, memoryIds, reason, action: existing?.action === "delete" || action === "delete" ? "delete" : "archive" });
+      }
+    }
+    const episodeRisks = [...episodeRiskMap.values()];
+    return {
+      generatedAt: now.toISOString(),
+      userId,
+      rules: this.listRetentionRules(),
+      expiredMemories,
+      episodeRisks,
+      summary: {
+        memoriesAtRisk: expiredMemories.length,
+        episodesAtRisk: episodeRisks.length,
+        deleteActions: expiredMemories.filter((item) => item.action === "delete").length + episodeRisks.filter((item) => item.action === "delete").length,
+        archiveActions: expiredMemories.filter((item) => item.action === "archive").length + episodeRisks.filter((item) => item.action === "archive").length
+      }
+    };
+  }
+
+  private applyEpisodeRetention(memoryId: string, action: "archive" | "delete", reason: string, ruleId: string | undefined, now: Date, report: RetentionEnforcementReport): void {
+    for (const episode of [...this.episodes.values()]) {
+      if (!episode.memoryIds.includes(memoryId)) continue;
+      if (action === "delete") {
+        this.episodes.delete(episode.id);
+        report.episodeDeleted.push(episode.id);
+        this.recordAudit("retention.enforce", { userId: episode.userId, metadata: { resource: "episode", action, reason, ruleId, episodeId: episode.id, memoryId } });
+        continue;
+      }
+      const updated: EpisodeRecord = {
+        ...episode,
+        retention: {
+          action,
+          at: now.toISOString(),
+          ruleId,
+          reason,
+          memoryIds: [...new Set([...(episode.retention?.memoryIds ?? []), memoryId])]
+        }
+      };
+      this.episodes.set(episode.id, updated);
+      report.episodeArchived.push(episode.id);
+      this.recordAudit("retention.enforce", { userId: episode.userId, metadata: { resource: "episode", action, reason, ruleId, episodeId: episode.id, memoryId } });
+    }
   }
 
   securityKeyReport(): SecurityKeyReport {
@@ -2459,6 +2555,26 @@ export class MemoryService {
       matchedRules: matching.map((rule) => ({ id: rule.id, label: rule.label, effect: rule.effect, reason: rule.reason })),
       reasons: matching.length ? matching.map((rule) => rule.reason ?? `${rule.effect} by ${rule.label}`) : ["no matching policy rule"]
     };
+  }
+
+  canRead(memory: Memory, actor: Partial<MemoryScope> = {}): boolean {
+    return this.evaluatePolicy("retrieve", memory, actor).allowed;
+  }
+
+  canWrite(input: MemoryInput, actor: Partial<MemoryScope> = {}): boolean {
+    return this.evaluatePolicy("write", input, actor).allowed;
+  }
+
+  canDelete(memory: Memory, actor: Partial<MemoryScope> = {}): boolean {
+    return this.evaluatePolicy("delete", memory, actor).allowed;
+  }
+
+  canPromote(memory: Memory, actor: Partial<MemoryScope> = {}): boolean {
+    return this.evaluatePolicy("write", memory, actor).allowed && this.evaluatePolicy("retrieve", memory, actor).allowed;
+  }
+
+  canUseInContext(memory: Memory, actor: Partial<MemoryScope> = {}): boolean {
+    return this.evaluatePolicy("retrieve", memory, actor).allowed && memory.beliefState !== "retracted";
   }
 
   transportSecurityReport(options: { publicUrl?: string; mode?: TransportSecurityReport["mode"]; tlsTerminatedBy?: string } = {}): TransportSecurityReport {
@@ -3488,6 +3604,7 @@ export class MemoryService {
       ...event
     });
     this.auditEvents.push(saved);
+    this.storage.auditWrite(saved);
     for (const webhook of this.webhooks.values()) {
       if (webhook.disabledAt || !webhook.events.includes(type)) continue;
       this.webhookDeliveries.push({
@@ -4175,7 +4292,7 @@ function openApiSchemas(): Record<string, Record<string, unknown>> {
           properties: {
             id: { type: "string" },
             schemaVersion: { const: "2.0" },
-            beliefState: { enum: ["active", "stale", "superseded", "contradicted", "needs_verification", "retracted"] },
+            beliefState: { enum: ["active", "stale", "superseded", "contradicted", "needs_verification", "retracted", "archived"] },
             createdAt: { type: "string", format: "date-time" },
             updatedAt: { type: "string", format: "date-time" },
             trust: { type: "number" },
@@ -4980,6 +5097,11 @@ function intervalOverlaps(event: TimelineReport["events"][number], after?: Date,
 function evidenceDate(value: Date | string | undefined): string | undefined {
   if (!value) return undefined;
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function roundMetric(value: number | undefined): number {
+  if (value === undefined || Number.isNaN(value)) return 0;
+  return Math.round(value * 1000) / 1000;
 }
 
 function newestPathTime(path: { edges: Array<{ timestamp?: Date | string }> }): number {

@@ -2,7 +2,7 @@ export type MemoryType = "user" | "feedback" | "project" | "reference" | "episod
 export type MemoryLayer = "working" | "episodic" | "long_term" | "procedural" | "reflection";
 export type SourceKind = "human" | "reviewed_code" | "tool" | "agent" | "transcript" | "import";
 export type MemorySchemaVersion = "2.0";
-export type BeliefState = "active" | "stale" | "superseded" | "contradicted" | "needs_verification" | "retracted";
+export type BeliefState = "active" | "stale" | "superseded" | "contradicted" | "needs_verification" | "retracted" | "archived";
 export type RelationType =
   | "mentions"
   | "calls"
@@ -124,7 +124,23 @@ export interface RetentionEnforcementReport {
   evaluated: number;
   archived: string[];
   deleted: string[];
+  episodeArchived: string[];
+  episodeDeleted: string[];
   rulesMatched: Record<string, number>;
+}
+
+export interface RetentionReviewReport {
+  generatedAt: Date | string;
+  userId?: string;
+  rules: RetentionRule[];
+  expiredMemories: Array<{ memoryId: string; reason: string; ruleId?: string; action: "archive" | "delete" }>;
+  episodeRisks: Array<{ episodeId: string; memoryIds: string[]; reason: string; action: "archive" | "delete" }>;
+  summary: {
+    memoriesAtRisk: number;
+    episodesAtRisk: number;
+    deleteActions: number;
+    archiveActions: number;
+  };
 }
 
 export type MemoryPolicyOperation = "write" | "retrieve" | "dream" | "export" | "delete" | "all";
@@ -453,12 +469,17 @@ export interface EvidencePack {
       initialScore?: number;
       mode?: RetrievalMode;
       signals: SearchResult["signals"];
+      scoreBreakdown?: SearchResult["signals"] & { finalScore: number; initialScore?: number; confidence?: number };
       explanation: string[];
+      whyIncluded: string[];
+      whyNotExcluded: string[];
       graphPaths: string[];
       citation: string;
       contradiction?: SearchResult["contradiction"];
       plan?: QueryPlan;
     };
+    policyDecision?: PolicyDecision;
+    contradictionWarnings?: string[];
   }>;
   excludedResults?: Array<{
     memoryId: string;
@@ -572,6 +593,13 @@ export interface EpisodeRecord {
   hash: string;
   memoryIds: string[];
   createdAt: Date | string;
+  retention?: {
+    action: "archive" | "delete";
+    at: Date | string;
+    ruleId?: string;
+    reason: string;
+    memoryIds: string[];
+  };
 }
 
 export interface EpisodeInput {

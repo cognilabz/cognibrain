@@ -7,29 +7,29 @@ This matrix is the code-verified status surface for the Evidence-Grade Agent Mem
 | MemoryRecordV2 | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Local-ready |
 | SQLite storage schema | Yes | Status only | Via env | N/A | Status only | Yes, runtime-gated | Yes | Local production candidate |
 | Postgres-compatible storage | Yes | Status only | Via env | N/A | Status only | Yes, including live Postgres container proof | Yes | Self-hosted production candidate; managed service still separate |
-| Event-sourced audit journal | Yes | Yes | Yes | Not required by planv1 | Audit feed | Yes | Yes | Local signable chain with replay |
-| API key authentication | Yes | Yes | Not required by planv1 | Not required by planv1 | Runtime health status | Yes | Yes | Local/team-ready when `MEMORY_API_KEYS` is set |
+| Event-sourced audit journal | Yes | Yes | Yes | Not required by plan1_1 | Audit feed | Yes | Yes | Local signable chain with replay |
+| API key authentication | Yes | Yes | Not required by plan1_1 | Not required by plan1_1 | Runtime health status | Yes | Yes | Local/team-ready when `MEMORY_API_KEYS` is set |
 | Policy engine and tenant isolation | Yes | Yes | Yes | Policy check tool | Scope/route preview | Yes, includes cross-scope fuzz matrix | Yes | Local/team-ready isolation surface |
 | Context/Evidence pack object model | Yes | Yes | Yes | Context pack tool | Context Pack Preview | Yes | Yes | Audit-ready local object |
 | Evidence pack export by id | Yes | Yes | Yes | Evidence pack tool | Context Pack Preview and Artifact Inspector | Yes | Yes | Local-ready |
 | Query intent planner | Yes | Yes | Yes | Available through context/search outputs | Route Preview | Yes, 20 query-type plan coverage | Yes | Deterministic plan with strategy/explanation |
 | Graph path explanation | Yes | Yes | Yes | Graph path and explain tools | Graph Explorer | Yes | Yes | Local-ready |
-| Real BM25/FTS backend | Yes for SQLite FTS5 and live Postgres tsvector | Storage status plus retrieval provider | Via storage/env commands | Not required by planv1 | Runtime storage status | Yes, indexed SQLite BM25 and live Postgres tsvector covered | Yes | Local/self-hosted production candidate |
-| Vector backend | Interface plus local and OpenAI-compatible providers | Search option | Via env/config | Not required by planv1 | Runtime storage capability status | Yes, including privacy-disable proof | This page | Optional no-key local/provider hook plus pgvector capability flag for Postgres deployments |
+| Real BM25/FTS backend | Yes for SQLite FTS5 and live Postgres tsvector | Storage status plus retrieval provider | Via storage/env commands | Not required by plan1_1 | Runtime storage status | Yes, indexed SQLite BM25 and live Postgres tsvector covered | Yes | Local/self-hosted production candidate |
+| Vector backend | Interface plus local and OpenAI-compatible providers | Search option | Via env/config | Not required by plan1_1 | Runtime storage capability status | Yes, including privacy-disable proof | This page | Optional no-key local/provider hook plus pgvector capability flag for Postgres deployments |
 | Retrieval calibration | Yes | Search/evidence result fields | Context/evidence output | Context/evidence output | Context Pack Preview confidence and unsafe flags | Yes, benchmark suite plus context exclusion test | Yes | Deterministic confidence with unsafe-to-inject threshold |
-| Connector SDK | Yes | Yes | Yes | Not required by planv1 | Connector health and writeback metrics | Yes, manifest builder/auth/poll/writeback plus live HTTP verifier | Yes | Local connector-author SDK plus HTTP lifecycle, OAuth hash/revoke, status visibility |
+| Connector SDK | Yes | Yes | Yes | Not required by plan1_1 | Connector health and writeback metrics | Yes, manifest builder/auth/poll/writeback plus live HTTP verifier | Yes | Local connector-author SDK plus HTTP lifecycle, OAuth hash/revoke, status visibility |
 | Source connector provenance | Yes | Yes | Yes | Evidence/context output | Evidence lines and verification queue | Yes, including source-deletion revalidation | Yes | Standard `sourceRef` plus source deletion verification queue |
 | Claim extraction schema | Yes | Yes | CLI via `extract` | Claim verification tool | Memory detail metadata | Yes | Yes | Deterministic schema plus provider fallback hook |
 | Durable vs ephemeral classifier | Yes | Yes | CLI via `extract` | Memory add/extract path | Memory detail/lifecycle state | Yes | Yes | Local rules classify store/ignore/session/working/ask-user |
-| GitHub/Slack/Discord connectors | Yes for local HTTP adapters and official manifests | Manifest/poll/writeback/auth boundaries | Yes | Not required by planv1 | Connector health and writeback metrics | Yes, `verify:connectors` live HTTP proof | Yes | Self-hostable connector proof |
-| MCP v2 graph/policy/procedure tools | Yes | N/A | N/A | Yes, includes graph/evidence/policy/claim/procedure/action tools | N/A | Yes | Yes | Local MCP Memory OS surface |
+| GitHub/Slack/Discord connectors | Yes for local HTTP adapters and official manifests | Manifest/poll/writeback/auth boundaries | Yes | Not required by plan1_1 | Connector health and writeback metrics | Yes, `verify:connectors` live HTTP proof | Yes | Self-hostable connector proof |
+| MCP v2 graph/policy/procedure tools | Yes | N/A | N/A | Yes, includes graph/evidence/policy/retention/claim/procedure/action tools | N/A | Yes | Yes | Local MCP Memory OS surface |
 | Python SDK | Yes | N/A | N/A | N/A | N/A | Yes | Yes | Local/client-ready subset |
 | TypeScript SDK v1 | Yes | Uses HTTP API | N/A | N/A | N/A | Yes, retry/error/page and surface tests | Yes | Local/client-ready with auth headers, retries, typed errors, pagination helper, graph/evidence/connectors/policy |
 | OpenAPI contract | Yes | Yes | CLI via `api-spec` | N/A | N/A | Yes | Yes | Structured local SDK-generation contract |
 | USP benchmarks | Yes, certified public-baseline gate plus import format | Artifacts | Yes | Not required by planv1 | Artifact Inspector and proof scores | Yes, `benchmark:market` | Yes | Public-baseline proof with importable comparable artifacts |
 | Production load benchmarks | Yes, local deterministic runner plus 10k/100k/1M artifacts and live Postgres smoke | Artifacts | Yes | Not required by planv1 | Artifact Inspector | Yes, includes 10k dream, 100k, 1M write/search/connector, and Postgres migration gate | Yes | Local/self-hosted proof |
 
-Open roadmap tracking lives in GitHub issues #166-#211.
+Open roadmap tracking for plan1_1 lives in GitHub issues #212-#261 until the final verification pass closes them.
 
 Latest Postgres proof: `npm run verify:postgres` starts or reuses a local Postgres 16 container, applies idempotent migrations, writes real rows into tenant-indexed tables, uses a generated `tsvector` plus GIN index for lexical retrieval, checks cross-user isolation, and writes `artifacts/postgres-live.json`. The 2026-05-24 run passed all acceptance checks with 25 writes, 10 searches, zero failures, migration count `3 -> 3`, `aliceAtlasRows=1`, `bobAtlasRows=0`, and `bobSearchLeaks=0`.
 

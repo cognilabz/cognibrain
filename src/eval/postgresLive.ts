@@ -20,6 +20,7 @@ interface PostgresLiveArtifact {
     idempotentMigrations: boolean;
     benchmarkAgainstPostgres: boolean;
     indexedLexicalSearch: boolean;
+    transactionRollback: boolean;
   };
   migration: {
     countBefore: number;
@@ -147,6 +148,16 @@ const idempotentMigrations = migrationBefore.count === migrationAfter.count && m
 
 const lexical = adapter.lexicalSearch("tsvector proof", { limit: 5 });
 const indexedLexicalSearch = lexical.length > 0 && lexical[0].explanation === "postgres tsvector";
+const rollbackProbeBefore = psqlNumber("select count(*) from cognibrain_memories where memory_id = 'rollback_probe'");
+run(psqlCommand, [
+  url,
+  "-v",
+  "ON_ERROR_STOP=1",
+  "-c",
+  "begin; insert into cognibrain_memories(memory_id, user_id, content, memory_type, layer, belief_state, visibility, created_at, updated_at, payload) values ('rollback_probe', 'rollback-user', 'rollback transaction probe', 'project', 'long_term', 'active', 'private', now(), now(), '{}'::jsonb); rollback;"
+]);
+const rollbackProbeAfter = psqlNumber("select count(*) from cognibrain_memories where memory_id = 'rollback_probe'");
+const transactionRollback = rollbackProbeBefore === rollbackProbeAfter;
 
 const artifact: PostgresLiveArtifact = {
   schemaVersion: "1.0",
@@ -162,7 +173,8 @@ const artifact: PostgresLiveArtifact = {
     multiUserIsolation,
     idempotentMigrations,
     benchmarkAgainstPostgres: writeLatencies.length === 25 && searchLatencies.length === 10 && failures === 0,
-    indexedLexicalSearch
+    indexedLexicalSearch,
+    transactionRollback
   },
   migration: {
     countBefore: migrationBefore.count,

@@ -90,6 +90,11 @@ export interface MemoryProcedureRecallArgs extends MemorySearchArgs {
   limit?: number;
 }
 
+export interface MemoryRetentionReviewArgs {
+  userId?: string;
+  now?: string;
+}
+
 export function createMemoryToolHandlers(service = new MemoryService()) {
   return {
     add(args: MemoryAddArgs) {
@@ -203,6 +208,10 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
       const target = args.memoryId ? service.get(args.memoryId) : args.input;
       if (!target) throw new Error("memory_policy_check requires memoryId or input");
       return service.evaluatePolicy(args.operation, target as Memory | MemoryInput, args.actor as Partial<MemoryInput> ?? {});
+    },
+
+    retentionReview(args: MemoryRetentionReviewArgs) {
+      return service.retentionReview(args.now ? new Date(args.now) : new Date(), args.userId);
     },
 
     verifyClaim(args: MemoryVerifyClaimArgs) {

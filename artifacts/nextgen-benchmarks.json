@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "generatedAt": "2026-05-25T05:02:06.547Z",
+  "generatedAt": "2026-05-25T06:26:34.965Z",
   "suites": [
     {
       "id": "answer-generation",
@@ -80,16 +80,16 @@
     {
       "id": "retrieval-calibration",
       "passed": true,
-      "score": 0.9347931696550242,
+      "score": 0.9347931696560589,
       "details": [
         {
           "id": "confidence-field",
           "passed": true,
-          "score": 0.8043795089650726,
+          "score": 0.8043795089681766,
           "expected": [
             "confidence>0.5"
           ],
-          "actual": "0.8043795089650726"
+          "actual": "0.8043795089681766"
         },
         {
           "id": "unsafe-threshold",
@@ -107,7 +107,7 @@
           "expected": [
             "weak memory excluded"
           ],
-          "actual": "[ce89892c-b064-4973-bd51-90f5c4b7dcfd] trust=0.94 score=0.75 confidence=0.80 Atlas deployment requires reviewed npm test evidence before release."
+          "actual": "[7b0de446-13bd-4a5f-a114-60e729dc8e48] trust=0.94 score=0.75 confidence=0.80 Atlas deployment requires reviewed npm test evidence before release."
         }
       ]
     },
@@ -159,16 +159,6 @@
   ],
   "trend": {
     "points": [
-      {
-        "generatedAt": "2026-05-24T16:44:39.354Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9612499999999999
-      },
       {
         "generatedAt": "2026-05-24T16:47:04.172Z",
         "suites": {
@@ -363,6 +353,17 @@
           "usp-evidence-pack": 1
         },
         "meanScore": 0.9559586339310048
+      },
+      {
+        "generatedAt": "2026-05-25T06:26:34.965Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9347931696560589,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9559586339312117
       }
     ]
   }

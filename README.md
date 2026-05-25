@@ -68,8 +68,8 @@ That makes cognibrain different from narrower memory products:
 
 | Product category | Main promise | cognibrain position |
 | --- | --- | --- |
-| Drop-in memory API | Store and recall user facts quickly | Adds inspectable context packs, governance, graph paths, lifecycle state, local ownership and harness routing |
-| Personal markdown brain | User-owned notes and backlinks | Adds API-first multi-agent/team scopes, consent enforcement, benchmarks, connectors and dashboard operations |
+| Drop-in memory API like Mem0 | Store and recall user facts quickly | Adds inspectable context packs, governance, graph paths, lifecycle state, local ownership and harness routing |
+| Personal markdown brain like GBrain | User-owned notes and backlinks | Adds API-first multi-agent/team scopes, consent enforcement, benchmarks, connectors and dashboard operations |
 | Temporal graph memory | Conversation graph over time | Adds source-quality gates, evidence export, marketplace modules, compliance surfaces and local-first packaging |
 | Graph/vector control plane | Hybrid retrieval over knowledge | Adds “why-used” proof, dream maintenance, policy-aware context injection and cross-harness reuse |
 

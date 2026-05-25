@@ -118,6 +118,19 @@ export function createOpenMemoryMcpServer(service = createDefaultMemoryService()
   );
 
   server.registerTool(
+    "memory_retention_review",
+    {
+      title: "Review Retention",
+      description: "Preview memories and ground-truth episodes affected by retention rules before enforcement.",
+      inputSchema: {
+        userId: z.string().optional(),
+        now: z.string().optional()
+      }
+    },
+    async (args) => jsonText(handlers.retentionReview(args))
+  );
+
+  server.registerTool(
     "memory_verify_claim",
     {
       title: "Verify Claim",
@@ -173,6 +186,22 @@ export function createOpenMemoryMcpServer(service = createDefaultMemoryService()
     {
       title: "Activate Memory Graph",
       description: "Run spreading activation over the memory graph for a query.",
+      inputSchema: {
+        query: z.string().min(1),
+        userId: z.string().optional(),
+        maxDepth: z.number().int().positive().max(8).optional(),
+        limit: z.number().int().positive().max(50).optional(),
+        validAt: z.string().optional()
+      }
+    },
+    async (args) => jsonText(handlers.graphActivation(args))
+  );
+
+  server.registerTool(
+    "memory_graph_activate",
+    {
+      title: "Activate Memory Graph",
+      description: "Alias for memory_graph_activation matching the Memory OS tool contract.",
       inputSchema: {
         query: z.string().min(1),
         userId: z.string().optional(),

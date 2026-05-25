@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./store";
+export * from "./storageAdapter";
 export * from "./retrieval";
 export * from "./reflection";
 export * from "./health";

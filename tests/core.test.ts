@@ -575,6 +575,10 @@ describe("TypeScript memory core", () => {
     expect(pack.context).toContain("npm test");
     expect(pack.results[0].retrieval.signals.trust).toBeGreaterThan(0);
     expect(pack.results[0].retrieval.explanation.length).toBeGreaterThan(0);
+    expect(pack.results[0].retrieval.whyIncluded.length).toBeGreaterThan(0);
+    expect(pack.results[0].retrieval.whyNotExcluded).toContain("policy allowed for actor and scope");
+    expect(pack.results[0].retrieval.scoreBreakdown?.finalScore).toBeGreaterThan(0);
+    expect(pack.results[0].policyDecision?.allowed).toBe(true);
     expect(pack.results[0].retrieval.citation).toContain("AGENTS.md:7");
     expect(pack.results[0].validity.validFrom).toBe("2026-05-01T00:00:00.000Z");
     expect(pack.results.some((result) => result.content.includes("private draft"))).toBe(false);
@@ -1037,11 +1041,20 @@ describe("TypeScript memory core", () => {
       timestamp: "2020-01-01T00:00:00.000Z",
       source: { kind: "transcript", confidence: 0.42 }
     });
+    const extracted = service.extract([{ role: "user", content: "Atlas episode retention source should expire.", timestamp: "2020-01-01T00:00:00.000Z" }], { userId: "u1" });
+    const episode = service.listEpisodes("u1")[0];
+    expect(episode.memoryIds).toEqual(extracted.memories.map((memory) => memory.id));
     service.add({ userId: "u3", content: "Privacy insight aggregate one.", source: { kind: "human", confidence: 0.95 } });
     service.add({ userId: "u4", content: "Privacy insight aggregate two.", source: { kind: "human", confidence: 0.95 } });
 
     const rule = service.setRetentionRule({ label: "Atlas archive", retentionDays: 1, action: "archive", scope: { entity: "atlas" } });
     expect(service.listRetentionRules()[0].id).toBe(rule.id);
+    const retentionReview = service.retentionReview(new Date(), "u1");
+    expect(retentionReview.expiredMemories.some((item) => item.memoryId === staleSearch.id && item.action === "archive")).toBe(true);
+    expect(retentionReview.episodeRisks.some((item) => item.episodeId === episode.id && item.action === "archive")).toBe(true);
+    const retentionReport = service.enforceRetention(new Date(), "u1");
+    expect(retentionReport.episodeArchived).toContain(episode.id);
+    expect(service.listEpisodes("u1")[0].retention?.action).toBe("archive");
     const search = service.search({ userId: "u1", query: "Atlas compliance memory", includePrivate: true });
     expect(search.some((result) => result.memory.id === staleSearch.id)).toBe(false);
     expect(service.exportUser("u1").find((memory) => memory.id === staleSearch.id)?.archivedAt).toBeDefined();
@@ -1719,6 +1732,9 @@ describe("TypeScript memory core", () => {
     const openapi = service.apiDescription();
     expect(openapi.clients.typescript).toContain("src/sdk/client.ts");
     expect(openapi.openapi).toBe("3.1.0");
+    expect(openapi.servers[0].url).toBe("/v1");
+    expect(openapi.paths["/openapi.json"].get).toBeDefined();
+    expect(openapi.paths["/retention/review"].get).toBeDefined();
     expect(openapi.paths["/memories/{id}/archive"].post).toMatchObject({ operationId: "postMemoriesIdArchive" });
     expect(openapi.paths["/audit/chain"].get).toBeDefined();
     expect(openapi.components.schemas.MemoryInput.required).toEqual(["userId", "content"]);

@@ -547,6 +547,10 @@ switch (command) {
     console.log(JSON.stringify(service.enforceRetention(args[0] ? new Date(args[0]) : new Date(), process.env.MEMORY_RETENTION_USER_ID ?? userId), null, 2));
     break;
   }
+  case "retention-review": {
+    console.log(JSON.stringify(service.retentionReview(args[0] ? new Date(args[0]) : new Date(), process.env.MEMORY_RETENTION_USER_ID ?? userId), null, 2));
+    break;
+  }
   case "key-report": {
     console.log(JSON.stringify(service.securityKeyReport(), null, 2));
     break;
@@ -1002,7 +1006,7 @@ switch (command) {
     break;
   }
   default:
-    fail("Usage: memctl <add|extract|action|search|inspect|route|intent|evidence|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-enrich|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|audit-chain|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|connector-telemetry|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
+    fail("Usage: memctl <add|extract|action|search|inspect|route|intent|evidence|evidence-pack|why-used|reflect|dream|health|maintenance|verify|confirm|retract|feedback|feedback-injection|metrics|profiles|profile-set|profile-learn|profile-sample|identity-link|timeline|timeline-summarize|temporal|patterns|graph|entities|entity-enrich|entity-merge|entity-split|graph-path|explain|graph-activate|graph-export|graph-query|graph-changes|infer|agent-register|agents|agent-persona|persona-set|personas|brain-create|brains|source-create|events|episodes|episode|federated-search|share-request|share-approve|promote|review|share-revoke|revoke|audit|audit-chain|compliance|compliance-export|policy-rules|policy-rule|policy-evaluate|retention-rule|retention-rules|retention-review|retention-enforce|key-report|key-rotate|privacy-insights|privacy-cross-brain|storage|marketplace|marketplace-plan|marketplace-install|marketplace-submit|marketplace-submissions|marketplace-scan|marketplace-review|marketplace-publish|marketplace-rate|api-spec|migration-export|managed-tenant-create|managed-tenants|managed-control-plane|benchmark-nextgen|leaderboard|provider-status|translate|connectors|connector-register|connector-sync|connector-sync-records|connector-health|connector-auth|connector-auth-begin|connector-auth-callback|connector-list|connector-poll|connector-writeback|connector-feedback|connector-telemetry|media-ingest|webhook-deliver|consent|revert|offline-add|offline-update|sync|sync-status|lifecycle-preview|dream-policy|observations|predictions|export|delete-user> ...");
 }
 
 function fail(message: string): never {

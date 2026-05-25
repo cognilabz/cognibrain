@@ -1,5 +1,13 @@
 # Connector Authoring
 
+For a new external platform, start with the Platform SDK scaffold:
+
+```bash
+./bin/cognibrain.mjs sdk platform acme --kind project_management --out integrations/acme
+```
+
+That path creates the TypeScript poll/map/sync code, connector manifest, `.env.example`, and a small runbook. Use manual manifest registration only when you already have a connector service or HTTP endpoint.
+
 Create a connector plan before installing it:
 
 ```bash

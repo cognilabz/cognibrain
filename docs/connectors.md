@@ -108,6 +108,16 @@ Each manifest declares connector kind, version, direction (`ingest`, `export`, o
 
 Connector authors can use `src/connectors/sdk.ts` to keep local integrations consistent before exposing an HTTP endpoint. The SDK provides `createConnectorManifest()`, `normalizeConnectorEvent()`, `runConnectorPoll()`, `connectorAuthHeaders()`, and `createWritebackPlan()` so adapters can share manifest validation, sourceRef provenance, auth-reference headers, poll normalization, and dry-run writeback planning with the built-in service lifecycle.
 
+## Platform SDK
+
+For platforms that are not built in yet, scaffold a complete local integration:
+
+```bash
+npx cognibrain sdk platform acme --kind project_management --out integrations/acme
+```
+
+The scaffold writes a TypeScript integration, connector manifest, `.env.example`, and short runbook. The generated code uses `createPlatformIntegration()` and `mapPlatformRecord()` from `src/connectors/sdk.ts`, so custom platforms get the same manifest validation, source provenance, health envelope, poll normalization and writeback dry-run behavior as official connectors. This is the recommended path for internal tools, private SaaS platforms, CRMs, support desks, incident systems, data catalogs and early vendor pilots before a native driver exists. Full tutorial: [`tutorials/platform-sdk.md`](tutorials/platform-sdk.md).
+
 ## External Vendor Connectors
 
 GitHub, Slack, Discord, Jira, Confluence, Notion and Linear are first-class external connectors:

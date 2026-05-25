@@ -16,10 +16,12 @@ const files = {
   vendorConnectors: read("src/connectors/vendorConnectors.ts"),
   vendorLive: read("src/eval/vendorConnectorsLive.ts"),
   vendorSmoke: read("src/eval/vendorCredentialSmoke.ts"),
+  connectorSdk: read("src/connectors/sdk.ts"),
   arena: read("src/eval/arena.ts"),
   cli: read("bin/cognibrain.mjs"),
   dashboard: read("src/dashboard/main.tsx"),
   connectors: read("docs/connectors.md"),
+  platformSdk: read("docs/tutorials/platform-sdk.md"),
   overview: read("docs/getting-started/overview.md"),
   setupCli: read("docs/getting-started/setup-cli.md"),
   claims: read("docs/claims.md"),
@@ -89,6 +91,7 @@ const checks = [
     has(files.setupCli, "npx cognibrain init"),
     has(files.setupCli, "connector add jira --set"),
     has(files.setupCli, "adapter add storage-sqlite"),
+    has(files.setupCli, "cognibrain sdk platform"),
     has(files.setupCli, "skill status"),
     has(files.setupCli, "config show --json"),
     has(files.overview, "What You Get"),
@@ -96,6 +99,17 @@ const checks = [
     has(files.readme, "docs/getting-started/setup-cli.md"),
     has(files.connectors, "credential-safe connector setup"),
     has(files.connectors, "State-of-the-art connector contracts")
+  ]),
+  check("platform SDK scaffold is productized", [
+    has(files.connectorSdk, "createPlatformIntegration"),
+    has(files.connectorSdk, "mapPlatformRecord"),
+    has(files.cli, "case \"sdk\""),
+    has(files.cli, "platformSdkScaffold"),
+    has(files.cli, "cognibrain sdk platform <name>"),
+    has(files.platformSdk, "npx cognibrain sdk platform"),
+    has(files.platformSdk, "createPlatformIntegration"),
+    has(files.connectors, "Platform SDK"),
+    has(files.readme, "docs/tutorials/platform-sdk.md")
   ]),
   check("benchmark arena is replayable and public", [
     has(files.package, "\"benchmark:arena\""),

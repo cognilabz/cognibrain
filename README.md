@@ -171,11 +171,12 @@ npx cognibrain init
 npx cognibrain config show --json
 npx cognibrain connector add github --set repo=cognilabz/cognibrain
 npx cognibrain adapter add storage-sqlite --set path=.cognibrain/memory.sqlite
+npx cognibrain sdk platform acme --kind project_management --out integrations/acme
 npx cognibrain skill status
 npx cognibrain doctor --fix
 ```
 
-The setup CLI uses a React/Ink terminal flow when a real terminal is available and a deterministic text path for CI. Setup state, harness config, connector config, adapter config and the Codex Skill lifecycle are all reachable through CLI commands. See [`docs/getting-started/setup-cli.md`](docs/getting-started/setup-cli.md).
+The setup CLI uses a React/Ink terminal flow when a real terminal is available and a deterministic text path for CI. Setup state, harness config, connector config, adapter config, Platform SDK scaffolds and the Codex Skill lifecycle are all reachable through CLI commands. See [`docs/getting-started/setup-cli.md`](docs/getting-started/setup-cli.md) and [`docs/tutorials/platform-sdk.md`](docs/tutorials/platform-sdk.md).
 
 Five-minute Memory OS demo:
 

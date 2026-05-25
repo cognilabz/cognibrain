@@ -73,6 +73,24 @@ npx cognibrain connector add clickup --set workspace=workspace_id --set space=sp
 npx cognibrain connector add posthog --set project=project_id
 ```
 
+## Platform SDK Scaffold
+
+When a source system is not built in yet, scaffold a custom integration instead of hand-writing a connector from scratch:
+
+```bash
+npx cognibrain sdk list
+npx cognibrain sdk platform acme --kind project_management --out integrations/acme
+npx cognibrain sdk doctor
+```
+
+The scaffold creates a TypeScript integration, connector manifest, `.env.example` and local runbook. Edit the generated `poll()` and `mapRecord()` functions, then register the manifest and run one sync:
+
+```bash
+npx cognibrain memory connector-register "$(cat integrations/acme/acme.connector.json)"
+npx tsx integrations/acme/acme.integration.ts
+npx cognibrain memory connector-health acme
+```
+
 ## Adapter Setup
 
 Adapters are the runtime extension points behind storage, provider intelligence, media extraction, benchmark comparisons and remote MCP transport. They are also configured through the CLI and use the same no-secret-values policy.

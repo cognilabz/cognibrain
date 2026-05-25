@@ -5,7 +5,7 @@ import http from "node:http";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const launchCwd = process.cwd();
@@ -61,6 +61,10 @@ switch (command) {
 
   case "adapter":
     await adapterCommand(commandArgs);
+    break;
+
+  case "sdk":
+    await sdkCommand(commandArgs);
     break;
 
   case "memory":
@@ -421,6 +425,36 @@ async function adapterCommand(commandArgs) {
   console.log(`${result.dryRun ? "would write" : "wrote"} adapter config: ${result.path}`);
   console.log(`${result.configured ? "configured" : "needs env"}: ${result.missing.length ? result.missing.join(", ") : "none"}`);
   console.log(`next: ${result.config.healthCommand}`);
+}
+
+async function sdkCommand(commandArgs) {
+  const subcommand = commandArgs[0] ?? "list";
+  if (subcommand === "help" || subcommand === "--help") sdkUsage(0);
+  if (subcommand === "list") {
+    const result = sdkCatalog();
+    if (commandArgs.includes("--json")) printJson(result);
+    else printSdkCatalog(result);
+    return;
+  }
+  if (subcommand === "doctor") {
+    const result = sdkDoctor();
+    if (commandArgs.includes("--json")) printJson(result);
+    else printSdkDoctor(result);
+    if (!result.ok) process.exit(1);
+    return;
+  }
+  if (subcommand !== "platform") sdkUsage(1);
+  const name = commandArgs[1];
+  if (!name) sdkUsage(1);
+  const result = platformSdkScaffold(name, {
+    kind: optionValue(commandArgs, "--kind") ?? "custom",
+    direction: optionValue(commandArgs, "--direction") ?? "two_way",
+    auth: optionValue(commandArgs, "--auth") ?? "token",
+    out: optionValue(commandArgs, "--out"),
+    dryRun: commandArgs.includes("--dry-run")
+  });
+  if (commandArgs.includes("--json")) printJson(result);
+  else printPlatformSdkScaffold(result);
 }
 
 function transportSecurityCheck(localUrl) {
@@ -1254,6 +1288,274 @@ function printAdapterDoctor(result) {
   }
 }
 
+function sdkCatalog() {
+  return [
+    {
+      sdk: "platform",
+      status: "available",
+      command: "cognibrain sdk platform <name> --kind project_management --out integrations/<name>",
+      docs: "docs/tutorials/platform-sdk.md",
+      includes: ["TypeScript integration", "connector manifest", ".env.example", "README"]
+    },
+    {
+      sdk: "connector-author",
+      status: "available",
+      command: "import { createPlatformIntegration } from 'cognibrain/src/connectors/sdk'",
+      docs: "docs/connectors.md#platform-sdk",
+      includes: ["manifest validation", "event normalization", "writeback dry-run plans", "health envelope"]
+    }
+  ];
+}
+
+function printSdkCatalog(items) {
+  for (const item of items) console.log(`${item.status}  ${item.sdk} - ${item.command}`);
+  console.log("next: cognibrain sdk platform acme --kind project_management --out integrations/acme");
+}
+
+function sdkDoctor() {
+  const checks = [
+    {
+      name: "platform SDK helpers",
+      ok: existsSync(join(root, "src", "connectors", "sdk.ts")) && readFileSync(join(root, "src", "connectors", "sdk.ts"), "utf8").includes("createPlatformIntegration"),
+      detail: "src/connectors/sdk.ts"
+    },
+    {
+      name: "platform SDK CLI",
+      ok: readFileSync(join(root, "bin", "cognibrain.mjs"), "utf8").includes("platformSdkScaffold"),
+      detail: "bin/cognibrain.mjs"
+    },
+    {
+      name: "platform SDK docs",
+      ok: existsSync(join(root, "docs", "tutorials", "platform-sdk.md")),
+      detail: "docs/tutorials/platform-sdk.md"
+    },
+    {
+      name: "publish package includes src and docs",
+      ok: readFileSync(join(root, "package.json"), "utf8").includes("\"src/\"") && readFileSync(join(root, "package.json"), "utf8").includes("\"docs/\""),
+      detail: "package.json files"
+    }
+  ];
+  return { ok: checks.every((check) => check.ok), checks };
+}
+
+function printSdkDoctor(result) {
+  for (const check of result.checks) console.log(`${check.ok ? "ok" : "fail"}  ${check.name} - ${check.detail}`);
+  console.log("next: cognibrain sdk platform acme --kind project_management --out integrations/acme");
+}
+
+function platformSdkScaffold(name, options) {
+  const slug = platformSlug(name);
+  const kind = validateChoice(options.kind, connectorKinds(), "--kind");
+  const direction = validateChoice(options.direction, ["ingest", "export", "two_way"], "--direction");
+  const auth = validateChoice(options.auth, ["none", "api_key", "oauth", "token"], "--auth");
+  const envPrefix = `MEMORY_${slug.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
+  const outputDir = resolve(launchCwd, options.out ?? join(".cognibrain", "integrations", slug));
+  const manifest = platformSdkManifest({ slug, name, kind, direction, auth, envPrefix });
+  const files = [
+    {
+      path: join(outputDir, `${slug}.integration.ts`),
+      content: platformIntegrationTemplate({ slug, name, kind, direction, auth, envPrefix })
+    },
+    {
+      path: join(outputDir, `${slug}.connector.json`),
+      content: `${JSON.stringify(manifest, null, 2)}\n`
+    },
+    {
+      path: join(outputDir, ".env.example"),
+      content: platformEnvTemplate({ envPrefix })
+    },
+    {
+      path: join(outputDir, "README.md"),
+      content: platformReadmeTemplate({ slug, name, kind })
+    }
+  ];
+  if (!options.dryRun) {
+    for (const file of files) writeGeneratedFile(file.path, file.content);
+  }
+  return {
+    schemaVersion: "1.0",
+    sdk: "platform",
+    name,
+    slug,
+    dryRun: Boolean(options.dryRun),
+    outputDir,
+    manifest,
+    files: files.map((file) => file.path),
+    commands: [
+      `npx cognibrain memory connector-register "$(cat ${join(outputDir, `${slug}.connector.json`)})"`,
+      `npx tsx ${join(outputDir, `${slug}.integration.ts`)}`,
+      `npx cognibrain memory connector-health ${slug}`
+    ],
+    docs: "docs/tutorials/platform-sdk.md"
+  };
+}
+
+function printPlatformSdkScaffold(result) {
+  console.log(`${result.dryRun ? "would scaffold" : "scaffolded"} platform SDK: ${result.slug}`);
+  console.log(`path: ${result.outputDir}`);
+  for (const file of result.files) console.log(`file: ${file}`);
+  console.log("next:");
+  for (const command of result.commands) console.log(`  ${command}`);
+}
+
+function platformSdkManifest({ slug, name, kind, direction, auth, envPrefix }) {
+  const now = new Date().toISOString();
+  return {
+    id: slug,
+    name,
+    kind,
+    version: "1.0.0",
+    direction,
+    capabilities: defaultPlatformCapabilities(direction),
+    auth,
+    defaultSourceKind: "import",
+    metadataMapping: {
+      externalId: "externalId",
+      url: "source.uri",
+      author: "sourceRef.author",
+      platform: "metadata.platform"
+    },
+    privacyPolicy: "project",
+    list: direction !== "export" ? { endpoint: `https://your-platform.example/api/${slug}/items`, method: "GET", authRef: `env:${envPrefix}_TOKEN` } : undefined,
+    poll: direction !== "export" ? { endpoint: `https://your-platform.example/api/${slug}/events`, method: "GET", authRef: `env:${envPrefix}_TOKEN` } : undefined,
+    writeback: direction !== "ingest" ? { endpoint: `https://your-platform.example/api/${slug}/writeback`, method: "POST", authRef: `env:${envPrefix}_TOKEN`, operations: ["comment", "summary", "memory_link"] } : undefined,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function platformIntegrationTemplate({ slug, name, kind, direction, auth, envPrefix }) {
+  const clientImport = pathToFileURL(join(root, "src", "sdk", "client.ts")).href;
+  const sdkImport = pathToFileURL(join(root, "src", "connectors", "sdk.ts")).href;
+  return [
+    'import { pathToFileURL } from "node:url";',
+    `import { CognibrainClient } from "${clientImport}";`,
+    `import { createPlatformIntegration, mapPlatformRecord } from "${sdkImport}";`,
+    "",
+    "export const integration = createPlatformIntegration(",
+    "  {",
+    `    id: "${slug}",`,
+    `    name: "${escapeTsString(name)}",`,
+    `    kind: "${kind}",`,
+    `    direction: "${direction}",`,
+    `    auth: "${auth}",`,
+    `    envPrefix: "${envPrefix}",`,
+    `    pollEndpoint: "https://your-platform.example/api/${slug}/events",`,
+    `    writebackEndpoint: "https://your-platform.example/api/${slug}/writeback"`,
+    "  },",
+    "  {",
+    "    async poll() {",
+    `      const baseUrl = process.env.${envPrefix}_BASE_URL;`,
+    `      const token = process.env.${envPrefix}_TOKEN;`,
+    "      if (!baseUrl) {",
+    `        return [{ id: "example-1", title: "${escapeTsString(name)} decision", body: "Map your platform record fields here.", url: "https://example.invalid/${slug}/example-1" }];`,
+    "      }",
+    "      const headers: Record<string, string> = token ? { authorization: \"Bearer \" + token } : {};",
+    "      const response = await fetch(baseUrl.replace(/\\/$/, \"\") + \"/events\", { headers });",
+    "      if (!response.ok) throw new Error(`Platform poll failed: ${response.status} ${response.statusText}`);",
+    "      const payload = await response.json() as { events?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;",
+    "      return Array.isArray(payload) ? payload : payload.events ?? [];",
+    "    },",
+    "    mapRecord(record) {",
+    `      return mapPlatformRecord(record, { platform: "${slug}" });`,
+    "    }",
+    "  }",
+    ");",
+    "",
+    "export async function syncOnce() {",
+    "  const client = new CognibrainClient({",
+    "    baseUrl: process.env.COGNIBRAIN_URL,",
+    "    apiKey: process.env.COGNIBRAIN_API_KEY",
+    "  });",
+    "  const userId = process.env.MEMORY_USER_ID ?? \"local\";",
+    "  await client.registerConnector(integration.manifest);",
+    "  const events = await integration.pollEvents({ userId });",
+    "  if (events.length) await client.syncConnector(integration.manifest.id, events, { userId });",
+    "  console.log(JSON.stringify({ connectorId: integration.manifest.id, events: events.length }, null, 2));",
+    "}",
+    "",
+    "if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {",
+    "  syncOnce().catch((error) => {",
+    "    console.error(error);",
+    "    process.exit(1);",
+    "  });",
+    "}",
+    ""
+  ].join("\n");
+}
+
+function platformEnvTemplate({ envPrefix }) {
+  return [
+    `${envPrefix}_BASE_URL=https://your-platform.example/api`,
+    `${envPrefix}_TOKEN=replace-with-a-real-token`,
+    "COGNIBRAIN_URL=http://127.0.0.1:8787",
+    "COGNIBRAIN_API_KEY=",
+    "MEMORY_USER_ID=local",
+    ""
+  ].join("\n");
+}
+
+function platformReadmeTemplate({ slug, name, kind }) {
+  return [
+    `# ${name} cognibrain platform integration`,
+    "",
+    "This scaffold maps an external platform into cognibrain through the Platform SDK.",
+    "",
+    "## Files",
+    "",
+    `- \`${slug}.integration.ts\`: poll, map, health and sync code.`,
+    `- \`${slug}.connector.json\`: connector manifest that can be registered with the local API.`,
+    "- `.env.example`: environment variable names; keep real secrets outside git.",
+    "",
+    "## Run",
+    "",
+    "```bash",
+    "cp .env.example .env",
+    "npx cognibrain start",
+    `npx cognibrain memory connector-register "$(cat ${slug}.connector.json)"`,
+    `npx tsx ${slug}.integration.ts`,
+    `npx cognibrain memory connector-health ${slug}`,
+    "```",
+    "",
+    `Kind: \`${kind}\`. Edit \`${slug}.integration.ts\` to call the real list or events endpoint and map source fields to \`externalId\`, \`content\`, \`url\`, \`author\` and metadata.`,
+    ""
+  ].join("\n");
+}
+
+function connectorKinds() {
+  return ["email", "chat", "project_management", "docs", "code", "calendar", "cloud_storage", "custom"];
+}
+
+function defaultPlatformCapabilities(direction) {
+  if (direction === "ingest") return ["ingest", "poll"];
+  if (direction === "export") return ["export", "writeback"];
+  return ["ingest", "poll", "writeback"];
+}
+
+function platformSlug(value) {
+  const slug = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!slug) {
+    console.error("Platform name must contain letters or numbers");
+    process.exit(1);
+  }
+  return slug;
+}
+
+function validateChoice(value, choices, flag) {
+  if (choices.includes(value)) return value;
+  console.error(`Invalid ${flag}: ${value}`);
+  console.error(`Allowed: ${choices.join(", ")}`);
+  process.exit(1);
+}
+
+function escapeTsString(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 function writeConnectorConfig(provider, metadata = {}) {
   const definition = connectorDefinitions()[provider];
   const settings = sanitizeConnectorSettings(definition, metadata.settings ?? {});
@@ -1565,6 +1867,25 @@ function writeTextFile(targetPath, content) {
   mkdirSync(dirname(targetPath), { recursive: true });
   writeFileSync(targetPath, normalized);
   console.log(`Wrote harness file: ${targetPath}`);
+}
+
+function writeGeneratedFile(targetPath, content) {
+  const normalized = content.endsWith("\n") ? content : `${content}\n`;
+  if (existsSync(targetPath)) {
+    const current = readFileSync(targetPath, "utf8");
+    if (current === normalized) {
+      console.log(`SDK file already current: ${targetPath}`);
+      return;
+    }
+    const sidecar = `${targetPath}.cognibrain`;
+    mkdirSync(dirname(sidecar), { recursive: true });
+    writeFileSync(sidecar, normalized);
+    console.log(`Wrote reviewable SDK sidecar: ${sidecar}`);
+    return;
+  }
+  mkdirSync(dirname(targetPath), { recursive: true });
+  writeFileSync(targetPath, normalized);
+  console.log(`Wrote SDK file: ${targetPath}`);
 }
 
 function generatedCopilotScopedInstructions() {
@@ -1951,6 +2272,10 @@ Usage:
       Inspect and maintain provider, storage, benchmark, media and MCP transport adapter configs
   cognibrain adapter add <adapter> [--dry-run] [--set key=value]
       Credential-safe adapter setup under .cognibrain/adapters/
+  cognibrain sdk list|doctor
+      Inspect available SDK scaffolds and SDK packaging readiness
+  cognibrain sdk platform <name> [--kind project_management|chat|docs|code|custom] [--out integrations/<name>] [--dry-run]
+      Scaffold a TypeScript platform integration SDK, connector manifest, env example, and README
   cognibrain skill install|status|doctor|path
       Install and inspect the Codex skill
   cognibrain memory add <text>
@@ -2004,6 +2329,14 @@ function adapterUsage(exitCode) {
   cognibrain adapter doctor [adapter] [--json]
   cognibrain adapter add <${Object.keys(adapterDefinitions()).join("|")}> [--dry-run] [--set key=value]
   cognibrain adapter remove <adapter>`);
+  process.exit(exitCode);
+}
+
+function sdkUsage(exitCode) {
+  console.log(`Usage:
+  cognibrain sdk list [--json]
+  cognibrain sdk doctor [--json]
+  cognibrain sdk platform <name> [--kind ${connectorKinds().join("|")}] [--direction ingest|export|two_way] [--auth none|api_key|oauth|token] [--out <dir>] [--dry-run]`);
   process.exit(exitCode);
 }
 

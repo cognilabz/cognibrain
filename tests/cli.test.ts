@@ -64,6 +64,30 @@ describe("cognibrain CLI", () => {
     }
   });
 
+  it("scaffolds custom platform integrations through the SDK CLI", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-sdk-platform-"));
+    try {
+      const out = join(dir, "integrations", "acme");
+      const dryRun = execFileSync(process.execPath, [cli, "--runtime-root", dir, "sdk", "platform", "acme", "--kind", "project_management", "--out", out, "--dry-run"], { cwd: dir, encoding: "utf8" });
+      expect(dryRun).toContain("would scaffold platform SDK: acme");
+      expect(existsSync(join(out, "acme.integration.ts"))).toBe(false);
+
+      const output = execFileSync(process.execPath, [cli, "--runtime-root", dir, "sdk", "platform", "acme", "--kind", "project_management", "--out", out], { cwd: dir, encoding: "utf8" });
+      const list = execFileSync(process.execPath, [cli, "--runtime-root", dir, "sdk", "list"], { cwd: dir, encoding: "utf8" });
+      const doctor = execFileSync(process.execPath, [cli, "--runtime-root", dir, "sdk", "doctor"], { cwd: dir, encoding: "utf8" });
+
+      expect(output).toContain("scaffolded platform SDK: acme");
+      expect(list).toContain("cognibrain sdk platform");
+      expect(doctor).toContain("platform SDK helpers");
+      expect(readFileSync(join(out, "acme.integration.ts"), "utf8")).toContain("createPlatformIntegration");
+      expect(readFileSync(join(out, "acme.connector.json"), "utf8")).toContain("\"kind\": \"project_management\"");
+      expect(readFileSync(join(out, ".env.example"), "utf8")).toContain("MEMORY_ACME_TOKEN");
+      expect(readFileSync(join(out, "README.md"), "utf8")).toContain("connector-register");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("adds and searches memories through the publishable bin entrypoint", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-"));
     try {

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities, type EngineeringMemoryKind } from "../src/core";
 import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
-import { connectorAuthHeaders, createConnectorManifest, createWritebackPlan, runConnectorPoll } from "../src/connectors/sdk";
+import { connectorAuthHeaders, createConnectorManifest, createPlatformIntegration, createWritebackPlan, runConnectorPoll } from "../src/connectors/sdk";
 import { MemoryService } from "../src/api/service";
 import { CognibrainClient, CognibrainError } from "../src/sdk/client";
 import { AppendOnlyLogPersistenceAdapter, CassandraCompatiblePersistenceAdapter, CassandraRemotePersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, PostgresRemotePersistenceAdapter, SQLitePersistenceAdapter, createPersistenceFromEnv, sqliteAvailable } from "../src/api/persistence";
@@ -2091,6 +2091,51 @@ describe("TypeScript memory core", () => {
         metadataMapping: {}
       })
     ).toThrow(/writeback/i);
+  });
+
+  it("packages a platform integration SDK for custom source systems", async () => {
+    const integration = createPlatformIntegration(
+      {
+        name: "Acme Tasks",
+        kind: "project_management",
+        direction: "two_way",
+        envPrefix: "MEMORY_ACME_TASKS",
+        metadataMapping: { taskId: "externalId", status: "metadata.status" }
+      },
+      {
+        poll: () => [
+          {
+            id: "TASK-1",
+            title: "Approve platform SDK",
+            body: "The self-hosted install should make private platform integration easy.",
+            url: "https://acme.example/tasks/TASK-1",
+            author: { name: "Mira" },
+            status: "approved",
+            token: "must-not-be-serialized-as-content"
+          }
+        ],
+        health: ({ config }) => ({ ok: true, tokenRef: `env:${config.tokenEnv}` })
+      }
+    );
+
+    expect(integration.manifest.id).toBe("acme-tasks");
+    expect(integration.manifest.capabilities).toEqual(expect.arrayContaining(["ingest", "poll", "writeback"]));
+    expect(integration.exampleConfig).toMatchObject({ tokenEnv: "MEMORY_ACME_TASKS_TOKEN", baseUrlEnv: "MEMORY_ACME_TASKS_BASE_URL" });
+    expect(JSON.stringify(integration.exampleConfig)).not.toContain("must-not-be-serialized");
+
+    const events = await integration.pollEvents({ userId: "sdk-user", projectId: "memory" });
+    const event = events[0];
+    if (!event) throw new Error("expected platform SDK event");
+    expect(event.content).toContain("Approve platform SDK");
+    expect(event.sourceRef?.connectorId).toBe("acme-tasks");
+    expect(event.sourceRef?.author).toBe("Mira");
+    expect(event.metadata?.connectorKind).toBe("project_management");
+    expect(event.metadata?.platform).toBe("acme-tasks");
+
+    const plan = await integration.writeback({ externalId: "TASK-1", text: "Linked memory evidence" });
+    expect(plan).toMatchObject({ connectorId: "acme-tasks", operation: "comment", dryRun: true });
+    const health = await integration.health();
+    expect(health).toMatchObject({ ok: true, connectorId: "acme-tasks", tokenRef: "env:MEMORY_ACME_TASKS_TOKEN" });
   });
 
   it("validates connector manifests, syncs connector events, retries webhooks, and ingests translated media", () => {

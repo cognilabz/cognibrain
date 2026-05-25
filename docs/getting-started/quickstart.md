@@ -10,7 +10,7 @@ npm install
 For the published package path:
 
 ```bash
-npx cognibrain setup --self-hosted
+npx cognibrain init
 ```
 
 ## First Memory
@@ -25,6 +25,7 @@ npx cognibrain setup --self-hosted
 ```bash
 ./bin/cognibrain.mjs doctor --publish
 npm run benchmark:cognicode
+npm run benchmark:arena
 ```
 
-Claim IDs: `CB-CLAIM-EVIDENCE`, `CB-CLAIM-COGNICODE`, `CB-CLAIM-PRODUCTION`.
+Claim IDs: `CB-CLAIM-EVIDENCE`, `CB-CLAIM-COGNICODE`, `CB-CLAIM-BENCHMARK-ARENA`, `CB-CLAIM-PRODUCTION`.

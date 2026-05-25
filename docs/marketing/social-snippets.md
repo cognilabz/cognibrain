@@ -19,12 +19,13 @@ Claim IDs: `CB-CLAIM-COGNICODE`, `CB-CLAIM-CONTEXT`.
 1. We built cognibrain so coding agents can remember the engineering stuff that actually matters: repo policies, corrections, failed commands, procedures, and why a memory was injected. Self-hosted first. Claim IDs: `CB-CLAIM-CONTEXT`, `CB-CLAIM-PRODUCTION`.
 2. CogniCodeBench tests a simple but painful loop: agent makes mistake, user corrects it, memory is stored, next patch should avoid the mistake. Synthetic proof, explicit boundary. Claim IDs: `CB-CLAIM-COGNICODE`, `CB-CLAIM-ABLATION`.
 3. Memory for coding agents should be inspectable. cognibrain EvidencePacks show source, scope, trust, graph path, policy decision, temporal state and exclusions. Claim ID: `CB-CLAIM-EVIDENCE`.
+4. Same benchmark, no slogan: Benchmark Arena runs Cognibrain, Mem0, Graphiti/Zep, Cognee, LangMem and GBrain on one synthetic engineering-memory scenario stream with proof levels visible. Claim ID: `CB-CLAIM-BENCHMARK-ARENA`.
 
 ## Hacker News Blurbs
 
 1. Show HN: cognibrain, a self-hosted Engineering Memory OS for coding agents. It focuses on correction carryover, patch evidence and connector telemetry rather than generic user-fact memory. Claim IDs: `CB-CLAIM-CONTEXT`, `CB-CLAIM-PATCH-EVIDENCE`.
 2. We added a synthetic benchmark called CogniCodeBench to test whether an agent avoids a corrected coding mistake on the next patch. The docs keep synthetic proof separate from real customer repo claims. Claim IDs: `CB-CLAIM-COGNICODE`, `CB-CLAIM-ABLATION`.
-3. cognibrain is local-first: API, CLI, MCP, dashboard, Docker/Kubernetes starter artifacts and GitHub/Slack/Discord verifier paths. Managed SaaS is not claimed yet. Claim IDs: `CB-CLAIM-PRODUCTION`, `CB-CLAIM-CONNECTORS`.
+3. cognibrain is local-first: API, CLI, MCP, dashboard, Docker/Kubernetes starter artifacts and GitHub/Slack/Discord/Jira/Confluence/Notion/Linear verifier paths. Managed SaaS is not claimed yet. Claim IDs: `CB-CLAIM-PRODUCTION`, `CB-CLAIM-CONNECTORS`.
 
 ## LinkedIn Post
 

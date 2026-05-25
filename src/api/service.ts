@@ -4811,11 +4811,13 @@ function connectorEventVisibility(event: MemoryExtractionEvent & { externalId?: 
 function connectorEventTags(manifest: ConnectorManifest, event: MemoryExtractionEvent & { externalId?: string }): string[] {
   const eventType = typeof event.metadata?.eventType === "string" ? event.metadata.eventType : "";
   const tags = [manifest.id, manifest.kind];
-  if (manifest.id.includes("github")) tags.push("github");
-  if (manifest.id.includes("slack")) tags.push("slack");
-  if (manifest.id.includes("discord")) tags.push("discord");
+  for (const provider of ["github", "slack", "discord", "jira", "confluence", "notion", "linear"]) {
+    if (manifest.id.includes(provider)) tags.push(provider);
+  }
   if (/pr[_-]?decision/i.test(eventType) || /\bPR\b.*\b(decision|approved|merged)\b/i.test(event.content)) tags.push("pr-decision", "connector-decision");
   if (/test[_-]?failure|actions[_-]?failure/i.test(eventType) || /\b(test|actions?)\b.*\b(failed|failure)\b/i.test(event.content)) tags.push("test-failure", "harness-action");
+  if (/issue[_-]?correction|ticket[_-]?correction|review[_-]?correction/i.test(eventType) || /\b(correction|do not|use .* instead)\b/i.test(event.content)) tags.push("engineering-correction", "connector-correction");
+  if (/architecture[_-]?decision|runbook|repo[_-]?policy/i.test(eventType) || /\b(ADR|architecture decision|runbook|repo policy)\b/i.test(event.content)) tags.push("architecture-decision", "repo-policy");
   if (connectorReviewRequired(manifest, event)) tags.push("memory-candidate", "review-required");
   return [...new Set(tags)];
 }
@@ -5083,18 +5085,18 @@ function officialConnectorManifests(): ConnectorManifest[] {
     writeback: capabilities.includes("writeback") ? { operations: connectorWritebackOperations(kind), endpoint: `connector://${id}/writeback`, method: "POST" } : undefined
   });
   const vendor = (
-    id: "official-github" | "official-slack" | "official-discord",
+    id: "official-github" | "official-slack" | "official-discord" | "official-jira" | "official-confluence" | "official-notion" | "official-linear",
     name: string,
     kind: ConnectorManifest["kind"],
     capabilities: ConnectorManifest["capabilities"],
     metadataMapping: Record<string, string>,
     defaultSourceKind: ConnectorManifest["defaultSourceKind"],
     oauthScopes: string[],
-    provider: "github" | "slack" | "discord",
+    provider: "github" | "slack" | "discord" | "jira" | "confluence" | "notion" | "linear",
     docsUrl: string,
     requiredEnv: string[]
   ): ConnectorManifest => {
-    const vendorEndpoint = { github: "vendor://github", slack: "vendor://slack", discord: "vendor://discord" }[provider];
+    const vendorEndpoint = { github: "vendor://github", slack: "vendor://slack", discord: "vendor://discord", jira: "vendor://jira", confluence: "vendor://confluence", notion: "vendor://notion", linear: "vendor://linear" }[provider];
     return {
       ...service(id, name, kind, capabilities, metadataMapping, defaultSourceKind, oauthScopes),
       list: { endpoint: `${vendorEndpoint}/list`, method: "GET" },
@@ -5112,11 +5114,15 @@ function officialConnectorManifests(): ConnectorManifest[] {
     base("calendar", "Calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", attendees: "entities.attendees", start: "temporal.eventAt" }, "human"),
     base("cloud_storage", "Cloud Storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title" }, "import"),
     vendor("official-github", "GitHub", "code", ["ingest", "export", "webhook", "poll", "writeback"], { repo: "metadata.repo", issueNumber: "externalId", pullRequest: "metadata.pullRequest", commit: "source.commit", actor: "source.author", url: "source.uri" }, "reviewed_code", ["repo:read", "issues:read", "pull_requests:read", "contents:read"], "github", "https://docs.github.com/en/rest/pulls/pulls", ["MEMORY_GITHUB_REPO", "MEMORY_GITHUB_TOKEN"]),
-    service("official-jira", "Jira", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueKey: "externalId", status: "metadata.status", assignee: "entities.assignee", sprint: "metadata.sprint", project: "metadata.project", url: "source.uri" }, "import", ["read:jira-work", "write:jira-work"]),
-    service("official-linear", "Linear", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueId: "externalId", team: "metadata.team", status: "metadata.status", assignee: "entities.assignee", label: "tags", url: "source.uri" }, "import", ["read", "write"]),
+    service("official-gitlab", "GitLab", "code", ["ingest", "export", "webhook", "poll", "writeback"], { project: "metadata.project", mergeRequest: "metadata.mergeRequest", issueIid: "externalId", pipeline: "metadata.pipeline", commit: "source.commit", actor: "source.author", url: "source.uri" }, "reviewed_code", ["read_api", "read_repository", "read_user"]),
+    service("official-azure-devops", "Azure DevOps", "code", ["ingest", "export", "webhook", "poll", "writeback"], { organization: "metadata.organization", project: "metadata.project", workItemId: "externalId", pullRequest: "metadata.pullRequest", pipeline: "metadata.pipeline", url: "source.uri" }, "reviewed_code", ["vso.code", "vso.work", "vso.build"]),
+    vendor("official-jira", "Jira", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueKey: "externalId", status: "metadata.status", assignee: "entities.assignee", sprint: "metadata.sprint", project: "metadata.project", url: "source.uri" }, "import", ["read:jira-work", "write:jira-work"], "jira", "https://developer.atlassian.com/cloud/jira/platform/rest/v3/", ["MEMORY_JIRA_BASE_URL", "MEMORY_JIRA_EMAIL", "MEMORY_JIRA_API_TOKEN", "MEMORY_JIRA_PROJECT"]),
+    vendor("official-confluence", "Confluence", "docs", ["ingest", "export", "webhook", "poll", "writeback"], { pageId: "externalId", space: "metadata.space", version: "metadata.version", title: "content.title", url: "source.uri" }, "import", ["read:confluence-content.all", "write:confluence-content"], "confluence", "https://developer.atlassian.com/cloud/confluence/rest/v2/", ["MEMORY_CONFLUENCE_BASE_URL", "MEMORY_CONFLUENCE_EMAIL", "MEMORY_CONFLUENCE_API_TOKEN", "MEMORY_CONFLUENCE_SPACE"]),
+    vendor("official-linear", "Linear", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { issueId: "externalId", team: "metadata.team", status: "metadata.status", assignee: "entities.assignee", label: "tags", url: "source.uri" }, "import", ["read", "write"], "linear", "https://developers.linear.app/docs/graphql/working-with-the-graphql-api", ["MEMORY_LINEAR_API_KEY", "MEMORY_LINEAR_TEAM_ID"]),
     vendor("official-slack", "Slack", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageTs: "externalId", threadTs: "metadata.threadId", permalink: "source.uri" }, "transcript", ["channels:history", "groups:history", "chat:write"], "slack", "https://docs.slack.dev/reference/methods/conversations.history/", ["MEMORY_SLACK_TOKEN", "MEMORY_SLACK_CHANNEL_ID"]),
     vendor("official-discord", "Discord", "chat", ["ingest", "webhook", "poll", "writeback"], { channel: "metadata.channel", sender: "source.author", messageId: "externalId", threadId: "metadata.threadId", jumpUrl: "source.uri" }, "transcript", ["messages.read", "messages.write"], "discord", "https://docs.discord.com/developers/resources/message", ["MEMORY_DISCORD_BOT_TOKEN", "MEMORY_DISCORD_CHANNEL_ID"]),
-    service("official-notion", "Notion", "docs", ["ingest", "webhook", "poll", "writeback"], { pageId: "externalId", workspace: "metadata.workspace", title: "content.title", url: "source.uri", lastEditedBy: "source.author" }, "import", ["read_content", "update_content"]),
+    service("official-microsoft-teams", "Microsoft Teams", "chat", ["ingest", "webhook", "poll", "writeback"], { team: "metadata.team", channel: "metadata.channel", sender: "source.author", messageId: "externalId", threadId: "metadata.threadId", url: "source.uri" }, "transcript", ["ChannelMessage.Read.All", "ChannelMessage.Send"]),
+    vendor("official-notion", "Notion", "docs", ["ingest", "webhook", "poll", "writeback"], { pageId: "externalId", workspace: "metadata.workspace", title: "content.title", url: "source.uri", lastEditedBy: "source.author" }, "import", ["read_content", "update_content"], "notion", "https://developers.notion.com/reference/intro", ["MEMORY_NOTION_TOKEN", "MEMORY_NOTION_DATABASE_ID"]),
     service("official-google-drive", "Google Drive", "cloud_storage", ["ingest", "poll", "media"], { fileId: "externalId", mimeType: "mimeType", uri: "source.uri", name: "content.title", owner: "source.author" }, "import", ["drive.readonly"]),
     service("official-gmail", "Gmail", "email", ["ingest", "export", "webhook", "poll", "writeback"], { messageId: "externalId", threadId: "metadata.threadId", subject: "content.title", from: "source.author", labelIds: "tags" }, "human", ["gmail.readonly", "gmail.modify"]),
     service("official-google-calendar", "Google Calendar", "calendar", ["ingest", "poll", "writeback"], { eventId: "externalId", calendarId: "metadata.calendarId", attendees: "entities.attendees", start: "temporal.eventAt", url: "source.uri" }, "human", ["calendar.readonly", "calendar.events"])

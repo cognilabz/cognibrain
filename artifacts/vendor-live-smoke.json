@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T15:19:40.096Z",
+  "generatedAt": "2026-05-25T16:24:12.412Z",
   "mode": "credential_smoke",
   "liveRequested": false,
   "writebackEnabled": false,
@@ -30,6 +30,50 @@
     {
       "provider": "discord",
       "connectorId": "official-discord",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "jira",
+      "connectorId": "official-jira",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "confluence",
+      "connectorId": "official-confluence",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "notion",
+      "connectorId": "official-notion",
+      "configured": false,
+      "skipped": true,
+      "checks": {
+        "credentialsPresent": false,
+        "liveSmokeOptedIn": false,
+        "noNetworkWithoutOptIn": true
+      }
+    },
+    {
+      "provider": "linear",
+      "connectorId": "official-linear",
       "configured": false,
       "skipped": true,
       "checks": {

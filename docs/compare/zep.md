@@ -24,6 +24,12 @@ Do not claim cognibrain beats Zep or Graphiti on their own benchmark domains wit
 
 Claim ID: `CB-CLAIM-MARKET`.
 
+## Same-Run Arena
+
+Benchmark Arena runs a Graphiti/Zep API-shape adapter on the same synthetic engineering-memory scenario stream as Cognibrain. Current local result: Cognibrain `same-run-full` 97.22%, Graphiti/Zep `same-run-api-shape` 66.67%. The gap is the coding-action layer: pre-tool guard plus Patch Evidence Trail, not temporal graph recall in the abstract.
+
+Claim ID: `CB-CLAIM-BENCHMARK-ARENA`.
+
 ## Honest Limitations
 
 cognibrain is not marketed as a general temporal knowledge graph platform. Its graph and temporal features serve coding-agent memory.

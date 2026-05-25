@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-25T16:03:08.612Z",
+  "benchmark": "BenchmarkArena",
+  "scenarioCount": 30,
+  "adapterContract": {
+    "sameScenarioStream": true,
+    "deterministicLocalRun": true,
+    "noVendorCredentialsRequired": true
+  },
+  "leaderboard": [
+    { "system": "Cognibrain", "score": 0.9722, "proofLevel": "same-run-full", "repeatedMistakeRate": 0, "gaps": 0 },
+    { "system": "Graphiti/Zep", "score": 0.6667, "proofLevel": "same-run-api-shape", "repeatedMistakeRate": 0.8333, "gaps": 2 },
+    { "system": "GBrain", "score": 0.6667, "proofLevel": "same-run-api-shape", "repeatedMistakeRate": 0.8333, "gaps": 2 },
+    { "system": "Cognee", "score": 0.4445, "proofLevel": "same-run-api-shape", "repeatedMistakeRate": 1, "gaps": 2 },
+    { "system": "LangMem", "score": 0.2222, "proofLevel": "same-run-api-shape", "repeatedMistakeRate": 1, "gaps": 2 },
+    { "system": "Mem0", "score": 0.1111, "proofLevel": "same-run-api-shape", "repeatedMistakeRate": 1, "gaps": 3 }
+  ],
+  "boundary": "Competitor rows are local API-shape compatibility adapters, not vendor-hosted certifications."
+}

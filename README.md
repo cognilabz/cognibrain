@@ -20,7 +20,7 @@
 
 cognibrain is a local-first TypeScript Engineering Memory OS for coding agents. It captures corrections, repo policies, architecture decisions, review feedback and tool outcomes as evidence-grade memory, then injects the right context before the next code change. It is still an Inspectable Agent Memory OS at the platform layer: every memory can be routed, governed, cited and audited before injection. It remembers across agent harnesses, proves every memory with source and retrieval evidence, explains why context was selected, respects scope and consent boundaries, and keeps memory valid over time through graph, temporal, contradiction and dream-maintenance surfaces.
 
-The project includes the memory engine, HTTP API, CLI, official connector manifests, built-in GitHub/Slack/Discord vendor drivers, provider adapters, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
+The project includes the memory engine, HTTP API, CLI, official connector manifests, built-in GitHub/Slack/Discord/Jira/Confluence/Notion/Linear vendor drivers, provider adapters, MCP connector, harness hook, operator dashboard, benchmark suite, and a self-maintenance loop called `dream`.
 
 **Claim:** coding-agent memory you can prove, route, govern, benchmark, and reuse across every agent. Claim IDs: `CB-CLAIM-CONTEXT`, `CB-CLAIM-EVIDENCE`, `CB-CLAIM-PATCH-EVIDENCE`.
 
@@ -48,11 +48,14 @@ Replayable demo artifacts for the same loop:
 npm run demo:why-used
 npm run demo:cognicodebench
 npm run demo:github-review
+npm run demo:first-win
 ```
 
-The demos generate `artifacts/demos/why-used.json`, `artifacts/demos/cognicodebench-demo-replay.json` and `artifacts/demos/github-review.json`, which are checked by `npm run audit:plan1_4`.
+The demos generate `artifacts/demos/why-used.json`, `artifacts/demos/cognicodebench-demo-replay.json`, `artifacts/demos/github-review.json` and `artifacts/demos/first-win.json`, which are checked by `npm run audit:plan1_5`.
 
 CogniCodeBench is the flagship benchmark for this loop: mistake -> correction -> memory -> next patch -> correct action. The checked-in artifact is synthetic proof, not a claim about arbitrary customer repositories. See [`docs/benchmarks/cognicodebench.md`](docs/benchmarks/cognicodebench.md), [`docs/benchmarks/results.md`](docs/benchmarks/results.md), and [`docs/claims.md`](docs/claims.md).
+
+Benchmark Arena is the same-benchmark comparison runner: one synthetic engineering-memory scenario stream across Cognibrain, Mem0, Graphiti/Zep, Cognee, LangMem and GBrain with explicit proof levels. Run `npm run benchmark:arena`; read [`docs/benchmarks/arena.md`](docs/benchmarks/arena.md), [`docs/benchmarks/proof-levels.md`](docs/benchmarks/proof-levels.md), and [`docs/market/same-benchmark.md`](docs/market/same-benchmark.md). Competitor rows are local API-shape adapters unless an imported artifact says otherwise.
 
 ![cognibrain desktop dashboard](docs/assets/dashboard-desktop.png)
 
@@ -107,9 +110,9 @@ The short version: **cognibrain remembers across agents, proves every memory, ex
 
 ## Is It Production Ready?
 
-For an open-source launch, yes: cognibrain is ready to present as a **self-hosted production candidate** when the verification gates pass in the target environment. That means the repo includes the core engine, Engineering Memory object model, API, CLI, MCP surface, dashboard, official connector manifests, real external GitHub/Slack/Discord vendor drivers, durable storage adapters, Docker/Kubernetes starter artifacts, CogniCodeBench and general benchmark gates, MIT license, contribution guide, security policy, and a status matrix that ties claims to code.
+For an open-source launch, yes: cognibrain is ready to present as a **self-hosted production candidate** when the verification gates pass in the target environment. That means the repo includes the core engine, Engineering Memory object model, API, CLI, MCP surface, dashboard, official connector manifests, real external GitHub/Slack/Discord/Jira/Confluence/Notion/Linear vendor drivers, guided install state, durable storage adapters, Docker/Kubernetes starter artifacts, CogniCodeBench and Benchmark Arena gates, MIT license, contribution guide, security policy, and a status matrix that ties claims to code.
 
-The boundary is explicit. Local development can run with JSON storage and no keys. Team or networked use must set `MEMORY_REQUIRE_AUTH=true`, configure `MEMORY_API_KEYS`, use a durable backend such as `postgres-remote` or SQLite for a single-node local team install, put TLS in front of the API, configure vendor credentials for source integrations, and run the publish checks. Managed SaaS readiness, vendor certification beyond the built-in GitHub/Slack/Discord drivers, and competitor benchmark leadership are deployment-specific claims, not automatic README claims.
+The boundary is explicit. Local development can run with JSON storage and no keys. Team or networked use must set `MEMORY_REQUIRE_AUTH=true`, configure `MEMORY_API_KEYS`, use a durable backend such as `postgres-remote` or SQLite for a single-node local team install, put TLS in front of the API, configure vendor credentials for source integrations, and run the publish checks. Managed SaaS readiness, tenant-specific vendor certification, and vendor-hosted competitor benchmark leadership are deployment-specific claims, not automatic README claims.
 
 Production gates:
 
@@ -118,10 +121,12 @@ npm run verify:nextgen
 npm run verify:status
 npm run audit:plan1_3
 npm run benchmark:cognicode
+npm run benchmark:arena
 npm run verify:postgres
 npm run verify:connectors
 npm run verify:vendor-connectors
 ./bin/cognibrain.mjs doctor --publish
+npm run audit:plan1_5
 npm pack --dry-run
 ```
 
@@ -157,6 +162,14 @@ One command from this checkout:
 
 ```bash
 ./bootstrap.sh --self-hosted
+```
+
+Guided install:
+
+```bash
+npx cognibrain init
+./bin/cognibrain.mjs connector add github
+./bin/cognibrain.mjs doctor --fix
 ```
 
 Five-minute Memory OS demo:
@@ -371,7 +384,7 @@ The `dream` cycle is the self-maintenance loop for the memory store:
 
 Pinned memories are never faded or archived.
 
-The current runtime also supports configurable and scoped learned retrieval profiles, injection-feedback learning from accepted/rejected context packs, adaptive dream-policy previews, generated observations with citation provenance, behavioral prediction and prefetch reports, deterministic answer-generation/multi-hop/temporal/pattern benchmark suites, scoped retention rules with search/dream enforcement, encrypted-memory key id/version metadata, key-provider reporting, encrypted backup recovery verification, transport-security readiness checks, managed import/export deployment bundles, differentially private aggregate insights with k-anonymity suppression, validated marketplace install plans, TypeScript and Python client surfaces plus OpenAPI for code generation, packaged domain modules, JSON/JSONL/SQLite/Postgres persistence adapters, `hybrid`/`rrf`/`graph`/`path` retrieval modes, deterministic or provider-backed query expansion, behavioural retrieval scoring, contradiction-aware context selection, graph path/activation/export reasoning, JSON-command intelligence adapters, deterministic fallback reranking, verifier/summarizer/classifier/extractor/translator providers, official connector manifests, built-in GitHub/Slack/Discord vendor API drivers, connector sync records, webhook delivery/retry inspection, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), multi-tenant brains/sources with explicit shared-brain federation, agent subscriptions, shared-memory review/revoke workflows, persona defaults, consent mutation, audit history and revert, offline operation queues, explicit identity links, privacy consent flags, secret redaction/encryption, canonical entity records with merge/split suggestions, typed relations, staged add-only extraction with media/language envelopes, translated media ingestion, enrichment candidates, hour/day/week/month temporal timelines, persisted timeline summaries, multilingual contradiction checks, behavioral-pattern review, feedback-based trust/importance updates, domain evaluations, local metrics, lifecycle preview, and export/delete APIs.
+The current runtime also supports configurable and scoped learned retrieval profiles, injection-feedback learning from accepted/rejected context packs, adaptive dream-policy previews, generated observations with citation provenance, behavioral prediction and prefetch reports, deterministic answer-generation/multi-hop/temporal/pattern benchmark suites, scoped retention rules with search/dream enforcement, encrypted-memory key id/version metadata, key-provider reporting, encrypted backup recovery verification, transport-security readiness checks, managed import/export deployment bundles, differentially private aggregate insights with k-anonymity suppression, validated marketplace install plans, TypeScript and Python client surfaces plus OpenAPI for code generation, packaged domain modules, JSON/JSONL/SQLite/Postgres persistence adapters, `hybrid`/`rrf`/`graph`/`path` retrieval modes, deterministic or provider-backed query expansion, behavioural retrieval scoring, contradiction-aware context selection, graph path/activation/export reasoning, JSON-command intelligence adapters, deterministic fallback reranking, verifier/summarizer/classifier/extractor/translator providers, official connector manifests, built-in GitHub/Slack/Discord/Jira/Confluence/Notion/Linear vendor API drivers, connector sync records, webhook delivery/retry inspection, scoped memory (`sessionId`, `appId`, `orgId`, `projectId`), multi-tenant brains/sources with explicit shared-brain federation, agent subscriptions, shared-memory review/revoke workflows, persona defaults, consent mutation, audit history and revert, offline operation queues, explicit identity links, privacy consent flags, secret redaction/encryption, canonical entity records with merge/split suggestions, typed relations, staged add-only extraction with media/language envelopes, translated media ingestion, enrichment candidates, hour/day/week/month temporal timelines, persisted timeline summaries, multilingual contradiction checks, behavioral-pattern review, feedback-based trust/importance updates, domain evaluations, local metrics, lifecycle preview, and export/delete APIs.
 
 For coding agents, the runtime also includes first-class Engineering Memory types (`repo_policy`, `architecture_decision`, `review_correction`, `tool_outcome`, `procedure`, `forbidden_action`, `migration_note`, `test_strategy`, `dependency_rule`, `generated_file_rule`), repo/branch/package/file scope, coding context packs, action guards, patch evidence trails, and CogniCodeBench.
 
@@ -496,12 +509,16 @@ docker/            Container and compose files
 - [MCP Integration](docs/integrations/mcp.md)
 - [Codex Integration](docs/integrations/codex.md)
 - [GitHub Connector](docs/integrations/github.md)
+- [Jira, Confluence, Notion And Linear](docs/integrations/jira-confluence-notion-linear.md)
 - [Memory Lifecycle](docs/lifecycle.md)
 - [Connectors](docs/connectors.md)
 - [Connector Maturity Matrix](docs/connectors.md#connector-maturity-matrix)
 - [Benchmarking](docs/benchmarking.md)
 - [CogniCodeBench](docs/benchmarks/cognicodebench.md)
 - [CogniCodeBench Results](docs/benchmarks/results.md)
+- [Benchmark Arena](docs/benchmarks/arena.md)
+- [Benchmark Proof Levels](docs/benchmarks/proof-levels.md)
+- [Benchmark Landscape](docs/benchmarks/landscape.md)
 - [Open Benchmark Leaderboard](docs/leaderboard.md)
 - [Community And Adoption](docs/community.md)
 - [Partner Integration Playbook](docs/partners.md)
@@ -511,6 +528,7 @@ docker/            Container and compose files
 - [Privacy And Retention Tutorial](docs/tutorials/privacy-retention.md)
 - [Domain Module Tutorial](docs/tutorials/domain-module.md)
 - [Market Comparison](docs/market-comparison.md)
+- [Same Benchmark, No Slogan](docs/market/same-benchmark.md)
 - [Compare: Mem0](docs/compare/mem0.md)
 - [Compare: GBrain](docs/compare/gbrain.md)
 - [Compare: Hindsight](docs/compare/hindsight.md)

@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { MemoryService } from "../api/service";
 
-type Provider = "github" | "slack" | "discord";
+type Provider = "github" | "slack" | "discord" | "jira" | "confluence" | "notion" | "linear";
 
 interface ProviderSmoke {
   provider: Provider;
@@ -26,7 +26,11 @@ interface VendorCredentialSmokeReport {
 const providers: Array<{ provider: Provider; connectorId: string; requiredEnv: string[] }> = [
   { provider: "github", connectorId: "official-github", requiredEnv: ["MEMORY_GITHUB_REPO", "MEMORY_GITHUB_TOKEN"] },
   { provider: "slack", connectorId: "official-slack", requiredEnv: ["MEMORY_SLACK_TOKEN", "MEMORY_SLACK_CHANNEL_ID"] },
-  { provider: "discord", connectorId: "official-discord", requiredEnv: ["MEMORY_DISCORD_BOT_TOKEN", "MEMORY_DISCORD_CHANNEL_ID"] }
+  { provider: "discord", connectorId: "official-discord", requiredEnv: ["MEMORY_DISCORD_BOT_TOKEN", "MEMORY_DISCORD_CHANNEL_ID"] },
+  { provider: "jira", connectorId: "official-jira", requiredEnv: ["MEMORY_JIRA_BASE_URL", "MEMORY_JIRA_EMAIL", "MEMORY_JIRA_API_TOKEN", "MEMORY_JIRA_PROJECT"] },
+  { provider: "confluence", connectorId: "official-confluence", requiredEnv: ["MEMORY_CONFLUENCE_BASE_URL", "MEMORY_CONFLUENCE_EMAIL", "MEMORY_CONFLUENCE_API_TOKEN", "MEMORY_CONFLUENCE_SPACE"] },
+  { provider: "notion", connectorId: "official-notion", requiredEnv: ["MEMORY_NOTION_TOKEN", "MEMORY_NOTION_DATABASE_ID"] },
+  { provider: "linear", connectorId: "official-linear", requiredEnv: ["MEMORY_LINEAR_API_KEY", "MEMORY_LINEAR_TEAM_ID"] }
 ];
 
 export async function runVendorCredentialSmoke(options: { out?: string; live?: boolean; writeback?: boolean } = {}): Promise<VendorCredentialSmokeReport> {
@@ -61,7 +65,7 @@ export async function runVendorCredentialSmoke(options: { out?: string; live?: b
       });
       const beforeWriteback = service.listConnectorSyncRecords().length;
       const writeback = await service.writebackConnector(item.connectorId, {
-        operation: item.provider === "github" ? "comment" : "summary",
+        operation: ["github", "jira", "confluence", "notion", "linear"].includes(item.provider) ? "comment" : "summary",
         content: "cognibrain self-hosted connector smoke: dry-run memory-linked writeback.",
         target: liveTarget(item.provider),
         dryRun: !writebackEnabled
@@ -77,7 +81,7 @@ export async function runVendorCredentialSmoke(options: { out?: string; live?: b
           listApplied: listed.status === "applied",
           pollApplied: polled.status === "applied",
           writebackSafe: writebackEnabled ? writeback.status === "applied" : writeback.status === "queued" && records.length === beforeWriteback,
-          authorizationRedacted: !/Bearer\s+[A-Za-z0-9._-]+|Bot\s+[A-Za-z0-9._-]+/i.test(serialized),
+          authorizationRedacted: !/Bearer\s+[A-Za-z0-9._-]+|Bot\s+[A-Za-z0-9._-]+|Basic\s+[A-Za-z0-9+/=]+/i.test(serialized),
           noPlainTokenRetained: item.requiredEnv.every((name) => {
             const value = process.env[name];
             return !value || !serialized.includes(value);
@@ -127,7 +131,11 @@ function liveTarget(provider: Provider): Record<string, unknown> {
   if (provider === "slack") {
     return { channel: process.env.MEMORY_SLACK_CHANNEL_ID, threadId: process.env.MEMORY_SLACK_THREAD_ID };
   }
-  return { channel: process.env.MEMORY_DISCORD_CHANNEL_ID };
+  if (provider === "discord") return { channel: process.env.MEMORY_DISCORD_CHANNEL_ID };
+  if (provider === "jira") return { issueKey: process.env.MEMORY_JIRA_ISSUE_KEY ?? process.env.MEMORY_JIRA_ISSUE ?? "DRY-RUN" };
+  if (provider === "confluence") return { pageId: process.env.MEMORY_CONFLUENCE_PAGE_ID ?? "DRY-RUN" };
+  if (provider === "notion") return { blockId: process.env.MEMORY_NOTION_BLOCK_ID ?? process.env.MEMORY_NOTION_PAGE_ID ?? "DRY-RUN" };
+  return { issueId: process.env.MEMORY_LINEAR_ISSUE_ID ?? "DRY-RUN" };
 }
 
 function cliOptions(argv: string[]): { out?: string; live?: boolean; writeback?: boolean } {

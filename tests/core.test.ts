@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import { createHmac } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -2098,9 +2099,12 @@ describe("TypeScript memory core", () => {
     expect(official.map((manifest) => manifest.kind)).toEqual(expect.arrayContaining(["email", "chat", "project_management", "docs", "code", "calendar", "cloud_storage"]));
     expect(official.map((manifest) => manifest.id)).toEqual(expect.arrayContaining([
       "official-github",
+      "official-gitlab",
+      "official-azure-devops",
       "official-jira",
       "official-linear",
       "official-slack",
+      "official-microsoft-teams",
       "official-notion",
       "official-google-drive",
       "official-gmail",
@@ -2831,5 +2835,43 @@ describe("TypeScript memory core", () => {
     expect(trail.proceduresRecalled.some((item) => item.command === "npm test")).toBe(true);
     expect(trail.forbiddenActionsAvoided.some((item) => item.forbiddenAction === "pnpm test")).toBe(true);
     expect(trail.toolOutcomes.some((item) => item.command === "npm test" && item.exitCode === 0)).toBe(true);
+  });
+
+  it("seeds expanded first-class vendor connectors", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    const vendors = ["official-github", "official-slack", "official-discord", "official-jira", "official-confluence", "official-notion", "official-linear"];
+    const health = service.connectorHealth().filter((item) => vendors.includes(item.connectorId));
+    expect(health.map((item) => item.connectorId)).toEqual(expect.arrayContaining(vendors));
+    expect(health.every((item) => item.supports.externalVendor)).toBe(true);
+    expect(health.find((item) => item.connectorId === "official-jira")?.externalVendor?.missingEnv).toContain("MEMORY_JIRA_PROJECT");
+    expect(health.find((item) => item.connectorId === "official-confluence")?.kind).toBe("docs");
+    expect(health.find((item) => item.connectorId === "official-linear")?.kind).toBe("project_management");
+  });
+
+  it("writes guided init and connector setup state without storing credential values", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-test-"));
+    const cli = join(process.cwd(), "bin", "cognibrain.mjs");
+    const env = {
+      ...process.env,
+      MEMORY_GITHUB_REPO: "cognilabz/cognibrain",
+      MEMORY_GITHUB_TOKEN: "test-token-should-not-be-written"
+    };
+    try {
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "init", "--profile", "solo-dev", "--yes", "--dry-run", "--no-start", "--no-doctor", "--no-skill", "--no-demo"], { cwd: dir, env, encoding: "utf8" });
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "add", "github"], { cwd: dir, env, encoding: "utf8" });
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "doctor", "--fix", "--no-start", "--no-skill"], { cwd: dir, env, encoding: "utf8" });
+      const setupPath = join(dir, ".cognibrain", "setup-state.json");
+      const connectorPath = join(dir, ".cognibrain", "connectors", "github.json");
+      expect(existsSync(setupPath)).toBe(true);
+      expect(existsSync(connectorPath)).toBe(true);
+      const setup = JSON.parse(readFileSync(setupPath, "utf8"));
+      const connector = JSON.parse(readFileSync(connectorPath, "utf8"));
+      expect(setup.profile).toBe("solo-dev");
+      expect(connector.configured).toBe(true);
+      expect(connector.requiredEnv.every((item: { valueRef?: string }) => item.valueRef?.startsWith("env:"))).toBe(true);
+      expect(JSON.stringify({ setup, connector })).not.toContain("test-token-should-not-be-written");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

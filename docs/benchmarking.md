@@ -1,6 +1,6 @@
 # Benchmarking
 
-cognibrain has seven benchmark layers:
+cognibrain has eight benchmark layers:
 
 1. `npm run eval` runs the local transparent proof suite.
 2. `npm run benchmark:locomo` runs against the official LoCoMo dataset from `snap-research/locomo`.
@@ -8,7 +8,8 @@ cognibrain has seven benchmark layers:
 4. `npm run benchmark:beam` runs against BEAM splits from Hugging Face.
 5. `npm run benchmark:nextgen` runs deterministic Agent Memory OS suites, including the `usp-evidence-pack` why-used benchmark.
 6. `npm run benchmark:cognicode` runs CogniCodeBench, the engineering-memory benchmark for coding agents.
-7. `npm run benchmark:market` combines certified artifacts into one machine-readable gate.
+7. `npm run benchmark:arena` runs the same engineering-memory scenario stream across Cognibrain and API-shaped competitor adapters.
+8. `npm run benchmark:market` combines certified artifacts into one machine-readable gate.
 
 ## Official LoCoMo Runner
 
@@ -68,6 +69,20 @@ Outputs:
 The pass gate requires at least 100 scenarios, correction carryover >= 0.90, repeated mistake rate <= 0.05, procedure recall >= 0.90, wrong-memory suppression >= 0.90, and a full score above `no_memory`, `raw_chat_history`, `keyword_only`, `semantic_only`, `vector_only`, `graph_only`, `temporal_only`, `procedure_only`, `cognibrain_without_temporal`, and `cognibrain_without_corrections`.
 
 Methodology and scenario schema: [`docs/benchmarks/cognicodebench.md`](benchmarks/cognicodebench.md).
+
+## Benchmark Arena
+
+`npm run benchmark:arena` compares Cognibrain, Mem0, Graphiti/Zep, Cognee, LangMem and GBrain on the same synthetic engineering-memory scenario stream.
+
+It reports correction carryover, repeated-mistake rate, procedure recall, patch correctness, evidence completeness, wrong-memory suppression, latency and capability gaps. Cognibrain runs as `same-run-full`; competitor rows currently run as `same-run-api-shape` local compatibility adapters unless an imported vendor-hosted artifact is explicitly provided in the future.
+
+Artifacts and docs:
+
+- `artifacts/arena/run.json`
+- `public/benchmark-arena/results.json`
+- [`benchmarks/arena.md`](benchmarks/arena.md)
+- [`benchmarks/proof-levels.md`](benchmarks/proof-levels.md)
+- [`market/same-benchmark.md`](market/same-benchmark.md)
 
 ## Official LongMemEval-S Runner
 

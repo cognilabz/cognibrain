@@ -24,6 +24,12 @@ cognibrain does not claim better graph/vector retrieval in the abstract. The cla
 
 Claim IDs: `CB-CLAIM-COGNICODE`, `CB-CLAIM-MARKET`.
 
+## Same-Run Arena
+
+Benchmark Arena runs a Cognee API-shape adapter on the same synthetic engineering-memory scenario stream as Cognibrain. Current local result: Cognibrain `same-run-full` 97.22%, Cognee `same-run-api-shape` 44.45%. The measured advantage is not "better knowledge graph"; it is correction-to-next-patch behavior with evidence.
+
+Claim ID: `CB-CLAIM-BENCHMARK-ARENA`.
+
 ## Honest Limitations
 
 If the job is broad knowledge ingestion without coding-agent behavior, Cognee-style tools may be a better category fit.

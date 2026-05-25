@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T15:19:25.790Z",
+  "generatedAt": "2026-05-25T16:24:16.429Z",
   "summary": {
-    "total": 12,
-    "passed": 12,
+    "total": 15,
+    "passed": 15,
     "failed": 0
   },
   "steps": [
@@ -12,21 +12,21 @@
       "command": "npm run test",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:08.488Z",
-      "finishedAt": "2026-05-25T15:19:14.405Z",
-      "durationMs": 5917,
-      "stdoutTail": "> cognibrain@0.1.0 test\n> vitest run\n RUN  v4.1.7 /Users/michaelhubeny/homespace/memory\n Test Files  5 passed (5)\n      Tests  108 passed (108)\n   Start at  17:19:08\n   Duration  5.48s (transform 1.57s, setup 0ms, import 1.94s, tests 10.56s, environment 0ms)",
-      "stderrTail": "(node:75871) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)"
+      "startedAt": "2026-05-25T16:23:38.966Z",
+      "finishedAt": "2026-05-25T16:23:53.217Z",
+      "durationMs": 14251,
+      "stdoutTail": "> cognibrain@0.1.0 test\n> vitest run\n RUN  v4.1.7 /Users/michaelhubeny/homespace/memory\n Test Files  5 passed (5)\n      Tests  110 passed (110)\n   Start at  18:23:39\n   Duration  13.55s (transform 4.54s, setup 0ms, import 6.04s, tests 26.02s, environment 3ms)",
+      "stderrTail": "(node:93787) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)"
     },
     {
       "name": "dashboard build",
       "command": "npm run build",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:14.408Z",
-      "finishedAt": "2026-05-25T15:19:16.843Z",
-      "durationMs": 2435,
-      "stdoutTail": "> cognibrain@0.1.0 build\n> tsc && vite build\nvite v8.0.14 building client environment for production...\n\u001b[2K\rtransforming...✓ 1581 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/dashboard/index.html                            0.46 kB │ gzip:  0.29 kB\ndist/dashboard/assets/cognilabz-logo-DwUPcd21.png   17.71 kB\ndist/dashboard/assets/index-ClWWFWiK.css            16.77 kB │ gzip:  3.89 kB\ndist/dashboard/assets/index-DiiskKlF.js            255.87 kB │ gzip: 79.20 kB\n✓ built in 101ms",
+      "startedAt": "2026-05-25T16:23:53.221Z",
+      "finishedAt": "2026-05-25T16:23:58.796Z",
+      "durationMs": 5575,
+      "stdoutTail": "> cognibrain@0.1.0 build\n> tsc && vite build\nvite v8.0.14 building client environment for production...\n\u001b[2K\rtransforming...✓ 1581 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/dashboard/index.html                            0.46 kB │ gzip:  0.29 kB\ndist/dashboard/assets/cognilabz-logo-DwUPcd21.png   17.71 kB\ndist/dashboard/assets/index-ClWWFWiK.css            16.77 kB │ gzip:  3.89 kB\ndist/dashboard/assets/index-BWdUqnUK.js            257.16 kB │ gzip: 79.52 kB\n✓ built in 361ms",
       "stderrTail": ""
     },
     {
@@ -34,9 +34,9 @@
       "command": "npm run verify:status",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:16.843Z",
-      "finishedAt": "2026-05-25T15:19:16.956Z",
-      "durationMs": 113,
+      "startedAt": "2026-05-25T16:23:58.797Z",
+      "finishedAt": "2026-05-25T16:23:59.536Z",
+      "durationMs": 739,
       "stdoutTail": "> cognibrain@0.1.0 verify:status\n> node scripts/verify-status.mjs\nok status matrix exists and has plan1_3 production columns\nok claim-to-test mapping is present\nok marketing claims are bounded by evidence\nok plan1_3 status reflects current proof level\nok verification scripts are wired\nstatus verification passed: 5/5 checks",
       "stderrTail": ""
     },
@@ -45,10 +45,32 @@
       "command": "npm run benchmark:cognicode",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:16.956Z",
-      "finishedAt": "2026-05-25T15:19:17.552Z",
-      "durationMs": 596,
-      "stdoutTail": "        \"staleSuppressed\": true\n      },\n      \"evidence\": {\n        \"correctionMemoryId\": \"3cb4e3a1-b813-4e12-a20c-0091ba2009f3\",\n        \"wrongActionMemoryId\": \"e1ec88b3-bb46-489d-9b0e-c2426e51abcd\",\n        \"codingContextPackId\": \"code_ctx_1itj2lu\",\n        \"patchEvidenceTrailId\": \"patch_ev_1llj8kn\",\n        \"guardSeverity\": \"block\",\n        \"referencedKinds\": [\n          \"dependency_rule\"\n        ]\n      },\n      \"errors\": []\n    },\n    {\n      \"id\": \"cognicode-100\",\n      \"passed\": true,\n      \"score\": 1,\n      \"checks\": {\n        \"correctionRecalled\": true,\n        \"procedureRecalled\": true,\n        \"wrongActionSuppressed\": true,\n        \"patchCorrect\": true,\n        \"evidenceComplete\": true,\n        \"staleSuppressed\": true\n      },\n      \"evidence\": {\n        \"correctionMemoryId\": \"ea65c7fd-edbd-45fa-81af-ea70478483b5\",\n        \"wrongActionMemoryId\": \"3847bf23-c71d-4559-8947-1880cce9af38\",\n        \"codingContextPackId\": \"code_ctx_1h8sred\",\n        \"patchEvidenceTrailId\": \"patch_ev_164ff7e\",\n        \"guardSeverity\": \"block\",\n        \"referencedKinds\": [\n          \"generated_file_rule\"\n        ]\n      },\n      \"errors\": []\n    }\n  ]\n}",
+      "startedAt": "2026-05-25T16:23:59.541Z",
+      "finishedAt": "2026-05-25T16:24:01.260Z",
+      "durationMs": 1719,
+      "stdoutTail": "        \"staleSuppressed\": true\n      },\n      \"evidence\": {\n        \"correctionMemoryId\": \"216e197a-64af-43bc-9442-4b95ed864e5c\",\n        \"wrongActionMemoryId\": \"483cbee5-d5e3-4ed9-bb38-0014e5ee495a\",\n        \"codingContextPackId\": \"code_ctx_1gda3ym\",\n        \"patchEvidenceTrailId\": \"patch_ev_1cuptx7\",\n        \"guardSeverity\": \"block\",\n        \"referencedKinds\": [\n          \"dependency_rule\"\n        ]\n      },\n      \"errors\": []\n    },\n    {\n      \"id\": \"cognicode-100\",\n      \"passed\": true,\n      \"score\": 1,\n      \"checks\": {\n        \"correctionRecalled\": true,\n        \"procedureRecalled\": true,\n        \"wrongActionSuppressed\": true,\n        \"patchCorrect\": true,\n        \"evidenceComplete\": true,\n        \"staleSuppressed\": true\n      },\n      \"evidence\": {\n        \"correctionMemoryId\": \"8743c43c-047f-4f18-b2cb-4ec4729c60cc\",\n        \"wrongActionMemoryId\": \"f1f114f2-b43a-47ad-ba20-3659962fb4d5\",\n        \"codingContextPackId\": \"code_ctx_12y3ngb\",\n        \"patchEvidenceTrailId\": \"patch_ev_kt4t5a\",\n        \"guardSeverity\": \"block\",\n        \"referencedKinds\": [\n          \"generated_file_rule\"\n        ]\n      },\n      \"errors\": []\n    }\n  ]\n}",
+      "stderrTail": ""
+    },
+    {
+      "name": "Benchmark Arena",
+      "command": "npm run benchmark:arena",
+      "status": 0,
+      "ok": true,
+      "startedAt": "2026-05-25T16:24:01.262Z",
+      "finishedAt": "2026-05-25T16:24:01.698Z",
+      "durationMs": 436,
+      "stdoutTail": "    },\n    {\n      \"system\": \"Graphiti/Zep\",\n      \"score\": 0.6667,\n      \"proofLevel\": \"same-run-api-shape\",\n      \"repeatedMistakeRate\": 0.8333,\n      \"gaps\": 2\n    },\n    {\n      \"system\": \"GBrain\",\n      \"score\": 0.6667,\n      \"proofLevel\": \"same-run-api-shape\",\n      \"repeatedMistakeRate\": 0.8333,\n      \"gaps\": 2\n    },\n    {\n      \"system\": \"Cognee\",\n      \"score\": 0.4445,\n      \"proofLevel\": \"same-run-api-shape\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 2\n    },\n    {\n      \"system\": \"LangMem\",\n      \"score\": 0.2222,\n      \"proofLevel\": \"same-run-api-shape\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 2\n    },\n    {\n      \"system\": \"Mem0\",\n      \"score\": 0.1111,\n      \"proofLevel\": \"same-run-api-shape\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 3\n    }\n  ],\n  \"winner\": \"Cognibrain\",\n  \"passed\": true\n}",
+      "stderrTail": ""
+    },
+    {
+      "name": "first-win demo",
+      "command": "npm run demo:plan1_5",
+      "status": 0,
+      "ok": true,
+      "startedAt": "2026-05-25T16:24:01.698Z",
+      "finishedAt": "2026-05-25T16:24:03.620Z",
+      "durationMs": 1922,
+      "stdoutTail": "  \"generatedAt\": \"2026-05-25T16:24:03.598Z\",\n  \"mode\": \"guided_self_hosted\",\n  \"passed\": true,\n  \"install\": {\n    \"profile\": \"solo-dev\",\n    \"harnesses\": [\n      \"codex\",\n      \"cursor\"\n    ],\n    \"connectorId\": \"official-github\",\n    \"initOutput\": [\n      \"cognibrain init: self-hosted solo developer\",\n      \"runtime root: /var/folders/cq/84vmk0ld5sqdlh52xzdkxxnw0000gn/T/cognibrain-first-win-Jvkdpw\",\n      \"profile: solo-dev\",\n      \"Wrote setup state: /var/folders/cq/84vmk0ld5sqdlh52xzdkxxnw0000gn/T/cognibrain-first-win-Jvkdpw/.cognibrain/setup-state.json\",\n      \"Codex MCP config already present: /Users/michaelhubeny/.codex/config.toml\"\n    ],\n    \"connectorOutput\": [\n      \"wrote connector config: /var/folders/cq/84vmk0ld5sqdlh52xzdkxxnw0000gn/T/cognibrain-first-win-Jvkdpw/.cognibrain/connectors/github.json\",\n      \"configured: none\"\n    ],\n    \"doctorOutput\": [\n      \"ok  Node >= 20 - v24.3.0\",\n      \"ok  npm available - 11.4.2\",\n      \"ok  package manifest - /Users/michaelhubeny/homespace/memory/package.json\",\n      \"ok  runtime launcher - scripts/start-local.mjs\",\n      \"ok  CLI entrypoint - bin/cognibrain.mjs\",\n      \"ok  tsx runtime - /Users/michaelhubeny/homespace/memory/node_modules/.bin/tsx\",\n      \"ok  Codex skill installed - /Users/michaelhubeny/.codex/skills/cognibrain/SKILL.md\",\n      \"ok  guided setup state - /var/folders/cq/84vmk0ld5sqdlh52xzdkxxnw0000gn/T/cognibrain-first-win-Jvkdpw/.cognibrain/setup-state.json\"\n    ]\n  },\n  \"firstWin\": {\n    \"wrongActionId\": \"bae7dad8-0fd2-4958-8f4a-4e2868f02be4\",\n    \"correctionId\": \"e086d157-fe68-4921-97c8-3c5bc0dc87f1\",\n    \"contextPackId\": \"code_ctx_8rygyi\",\n    \"actionGuardSeverity\": \"block\",\n    \"patchEvidenceTrailId\": \"patch_ev_1tfy73l\"\n  }\n}",
       "stderrTail": ""
     },
     {
@@ -56,9 +78,9 @@
       "command": "npm run audit:plan1_3",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:17.553Z",
-      "finishedAt": "2026-05-25T15:19:17.690Z",
-      "durationMs": 137,
+      "startedAt": "2026-05-25T16:24:03.622Z",
+      "finishedAt": "2026-05-25T16:24:04.258Z",
+      "durationMs": 636,
       "stdoutTail": "> cognibrain@0.1.0 audit:plan1_3\n> node scripts/audit-plan1_3.mjs\nok plan1_3 structure is fully represented\nok EPIC 1 repo-state verification and product truth\nok EPIC 2 CogniCodeBench specification, generator, simulator, evaluator, and ablations\nok strict self-hosted production and benchmark boundaries are visible\nok EPIC 3 Engineering Memory model\nok EPIC 4 coding-agent retrieval\nok EPIC 5 evidence-grade context packs\nok EPIC 6 temporal belief and codebase evolution\nok EPIC 7 harness distribution\nok EPIC 8 production platform hardening\nok EPIC 9 API, SDK, and docs\nok EPIC 10 benchmark proof and market positioning\nok release verification wiring\nplan1_3 audit passed: 13/13 checks",
       "stderrTail": ""
     },
@@ -67,10 +89,21 @@
       "command": "npm run audit:plan1_4",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:17.691Z",
-      "finishedAt": "2026-05-25T15:19:17.821Z",
-      "durationMs": 130,
+      "startedAt": "2026-05-25T16:24:04.267Z",
+      "finishedAt": "2026-05-25T16:24:04.902Z",
+      "durationMs": 635,
       "stdoutTail": "> cognibrain@0.1.0 audit:plan1_4\n> node scripts/audit-plan1_4.mjs\nok plan1_4 docs information architecture exists\nok local markdown links resolve\nok canonical marketing and README alignment\nok comparison and market pages are bounded\nok CogniCodeBench is flagship proof with baselines and demos\nok evidence and patch trail product surfaces are complete\nok engineering correction and tool-outcome pipeline is implemented\nok connector docs and maturity matrix are present\nok architecture diagrams cover plan lifecycles\nok production docs, observability and boundary badges are explicit\nok release automation is wired\nplan1_4 audit passed: 11/11 checks",
+      "stderrTail": ""
+    },
+    {
+      "name": "plan1_5 audit",
+      "command": "npm run audit:plan1_5",
+      "status": 0,
+      "ok": true,
+      "startedAt": "2026-05-25T16:24:04.903Z",
+      "finishedAt": "2026-05-25T16:24:05.335Z",
+      "durationMs": 432,
+      "stdoutTail": "> cognibrain@0.1.0 audit:plan1_5\n> node scripts/audit-plan1_5.mjs\nok plan1_5 tracking issue list is present\nok first-class vendor drivers are implemented\nok planned connector contracts are explicit\nok vendor verification covers every provider\nok guided self-hosted install is wired\nok benchmark arena is replayable and public\nok marketing and claim boundaries are updated\nok dashboard exposes arena proof\nok plan1_5 scripts are release-wired\nok local markdown links resolve\nplan1_5 audit passed: 10/10 checks",
       "stderrTail": ""
     },
     {
@@ -78,21 +111,21 @@
       "command": "npm run verify:postgres",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:17.822Z",
-      "finishedAt": "2026-05-25T15:19:21.871Z",
-      "durationMs": 4049,
+      "startedAt": "2026-05-25T16:24:05.336Z",
+      "finishedAt": "2026-05-25T16:24:11.260Z",
+      "durationMs": 5924,
       "stdoutTail": "          ]\n        },\n        \"notes\": [\n          \"CockroachDB remote driver using psql-compatible wire protocol and transactional append-only snapshot tables.\",\n          \"Set MEMORY_STORAGE_BACKEND=postgres-remote or cockroach-remote and MEMORY_POSTGRES_URL for production deployments.\",\n          \"The synchronous persistence boundary shells through psql so local CLI/API startup remains zero-dependency.\"\n        ]\n      },\n      {\n        \"kind\": \"cassandra-remote\",\n        \"durable\": true,\n        \"distributedReady\": true,\n        \"transactional\": false,\n        \"appendOnly\": true,\n        \"sql\": false,\n        \"encryptedAtRest\": true,\n        \"migrationSafe\": true,\n        \"replication\": \"quorum\",\n        \"sharding\": \"range\",\n        \"notes\": [\n          \"Cassandra remote driver using cqlsh-compatible CQL with append-only wide-column snapshot tables.\",\n          \"Set MEMORY_STORAGE_BACKEND=cassandra-remote, MEMORY_CASSANDRA_CONTACT_POINT and MEMORY_CASSANDRA_KEYSPACE for production deployments.\",\n          \"Consistency, replication and sharding are delegated to the configured Cassandra cluster.\"\n        ]\n      }\n    ]\n  },\n  \"security\": {\n    \"encryptedMemories\": 1,\n    \"keyProvider\": \"local-env\",\n    \"backupVerified\": true\n  },\n  \"isolation\": {\n    \"aliceAtlasRows\": 1,\n    \"bobAtlasRows\": 0,\n    \"bobBeaconSearchRows\": 1,\n    \"bobSearchLeaks\": 0\n  },\n  \"passed\": true\n}",
-      "stderrTail": "(node:76318) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)"
+      "stderrTail": "(node:94286) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)"
     },
     {
       "name": "connector compatibility",
       "command": "npm run verify:compatibility",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:21.872Z",
-      "finishedAt": "2026-05-25T15:19:22.825Z",
-      "durationMs": 953,
-      "stdoutTail": "  \"mode\": \"credential_smoke\",\n  \"liveRequested\": false,\n  \"writebackEnabled\": false,\n  \"providers\": [\n    {\n      \"provider\": \"github\",\n      \"connectorId\": \"official-github\",\n      \"configured\": false,\n      \"skipped\": true,\n      \"checks\": {\n        \"credentialsPresent\": false,\n        \"liveSmokeOptedIn\": false,\n        \"noNetworkWithoutOptIn\": true\n      }\n    },\n    {\n      \"provider\": \"slack\",\n      \"connectorId\": \"official-slack\",\n      \"configured\": false,\n      \"skipped\": true,\n      \"checks\": {\n        \"credentialsPresent\": false,\n        \"liveSmokeOptedIn\": false,\n        \"noNetworkWithoutOptIn\": true\n      }\n    },\n    {\n      \"provider\": \"discord\",\n      \"connectorId\": \"official-discord\",\n      \"configured\": false,\n      \"skipped\": true,\n      \"checks\": {\n        \"credentialsPresent\": false,\n        \"liveSmokeOptedIn\": false,\n        \"noNetworkWithoutOptIn\": true\n      }\n    }\n  ],\n  \"passed\": true\n}",
+      "startedAt": "2026-05-25T16:24:11.261Z",
+      "finishedAt": "2026-05-25T16:24:12.428Z",
+      "durationMs": 1167,
+      "stdoutTail": "        \"liveSmokeOptedIn\": false,\n        \"noNetworkWithoutOptIn\": true\n      }\n    },\n    {\n      \"provider\": \"confluence\",\n      \"connectorId\": \"official-confluence\",\n      \"configured\": false,\n      \"skipped\": true,\n      \"checks\": {\n        \"credentialsPresent\": false,\n        \"liveSmokeOptedIn\": false,\n        \"noNetworkWithoutOptIn\": true\n      }\n    },\n    {\n      \"provider\": \"notion\",\n      \"connectorId\": \"official-notion\",\n      \"configured\": false,\n      \"skipped\": true,\n      \"checks\": {\n        \"credentialsPresent\": false,\n        \"liveSmokeOptedIn\": false,\n        \"noNetworkWithoutOptIn\": true\n      }\n    },\n    {\n      \"provider\": \"linear\",\n      \"connectorId\": \"official-linear\",\n      \"configured\": false,\n      \"skipped\": true,\n      \"checks\": {\n        \"credentialsPresent\": false,\n        \"liveSmokeOptedIn\": false,\n        \"noNetworkWithoutOptIn\": true\n      }\n    }\n  ],\n  \"passed\": true\n}",
       "stderrTail": ""
     },
     {
@@ -100,10 +133,10 @@
       "command": "/opt/homebrew/Cellar/node/24.3.0/bin/node bin/cognibrain.mjs start",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:22.825Z",
-      "finishedAt": "2026-05-25T15:19:23.180Z",
-      "durationMs": 355,
-      "stdoutTail": "cognibrain API: http://localhost:8787\ncognibrain UI:  http://localhost:5173\nruntime state:   /Users/michaelhubeny/homespace/memory/.cognibrain/local-runtime.json",
+      "startedAt": "2026-05-25T16:24:12.429Z",
+      "finishedAt": "2026-05-25T16:24:12.546Z",
+      "durationMs": 117,
+      "stdoutTail": "cognibrain already running: http://localhost:8787 and http://localhost:5173",
       "stderrTail": ""
     },
     {
@@ -111,10 +144,10 @@
       "command": "npm run doctor:publish",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:23.181Z",
-      "finishedAt": "2026-05-25T15:19:24.114Z",
-      "durationMs": 933,
-      "stdoutTail": "> cognibrain@0.1.0 doctor:publish\n> node bin/cognibrain.mjs doctor --publish\nok  Node >= 20 - v24.3.0\nok  npm available - 11.4.2\nok  package manifest - /Users/michaelhubeny/homespace/memory/package.json\nok  runtime launcher - scripts/start-local.mjs\nok  CLI entrypoint - bin/cognibrain.mjs\nok  tsx runtime - /Users/michaelhubeny/homespace/memory/node_modules/.bin/tsx\nok  Codex skill installed - /Users/michaelhubeny/.codex/skills/cognibrain/SKILL.md\nok  API process - http://localhost:8787\nok  dashboard process - http://localhost:5173\nok  API health - {\"ok\":true,\"auth\":{\"mode\":\"open-local-dev\",\"protected\":false,\"warning\":\"API authentication is disabled for local development. Set MEMORY_API_KEYS or MEMORY_REQUIRE_AUTH=true before exposing this server.\"},\"total\":47,\"active\":47,\"archived\":0,\"freshness\":1,\"averageTrust\":0.8367021276595741,\"coverage\":0.6666666666666666,\"contradictions\":0,\"healthScore\":0.8744113475177304}\nok  dream maintenance - {\"enabled\":true,\"intervalHours\":6,\"writeThreshold\":12,\"users\":{\"michaelhubeny\":{\"writesSinceDream\":0,\"lastDreamAt\":\"2026-05-25T13:58:34.286Z\"},\"smoke\":{\"writesSinceDream\":2},\"smoke-1779607129334\":{\"writesSinceDream\":3},\"smoke-1779607233403\":{\"writesSinceDream\":3},\"temporal-1779607736479\":{\"writesSinceDream\":8},\"graph-1779608330306\":{\"writesSinceDream\":2},\"live-owner\":{\"writesSinceDream\":1},\"live-member\":{\"writesSinceDream\":1},\"rank-mpjhjz9c\":{\"writesSinceDream\":3},\"agent-member\":{\"writesSinceDream\":1},\"demo\":{\"writesSinceDream\":1}}}\nok  npm pack dry-run - ok\nok  package excludes generated files - clean\nok  transport security - local-only transport\nok  harness package templates - 11 templates available\nok  harness generated configs - Codex, Claude, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI configs present\nok  production docs - docs/production/overview.md and docs/claims.md",
+      "startedAt": "2026-05-25T16:24:12.547Z",
+      "finishedAt": "2026-05-25T16:24:15.207Z",
+      "durationMs": 2660,
+      "stdoutTail": "> cognibrain@0.1.0 doctor:publish\n> node bin/cognibrain.mjs doctor --publish\nok  Node >= 20 - v24.3.0\nok  npm available - 11.4.2\nok  package manifest - /Users/michaelhubeny/homespace/memory/package.json\nok  runtime launcher - scripts/start-local.mjs\nok  CLI entrypoint - bin/cognibrain.mjs\nok  tsx runtime - /Users/michaelhubeny/homespace/memory/node_modules/.bin/tsx\nok  Codex skill installed - /Users/michaelhubeny/.codex/skills/cognibrain/SKILL.md\nwarn  guided setup state - /Users/michaelhubeny/homespace/memory/.cognibrain/setup-state.json\nwarn  connector config directory - /Users/michaelhubeny/homespace/memory/.cognibrain/connectors\nok  API process - http://localhost:8787\nok  dashboard process - http://localhost:5173\nok  API health - {\"ok\":true,\"auth\":{\"mode\":\"open-local-dev\",\"protected\":false,\"warning\":\"API authentication is disabled for local development. Set MEMORY_API_KEYS or MEMORY_REQUIRE_AUTH=true before exposing this server.\"},\"total\":48,\"active\":48,\"archived\":0,\"freshness\":1,\"averageTrust\":0.8383333333333329,\"coverage\":0.6666666666666666,\"contradictions\":0,\"healthScore\":0.8749333333333331}\nok  dream maintenance - {\"enabled\":true,\"intervalHours\":6,\"writeThreshold\":12,\"users\":{\"michaelhubeny\":{\"writesSinceDream\":0,\"lastDreamAt\":\"2026-05-25T13:58:34.286Z\"},\"smoke\":{\"writesSinceDream\":2},\"smoke-1779607129334\":{\"writesSinceDream\":3},\"smoke-1779607233403\":{\"writesSinceDream\":3},\"temporal-1779607736479\":{\"writesSinceDream\":8},\"graph-1779608330306\":{\"writesSinceDream\":2},\"live-owner\":{\"writesSinceDream\":1},\"live-member\":{\"writesSinceDream\":1},\"rank-mpjhjz9c\":{\"writesSinceDream\":3},\"agent-member\":{\"writesSinceDream\":1},\"demo\":{\"writesSinceDream\":2}}}\nok  npm pack dry-run - ok\nok  package excludes generated files - clean\nok  transport security - local-only transport\nok  harness package templates - 11 templates available\nok  harness generated configs - Codex, Claude, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI configs present\nok  production docs - docs/production/overview.md and docs/claims.md",
       "stderrTail": ""
     },
     {
@@ -122,20 +155,20 @@
       "command": "npm pack --dry-run",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:24.114Z",
-      "finishedAt": "2026-05-25T15:19:25.089Z",
-      "durationMs": 975,
+      "startedAt": "2026-05-25T16:24:15.208Z",
+      "finishedAt": "2026-05-25T16:24:15.773Z",
+      "durationMs": 565,
       "stdoutTail": "cognibrain-0.1.0.tgz",
-      "stderrTail": "npm notice 30.8kB src/eval/cognicodeBench.ts\nnpm notice 13.8kB src/eval/connectorsLive.ts\nnpm notice 4.8kB src/eval/fixtures.ts\nnpm notice 7.2kB src/eval/leaderboard.ts\nnpm notice 7.6kB src/eval/load.ts\nnpm notice 11.9kB src/eval/locomo.ts\nnpm notice 12.8kB src/eval/longmemeval.ts\nnpm notice 13.4kB src/eval/marketGate.ts\nnpm notice 24.8kB src/eval/nextgen.ts\nnpm notice 10.2kB src/eval/nextgenBenchmarks.ts\nnpm notice 14.5kB src/eval/postgresLive.ts\nnpm notice 2.8kB src/eval/publishLeaderboard.ts\nnpm notice 2.0kB src/eval/readmeClaims.ts\nnpm notice 1.9kB src/eval/run.ts\nnpm notice 13.7kB src/eval/vendorConnectorsLive.ts\nnpm notice 5.6kB src/eval/vendorCredentialSmoke.ts\nnpm notice 11.9kB src/sdk/client.ts\nnpm notice 815B templates/claude/settings.json\nnpm notice 1.2kB templates/codex/AGENTS.md\nnpm notice 2.4kB templates/codex/cognibrain-skill/SKILL.md\nnpm notice 848B templates/copilot/copilot-instructions.md\nnpm notice 1.6kB templates/crewai/crewai_cognibrain.py\nnpm notice 546B templates/crewai/crewai.cognibrain.json\nnpm notice 774B templates/cursor/open-memory.mdc\nnpm notice 1.7kB templates/langgraph/langgraph-cognibrain.ts\nnpm notice 551B templates/langgraph/langgraph.cognibrain.json\nnpm notice 613B templates/openclaw/cognibrain.md\nnpm notice 749B templates/opencode/cognibrain.md\nnpm notice 476B tsconfig.json\nnpm notice 212B vite.config.ts\nnpm notice Tarball Details\nnpm notice name: cognibrain\nnpm notice version: 0.1.0\nnpm notice filename: cognibrain-0.1.0.tgz\nnpm notice package size: 6.4 MB\nnpm notice unpacked size: 7.8 MB\nnpm notice shasum: 40f45080db91e4726cf09ec9e986cbc4c9d14e02\nnpm notice integrity: sha512-jI6mvuekJYpY0[...]hkqc6o78KLimg==\nnpm notice total files: 203\nnpm notice"
+      "stderrTail": "npm notice 30.8kB src/eval/cognicodeBench.ts\nnpm notice 13.8kB src/eval/connectorsLive.ts\nnpm notice 4.8kB src/eval/fixtures.ts\nnpm notice 7.2kB src/eval/leaderboard.ts\nnpm notice 7.6kB src/eval/load.ts\nnpm notice 11.9kB src/eval/locomo.ts\nnpm notice 12.8kB src/eval/longmemeval.ts\nnpm notice 13.4kB src/eval/marketGate.ts\nnpm notice 24.8kB src/eval/nextgen.ts\nnpm notice 10.2kB src/eval/nextgenBenchmarks.ts\nnpm notice 14.5kB src/eval/postgresLive.ts\nnpm notice 2.8kB src/eval/publishLeaderboard.ts\nnpm notice 2.0kB src/eval/readmeClaims.ts\nnpm notice 1.9kB src/eval/run.ts\nnpm notice 24.5kB src/eval/vendorConnectorsLive.ts\nnpm notice 6.8kB src/eval/vendorCredentialSmoke.ts\nnpm notice 11.9kB src/sdk/client.ts\nnpm notice 815B templates/claude/settings.json\nnpm notice 1.2kB templates/codex/AGENTS.md\nnpm notice 2.4kB templates/codex/cognibrain-skill/SKILL.md\nnpm notice 848B templates/copilot/copilot-instructions.md\nnpm notice 1.6kB templates/crewai/crewai_cognibrain.py\nnpm notice 546B templates/crewai/crewai.cognibrain.json\nnpm notice 774B templates/cursor/open-memory.mdc\nnpm notice 1.7kB templates/langgraph/langgraph-cognibrain.ts\nnpm notice 551B templates/langgraph/langgraph.cognibrain.json\nnpm notice 613B templates/openclaw/cognibrain.md\nnpm notice 749B templates/opencode/cognibrain.md\nnpm notice 476B tsconfig.json\nnpm notice 212B vite.config.ts\nnpm notice Tarball Details\nnpm notice name: cognibrain\nnpm notice version: 0.1.0\nnpm notice filename: cognibrain-0.1.0.tgz\nnpm notice package size: 6.4 MB\nnpm notice unpacked size: 7.9 MB\nnpm notice shasum: 7538a1e2243f168c7ea89c31b2aa59c4c51ebfa4\nnpm notice integrity: sha512-8gMteNgofGdTf[...]h3/1XWrM+kLhQ==\nnpm notice total files: 213\nnpm notice"
     },
     {
       "name": "Python SDK tests",
       "command": "python3 -m unittest discover -s sdk/python/tests",
       "status": 0,
       "ok": true,
-      "startedAt": "2026-05-25T15:19:25.089Z",
-      "finishedAt": "2026-05-25T15:19:25.790Z",
-      "durationMs": 701,
+      "startedAt": "2026-05-25T16:24:15.774Z",
+      "finishedAt": "2026-05-25T16:24:16.429Z",
+      "durationMs": 655,
       "stdoutTail": "",
       "stderrTail": "....\n----------------------------------------------------------------------\nRan 4 tests in 0.522s\nOK"
     }

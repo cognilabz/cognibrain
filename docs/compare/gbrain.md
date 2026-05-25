@@ -24,6 +24,12 @@ The comparison is category-based, not a claim that cognibrain is better at perso
 
 Claim ID: `CB-CLAIM-MARKET`.
 
+## Same-Run Arena
+
+Benchmark Arena runs a GBrain API-shape adapter on the same synthetic engineering-memory scenario stream as Cognibrain. Current local result: Cognibrain `same-run-full` 97.22%, GBrain `same-run-api-shape` 66.67%. The delta is self-hosted agent workflow proof: install wizard, connector verifier, action guard and patch evidence.
+
+Claim ID: `CB-CLAIM-BENCHMARK-ARENA`.
+
 ## Honest Limitations
 
 cognibrain is less notebook-like than a personal markdown brain. It optimizes for engineering-agent injection and auditability rather than daily note authoring.

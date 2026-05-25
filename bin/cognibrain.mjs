@@ -14,6 +14,10 @@ const command = args[0];
 const commandArgs = args.slice(1);
 
 switch (command) {
+  case "init":
+    await init(commandArgs);
+    break;
+
   case "setup":
     await setup(commandArgs);
     break;
@@ -49,6 +53,10 @@ switch (command) {
 
   case "config":
     writeHarnessConfig(commandArgs[0] ?? "all");
+    break;
+
+  case "connector":
+    await connectorCommand(commandArgs);
     break;
 
   case "memory":
@@ -93,6 +101,39 @@ async function setup(setupArgs) {
 
 async function doctor(doctorArgs) {
   const publish = doctorArgs.includes("--publish");
+  const fix = doctorArgs.includes("--fix");
+  const noStart = doctorArgs.includes("--no-start");
+  const fixed = [];
+
+  if (fix) {
+    if (!existsSync(join(runtimeRoot, ".cognibrain", "setup-state.json"))) {
+      writeSetupState(profileDefinition("solo-dev"), { fixedByDoctor: true });
+      fixed.push("setup-state");
+    }
+    if (!existsSync(join(runtimeRoot, ".cognibrain", "connectors"))) {
+      mkdirSync(join(runtimeRoot, ".cognibrain", "connectors"), { recursive: true });
+      fixed.push("connector-directory");
+    }
+    if (!existsSync(join(launchCwd, ".cognibrain-harness-package.json"))) {
+      writeHarnessPackageManifest();
+      fixed.push("harness-package");
+    }
+    const skillPath = join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills", "cognibrain", "SKILL.md");
+    if (!existsSync(skillPath) && !doctorArgs.includes("--no-skill")) {
+      runNodeChecked("scripts/install-codex-skill.mjs", []);
+      fixed.push("codex-skill");
+    }
+    if (!noStart) {
+      const state = readRuntimeState();
+      const apiAlive = state?.api?.pid ? isAlive(state.api.pid) : false;
+      const uiAlive = state?.ui?.pid ? isAlive(state.ui.pid) : false;
+      if (!apiAlive || !uiAlive) {
+        runNodeChecked("scripts/start-local.mjs", ["--daemon"]);
+        fixed.push("runtime");
+      }
+    }
+  }
+
   const checks = [];
   const add = (name, ok, detail = "", level = ok ? "ok" : "fail") => checks.push({ name, ok, detail, level });
 
@@ -107,12 +148,14 @@ async function doctor(doctorArgs) {
 
   const skillPath = join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills", "cognibrain", "SKILL.md");
   add("Codex skill installed", existsSync(skillPath), skillPath);
+  add("guided setup state", existsSync(join(runtimeRoot, ".cognibrain", "setup-state.json")), join(runtimeRoot, ".cognibrain", "setup-state.json"), existsSync(join(runtimeRoot, ".cognibrain", "setup-state.json")) ? "ok" : "warn");
+  add("connector config directory", existsSync(join(runtimeRoot, ".cognibrain", "connectors")), join(runtimeRoot, ".cognibrain", "connectors"), existsSync(join(runtimeRoot, ".cognibrain", "connectors")) ? "ok" : "warn");
 
   const state = readRuntimeState();
   const apiAlive = state?.api?.pid ? isAlive(state.api.pid) : false;
   const uiAlive = state?.ui?.pid ? isAlive(state.ui.pid) : false;
-  add("API process", apiAlive, state?.api?.url ?? "not started");
-  add("dashboard process", uiAlive, state?.ui?.url ?? "not started");
+  add("API process", apiAlive, state?.api?.url ?? "not started", apiAlive ? "ok" : noStart ? "warn" : "fail");
+  add("dashboard process", uiAlive, state?.ui?.url ?? "not started", uiAlive ? "ok" : noStart ? "warn" : "fail");
 
   if (state?.api?.url && apiAlive) {
     const health = await requestJson(`${state.api.url}/health`).catch((error) => ({ error: error.message }));
@@ -158,8 +201,50 @@ async function doctor(doctorArgs) {
   for (const check of checks) {
     console.log(`${check.level === "warn" ? "warn" : check.ok ? "ok" : "fail"}  ${check.name}${check.detail ? ` - ${check.detail}` : ""}`);
   }
+  if (fixed.length) console.log(`fixed ${fixed.join(", ")}`);
 
   if (checks.some((check) => !check.ok && check.level !== "warn")) process.exit(1);
+}
+
+async function init(initArgs) {
+  if (initArgs.includes("--help")) initUsage(0);
+  const profileName = optionValue(initArgs, "--profile") ?? (initArgs.includes("--benchmark") ? "benchmark" : initArgs.includes("--enterprise") ? "enterprise" : initArgs.includes("--team") ? "team" : "solo-dev");
+  const profile = profileDefinition(profileName);
+  const setupArgs = new Set(profile.setupFlags);
+  if (initArgs.includes("--no-start")) setupArgs.add("--no-start");
+  if (initArgs.includes("--no-skill")) setupArgs.add("--no-skill");
+  if (initArgs.includes("--no-doctor")) setupArgs.add("--no-doctor");
+  if (initArgs.includes("--all-harnesses")) setupArgs.add("--all-harnesses");
+
+  console.log(`cognibrain init: ${profile.label}`);
+  console.log(`runtime root: ${runtimeRoot}`);
+  console.log(`profile: ${profile.name}`);
+  writeSetupState(profile, {
+    selectedAt: new Date().toISOString(),
+    installCommand: "npx cognibrain init",
+    dryRun: initArgs.includes("--dry-run"),
+    dashboard: !initArgs.includes("--no-dashboard")
+  });
+  for (const connector of profile.connectors) writeConnectorConfig(connector, { dryRun: initArgs.includes("--dry-run"), suggestedByProfile: profile.name });
+  if (!initArgs.includes("--dry-run")) await setup([...setupArgs]);
+  if (profile.runDemo && !initArgs.includes("--no-demo") && !initArgs.includes("--dry-run")) {
+    const demo = runCapture("npm", ["run", "demo:first-win"]);
+    if (demo.status !== 0) console.log(`warn  first-win demo skipped - ${demo.stderr.trim() || demo.stdout.trim()}`);
+  }
+  console.log("next: cognibrain status, cognibrain doctor --fix, cognibrain connector add github");
+}
+
+async function connectorCommand(commandArgs) {
+  const subcommand = commandArgs[0];
+  if (subcommand !== "add") connectorUsage(1);
+  const provider = commandArgs[1];
+  if (!provider || !connectorDefinitions()[provider]) connectorUsage(1);
+  const result = writeConnectorConfig(provider, {
+    dryRun: commandArgs.includes("--dry-run"),
+    suggestedByProfile: optionValue(commandArgs, "--profile")
+  });
+  console.log(`${result.dryRun ? "would write" : "wrote"} connector config: ${result.path}`);
+  console.log(`${result.configured ? "configured" : "missing env"}: ${result.missing.length ? result.missing.join(", ") : "none"}`);
 }
 
 function transportSecurityCheck(localUrl) {
@@ -186,6 +271,156 @@ function inferDeploymentMode(url) {
   } catch {
     return "production";
   }
+}
+
+function profileDefinition(name) {
+  const profiles = {
+    "solo-dev": {
+      name: "solo-dev",
+      label: "self-hosted solo developer",
+      mode: "self_hosted",
+      setupFlags: ["--codex", "--cursor"],
+      harnesses: ["codex", "cursor"],
+      storage: "local-json",
+      auth: "local-only",
+      connectors: ["github"],
+      runDemo: true,
+      nextSteps: ["Open the dashboard", "Add GitHub credentials", "Run the first-win demo"]
+    },
+    team: {
+      name: "team",
+      label: "self-hosted team workspace",
+      mode: "self_hosted",
+      setupFlags: ["--all-harnesses"],
+      harnesses: ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai"],
+      storage: "local-json-or-postgres",
+      auth: "reverse-proxy-or-oidc",
+      connectors: ["github", "slack", "jira", "confluence", "notion", "linear"],
+      runDemo: true,
+      nextSteps: ["Set connector env vars", "Run verify:compatibility", "Publish deployment docs"]
+    },
+    enterprise: {
+      name: "enterprise",
+      label: "self-hosted enterprise pilot",
+      mode: "self_hosted",
+      setupFlags: ["--self-hosted"],
+      harnesses: ["all"],
+      storage: "postgres",
+      auth: "oidc-or-sso",
+      connectors: ["github", "slack", "discord", "jira", "confluence", "notion", "linear"],
+      runDemo: true,
+      nextSteps: ["Enable TLS", "Run vendor-live smoke with tenant credentials", "Review SECURITY.md"]
+    },
+    benchmark: {
+      name: "benchmark",
+      label: "benchmark proof lab",
+      mode: "self_hosted",
+      setupFlags: ["--all-harnesses"],
+      harnesses: ["all"],
+      storage: "local-json",
+      auth: "local-only",
+      connectors: ["github", "jira", "notion", "linear"],
+      runDemo: true,
+      nextSteps: ["Run benchmark:arena", "Open artifacts/arena/run.json", "Publish same-benchmark proof"]
+    }
+  };
+  const profile = profiles[name];
+  if (!profile) {
+    console.error(`Unknown init profile: ${name}`);
+    console.error(`Available profiles: ${Object.keys(profiles).join(", ")}`);
+    process.exit(1);
+  }
+  return profile;
+}
+
+function writeSetupState(profile, metadata = {}) {
+  const path = join(runtimeRoot, ".cognibrain", "setup-state.json");
+  writeJson(path, {
+    schemaVersion: "1.0",
+    product: "cognibrain",
+    profile: profile.name,
+    label: profile.label,
+    mode: profile.mode,
+    runtimeRoot,
+    packageRoot: root,
+    harnesses: profile.harnesses,
+    storage: profile.storage,
+    auth: profile.auth,
+    connectors: profile.connectors,
+    runDemo: profile.runDemo,
+    nextSteps: profile.nextSteps,
+    metadata
+  });
+  console.log(`Wrote setup state: ${path}`);
+  return path;
+}
+
+function connectorDefinitions() {
+  return {
+    github: {
+      connectorId: "official-github",
+      requiredEnv: ["MEMORY_GITHUB_REPO", "MEMORY_GITHUB_TOKEN"],
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/integrations/github.md"
+    },
+    slack: {
+      connectorId: "official-slack",
+      requiredEnv: ["MEMORY_SLACK_TOKEN", "MEMORY_SLACK_CHANNEL_ID"],
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/integrations/slack-discord.md"
+    },
+    discord: {
+      connectorId: "official-discord",
+      requiredEnv: ["MEMORY_DISCORD_BOT_TOKEN", "MEMORY_DISCORD_CHANNEL_ID"],
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/integrations/slack-discord.md"
+    },
+    jira: {
+      connectorId: "official-jira",
+      requiredEnv: ["MEMORY_JIRA_BASE_URL", "MEMORY_JIRA_EMAIL", "MEMORY_JIRA_API_TOKEN", "MEMORY_JIRA_PROJECT"],
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md"
+    },
+    confluence: {
+      connectorId: "official-confluence",
+      requiredEnv: ["MEMORY_CONFLUENCE_BASE_URL", "MEMORY_CONFLUENCE_EMAIL", "MEMORY_CONFLUENCE_API_TOKEN", "MEMORY_CONFLUENCE_SPACE"],
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md"
+    },
+    notion: {
+      connectorId: "official-notion",
+      requiredEnv: ["MEMORY_NOTION_TOKEN", "MEMORY_NOTION_DATABASE_ID"],
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md"
+    },
+    linear: {
+      connectorId: "official-linear",
+      requiredEnv: ["MEMORY_LINEAR_API_KEY", "MEMORY_LINEAR_TEAM_ID"],
+      verification: "npm run verify:vendor-connectors",
+      docs: "docs/connectors.md"
+    }
+  };
+}
+
+function writeConnectorConfig(provider, metadata = {}) {
+  const definition = connectorDefinitions()[provider];
+  const missing = definition.requiredEnv.filter((key) => !process.env[key]);
+  const path = join(runtimeRoot, ".cognibrain", "connectors", `${provider}.json`);
+  const config = {
+    schemaVersion: "1.0",
+    provider,
+    connectorId: definition.connectorId,
+    configured: missing.length === 0,
+    requiredEnv: definition.requiredEnv.map((key) => ({ name: key, present: Boolean(process.env[key]), valueRef: `env:${key}` })),
+    missingEnv: missing,
+    storagePolicy: "never store credential values; read from environment at runtime",
+    verification: definition.verification,
+    docs: definition.docs,
+    nextSteps: missing.length ? [`Set ${missing.join(", ")}`, definition.verification] : [definition.verification, "npm run verify:vendor-live -- --live"],
+    metadata: { writtenAt: new Date().toISOString(), ...metadata }
+  };
+  if (!metadata.dryRun) writeJson(path, config);
+  return { path, configured: missing.length === 0, missing, dryRun: Boolean(metadata.dryRun), config };
 }
 
 function writeHarnessConfig(target) {
@@ -566,6 +801,11 @@ function majorVersion(version) {
   return Number(version.replace(/^v/, "").split(".")[0] ?? 0);
 }
 
+function optionValue(argv, name) {
+  const index = argv.indexOf(name);
+  return index >= 0 ? argv[index + 1] : undefined;
+}
+
 function readRuntimeState() {
   const statePath = join(runtimeRoot, ".cognibrain", "local-runtime.json");
   if (!existsSync(statePath)) return null;
@@ -614,14 +854,18 @@ function usage(exitCode) {
 
 Usage:
   cognibrain [--runtime-root <path>] <command>
+  cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--no-start] [--no-doctor] [--no-skill]
+      Guided self-hosted install that writes setup state, connector stubs, harness config, starts runtime, and runs doctor
   cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--all-harnesses]
       Install the Codex skill, optionally write harness configs, start API + dashboard, run doctor
-  cognibrain doctor [--publish]
-      Check local runtime, skill install, package readiness, and optional npm pack hygiene
+  cognibrain doctor [--publish] [--fix] [--no-start]
+      Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
   cognibrain start | dev | status | stop
       Manage the local API + dashboard runtime
   cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>
       Write MCP config for supported harnesses
+  cognibrain connector add <github|slack|discord|jira|confluence|notion|linear> [--dry-run]
+      Write a credential-safe connector setup stub under .cognibrain/connectors/
   cognibrain skill install
       Install the Codex skill
   cognibrain memory add <text>
@@ -639,6 +883,16 @@ Usage:
   cognibrain clean
       Remove generated local runtime, benchmark, screenshot, and build artifacts
 `);
+  process.exit(exitCode);
+}
+
+function initUsage(exitCode) {
+  console.log(`Usage: cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dry-run] [--no-start] [--no-doctor] [--no-skill] [--no-demo]`);
+  process.exit(exitCode);
+}
+
+function connectorUsage(exitCode) {
+  console.log("Usage: cognibrain connector add <github|slack|discord|jira|confluence|notion|linear> [--dry-run]");
   process.exit(exitCode);
 }
 

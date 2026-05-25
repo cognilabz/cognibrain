@@ -294,6 +294,15 @@ const certifiedBenchmarks = [
     baseline: "best ablation below full",
     margin: 18,
     artifact: "artifacts/cognicodebench/run.json"
+  },
+  {
+    dataset: "Benchmark Arena",
+    metric: "same-run arena score",
+    ours: "0.9722 score",
+    accuracy: 97.22,
+    baseline: "best API-shape 66.67%",
+    margin: 30.55,
+    artifact: "artifacts/arena/run.json"
   }
 ];
 
@@ -345,6 +354,17 @@ const patchEvidenceProof = [
   ["commands run", "patch summary captures exact validation"],
   ["tool outcomes", "exit code, duration and touched files"],
   ["stale excluded", "superseded rules kept out of context"]
+];
+
+const benchmarkArenaProof = [
+  ["adapter contract", "same scenario stream"],
+  ["Cognibrain", "same-run-full"],
+  ["Mem0", "same-run-api-shape"],
+  ["Graphiti/Zep", "same-run-api-shape"],
+  ["Cognee", "same-run-api-shape"],
+  ["LangMem", "same-run-api-shape"],
+  ["GBrain", "same-run-api-shape"],
+  ["public table", "public/benchmark-arena"]
 ];
 
 const platformSignals = [
@@ -1777,6 +1797,17 @@ function ProofView({
           </div>
         </div>
         <div className="panel">
+          <h2><BarChart3 size={17} /> Benchmark Arena</h2>
+          <div className="ability-list">
+            {benchmarkArenaProof.map(([label, value]) => (
+              <div key={label} className="ability-row">
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="panel">
           <h2><Network size={17} /> Harness Packages</h2>
           <div className="ability-list">
             {harnessProof.map(([label, value]) => (
@@ -1947,6 +1978,8 @@ function summarizeArtifact(value: string): string[] {
       }>;
       benchmark?: string;
       scenarioCount?: number;
+      systems?: Array<{ displayName?: string; score?: number; proofLevel?: string; metrics?: { repeatedMistakeRate?: number }; capabilityGaps?: string[] }>;
+      leaderboard?: Array<{ system?: string; score?: number; proofLevel?: string; repeatedMistakeRate?: number; gaps?: number }>;
       metrics?: {
         correctionCarryoverRate?: number;
         repeatedMistakeRate?: number;
@@ -1977,6 +2010,17 @@ function summarizeArtifact(value: string): string[] {
         `repeatedMistakeRate=${parsed.metrics?.repeatedMistakeRate ?? 1}`,
         `procedureRecall=${parsed.metrics?.procedureRecallRate ?? 0}`,
         `wrongMemorySuppression=${parsed.metrics?.wrongMemorySuppression ?? 0}`
+      ];
+    }
+    if (parsed.benchmark === "BenchmarkArena") {
+      const winner = parsed.leaderboard?.[0];
+      const cognibrain = parsed.systems?.find((system) => system.displayName === "Cognibrain");
+      return [
+        `benchmark=BenchmarkArena scenarios=${parsed.scenarioCount ?? 0}`,
+        `winner=${winner?.system ?? "unknown"} score=${(((winner?.score ?? 0) as number) * 100).toFixed(2)}% proof=${winner?.proofLevel ?? "unknown"}`,
+        `cognibrainProof=${cognibrain?.proofLevel ?? "unknown"} repeatedMistakeRate=${cognibrain?.metrics?.repeatedMistakeRate ?? "n/a"}`,
+        `systems=${parsed.systems?.length ?? parsed.leaderboard?.length ?? 0}`,
+        `boundary=API-shape rows are not vendor-hosted certifications`
       ];
     }
     if (parsed.benchmarks) {

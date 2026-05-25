@@ -10,7 +10,7 @@ cognibrain is ready to present as an open-source, self-hosted Engineering Memory
 | Team API | API-key auth, actor ids, policy rules, scoped retrieval, audit events | `MEMORY_REQUIRE_AUTH=true` and `MEMORY_API_KEYS` set before exposing the server |
 | Durable storage | JSON/JSONL, SQLite FTS5, Postgres-compatible CI mode, psql-backed Postgres/Cockroach remote driver | `npm run verify:postgres` against the target Postgres path |
 | Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, Engineering Memory types, coding context packs, action guards, patch evidence trails, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen`, `npm run benchmark:cognicode`, `npm run verify:status`, and `npm run audit:plan1_3` |
-| Connectors | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, real GitHub/Slack/Discord vendor drivers, HTTP adapter verifier, vendor driver verifier | `npm run verify:connectors`, `npm run verify:vendor-connectors`, and deployment-specific vendor credential smoke tests |
+| Connectors | Official manifests, OAuth hash/revoke lifecycle, list/poll/sync/writeback HTTP contract, real GitHub/Slack/Discord/Jira/Confluence/Notion/Linear vendor drivers, HTTP adapter verifier, vendor driver verifier | `npm run verify:connectors`, `npm run verify:vendor-connectors`, and deployment-specific vendor credential smoke tests |
 | Benchmarks | CogniCodeBench, LoCoMo, LongMemEval, BEAM, nextgen, answer-generation, market gate, load artifacts | `npm run benchmark:cognicode`, `npm run benchmark:certified`, `npm run benchmark:market`, and the selected `benchmark:load` profile |
 | Open-source packaging | MIT license, contribution guide, security policy, Docker, Kubernetes, npm package dry-run, Python PyPI-style SDK package | `./bin/cognibrain.mjs doctor --publish`, `npm pack --dry-run`, and Python SDK tests |
 
@@ -20,7 +20,7 @@ You can honestly say:
 
 - "cognibrain is a local-first, self-hostable Engineering Memory OS with inspectable evidence packs, policy-aware retrieval, durable storage options, connectors, MCP tools, dashboard operations, and reproducible verification gates."
 - "CogniCodeBench proves the synthetic coding-agent loop where corrections, review feedback, commands, tool outcomes and codebase changes carry into the next patch."
-- "A team can run it behind its own API key, Postgres/Cockroach storage, TLS ingress, backup process, and connector credentials for built-in GitHub, Slack, and Discord vendor drivers."
+- "A team can run it behind its own API key, Postgres/Cockroach storage, TLS ingress, backup process, and connector credentials for built-in GitHub, Slack, Discord, Jira, Confluence, Notion, and Linear vendor drivers."
 - "The public benchmark claims are generated from repo-local artifacts and distinguish synthetic/public gates from vendor-signed external reruns."
 
 Do not claim:
@@ -143,5 +143,5 @@ For larger deployments, repeat the load benchmark at 100k or 1M memories using t
 - If Compose fails during config interpolation, export `MEMORY_API_KEYS` and `POSTGRES_PASSWORD` first; the file intentionally fails closed without them.
 - If `docker compose` is unavailable but `docker-compose` exists, use the standalone binary with the same flags.
 - If `/health` is reachable but non-health routes return `401`, confirm that callers send `x-api-key` when `MEMORY_REQUIRE_AUTH=true`.
-- If vendor connector checks pass locally but production sync fails, rerun `npm run verify:vendor-connectors` with tenant credentials and inspect `/connectors/health` before claiming vendor certification.
+- If vendor connector checks pass locally but production sync fails, rerun `npm run verify:vendor-live -- --live` with tenant credentials and inspect `/connectors/health` before claiming vendor certification.
 - If `npm run audit:plan1_2` or `npm run audit:plan1_3` fails, open `artifacts/plan1_2-audit.json` or `artifacts/plan1_3-audit.json`; it reports the exact Epic/WP check and failed assertion index.

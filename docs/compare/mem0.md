@@ -24,6 +24,12 @@ CogniCodeBench is synthetic. It should not be used to claim broad real-world sup
 
 Claim IDs: `CB-CLAIM-ABLATION`, `CB-CLAIM-MARKET`.
 
+## Same-Run Arena
+
+Benchmark Arena now runs a Mem0 API-shape adapter on the same synthetic engineering-memory scenario stream as Cognibrain. Current local result: Cognibrain `same-run-full` 97.22%, Mem0 `same-run-api-shape` 11.11%. The aggressive claim is narrow: this runner tests correction carryover into action guard and patch evidence, not generic user-fact memory quality.
+
+Claim ID: `CB-CLAIM-BENCHMARK-ARENA`.
+
 ## Honest Limitations
 
 cognibrain does not currently claim Mem0-style managed SaaS maturity, public uptime, billing, hosted support or vendor-signed benchmark leadership.

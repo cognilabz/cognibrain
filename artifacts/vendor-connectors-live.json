@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T15:19:39.824Z",
+  "generatedAt": "2026-05-25T16:24:12.096Z",
   "mode": "contract",
   "checks": {
     "officialManifestsUseVendorEndpoints": true,
@@ -12,6 +12,14 @@
     "slackWritesChatPostMessage": true,
     "discordUsesChannelMessages": true,
     "discordWritesChannelMessage": true,
+    "jiraUsesSearch": true,
+    "jiraWritesComment": true,
+    "confluenceUsesContent": true,
+    "confluenceWritesComment": true,
+    "notionQueriesDatabase": true,
+    "notionWritesBlock": true,
+    "linearUsesGraphQL": true,
+    "linearWritesComment": true,
     "listPollWritebackApplied": true,
     "dryRunDoesNotPost": true,
     "authorizationHeadersRedactedInSyncRecords": true,
@@ -20,6 +28,10 @@
     "githubActionsFailureTagged": true,
     "slackDecisionNeedsReview": true,
     "discordDecisionNeedsReview": true,
+    "jiraCorrectionTagged": true,
+    "confluenceArchitectureTagged": true,
+    "notionDecisionTagged": true,
+    "linearCorrectionTagged": true,
     "externalHealthRecordsVisible": true
   },
   "calls": [
@@ -119,9 +131,129 @@
       "authorizationScheme": "Bot",
       "contentType": "application/json",
       "body": "{\"content\":\"Decision captured for review.\",\"allowed_mentions\":{\"parse\":[]}}"
+    },
+    {
+      "provider": "jira",
+      "method": "GET",
+      "path": "/jira/rest/api/3/search",
+      "search": "?jql=project%3DCB+ORDER+BY+updated+DESC&maxResults=20&fields=summary%2Cstatus%2Clabels%2Ccomponents%2Cassignee%2Cupdated%2Ccomment%2Cparent",
+      "hasAuthorization": true,
+      "authorizationScheme": "Basic",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "jira",
+      "method": "GET",
+      "path": "/jira/rest/api/3/search",
+      "search": "?jql=project%3DCB+ORDER+BY+updated+DESC&maxResults=20&fields=summary%2Cstatus%2Clabels%2Ccomponents%2Cassignee%2Cupdated%2Ccomment%2Cparent",
+      "hasAuthorization": true,
+      "authorizationScheme": "Basic",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "jira",
+      "method": "POST",
+      "path": "/jira/rest/api/3/issue/CB-42/comment",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Basic",
+      "contentType": "application/json",
+      "body": "{\"body\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Decision captured for review.\"}]}]}}"
+    },
+    {
+      "provider": "confluence",
+      "method": "GET",
+      "path": "/confluence/wiki/rest/api/content",
+      "search": "?spaceKey=ENG&type=page&expand=version%2Cmetadata.labels%2Cbody.storage&limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Basic",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "confluence",
+      "method": "GET",
+      "path": "/confluence/wiki/rest/api/content",
+      "search": "?spaceKey=ENG&type=page&expand=version%2Cmetadata.labels%2Cbody.storage&limit=20",
+      "hasAuthorization": true,
+      "authorizationScheme": "Basic",
+      "contentType": "application/json",
+      "body": ""
+    },
+    {
+      "provider": "confluence",
+      "method": "POST",
+      "path": "/confluence/wiki/rest/api/content/123/child/comment",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Basic",
+      "contentType": "application/json",
+      "body": "{\"type\":\"comment\",\"container\":{\"id\":\"123\",\"type\":\"page\"},\"body\":{\"storage\":{\"value\":\"<p>Decision captured for review.</p>\",\"representation\":\"storage\"}}}"
+    },
+    {
+      "provider": "notion",
+      "method": "POST",
+      "path": "/notion/v1/databases/db123/query",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"page_size\":20}"
+    },
+    {
+      "provider": "notion",
+      "method": "POST",
+      "path": "/notion/v1/databases/db123/query",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"page_size\":20}"
+    },
+    {
+      "provider": "notion",
+      "method": "PATCH",
+      "path": "/notion/v1/blocks/page123/children",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Bearer",
+      "contentType": "application/json",
+      "body": "{\"children\":[{\"object\":\"block\",\"type\":\"paragraph\",\"paragraph\":{\"rich_text\":[{\"type\":\"text\",\"text\":{\"content\":\"Decision captured for review.\"}}]}}]}"
+    },
+    {
+      "provider": "linear",
+      "method": "POST",
+      "path": "/linear/graphql",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Raw",
+      "contentType": "application/json",
+      "body": "{\"query\":\"query CognibrainIssues($teamId: String!) { issues(first: 20, filter: { team: { id: { eq: $teamId } } }) { nodes { id identifier title url updatedAt state { name } assignee { name } labels { nodes { name } } comments(first: 5) { nodes { id body user { name } updatedAt } } } } }\",\"variables\":{\"teamId\":\"team123\"}}"
+    },
+    {
+      "provider": "linear",
+      "method": "POST",
+      "path": "/linear/graphql",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Raw",
+      "contentType": "application/json",
+      "body": "{\"query\":\"query CognibrainIssues($teamId: String!) { issues(first: 20, filter: { team: { id: { eq: $teamId } } }) { nodes { id identifier title url updatedAt state { name } assignee { name } labels { nodes { name } } comments(first: 5) { nodes { id body user { name } updatedAt } } } } }\",\"variables\":{\"teamId\":\"team123\"}}"
+    },
+    {
+      "provider": "linear",
+      "method": "POST",
+      "path": "/linear/graphql",
+      "search": "",
+      "hasAuthorization": true,
+      "authorizationScheme": "Raw",
+      "contentType": "application/json",
+      "body": "{\"query\":\"mutation CognibrainComment($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success comment { id url } } }\",\"variables\":{\"issueId\":\"lin_123\",\"body\":\"Decision captured for review.\"}}"
     }
   ],
-  "memoryCount": 4,
-  "syncRecordCount": 9,
+  "memoryCount": 12,
+  "syncRecordCount": 21,
   "passed": true
 }

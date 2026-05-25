@@ -29,8 +29,8 @@ Canonical public messaging lives in `docs/marketing/messaging.md`; public claims
 - Makes recall inspectable through evidence packs instead of opaque vector hits.
 - Warns or blocks known bad actions such as editing generated files, using the wrong package manager, or following stale migration instructions.
 - Lets teams enforce memory boundaries with scopes, consent, policy rules, auth, and audit logs.
-- Gives operators reproducible proof through CogniCodeBench, local benchmarks, HTTP and vendor connector verifiers, Postgres gates, and dashboard artifacts.
-- Keeps deployment ownership local-first while still supporting self-hosted team storage and real GitHub, Slack, and Discord connector integrations.
+- Gives operators reproducible proof through CogniCodeBench, Benchmark Arena, local benchmarks, HTTP and vendor connector verifiers, Postgres gates, and dashboard artifacts.
+- Keeps deployment ownership local-first while still supporting self-hosted team storage and real GitHub, Slack, Discord, Jira, Confluence, Notion and Linear connector integrations.
 
 ## Users
 
@@ -68,7 +68,7 @@ Calm, technical, direct. Avoid hype. Prefer nouns like recall, evidence, source,
 - The app name appears as `cognibrain` in the app and browser title.
 - The Cognilabz logo is visible without making the product name `Cognilabz`.
 - A first-time user understands the three jobs: test recall, run memory hygiene, inspect proof.
-- A public README visitor understands setup, usage, benefits, production-readiness scope, CogniCodeBench, and how cognibrain differs from Mem0/GBrain-style alternatives.
+- A public README visitor understands setup, usage, benefits, production-readiness scope, CogniCodeBench, Benchmark Arena, and how cognibrain differs from Mem0/GBrain-style alternatives.
 - Launch copy reuses the canonical messaging pack and keeps self-hosted readiness separate from managed SaaS future claims.
 - The dashboard works on desktop and mobile with no horizontal overflow.
 - README feels like a polished public repo overview, not an internal report.

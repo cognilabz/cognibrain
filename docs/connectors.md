@@ -68,30 +68,38 @@ The runtime seeds official manifests for common work systems:
 - `official-calendar`
 - `official-cloud_storage`
 - `official-github`
+- `official-gitlab`
+- `official-azure-devops`
 - `official-jira`
+- `official-confluence`
 - `official-linear`
 - `official-slack`
 - `official-discord`
+- `official-microsoft-teams`
 - `official-notion`
 - `official-google-drive`
 - `official-gmail`
 - `official-google-calendar`
 
-Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, OAuth scope references, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, list/poll endpoints, and writeback configuration when supported. Service-specific manifests map GitHub issues and pull requests, Jira and Linear work items, Slack and Discord decisions, Notion pages, Google Drive files, Gmail threads, and Google Calendar events into auditable memory events. The official GitHub, Slack, and Discord manifests use built-in `vendor://` endpoints backed by real vendor API drivers instead of placeholder HTTP adapter URLs. Custom manifests can be registered through the CLI or HTTP API:
+Each manifest declares connector kind, version, direction (`ingest`, `export`, or `two_way`), auth style, OAuth scope references, capabilities (`ingest`, `export`, `webhook`, `poll`, `writeback`, `media`, `translation`), default source kind, metadata mapping, privacy policy, list/poll endpoints, and writeback configuration when supported. Service-specific manifests map GitHub issues and pull requests, GitLab and Azure DevOps issues/reviews/pipelines, Jira and Linear work items, Confluence and Notion pages, Slack/Discord/Teams decisions, Google Drive files, Gmail threads, and Google Calendar events into auditable memory events. The official GitHub, Slack, Discord, Jira, Confluence, Notion and Linear manifests use built-in `vendor://` endpoints backed by real vendor API drivers instead of placeholder HTTP adapter URLs. GitLab, Azure DevOps and Microsoft Teams are planned connector contracts with manifest, OAuth, list, poll and writeback shapes, but no certified vendor driver yet. Custom manifests can be registered through the CLI or HTTP API:
 
 Connector authors can use `src/connectors/sdk.ts` to keep local integrations consistent before exposing an HTTP endpoint. The SDK provides `createConnectorManifest()`, `normalizeConnectorEvent()`, `runConnectorPoll()`, `connectorAuthHeaders()`, and `createWritebackPlan()` so adapters can share manifest validation, sourceRef provenance, auth-reference headers, poll normalization, and dry-run writeback planning with the built-in service lifecycle.
 
 ## External Vendor Connectors
 
-GitHub, Slack, and Discord are first-class external connectors:
+GitHub, Slack, Discord, Jira, Confluence, Notion and Linear are first-class external connectors:
 
 | Connector | Required environment | Reads | Writes |
 | --- | --- | --- | --- |
 | `official-github` | `MEMORY_GITHUB_REPO`, `MEMORY_GITHUB_TOKEN` | Pull requests and failed workflow runs through the GitHub REST API | Issue or pull-request comments |
 | `official-slack` | `MEMORY_SLACK_TOKEN`, `MEMORY_SLACK_CHANNEL_ID` | Channel list and channel history through Slack Web API methods | `chat.postMessage` replies or summaries |
 | `official-discord` | `MEMORY_DISCORD_BOT_TOKEN`, `MEMORY_DISCORD_CHANNEL_ID` | Channel messages through Discord REST | Channel messages with mentions disabled by default |
+| `official-jira` | `MEMORY_JIRA_BASE_URL`, `MEMORY_JIRA_EMAIL`, `MEMORY_JIRA_API_TOKEN`, `MEMORY_JIRA_PROJECT` | Jira issue search with status, labels, assignee and comments | Atlassian document-format issue comments |
+| `official-confluence` | `MEMORY_CONFLUENCE_BASE_URL`, `MEMORY_CONFLUENCE_EMAIL`, `MEMORY_CONFLUENCE_API_TOKEN`, `MEMORY_CONFLUENCE_SPACE` | Confluence pages with labels, versions and storage body | Page comments in storage format |
+| `official-notion` | `MEMORY_NOTION_TOKEN`, `MEMORY_NOTION_DATABASE_ID` | Notion database query results and page metadata | Paragraph blocks appended to a page or block |
+| `official-linear` | `MEMORY_LINEAR_API_KEY`, `MEMORY_LINEAR_TEAM_ID` | Linear issues, state, labels and comments through GraphQL | `commentCreate` GraphQL mutation |
 
-Optional base URL variables (`MEMORY_GITHUB_API_BASE`, `MEMORY_SLACK_API_BASE`, `MEMORY_DISCORD_API_BASE`) make the same drivers testable against hermetic fixtures. Runtime sync records redact `authorization` headers before persistence, and `connector-writeback` dry-runs build the exact request plan without posting to the vendor.
+Optional base URL variables (`MEMORY_GITHUB_API_BASE`, `MEMORY_SLACK_API_BASE`, `MEMORY_DISCORD_API_BASE`, `MEMORY_JIRA_BASE_URL`, `MEMORY_CONFLUENCE_BASE_URL`, `MEMORY_NOTION_API_BASE`, `MEMORY_LINEAR_API_BASE`) make the same drivers testable against hermetic fixtures. Runtime sync records redact `authorization` headers before persistence, and `connector-writeback` dry-runs build the exact request plan without posting to the vendor.
 
 ```bash
 ./bin/cognibrain.mjs memory connector-register '{"id":"support-chat","name":"Support Chat","kind":"chat","version":"1.0.0","direction":"two_way","capabilities":["ingest","webhook","writeback"],"auth":"token","defaultSourceKind":"transcript","metadataMapping":{"channel":"metadata.channel","messageId":"externalId"}}'
@@ -119,7 +127,7 @@ OAuth connectors can declare an `oauth` block. The runtime then manages a statef
 
 `connector-auth-begin` emits an authorization URL with state, redirect URI and scopes. `connector-auth-callback` stores only a token reference plus hash, then attaches that `authRef` to list/poll/writeback blocks that need it. `connector-auth-revoke` marks matching sessions revoked and clears endpoint auth references without exposing the prior token.
 
-List/poll-capable manifests can include endpoint blocks. `connector-list` returns external items without writing memory. `connector-poll` routes normalized events through the same add-only extraction path as `connector-sync`; custom HTTP connectors provide a JSON body with `events`, while built-in vendor connectors call the GitHub, Slack, or Discord APIs directly and normalize their responses in-process. GitHub PR decisions and Actions failures are tagged as decision/action memories; chat decisions from Slack or Discord are kept as `needs_verification` memory candidates when a channel or event requires review, and channel visibility metadata is mapped to consent visibility before reuse. Set `privacyPolicy:"never_store"` for connectors that should prove polling without storing any event content. Writeback-capable manifests can include a `writeback` block with an endpoint, method, auth reference, and allowed operations. Without an endpoint, `connector-writeback` and `/connectors/writeback` create a queued dry-run plan for review. With an endpoint and `dryRun:false`, Cognibrain sends the source-specific payload as HTTP using `x-cognibrain-connector`, `x-cognibrain-operation`, and optional HMAC `x-cognibrain-signature` headers for custom connectors, or uses the native vendor driver for GitHub comments, Slack `chat.postMessage`, and Discord channel messages. `connector-feedback` and `/connectors/feedback` convert accepted changes, rejected suggestions, failing tests, and user corrections into trust/importance updates plus a durable feedback memory.
+List/poll-capable manifests can include endpoint blocks. `connector-list` returns external items without writing memory. `connector-poll` routes normalized events through the same add-only extraction path as `connector-sync`; custom HTTP connectors provide a JSON body with `events`, while built-in vendor connectors call the GitHub, Slack, Discord, Jira, Confluence, Notion or Linear APIs directly and normalize their responses in-process. GitHub PR decisions and Actions failures are tagged as decision/action memories; chat decisions from Slack or Discord are kept as `needs_verification` memory candidates when a channel or event requires review; Jira and Linear corrections are tagged as engineering corrections; Confluence and Notion architecture/runbook pages are tagged as architecture decisions. Set `privacyPolicy:"never_store"` for connectors that should prove polling without storing any event content. Writeback-capable manifests can include a `writeback` block with an endpoint, method, auth reference, and allowed operations. Without an endpoint, `connector-writeback` and `/connectors/writeback` create a queued dry-run plan for review. With an endpoint and `dryRun:false`, Cognibrain sends the source-specific payload as HTTP using `x-cognibrain-connector`, `x-cognibrain-operation`, and optional HMAC `x-cognibrain-signature` headers for custom connectors, or uses the native vendor driver for GitHub comments, Slack `chat.postMessage`, Discord channel messages, Jira comments, Confluence comments, Notion block append and Linear comments. `connector-feedback` and `/connectors/feedback` convert accepted changes, rejected suggestions, failing tests, and user corrections into trust/importance updates plus a durable feedback memory.
 
 Run the live connector gate with:
 
@@ -129,7 +137,7 @@ npm run verify:vendor-connectors
 npm run verify:vendor-live
 ```
 
-`verify:connectors` starts a local HTTP connector target, verifies OAuth hash/revoke, pulls GitHub/Slack/Discord-shaped events, sends writebacks, checks connector health, and runs the harness package installer in a temporary project. `verify:vendor-connectors` keeps the seeded official manifests intact, points their vendor API bases at hermetic fixtures, verifies real GitHub/Slack/Discord REST paths, auth schemes, writeback endpoints, dry-run no-post behavior, source provenance, review queues, connector health, and secret redaction.
+`verify:connectors` starts a local HTTP connector target, verifies OAuth hash/revoke, pulls GitHub/Slack/Discord-shaped events, sends writebacks, checks connector health, and runs the harness package installer in a temporary project. `verify:vendor-connectors` keeps the seeded official manifests intact, points their vendor API bases at hermetic fixtures, verifies GitHub/Slack/Discord/Jira/Confluence/Notion REST paths plus Linear GraphQL, auth schemes, writeback endpoints, dry-run no-post behavior, source provenance, review queues, connector health, and secret redaction.
 
 ## Connector Compatibility
 
@@ -138,7 +146,7 @@ Self-hosted compatibility has three layers:
 | Gate | Command | What it proves |
 | --- | --- | --- |
 | Harness packages | `npm run verify:connectors` | Generates Codex, Claude Code, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI configs, then runs the Claude Code hook golden path from context to patch evidence. |
-| Vendor contract | `npm run verify:vendor-connectors` | Exercises the built-in GitHub, Slack and Discord vendor drivers against hermetic REST fixtures without leaking secrets. |
+| Vendor contract | `npm run verify:vendor-connectors` | Exercises the built-in GitHub, Slack, Discord, Jira, Confluence, Notion and Linear vendor drivers against hermetic REST/GraphQL fixtures without leaking secrets. |
 | Deployment credentials | `npm run verify:vendor-live` | Produces `artifacts/vendor-live-smoke.json`; skips network by default and can run real tenant list/poll/dry-run writeback when `MEMORY_VENDOR_LIVE_SMOKE=true` plus provider credentials are set. |
 
 For live credential checks, keep writeback dry-run until the target issue, pull request, channel or thread is explicitly approved. Set `MEMORY_VENDOR_LIVE_WRITE=true` only for a controlled smoke target.
@@ -168,6 +176,16 @@ flowchart LR
 | GitHub vendor | Yes | N/A | Token reference | Yes | Planned/custom | PR/issue comment | `verify:vendor-live` | [`integrations/github.md`](integrations/github.md) | vendor-smoke required |
 | Slack vendor | Yes | N/A | Token reference | Yes | Planned/custom | `chat.postMessage` | `verify:vendor-live` | [`integrations/slack-discord.md`](integrations/slack-discord.md) | vendor-smoke required |
 | Discord vendor | Yes | N/A | Token reference | Yes | Planned/custom | Channel message | `verify:vendor-live` | [`integrations/slack-discord.md`](integrations/slack-discord.md) | vendor-smoke required |
+| Jira vendor | Yes | Yes, `connector add jira` | Token reference | Yes | Planned/custom | Issue comment | `verify:vendor-live` | [`integrations/jira-confluence-notion-linear.md`](integrations/jira-confluence-notion-linear.md) | vendor-smoke required |
+| Confluence vendor | Yes | Yes, `connector add confluence` | Token reference | Yes | Planned/custom | Page comment | `verify:vendor-live` | [`integrations/jira-confluence-notion-linear.md`](integrations/jira-confluence-notion-linear.md) | vendor-smoke required |
+| Notion vendor | Yes | Yes, `connector add notion` | Token reference | Yes | Planned/custom | Append block | `verify:vendor-live` | [`integrations/jira-confluence-notion-linear.md`](integrations/jira-confluence-notion-linear.md) | vendor-smoke required |
+| Linear vendor | Yes | Yes, `connector add linear` | Token reference | Yes | Planned/custom | Issue comment | `verify:vendor-live` | [`integrations/jira-confluence-notion-linear.md`](integrations/jira-confluence-notion-linear.md) | vendor-smoke required |
+| GitLab vendor | Yes | Planned | OAuth contract | Planned contract | Planned/custom | Comment/status contract | Planned | Connector contract in this page | planned |
+| Azure DevOps vendor | Yes | Planned | OAuth contract | Planned contract | Planned/custom | Comment/status contract | Planned | Connector contract in this page | planned |
+| Gmail vendor | Yes | Planned | OAuth contract | Planned contract | Planned/custom | Label/summary contract | Planned | Connector contract in this page | planned |
+| Google Drive vendor | Yes | Planned | OAuth contract | Planned contract | Planned/custom | Tag/summary contract | Planned | Connector contract in this page | planned |
+| Google Calendar vendor | Yes | Planned | OAuth contract | Planned contract | Planned/custom | Summary/link contract | Planned | Connector contract in this page | planned |
+| Microsoft Teams vendor | Yes | Planned | OAuth contract | Planned contract | Planned/custom | Message contract | Planned | Connector contract in this page | planned |
 
 Claim IDs: `CB-CLAIM-CONNECTORS`, `CB-CLAIM-CONNECTOR-MATURITY`.
 

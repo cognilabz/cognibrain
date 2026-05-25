@@ -962,7 +962,7 @@ export interface ConnectorManifest {
     redirectUri?: string;
   };
   vendor?: {
-    provider: "github" | "slack" | "discord";
+    provider: "github" | "slack" | "discord" | "jira" | "confluence" | "notion" | "linear";
     docsUrl: string;
     requiredEnv: string[];
     realSmokeEnv?: string[];

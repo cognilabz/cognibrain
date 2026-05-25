@@ -15,6 +15,8 @@ This is stronger than a synthetic demo because the certified runners use public 
 
 The current repo also proves a category-specific Engineering Memory OS loop through CogniCodeBench. That artifact is intentionally synthetic: it measures whether coding-agent corrections, review feedback, commands, tool outcomes, generated-file rules, and codebase migrations carry into the next patch. It should be compared with other coding-agent memory systems only when they run the same scenario schema and report the same correction carryover, repeated mistake, procedure recall, evidence, and stale-rule metrics.
 
+Benchmark Arena is the new comparison surface for that exact boundary. `npm run benchmark:arena` runs Cognibrain as `same-run-full` and Mem0, Graphiti/Zep, Cognee, LangMem and GBrain as local `same-run-api-shape` adapters on one scenario stream. The public table is intentionally aggressive but bounded: it ranks correction-to-next-patch behavior and shows proof level beside every row.
+
 Focused market pages:
 
 - [`docs/market/engineering-memory-os.md`](market/engineering-memory-os.md)
@@ -27,6 +29,7 @@ Focused market pages:
 - [`docs/market/stop-fixing-same-agent-mistake.md`](market/stop-fixing-same-agent-mistake.md)
 - [`docs/market/cognicodebench-proof.md`](market/cognicodebench-proof.md)
 - [`docs/market/evidence-grade-memory.md`](market/evidence-grade-memory.md)
+- [`docs/market/same-benchmark.md`](market/same-benchmark.md)
 
 Product-grade comparison pages:
 

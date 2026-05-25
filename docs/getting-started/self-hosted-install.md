@@ -10,6 +10,17 @@ export POSTGRES_PASSWORD="$(openssl rand -hex 32)"
 docker compose -f docker/docker-compose.yml up --build
 ```
 
+## Guided CLI
+
+```bash
+npx cognibrain init --profile team
+npx cognibrain connector add github
+npx cognibrain connector add jira
+npx cognibrain doctor --fix
+```
+
+`init` writes `.cognibrain/setup-state.json`, connector stubs under `.cognibrain/connectors/`, harness configs, and first-run next steps. Connector stubs store only `env:` references and missing-env status, never credential values.
+
 ## Required Environment
 
 - `MEMORY_REQUIRE_AUTH=true`
@@ -25,6 +36,8 @@ docker compose -f docker/docker-compose.yml up --build
 ```bash
 npm run verify:postgres
 npm run verify:compatibility
+npm run benchmark:arena
+npm run audit:plan1_5
 ./bin/cognibrain.mjs doctor --publish
 npm run release:check
 ```

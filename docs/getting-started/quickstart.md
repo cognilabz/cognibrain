@@ -13,6 +13,7 @@ npx cognibrain config show --json
 npx cognibrain connections
 npx cognibrain connections connectors list
 npx cognibrain connections adapters list
+npx cognibrain service plan
 npx cognibrain skill status
 ```
 

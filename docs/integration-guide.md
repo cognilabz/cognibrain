@@ -69,6 +69,7 @@ Use `memory_context_pack` before long-running agent work and `memory_add` after 
 ./bin/cognibrain.mjs         # CLI home for runtime, memories, connections and config
 ./bin/cognibrain.mjs status
 ./bin/cognibrain.mjs dashboard   # optional browser dashboard
+./bin/cognibrain.mjs service plan # systemd, launchd, or Windows Task Scheduler startup plan
 ./bin/cognibrain.mjs stop
 npm run verify               # tests + evaluation + build
 ```

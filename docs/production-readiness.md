@@ -6,7 +6,7 @@ cognibrain is ready to present as an open-source, self-hosted Engineering Memory
 
 | Area | Ready today | Required gate |
 | --- | --- | --- |
-| Local install | React/Ink CLI home, guided setup, memory workbench, connections/config surfaces, API, optional dashboard, MCP, harness package generation, connector config, adapter config and skill lifecycle | `npx cognibrain`, `npx cognibrain init`, `./bootstrap.sh --self-hosted`, or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
+| Local install | React/Ink CLI home, guided setup, memory workbench, connections/config surfaces, API, native service automation, optional dashboard, MCP, harness package generation, connector config, adapter config and skill lifecycle | `npx cognibrain`, `npx cognibrain init`, `npx cognibrain service plan`, `./bootstrap.sh --self-hosted`, or `./bin/cognibrain.mjs setup --self-hosted` plus `./bin/cognibrain.mjs doctor --publish` |
 | Team API | API-key auth, actor ids, policy rules, scoped retrieval, audit events | `MEMORY_REQUIRE_AUTH=true` and `MEMORY_API_KEYS` set before exposing the server |
 | Durable storage | JSON/JSONL, SQLite FTS5, Postgres-compatible CI mode, psql-backed Postgres/Cockroach remote driver | `npm run verify:postgres` against the target Postgres path |
 | Evidence and governance | MemoryRecordV2, EvidencePack, why-used explanations, Engineering Memory types, coding context packs, action guards, patch evidence trails, policy checks, graph paths, retention review, audit chain | `npm run verify:nextgen`, `npm run benchmark:cognicode`, `npm run verify:status`, and `npm run audit:plan1_3` |
@@ -65,6 +65,17 @@ npx cognibrain skill status
 ```
 
 This proves setup, memory write, evidence export, API startup, terminal operator health, connector/adapter visibility, Codex Skill generation, and local health. Use [`getting-started/setup-cli.md`](getting-started/setup-cli.md) for the interactive setup flow and connector examples. The browser dashboard remains opt-in through `npx cognibrain dashboard`.
+
+Native service automation is also CLI-controlled:
+
+```bash
+npx cognibrain service plan --platform linux --json
+npx cognibrain service plan --platform macos --json
+npx cognibrain service plan --platform windows --json
+npx cognibrain service install --activate
+```
+
+The generated service runs the foreground runtime under systemd, launchd, or Windows Task Scheduler and keeps the dashboard off unless `--dashboard` is set.
 
 ### Self-Hosted Compose
 

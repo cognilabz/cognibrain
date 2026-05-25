@@ -161,6 +161,22 @@ npx cognibrain dashboard
 npx cognibrain start --dashboard
 ```
 
+### Service Automation
+
+Self-hosted installs can run the API automatically without a browser session. The CLI plans, writes and controls OS-native service startup:
+
+```bash
+npx cognibrain service plan
+npx cognibrain service plan --platform linux --json
+npx cognibrain service plan --platform macos --json
+npx cognibrain service plan --platform windows --json
+npx cognibrain service install --activate
+npx cognibrain service status
+npx cognibrain service logs
+```
+
+Linux uses systemd, macOS uses launchd, and Windows uses Task Scheduler so no extra service wrapper is required. Service config is visible through `cognibrain service --json`; runtime options are configured through flags such as `--dashboard`, `--system`, `--port`, `--db-path`, and repeated `--env KEY=value`.
+
 ## Optional Dashboard
 
 The dashboard is a working inspection surface, not a decorative demo, but it is not required for local operation. It presents cognibrain as a browser view over the same runtime and operator gate exposed by the CLI:

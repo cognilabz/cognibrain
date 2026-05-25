@@ -19,6 +19,6 @@ curl http://localhost:8787/audit/chain
 - benchmark drift
 - repeated mistake rate from CogniCodeBench
 
-`cognibrain status`, `cognibrain memories`, and `cognibrain connections` expose the day-to-day operator state in the terminal. The optional dashboard reads `/metrics` and connector health when you want a browser view.
+`cognibrain status`, `cognibrain memories`, `cognibrain connections`, and `cognibrain service status` expose the day-to-day operator state in the terminal. The optional dashboard reads `/metrics` and connector health when you want a browser view.
 
 Claim IDs: `CB-CLAIM-PRODUCTION`, `CB-CLAIM-OBSERVABILITY`.

@@ -30,6 +30,16 @@ The CLI is the primary operator surface for self-hosting. `npx cognibrain` shows
 npx cognibrain dashboard
 ```
 
+For unattended startup, install the native service from the CLI:
+
+```bash
+npx cognibrain service plan --json
+npx cognibrain service install --activate --env MEMORY_REQUIRE_AUTH=true
+npx cognibrain service status
+```
+
+Linux uses systemd, macOS uses launchd, and Windows uses Task Scheduler. Use `--system` for a machine-level Linux/macOS service and `--dashboard` only when the optional browser UI should run too.
+
 ## Required Environment
 
 - `MEMORY_REQUIRE_AUTH=true`

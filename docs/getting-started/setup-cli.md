@@ -64,6 +64,40 @@ npx cognibrain memories coding-context "prepare a release patch"
 npx cognibrain memory why-used "Why did this release memory appear?"
 ```
 
+## Service Automation
+
+Use `service` when cognibrain should start automatically after login or boot. The command is still CLI-first: it shows the exact native file, environment, runtime root and activation command before you enable anything.
+
+```bash
+npx cognibrain service plan
+npx cognibrain service plan --platform linux --json
+npx cognibrain service plan --platform macos --json
+npx cognibrain service plan --platform windows --json
+npx cognibrain service install --activate
+npx cognibrain service status
+npx cognibrain service start
+npx cognibrain service stop
+npx cognibrain service uninstall --deactivate
+```
+
+Supported managers:
+
+| OS | Manager | Default scope |
+| --- | --- | --- |
+| Linux | systemd | user service, `--system` for machine service |
+| macOS | launchd | LaunchAgent, `--system` for LaunchDaemon |
+| Windows | Task Scheduler | current-user startup task |
+
+Configure the service without editing generated files:
+
+```bash
+npx cognibrain service install --env MEMORY_REQUIRE_AUTH=true
+npx cognibrain service install --dashboard --port 8787 --dashboard-port 5173
+npx cognibrain service install --db-path .cognibrain/memory.json
+```
+
+The service runs `cognibrain --runtime-root <path> dev` in the foreground so systemd, launchd or Task Scheduler owns the process. `cognibrain start` remains the manual API daemon path. Do not put secret token values directly into `--env`; use deployment-owned service-manager secret handling for production credentials.
+
 ## Non-Interactive Profiles
 
 ```bash

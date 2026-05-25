@@ -16,6 +16,16 @@ npm install
 ./bin/cognibrain.mjs dashboard
 ```
 
+To start cognibrain automatically on this machine, use the CLI service surface:
+
+```bash
+./bin/cognibrain.mjs service plan
+./bin/cognibrain.mjs service install --activate
+./bin/cognibrain.mjs service status
+```
+
+Linux uses systemd, macOS uses launchd, and Windows uses Task Scheduler. Add `--dashboard` only if the optional browser UI should also start as part of the service.
+
 ## Troubleshooting
 
 - If `tsx` is missing, run `npm install`.

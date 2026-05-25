@@ -30,6 +30,7 @@ Canonical public messaging lives in `docs/marketing/messaging.md`; public claims
 - Warns or blocks known bad actions such as editing generated files, using the wrong package manager, or following stale migration instructions.
 - Lets teams enforce memory boundaries with scopes, consent, policy rules, auth, and audit logs.
 - Gives operators reproducible proof through CogniCodeBench, Benchmark Arena, local benchmarks, HTTP and vendor connector verifiers, Postgres gates, CLI status surfaces, and optional dashboard artifacts.
+- Lets self-hosted operators automate startup from the CLI through systemd, launchd, or Windows Task Scheduler without making the dashboard mandatory.
 - Keeps deployment ownership local-first while supporting self-hosted team storage and native connector integrations across code hosts, chat, docs, tasks, incident tools, observability and product systems.
 
 ## Users

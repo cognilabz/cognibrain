@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import http from "node:http";
-import { homedir } from "node:os";
+import { homedir, platform as hostPlatformName } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -11,8 +11,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const launchCwd = process.cwd();
 const rawArgs = process.argv.slice(2);
 const { args, runtimeRoot } = parseGlobalArgs(rawArgs);
-const command = args[0];
-const commandArgs = args.slice(1);
+const command = args[0]?.startsWith("--") ? undefined : args[0];
+const commandArgs = args[0]?.startsWith("--") ? args : args.slice(1);
 
 switch (command) {
   case undefined:
@@ -51,6 +51,10 @@ switch (command) {
 
   case "stop":
     runNodeAndExit("scripts/start-local.mjs", ["--stop"]);
+    break;
+
+  case "service":
+    await serviceCommand(commandArgs);
     break;
 
   case "clean":
@@ -218,6 +222,45 @@ async function connectionsCommand(connectionArgs = []) {
     return;
   }
   connectionsUsage(1);
+}
+
+async function serviceCommand(serviceArgs = []) {
+  const subcommand = firstSubcommand(serviceArgs);
+  if (subcommand === "help" || subcommand === "--help") {
+    serviceUsage(0);
+    return;
+  }
+  const plan = servicePlan(serviceArgs);
+  if (["overview", "status", "plan", "list"].includes(subcommand)) {
+    if (serviceArgs.includes("--json")) printJson(plan);
+    else await renderCliSurface("service", plan, { title: "cognibrain service" });
+    return;
+  }
+  if (subcommand === "install") {
+    const dryRun = serviceArgs.includes("--dry-run");
+    const result = dryRun ? { ...plan, dryRun: true, written: [] } : writeServicePlan(plan);
+    if (!dryRun && serviceArgs.includes("--activate")) runServiceNativeAction(plan, "enable");
+    if (serviceArgs.includes("--json")) printJson(result);
+    else printServiceInstall(result, dryRun);
+    return;
+  }
+  if (subcommand === "uninstall" || subcommand === "remove") {
+    if (serviceArgs.includes("--deactivate") && existsSync(plan.files.descriptor)) runServiceNativeAction(plan, "disable");
+    const result = removeServicePlan(plan);
+    if (serviceArgs.includes("--json")) printJson(result);
+    else printServiceRemove(result);
+    return;
+  }
+  if (["enable", "disable", "start", "stop", "restart"].includes(subcommand)) {
+    runServiceNativeAction(plan, subcommand);
+    return;
+  }
+  if (subcommand === "logs") {
+    if (serviceArgs.includes("--json")) printJson(plan.logs);
+    else printServiceLogs(plan);
+    return;
+  }
+  serviceUsage(1);
 }
 
 async function doctor(doctorArgs) {
@@ -1200,6 +1243,7 @@ async function cliHomeData() {
   const config = readConfigurationState();
   const connections = connectionsDashboardData();
   const memories = await memoryDashboardData(["--limit", "5"]);
+  const service = servicePlan([]);
   return {
     schemaVersion: "1.0",
     package: packageInfo(),
@@ -1207,6 +1251,7 @@ async function cliHomeData() {
     config,
     memories,
     connections,
+    service,
     primaryInterface: "cli",
     dashboard: {
       optional: true,
@@ -1221,6 +1266,8 @@ async function cliHomeData() {
       "cognibrain connections",
       "cognibrain connections add github --set repo=owner/repo",
       "cognibrain config show",
+      "cognibrain service plan",
+      "cognibrain service install --activate",
       "cognibrain dashboard"
     ]
   };
@@ -1258,6 +1305,318 @@ function runtimeStatus() {
     },
     mode: apiAlive ? (uiAlive ? "api+optional-dashboard" : "api-only") : "stopped"
   };
+}
+
+function servicePlan(serviceArgs = []) {
+  const targetPlatform = normalizeServicePlatform(optionValue(serviceArgs, "--platform") ?? optionValue(serviceArgs, "--os") ?? serviceHostPlatform());
+  const serviceName = optionValue(serviceArgs, "--name") ?? "cognibrain";
+  const label = optionValue(serviceArgs, "--label") ?? `dev.cognilabz.${serviceName}`;
+  const system = serviceArgs.includes("--system");
+  const dashboardEnabled = serviceArgs.includes("--dashboard") || serviceArgs.includes("--with-dashboard");
+  const serviceDir = join(runtimeRoot, ".cognibrain", "service");
+  const metadataPath = join(serviceDir, "service.json");
+  const logs = {
+    stdout: join(serviceDir, "cognibrain.out.log"),
+    stderr: join(serviceDir, "cognibrain.err.log")
+  };
+  const node = process.execPath;
+  const cli = join(root, "bin", "cognibrain.mjs");
+  const dbPath = optionValue(serviceArgs, "--db-path") ?? process.env.MEMORY_DB_PATH ?? join(runtimeRoot, ".memory-harness.json");
+  const env = {
+    COGNIBRAIN_RUNTIME_ROOT: runtimeRoot,
+    MEMORY_DB_PATH: dbPath,
+    NODE_ENV: optionValue(serviceArgs, "--node-env") ?? process.env.NODE_ENV ?? "production",
+    ...serviceEnvFromArgs(serviceArgs)
+  };
+  if (optionValue(serviceArgs, "--port")) env.PORT = optionValue(serviceArgs, "--port");
+  if (optionValue(serviceArgs, "--dashboard-port")) env.VITE_PORT = optionValue(serviceArgs, "--dashboard-port");
+  if (dashboardEnabled) env.COGNIBRAIN_DASHBOARD = "true";
+
+  const execArgs = [cli, "--runtime-root", runtimeRoot, "dev", ...(dashboardEnabled ? ["--dashboard"] : [])];
+  const scope = system ? "system" : "user";
+  const descriptorPath = serviceDescriptorPath(targetPlatform, serviceName, label, scope, serviceDir);
+  const descriptor = serviceDescriptor(targetPlatform, {
+    name: serviceName,
+    label,
+    scope,
+    node,
+    cli,
+    execArgs,
+    runtimeRoot,
+    root,
+    env,
+    logs
+  });
+  const commands = serviceNativeCommands(targetPlatform, { name: serviceName, label, scope, descriptorPath, scriptPath: descriptorPath });
+  const installed = existsSync(descriptorPath) || existsSync(metadataPath);
+  return {
+    schemaVersion: "1.0",
+    platform: targetPlatform,
+    hostPlatform: serviceHostPlatform(),
+    manager: serviceManager(targetPlatform),
+    name: serviceName,
+    label,
+    scope,
+    runtimeRoot,
+    dashboard: { enabled: dashboardEnabled, optional: true },
+    command: { executable: node, args: execArgs },
+    env,
+    files: {
+      descriptor: descriptorPath,
+      metadata: metadataPath,
+      logs
+    },
+    descriptor,
+    installed,
+    runtime: runtimeStatus(),
+    commands,
+    actions: [
+      "cognibrain service plan --json",
+      "cognibrain service install --activate",
+      "cognibrain service status",
+      "cognibrain service start",
+      "cognibrain service stop",
+      "cognibrain service uninstall --deactivate"
+    ],
+    notes: serviceNotes(targetPlatform)
+  };
+}
+
+function serviceHostPlatform() {
+  const value = hostPlatformName();
+  if (value === "darwin") return "macos";
+  if (value === "win32") return "windows";
+  return "linux";
+}
+
+function normalizeServicePlatform(value) {
+  const normalized = String(value).toLowerCase();
+  if (["darwin", "mac", "macos", "osx"].includes(normalized)) return "macos";
+  if (["win", "win32", "windows"].includes(normalized)) return "windows";
+  if (["linux", "systemd"].includes(normalized)) return "linux";
+  console.error(`Unknown service platform: ${value}`);
+  serviceUsage(1);
+}
+
+function serviceManager(targetPlatform) {
+  if (targetPlatform === "macos") return "launchd";
+  if (targetPlatform === "windows") return "task-scheduler";
+  return "systemd";
+}
+
+function serviceDescriptorPath(targetPlatform, name, label, scope, serviceDir) {
+  if (targetPlatform === "macos") {
+    return scope === "system" ? `/Library/LaunchDaemons/${label}.plist` : join(homedir(), "Library", "LaunchAgents", `${label}.plist`);
+  }
+  if (targetPlatform === "windows") return join(serviceDir, `${name}.service.ps1`);
+  return scope === "system" ? `/etc/systemd/system/${name}.service` : join(homedir(), ".config", "systemd", "user", `${name}.service`);
+}
+
+function serviceDescriptor(targetPlatform, options) {
+  if (targetPlatform === "macos") return launchdPlist(options);
+  if (targetPlatform === "windows") return windowsServiceScript(options);
+  return systemdUnit(options);
+}
+
+function systemdUnit({ name, node, execArgs, runtimeRoot, root: workingDirectory, env }) {
+  const envLines = Object.entries(env).map(([key, value]) => `Environment=${systemdQuote(`${key}=${value}`)}`).join("\n");
+  return `[Unit]
+Description=Cognibrain self-hosted memory runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=${systemdQuote(workingDirectory)}
+${envLines}
+ExecStart=${systemdQuote(node)} ${execArgs.map(systemdQuote).join(" ")}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+`;
+}
+
+function launchdPlist({ label, node, execArgs, runtimeRoot: _runtimeRoot, root: workingDirectory, env, logs }) {
+  const envEntries = Object.entries(env)
+    .map(([key, value]) => `    <key>${xmlEscape(key)}</key>\n    <string>${xmlEscape(value)}</string>`)
+    .join("\n");
+  const args = [node, ...execArgs]
+    .map((arg) => `    <string>${xmlEscape(arg)}</string>`)
+    .join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${xmlEscape(label)}</string>
+  <key>ProgramArguments</key>
+  <array>
+${args}
+  </array>
+  <key>WorkingDirectory</key>
+  <string>${xmlEscape(workingDirectory)}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+${envEntries}
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${xmlEscape(logs.stdout)}</string>
+  <key>StandardErrorPath</key>
+  <string>${xmlEscape(logs.stderr)}</string>
+</dict>
+</plist>
+`;
+}
+
+function windowsServiceScript({ node, execArgs, root: workingDirectory, env }) {
+  const envLines = Object.entries(env)
+    .map(([key, value]) => `$env:${key} = ${powershellString(value)}`)
+    .join("\n");
+  const args = execArgs.map(powershellString).join(" ");
+  return `$ErrorActionPreference = "Stop"
+Set-Location ${powershellString(workingDirectory)}
+${envLines}
+& ${powershellString(node)} ${args}
+exit $LASTEXITCODE
+`;
+}
+
+function serviceEnvFromArgs(args) {
+  return Object.fromEntries(optionValues(args, "--env").map((item) => {
+    const index = item.indexOf("=");
+    if (index <= 0) {
+      console.error(`Invalid --env value: ${item}. Use KEY=value.`);
+      process.exit(1);
+    }
+    return [item.slice(0, index), item.slice(index + 1)];
+  }));
+}
+
+function serviceNativeCommands(targetPlatform, { name, label, scope, descriptorPath }) {
+  if (targetPlatform === "macos") {
+    return {
+      enable: [`launchctl load -w ${shellQuote(descriptorPath)}`],
+      disable: [`launchctl unload -w ${shellQuote(descriptorPath)}`],
+      start: [`launchctl start ${shellQuote(label)}`],
+      stop: [`launchctl stop ${shellQuote(label)}`],
+      restart: [`launchctl stop ${shellQuote(label)}`, `launchctl start ${shellQuote(label)}`],
+      status: [`launchctl list | grep ${shellQuote(label)}`],
+      uninstall: [`rm ${shellQuote(descriptorPath)}`]
+    };
+  }
+  if (targetPlatform === "windows") {
+    const task = `Cognibrain\\${name}`;
+    const action = `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${descriptorPath.replace(/'/g, "''")}'`;
+    return {
+      enable: [`schtasks /Create /TN "${task}" /SC ONLOGON /TR "${action}" /F`],
+      disable: [`schtasks /Delete /TN "${task}" /F`],
+      start: [`schtasks /Run /TN "${task}"`],
+      stop: [`schtasks /End /TN "${task}"`],
+      restart: [`schtasks /End /TN "${task}"`, `schtasks /Run /TN "${task}"`],
+      status: [`schtasks /Query /TN "${task}" /V /FO LIST`],
+      uninstall: [`del "${descriptorPath}"`]
+    };
+  }
+  const prefix = scope === "system" ? "sudo systemctl" : "systemctl --user";
+  const unit = `${name}.service`;
+  return {
+    enable: [`${prefix} daemon-reload`, `${prefix} enable --now ${unit}`],
+    disable: [`${prefix} disable --now ${unit}`],
+    start: [`${prefix} start ${unit}`],
+    stop: [`${prefix} stop ${unit}`],
+    restart: [`${prefix} restart ${unit}`],
+    status: [`${prefix} status ${unit}`],
+    uninstall: [`rm ${shellQuote(descriptorPath)}`]
+  };
+}
+
+function serviceNotes(targetPlatform) {
+  if (targetPlatform === "windows") return ["Windows uses Task Scheduler for no-extra-dependency background startup.", "Use --dashboard only when the optional browser UI should run too."];
+  if (targetPlatform === "macos") return ["macOS uses launchd LaunchAgents by default.", "Use --system only for LaunchDaemons when installing with administrator rights."];
+  return ["Linux uses systemd user services by default.", "Use --system for a machine service when installing with administrator rights."];
+}
+
+function writeServicePlan(plan) {
+  if (plan.platform !== serviceHostPlatform()) {
+    console.error(`Refusing to install ${plan.platform} service files on ${serviceHostPlatform()}. Use service plan --platform ${plan.platform} --json on this host, or run install on the target OS.`);
+    process.exit(1);
+  }
+  mkdirSync(dirname(plan.files.descriptor), { recursive: true });
+  mkdirSync(dirname(plan.files.logs.stdout), { recursive: true });
+  writeFileSync(plan.files.descriptor, plan.descriptor);
+  const metadata = { ...plan, descriptor: undefined };
+  writeJson(plan.files.metadata, metadata);
+  return { ...plan, installed: true, written: [plan.files.descriptor, plan.files.metadata], dryRun: false };
+}
+
+function removeServicePlan(plan) {
+  const removed = [];
+  for (const path of [plan.files.descriptor, plan.files.metadata]) {
+    if (existsSync(path)) {
+      rmSync(path, { force: true });
+      removed.push(path);
+    }
+  }
+  return { ...plan, installed: false, removed };
+}
+
+function runServiceNativeAction(plan, action) {
+  if (plan.platform !== serviceHostPlatform()) {
+    console.error(`Cannot run ${plan.platform} ${action} command on ${serviceHostPlatform()}.`);
+    process.exit(1);
+  }
+  const commands = action === "uninstall" ? plan.commands.uninstall : plan.commands[action];
+  if (!commands?.length) serviceUsage(1);
+  for (const command of commands) {
+    const result = spawnSync(command, [], { cwd: root, shell: true, stdio: "inherit" });
+    if (result.status !== 0) process.exit(result.status ?? 1);
+  }
+}
+
+function printServiceInstall(result, dryRun) {
+  console.log(`${dryRun ? "would write" : "wrote"} ${result.manager} service for ${result.platform}`);
+  console.log(`descriptor: ${result.files.descriptor}`);
+  console.log(`metadata: ${result.files.metadata}`);
+  console.log(`runtime: ${result.runtimeRoot}`);
+  console.log(`dashboard: ${result.dashboard.enabled ? "enabled" : "optional/off"}`);
+  console.log(`next: ${result.commands.enable.join(" && ")}`);
+}
+
+function printServiceRemove(result) {
+  console.log(`removed service files: ${result.removed.length ? result.removed.join(", ") : "none"}`);
+}
+
+function printServiceLogs(plan) {
+  if (plan.platform === "linux") console.log(`logs: ${plan.scope === "system" ? "journalctl -u" : "journalctl --user -u"} ${plan.name}.service -f`);
+  else if (plan.platform === "macos") console.log(`logs: tail -f ${plan.files.logs.stdout} ${plan.files.logs.stderr}`);
+  else console.log(`logs: schtasks /Query /TN "Cognibrain\\${plan.name}" /V /FO LIST`);
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function systemdQuote(value) {
+  return `"${String(value).replace(/(["\\$`])/g, "\\$1")}"`;
+}
+
+function powershellString(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function xmlEscape(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 async function memoryDashboardData(memoryArgs = []) {
@@ -2480,6 +2839,22 @@ async function renderCliSurface(kind, payload, options = {}) {
 }
 
 function surfaceLines(kind, payload) {
+  if (kind === "service") {
+    return {
+      metrics: [
+        ["platform", `${payload.platform} (${payload.manager})`, "cyan"],
+        ["installed", payload.installed ? "yes" : "no", payload.installed ? "green" : "yellow"],
+        ["runtime", payload.runtime?.mode ?? "unknown", payload.runtime?.api?.alive ? "green" : "yellow"],
+        ["dashboard", payload.dashboard?.enabled ? "enabled" : "optional/off", payload.dashboard?.enabled ? "green" : "gray"]
+      ],
+      sections: [
+        { title: "Files", items: [payload.files?.descriptor, payload.files?.metadata].filter(Boolean) },
+        { title: "Commands", items: payload.actions ?? [] },
+        { title: "Native Enable", items: payload.commands?.enable ?? [] },
+        { title: "Notes", items: payload.notes ?? [] }
+      ]
+    };
+  }
   if (kind === "memories") {
     const health = payload.health ?? {};
     return {
@@ -2523,6 +2898,7 @@ function surfaceLines(kind, payload) {
     sections: [
       { title: "Memories", items: [`${payload.memories?.health?.memories ?? payload.memories?.recent?.length ?? 0} stored`, "cognibrain memories search <query>", "cognibrain memories add <text>"] },
       { title: "Connections", items: [`${payload.connections?.connectors?.configured?.length ?? 0} connectors configured`, `${payload.connections?.adapters?.configured?.length ?? 0} adapters configured`, "cognibrain connections add github --set repo=owner/repo"] },
+      { title: "Service", items: [`${payload.service?.platform ?? "local"} ${payload.service?.installed ? "installed" : "not installed"}`, "cognibrain service plan", "cognibrain service install --activate"] },
       { title: "Commands", items: payload.commands ?? [] }
     ]
   };
@@ -2633,6 +3009,12 @@ Usage:
       Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
   cognibrain start [--dashboard] | dev [--dashboard] | dashboard | status | stop
       Manage the local API runtime; the web dashboard is optional and starts only with dashboard opt-in
+  cognibrain service [plan|status] [--platform linux|macos|windows] [--json]
+      Inspect native service automation for systemd, launchd, or Windows Task Scheduler
+  cognibrain service install [--activate] [--dashboard] [--system] [--env KEY=value]
+      Write native service files for automated startup; activation is explicit
+  cognibrain service start|stop|restart|uninstall|logs
+      Control or inspect the installed native service from the CLI
   cognibrain memories [list|status] [--json]
       CLI memory workbench with recent memories, health, maintenance, and dashboard-equivalent memory actions
   cognibrain memories <add|search|coding-context|evidence-pack|why-used|graph|timeline|dream|marketplace|...>
@@ -2680,6 +3062,21 @@ Usage:
 
 function initUsage(exitCode) {
   console.log(`Usage: cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dry-run] [--dashboard] [--no-start] [--no-doctor] [--no-skill] [--no-demo]`);
+  process.exit(exitCode);
+}
+
+function serviceUsage(exitCode) {
+  console.log(`Usage:
+  cognibrain service [plan|status] [--platform linux|macos|windows] [--system] [--dashboard] [--json]
+  cognibrain service install [--activate] [--dry-run] [--dashboard] [--system] [--env KEY=value] [--port 8787] [--db-path <path>]
+  cognibrain service enable|disable|start|stop|restart
+  cognibrain service uninstall [--deactivate]
+  cognibrain service logs
+
+Native managers:
+  linux: systemd user service by default, system service with --system
+  macos: launchd LaunchAgent by default, LaunchDaemon with --system
+  windows: Task Scheduler startup task without extra dependencies`);
   process.exit(exitCode);
 }
 

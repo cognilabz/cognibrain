@@ -18,11 +18,39 @@ describe("cognibrain CLI", () => {
     expect(output).toContain("cognibrain doctor");
     expect(output).toContain("cognibrain memories");
     expect(output).toContain("cognibrain connections");
+    expect(output).toContain("cognibrain service");
     expect(output).toContain("cognibrain memory search");
     expect(output).toContain("React/Ink guided");
     expect(output).toContain("azure-devops");
     expect(output).toContain("cognibrain adapter list");
     expect(output).toContain("cognibrain skill install|status|doctor|path");
+  }, slowCliTimeout);
+
+  it("plans native service automation for Linux, macOS, and Windows from the CLI", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-service-"));
+    try {
+      const linux = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "service", "plan", "--platform", "linux", "--system", "--dashboard", "--env", "MEMORY_REQUIRE_AUTH=true", "--json"], { cwd: dir, encoding: "utf8" }));
+      const macos = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "service", "plan", "--platform", "macos", "--json"], { cwd: dir, encoding: "utf8" }));
+      const windows = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "service", "plan", "--platform", "windows", "--json"], { cwd: dir, encoding: "utf8" }));
+      const dryRun = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "service", "install", "--platform", "windows", "--dry-run", "--json"], { cwd: dir, encoding: "utf8" }));
+
+      expect(linux.manager).toBe("systemd");
+      expect(linux.files.descriptor).toBe("/etc/systemd/system/cognibrain.service");
+      expect(linux.descriptor).toContain("[Service]");
+      expect(linux.descriptor).toContain("--dashboard");
+      expect(linux.descriptor).toContain("Environment=\"MEMORY_REQUIRE_AUTH=true\"");
+      expect(linux.commands.enable.join(" ")).toContain("systemctl");
+      expect(macos.manager).toBe("launchd");
+      expect(macos.descriptor).toContain("<key>ProgramArguments</key>");
+      expect(macos.commands.enable.join(" ")).toContain("launchctl");
+      expect(windows.manager).toBe("task-scheduler");
+      expect(windows.descriptor).toContain("Set-Location");
+      expect(windows.commands.enable.join(" ")).toContain("schtasks /Create");
+      expect(dryRun.dryRun).toBe(true);
+      expect(existsSync(join(dir, ".cognibrain", "service", "cognibrain.service.ps1"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }, slowCliTimeout);
 
   it("opens the package-style CLI home without requiring the web dashboard", () => {
@@ -38,6 +66,7 @@ describe("cognibrain CLI", () => {
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "connections", "add", "github", "--set", "repo=cognilabz/cognibrain", "--token-env", "MEMORY_GITHUB_TOKEN"], { cwd: dir, env, encoding: "utf8" });
 
       const home = execFileSync(process.execPath, [cli, "--runtime-root", dir], { cwd: dir, env, encoding: "utf8" });
+      const homeJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "--json"], { cwd: dir, env, encoding: "utf8" }));
       const status = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "status", "--json"], { cwd: dir, env, encoding: "utf8" }));
       const memoriesJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories", "--json"], { cwd: dir, env, encoding: "utf8" }));
       const connectionsJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "connections", "--json"], { cwd: dir, env, encoding: "utf8" }));
@@ -52,6 +81,8 @@ describe("cognibrain CLI", () => {
       expect(connections).toContain("cognibrain connections");
       expect(connections).toContain("github");
       expect(status.package.name).toBe("@cognilabz/cognibrain");
+      expect(homeJson.service.manager).toBeTruthy();
+      expect(homeJson.commands).toContain("cognibrain service plan");
       expect(status.dashboard.optional).toBe(true);
       expect(status.runtime.dashboard.optional).toBe(true);
       expect(memoriesJson.recent.length).toBeGreaterThan(0);

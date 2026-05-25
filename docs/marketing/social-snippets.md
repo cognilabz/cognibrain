@@ -25,7 +25,7 @@ Claim IDs: `CB-CLAIM-COGNICODE`, `CB-CLAIM-CONTEXT`.
 
 1. Show HN: cognibrain, a self-hosted Engineering Memory OS for coding agents. It focuses on correction carryover, patch evidence and connector telemetry rather than generic user-fact memory. Claim IDs: `CB-CLAIM-CONTEXT`, `CB-CLAIM-PATCH-EVIDENCE`.
 2. We added a synthetic benchmark called CogniCodeBench to test whether an agent avoids a corrected coding mistake on the next patch. The docs keep synthetic proof separate from real customer repo claims. Claim IDs: `CB-CLAIM-COGNICODE`, `CB-CLAIM-ABLATION`.
-3. cognibrain is local-first: CLI-first operation, API, MCP, optional dashboard, Docker/Kubernetes starter artifacts, 19 native vendor drivers, and verifier paths that separate hermetic proof from tenant live-smoke certification. Managed SaaS is not claimed yet. Claim IDs: `CB-CLAIM-PRODUCTION`, `CB-CLAIM-CONNECTORS`.
+3. cognibrain is local-first: CLI-first operation, service automation, API, MCP, optional dashboard, Docker/Kubernetes starter artifacts, 19 native vendor drivers, and verifier paths that separate hermetic proof from tenant live-smoke certification. Managed SaaS is not claimed yet. Claim IDs: `CB-CLAIM-PRODUCTION`, `CB-CLAIM-CONNECTORS`.
 
 ## LinkedIn Post
 

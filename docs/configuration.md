@@ -11,6 +11,8 @@ npm install
 
 The local launcher starts the API by default, chooses the next open port if a default port is busy, and writes runtime state under `.cognibrain/` in the launch directory. `./bin/cognibrain.mjs` opens the terminal operator home for status, memories, connections and config. Start the optional browser dashboard with `./bin/cognibrain.mjs dashboard`, `./bin/cognibrain.mjs start --dashboard`, or `COGNIBRAIN_DASHBOARD=true`. Set `COGNIBRAIN_RUNTIME_ROOT` or pass `--runtime-root <path>` to pin the memory/state directory somewhere else.
 
+For unattended startup, use `./bin/cognibrain.mjs service plan` and `./bin/cognibrain.mjs service install --activate`. The service surface writes native systemd, launchd, or Windows Task Scheduler configuration and records the plan under `.cognibrain/service/service.json`.
+
 Run a publish readiness check:
 
 ```bash

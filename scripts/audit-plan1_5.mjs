@@ -79,6 +79,7 @@ const checks = [
     has(files.cli, "renderCliSurface"),
     has(files.cli, "case \"memories\""),
     has(files.cli, "case \"connections\""),
+    has(files.cli, "case \"service\""),
     has(files.cli, "connector add"),
     has(files.cli, "doctor --fix"),
     has(files.package, "\"ink\""),
@@ -106,6 +107,21 @@ const checks = [
     has(files.startLocal, "const withDashboard"),
     has(files.startLocal, "optional; run cognibrain dashboard"),
     has(files.startLocal, "requireExecutable(\"vite\") : null")
+  ]),
+  check("CLI service automation covers Linux macOS and Windows", [
+    has(files.cli, "serviceCommand"),
+    has(files.cli, "servicePlan"),
+    has(files.cli, "launchd"),
+    has(files.cli, "systemd"),
+    has(files.cli, "task-scheduler"),
+    has(files.cli, "schtasks /Create"),
+    has(files.cli, "cognibrain service install --activate"),
+    has(files.setupCli, "Service Automation"),
+    has(files.setupCli, "systemd"),
+    has(files.setupCli, "launchd"),
+    has(files.setupCli, "Task Scheduler"),
+    has(files.readme, "Service Automation"),
+    has(files.readme, "cognibrain service plan --platform windows --json")
   ]),
   check("setup UX and docs are product-ready", [
     has(files.setupCli, "React/Ink"),

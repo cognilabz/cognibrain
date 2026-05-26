@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("..", import.meta.url));
+const root = fileURLToPath(new URL("../..", import.meta.url));
 const cli = join(root, "bin", "cognibrain.mjs");
 const outDir = join(root, "artifacts", "demos");
 const mode = process.argv[2] ?? "--all";

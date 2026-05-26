@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = new URL("../..", import.meta.url).pathname;
 const extraArgs = process.argv.slice(2);
 const arenaArgs = [
   "tsx",
@@ -33,7 +33,7 @@ const arenaArgs = [
 const env = {
   ...process.env,
   MEMORY_ARENA_AUTO_NATIVE: process.env.MEMORY_ARENA_AUTO_NATIVE ?? "false",
-  MEMORY_ARENA_LANGMEM_COMMAND: process.env.MEMORY_ARENA_LANGMEM_COMMAND ?? `${process.execPath} ${join(root, "scripts", "competitors", "native-python-runner.mjs")} --system langmem`,
+  MEMORY_ARENA_LANGMEM_COMMAND: process.env.MEMORY_ARENA_LANGMEM_COMMAND ?? `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "native-python-runner.mjs")} --system langmem`,
   MEMORY_ARENA_LANGMEM_PROOF_LEVEL: process.env.MEMORY_ARENA_LANGMEM_PROOF_LEVEL ?? "same-run-native",
   MEMORY_ARENA_RUNNER_TIMEOUT_MS: process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS ?? "60000",
   MEMORY_ARENA_PYTHON_RUNNER_TIMEOUT_MS: process.env.MEMORY_ARENA_PYTHON_RUNNER_TIMEOUT_MS ?? "60000"

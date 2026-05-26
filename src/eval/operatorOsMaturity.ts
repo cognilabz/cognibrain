@@ -37,7 +37,7 @@ const surfaces = [
   surface("Logs", ["cognibrain service logs", "cognibrain doctor --publish"], ["service logs", "Readiness doctor"], ["bin/cognibrain.mjs"]),
   surface("Policies", ["cognibrain memory policy-rule", "cognibrain memory policy-evaluate"], ["id: \"policies\"", "Policy rules"], ["src/cli/memctl.ts", "src/api/server.ts"]),
   surface("Retention", ["cognibrain memory retention-rule", "cognibrain memory retention-enforce"], ["id: \"retention\"", "Retention and compliance"], ["src/cli/memctl.ts", "src/api/server.ts"]),
-  surface("Docs", ["cognibrain proof", "npm run audit:docs"], ["docs/status.md", "docs/claims.md"], ["scripts/audit-docs.mjs"])
+  surface("Docs", ["cognibrain proof", "npm run audit:docs"], ["docs/status.md", "docs/claims.md"], ["scripts/release/audit-docs.mjs"])
 ];
 
 export function generateOperatorOsMaturity(options: { out?: string; markdown?: string } = {}): OperatorOsReport {

@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = new URL("../..", import.meta.url).pathname;
 const read = (path) => readFileSync(join(root, path), "utf8");
 const exists = (path) => existsSync(join(root, path));
 const json = (path) => JSON.parse(read(path));

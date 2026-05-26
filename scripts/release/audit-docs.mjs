@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = new URL("../..", import.meta.url).pathname;
 const read = (path) => readFileSync(join(root, path), "utf8");
 const exists = (path) => existsSync(join(root, path));
 const has = (content, needle) => content.includes(needle);

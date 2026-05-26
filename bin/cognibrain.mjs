@@ -35,15 +35,15 @@ switch (command) {
     break;
 
   case "start":
-    runNodeAndExit("scripts/start-local.mjs", ["--daemon", ...commandArgs]);
+    runNodeAndExit("scripts/runtime/start-local.mjs", ["--daemon", ...commandArgs]);
     break;
 
   case "dev":
-    runNodeAndExit("scripts/start-local.mjs", commandArgs);
+    runNodeAndExit("scripts/runtime/start-local.mjs", commandArgs);
     break;
 
   case "dashboard":
-    runNodeAndExit("scripts/start-local.mjs", ["--daemon", "--dashboard", ...commandArgs]);
+    runNodeAndExit("scripts/runtime/start-local.mjs", ["--daemon", "--dashboard", ...commandArgs]);
     break;
 
   case "status":
@@ -56,7 +56,7 @@ switch (command) {
     break;
 
   case "stop":
-    runNodeAndExit("scripts/start-local.mjs", ["--stop"]);
+    runNodeAndExit("scripts/runtime/start-local.mjs", ["--stop"]);
     break;
 
   case "service":
@@ -119,7 +119,7 @@ async function setup(setupArgs) {
   }
   const flags = new Set(setupArgs);
   const selfHosted = flags.has("--self-hosted");
-  if (!flags.has("--no-skill")) runNodeChecked("scripts/install-codex-skill.mjs", []);
+  if (!flags.has("--no-skill")) runNodeChecked("scripts/runtime/install-codex-skill.mjs", []);
 
   if (flags.has("--all-harnesses") || selfHosted) {
     writeHarnessConfig("all");
@@ -142,7 +142,7 @@ async function setup(setupArgs) {
     if (flags.has("--devin-style")) writeHarnessConfig("devin-style");
   }
 
-  if (!flags.has("--no-start")) runNodeChecked("scripts/start-local.mjs", ["--daemon", ...(flags.has("--dashboard") ? ["--dashboard"] : [])]);
+  if (!flags.has("--no-start")) runNodeChecked("scripts/runtime/start-local.mjs", ["--daemon", ...(flags.has("--dashboard") ? ["--dashboard"] : [])]);
   if (!flags.has("--no-doctor")) await doctor(selfHosted ? ["--publish"] : []);
 }
 
@@ -156,24 +156,12 @@ async function cliHome(homeArgs = []) {
     printJson(result);
     return;
   }
-  if (homeArgs.includes("--classic")) {
-    await renderCliSurface("home", result, { title: "cognibrain CLI home" });
-    return;
-  }
-  try {
-    const { renderInteractiveCliApp } = await import(pathToFileURL(join(root, "src", "cli", "inkApp.mjs")).href);
-    await renderInteractiveCliApp(result, {
-      interactive: process.stdout.isTTY === true && process.env.COGNIBRAIN_FORCE_INK !== "true" && !homeArgs.includes("--snapshot"),
-      snapshotMs: Number(process.env.COGNIBRAIN_CLI_SNAPSHOT_MS ?? 80)
-    });
-  } catch {
-    await renderCliSurface("home", result, { title: "cognibrain CLI home" });
-  }
+  await renderCliSurface("home", result, { title: "cognibrain" });
 }
 
 async function statusCommand(statusArgs = []) {
   if (statusArgs.includes("--raw")) {
-    runNodeAndExit("scripts/start-local.mjs", ["--status"]);
+    runNodeAndExit("scripts/runtime/start-local.mjs", ["--status"]);
     return;
   }
   const result = await cliHomeData();
@@ -192,7 +180,7 @@ async function proofCommand(proofArgs = []) {
   const refresh = !proofArgs.includes("--no-refresh");
   let refreshError;
   if (refresh) {
-    const result = runCapture(process.execPath, ["scripts/audit-product-truth.mjs"]);
+    const result = runCapture(process.execPath, ["scripts/release/audit-product-truth.mjs"]);
     if (result.status !== 0) refreshError = result.stderr || result.stdout || `audit exited with ${result.status}`;
   }
   const result = productTruthData(refreshError);
@@ -335,7 +323,7 @@ async function doctor(doctorArgs) {
     }
     const skillPath = join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills", "cognibrain", "SKILL.md");
     if (!existsSync(skillPath) && !doctorArgs.includes("--no-skill")) {
-      runNodeChecked("scripts/install-codex-skill.mjs", []);
+      runNodeChecked("scripts/runtime/install-codex-skill.mjs", []);
       fixed.push("codex-skill");
     }
     if (!noStart) {
@@ -343,7 +331,7 @@ async function doctor(doctorArgs) {
       const apiAlive = state?.api?.pid ? isAlive(state.api.pid) : false;
       const uiAlive = state?.ui?.pid ? isAlive(state.ui.pid) : false;
       if (!apiAlive || (dashboardRequired && !uiAlive)) {
-        runNodeChecked("scripts/start-local.mjs", ["--daemon", ...(dashboardRequired ? ["--dashboard"] : [])]);
+        runNodeChecked("scripts/runtime/start-local.mjs", ["--daemon", ...(dashboardRequired ? ["--dashboard"] : [])]);
         fixed.push("runtime");
       }
     }
@@ -356,7 +344,7 @@ async function doctor(doctorArgs) {
   const npmVersion = runCapture("npm", ["--version"]);
   add("npm available", npmVersion.status === 0, npmVersion.stdout.trim() || npmVersion.stderr.trim());
   add("package manifest", existsSync(join(root, "package.json")), join(root, "package.json"));
-  add("runtime launcher", existsSync(join(root, "scripts", "start-local.mjs")), "scripts/start-local.mjs");
+  add("runtime launcher", existsSync(join(root, "scripts", "runtime", "start-local.mjs")), "scripts/runtime/start-local.mjs");
   add("CLI entrypoint", existsSync(join(root, "bin", "cognibrain.mjs")), "bin/cognibrain.mjs");
   const tsx = resolveExecutable("tsx");
   add("tsx runtime", Boolean(tsx), tsx ?? "missing");
@@ -377,8 +365,7 @@ async function doctor(doctorArgs) {
   add("adapter credentials", adapterReadiness.ok || adapterReadiness.checks.length === 0, adapterReadiness.checks.length ? `${adapterReadiness.checks.filter((check) => check.ok).length}/${adapterReadiness.checks.length} configured` : "no adapter configs yet", adapterReadiness.ok || adapterReadiness.checks.length === 0 ? "ok" : "warn");
   const publicArenaReady = existsSync(join(root, "public", "benchmark-arena", "results.json")) && existsSync(join(root, "docs", "benchmarks", "latest-arena.md"));
   add("benchmark artifacts fresh enough", publicArenaReady, publicArenaReady ? "public arena and latest markdown present" : "run npm run benchmark:arena && npm run benchmark:arena:publish", publicArenaReady ? "ok" : "warn");
-  const cliAssetsReady = ["cli-home.svg", "cli-connections.svg", "cli-service.svg"].every((name) => existsSync(join(root, "docs", "assets", name)));
-  add("docs assets", cliAssetsReady, cliAssetsReady ? "curated CLI docs assets present" : "run npm run docs:cli-screenshots", cliAssetsReady ? "ok" : "warn");
+  add("operator CLI", !files.packageJson.dependencies?.ink && files.cli.includes("function renderPlainSurface"), "stable compact text surface");
   const mcpReady = existsSync(join(root, "src", "connectors", "mcpServer.ts")) && existsSync(join(root, "src", "connectors", "mcpHandlers.ts"));
   add("MCP server files", mcpReady, mcpReady ? "src/connectors/mcpServer.ts" : "missing MCP server files");
 
@@ -482,7 +469,7 @@ async function init(initArgs) {
   writeSetupState(profile, {
     selectedAt: new Date().toISOString(),
     installCommand: "npx cognibrain init",
-    uiFramework: "ink-react",
+    uiFramework: "plain-cli",
     dryRun: initArgs.includes("--dry-run"),
     primaryInterface: "cli",
     dashboard: initArgs.includes("--dashboard") ? "opt-in-started" : "optional"
@@ -502,7 +489,7 @@ async function skillCommand(commandArgs) {
   const fix = commandArgs.includes("--fix");
   const path = codexSkillPath();
   if (subcommand === "install") {
-    runNodeAndExit("scripts/install-codex-skill.mjs", []);
+    runNodeAndExit("scripts/runtime/install-codex-skill.mjs", []);
     return;
   }
   if (subcommand === "path") {
@@ -510,7 +497,7 @@ async function skillCommand(commandArgs) {
     return;
   }
   if (subcommand === "status" || subcommand === "doctor") {
-    if (!existsSync(path) && (subcommand === "doctor" || fix)) runNodeChecked("scripts/install-codex-skill.mjs", []);
+    if (!existsSync(path) && (subcommand === "doctor" || fix)) runNodeChecked("scripts/runtime/install-codex-skill.mjs", []);
     const installed = existsSync(path);
     const result = {
       installed,
@@ -1417,7 +1404,7 @@ async function cliAppData() {
   });
   return {
     ...home,
-    surface: "interactive-ink-cli",
+    surface: "operator-cli",
     configCatalog: configCatalog(),
     connectors: {
       ...home.connections.connectors,
@@ -1477,7 +1464,7 @@ function productTruthData(refreshError) {
       ["arena.competitors.realRuns", systems.filter((system) => system.system !== "cognibrain" && ["same-run-native", "same-run-cloud-api", "same-run-cli", "vendor-signed", "real-customer-field"].includes(system.proofLevel)).length, "artifacts/arena/run.json"],
       ["connectors.tenantLiveSmokes", maturityRows.filter((row) => row.maturity?.liveSmoke).length, "artifacts/connector-maturity.json"]
     ],
-    checks: refreshError ? [{ id: "truth-refresh", message: String(refreshError).slice(0, 500), passed: false, severity: "fail", evidence: { command: "node scripts/audit-product-truth.mjs" } }] : [],
+    checks: refreshError ? [{ id: "truth-refresh", message: String(refreshError).slice(0, 500), passed: false, severity: "fail", evidence: { command: "node scripts/release/audit-product-truth.mjs" } }] : [],
     openGaps: []
   };
   return {
@@ -2364,7 +2351,7 @@ function platformSdkManifest({ slug, name, kind, direction, auth, envPrefix }) {
 }
 
 function platformIntegrationTemplate({ slug, name, kind, direction, auth, envPrefix }) {
-  const clientImport = pathToFileURL(join(root, "src", "sdk", "client.ts")).href;
+  const clientImport = pathToFileURL(join(root, "sdk", "typescript", "client.ts")).href;
   const sdkImport = pathToFileURL(join(root, "src", "connectors", "sdk.ts")).href;
   return [
     'import { pathToFileURL } from "node:url";',
@@ -3283,101 +3270,11 @@ function optionValues(argv, name) {
 }
 
 async function renderCliPanel(kind, payload, options = {}) {
-  if (process.stdout.isTTY !== true && process.env.COGNIBRAIN_FORCE_INK !== "true") {
-    renderPlainPanel(kind, payload, options);
-    return;
-  }
-  try {
-    const React = await import("react");
-    const ink = await import("ink");
-    const h = React.createElement;
-    const Text = ink.Text;
-    const Box = ink.Box;
-    const muted = (text) => h(Text, { color: "gray" }, text);
-    const line = (label, value, color = "white") => h(Box, { gap: 1 }, h(Text, { color: "gray" }, `${label}:`), h(Text, { color }, String(value)));
-    const list = (items) => (items ?? []).map((item, index) => h(Text, { key: `${item}-${index}` }, `  ${index + 1}. ${item}`));
-    let body;
-    if (kind === "connector") {
-      body = [
-        line("connector", `${payload.connectorId} (${payload.status})`, payload.status === "vendor-driver" ? "green" : "yellow"),
-        line("config", options.path ?? ""),
-        line("credentials", payload.missingEnv?.length ? `missing ${payload.missingEnv.join(", ")}` : "env refs ready", payload.missingEnv?.length ? "yellow" : "green"),
-        line("docs", payload.docs),
-        muted("sample memory events"),
-        ...list(payload.preview?.sampleMemoryEvents),
-        muted("next"),
-        ...list(payload.nextSteps)
-      ];
-    } else if (kind === "adapter") {
-      body = [
-        line("adapter", `${payload.adapterId} (${payload.kind}, ${payload.status})`, payload.status === "built-in" ? "green" : "yellow"),
-        line("config", options.path ?? ""),
-        line("credentials", payload.missingEnv?.length ? `missing ${payload.missingEnv.join(", ")}` : "env refs ready", payload.missingEnv?.length ? "yellow" : "green"),
-        line("docs", payload.docs),
-        muted("sample memory events"),
-        ...list(payload.preview?.sampleMemoryEvents),
-        muted("next"),
-        ...list(payload.nextSteps)
-      ];
-    } else {
-      body = [
-        line("profile", `${payload.name} - ${payload.label}`, "cyan"),
-        line("runtime", options.runtimeRoot ?? runtimeRoot),
-        line("storage", payload.storage),
-        line("auth", payload.auth),
-        line("harnesses", payload.harnesses.join(", ")),
-        line("connectors", payload.connectors.join(", ") || "none"),
-        line("adapters", (payload.adapters ?? []).join(", ") || "none"),
-        muted("next"),
-        ...list(payload.nextSteps)
-      ];
-    }
-    const element = h(
-      Box,
-      { flexDirection: "column", borderStyle: "round", borderColor: "cyan", paddingX: 1, paddingY: 0 },
-      h(Text, { bold: true, color: "cyan" }, options.title ?? "cognibrain"),
-      ...body
-    );
-    const instance = ink.render(element, { exitOnCtrlC: false });
-    await new Promise((resolveTimeout) => setTimeout(resolveTimeout, 20));
-    instance.unmount();
-  } catch {
-    renderPlainPanel(kind, payload, options);
-  }
+  renderPlainPanel(kind, payload, options);
 }
 
 async function renderCliSurface(kind, payload, options = {}) {
-  if (process.stdout.isTTY !== true && process.env.COGNIBRAIN_FORCE_INK !== "true") {
-    renderPlainSurface(kind, payload, options);
-    return;
-  }
-  try {
-    const React = await import("react");
-    const ink = await import("ink");
-    const h = React.createElement;
-    const Text = ink.Text;
-    const Box = ink.Box;
-    const line = (label, value, color = "white") => h(Box, { gap: 1 }, h(Text, { color: "gray" }, `${label}:`), h(Text, { color }, String(value)));
-    const section = (title, items = []) => h(
-      Box,
-      { key: title, flexDirection: "column", marginTop: 1 },
-      h(Text, { bold: true, color: "cyan" }, title),
-      ...items.map((item, index) => h(Text, { key: `${title}-${index}` }, `  ${item}`))
-    );
-    const body = surfaceLines(kind, payload);
-    const element = h(
-      Box,
-      { flexDirection: "column", borderStyle: "round", borderColor: "cyan", paddingX: 1, paddingY: 0 },
-      h(Text, { bold: true, color: "cyan" }, options.title ?? "cognibrain"),
-      ...body.metrics.map(([label, value, color]) => line(label, value, color)),
-      ...body.sections.map((item) => section(item.title, item.items))
-    );
-    const instance = ink.render(element, { exitOnCtrlC: false });
-    await new Promise((resolveTimeout) => setTimeout(resolveTimeout, 20));
-    instance.unmount();
-  } catch {
-    renderPlainSurface(kind, payload, options);
-  }
+  renderPlainSurface(kind, payload, options);
 }
 
 function surfaceLines(kind, payload) {

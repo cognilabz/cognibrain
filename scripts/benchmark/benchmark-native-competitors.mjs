@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = new URL("../..", import.meta.url).pathname;
 const out = optionValue("--out") ?? "artifacts/arena/native-competitors.json";
 const count = optionValue("--count") ?? "30";
 const pythonVenv = process.env.MEMORY_ARENA_COMPETITOR_VENV ?? join(root, ".cognibrain", "native-runners", "competitors-venv");
@@ -23,15 +23,15 @@ const installations = {
 const env = {
   ...process.env,
   MEMORY_ARENA_COMPETITOR_PYTHON: pythonBin,
-  MEMORY_ARENA_MEM0_COMMAND: `${process.execPath} ${join(root, "scripts", "competitors", "native-python-runner.mjs")} --system mem0`,
+  MEMORY_ARENA_MEM0_COMMAND: `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "native-python-runner.mjs")} --system mem0`,
   MEMORY_ARENA_MEM0_PROOF_LEVEL: "same-run-native",
-  MEMORY_ARENA_GRAPHITI_COMMAND: `${process.execPath} ${join(root, "scripts", "competitors", "native-python-runner.mjs")} --system graphiti`,
+  MEMORY_ARENA_GRAPHITI_COMMAND: `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "native-python-runner.mjs")} --system graphiti`,
   MEMORY_ARENA_GRAPHITI_PROOF_LEVEL: "credential-blocked",
-  MEMORY_ARENA_COGNEE_COMMAND: `${process.execPath} ${join(root, "scripts", "competitors", "native-python-runner.mjs")} --system cognee`,
+  MEMORY_ARENA_COGNEE_COMMAND: `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "native-python-runner.mjs")} --system cognee`,
   MEMORY_ARENA_COGNEE_PROOF_LEVEL: "credential-blocked",
-  MEMORY_ARENA_LANGMEM_COMMAND: `${process.execPath} ${join(root, "scripts", "competitors", "native-python-runner.mjs")} --system langmem`,
+  MEMORY_ARENA_LANGMEM_COMMAND: `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "native-python-runner.mjs")} --system langmem`,
   MEMORY_ARENA_LANGMEM_PROOF_LEVEL: "same-run-native",
-  MEMORY_ARENA_GBRAIN_COMMAND: `${process.execPath} ${join(root, "scripts", "competitors", "gbrain-runner.mjs")}`,
+  MEMORY_ARENA_GBRAIN_COMMAND: `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "gbrain-runner.mjs")}`,
   MEMORY_ARENA_GBRAIN_PROOF_LEVEL: "same-run-cli",
   MEMORY_ARENA_GBRAIN_REPO: gbrainRepo,
   MEMORY_ARENA_GBRAIN_HOME: gbrainHome,
@@ -40,7 +40,7 @@ const env = {
 };
 
 if (process.env.MEM0_API_KEY || process.env.MEMORY_ARENA_MEM0_API_KEY) {
-  env.MEMORY_ARENA_MEM0_COMMAND = `${process.execPath} ${join(root, "scripts", "competitors", "mem0-runner.mjs")}`;
+  env.MEMORY_ARENA_MEM0_COMMAND = `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "mem0-runner.mjs")}`;
   env.MEMORY_ARENA_MEM0_PROOF_LEVEL = "same-run-cloud-api";
   env.MEMORY_ARENA_MEM0_API_KEY = process.env.MEM0_API_KEY ?? process.env.MEMORY_ARENA_MEM0_API_KEY;
   if (process.env.MEM0_BASE_URL) env.MEMORY_ARENA_MEM0_BASE_URL = process.env.MEM0_BASE_URL;

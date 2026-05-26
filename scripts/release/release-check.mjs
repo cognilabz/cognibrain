@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = new URL("../..", import.meta.url).pathname;
 const artifactPath = join(root, "artifacts", "release-check.json");
 const steps = [
   ["unit tests", "npm", ["run", "test"]],
@@ -12,6 +12,7 @@ const steps = [
   ["CogniCodeBench", "npm", ["run", "benchmark:cognicode"]],
   ["Benchmark Arena", "npm", ["run", "benchmark:arena"]],
   ["first-win demo", "npm", ["run", "demo:first-win"]],
+  ["structure audit", "npm", ["run", "audit:structure"]],
   ["docs audit", "npm", ["run", "audit:docs"]],
   ["Postgres verifier", "npm", ["run", "verify:postgres"]],
   ["connector compatibility", "npm", ["run", "verify:compatibility"]],

@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const home = process.env.HOME;
 if (!home && !process.env.CODEX_HOME) {
   console.error("CODEX_HOME or HOME is required to install the Codex skill.");

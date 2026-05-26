@@ -76,7 +76,7 @@ Important routes:
 ## TypeScript SDK
 
 ```ts
-import { CognibrainClient } from "@cognilabz/cognibrain/src/sdk/client";
+import { CognibrainClient } from "@cognilabz/cognibrain/sdk/typescript/client";
 
 const client = new CognibrainClient({ baseUrl: "http://127.0.0.1:8787" });
 await client.addMemory({
@@ -96,3 +96,5 @@ python3 -m unittest discover -s sdk/python/tests
 ```
 
 See [../sdk/python/README.md](../sdk/python/README.md) for the dependency-free Python client.
+
+The TypeScript and Python SDKs both wrap the same HTTP API. TypeScript is shipped for Node/TS applications; Python is shipped for LangGraph, CrewAI and Python automation. Agents should still use MCP first when MCP is available.

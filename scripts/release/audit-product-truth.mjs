@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = new URL("../..", import.meta.url).pathname;
 const artifactPath = join(root, "artifacts", "product-truth-audit.json");
 const realCompetitorLevels = new Set(["same-run-native", "same-run-cloud-api", "same-run-cli", "vendor-signed", "real-customer-field"]);
 const acceptableModeledLevels = new Set(["same-run-api-shape", "artifact-import", "credential-blocked", "public-claim-only", "planned"]);
@@ -21,7 +21,7 @@ const files = {
   vendorApiSpecs: readJson("artifacts/vendor-api-specs.json", { rows: [], summary: {} }),
   vendorLive: readJson("artifacts/vendor-live-smoke.json", { liveRequested: false, writebackEnabled: false, providers: [] }),
   postgresLive: readJson("artifacts/postgres-live.json", { acceptance: {} }),
-  releaseCheck: read("scripts/release-check.mjs"),
+  releaseCheck: read("scripts/release/release-check.mjs"),
   cli: read("bin/cognibrain.mjs"),
   server: read("src/api/server.ts"),
   service: read("src/api/service.ts"),
@@ -227,7 +227,7 @@ const checks = [
   ].every((path) => !packageFiles.has(path)), "fail", {
     packageFiles: Array.from(packageFiles).filter((path) => path.startsWith("artifacts/"))
   }),
-  check("truth-gate-release", "Release and verification gates run the code-first product truth audit.", files.packageJson.scripts?.["audit:truth"] === "node scripts/audit-product-truth.mjs" && files.packageJson.scripts?.["verify:nextgen"]?.includes("audit:truth") && files.releaseCheck.includes("audit:truth"), "fail", {
+  check("truth-gate-release", "Release and verification gates run the code-first product truth audit.", files.packageJson.scripts?.["audit:truth"] === "node scripts/release/audit-product-truth.mjs" && files.packageJson.scripts?.["verify:nextgen"]?.includes("audit:truth") && files.releaseCheck.includes("audit:truth"), "fail", {
     scripts: ["audit:truth", "verify:nextgen", "release:check"]
   }),
   check("gap-storage-db-primary", "DB-primary MemoryRepository with granular writes is implemented.", !storageIsSnapshotFirst, "gap", {

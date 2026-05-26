@@ -40,7 +40,7 @@ export function generateBenchmarkHardeningReport(options: { scenarios?: string; 
   const nativeOrCliRows = competitors.filter((system) => ["same-run-native", "same-run-cloud-api", "same-run-cli", "vendor-signed", "real-customer-field"].includes(String(system.proofLevel))).length;
   const apiShapeRows = competitors.filter((system) => system.proofLevel === "same-run-api-shape").length;
   const credentialBlockedRows = competitors.filter((system) => system.proofLevel === "credential-blocked").length;
-  const nativeRunnerAvailable = existsSync("scripts/competitors/native-python-runner.mjs") || existsSync("scripts/competitors/native_python_runner.py");
+  const nativeRunnerAvailable = existsSync("scripts/benchmark/competitors/native-python-runner.mjs") || existsSync("scripts/benchmark/competitors/native_python_runner.py");
   const checks = {
     scenarioDatasetPresent: scenarios.length >= 100,
     scenarioSchemaPresent: existsSync("docs/schemas/cognicodebench-scenario.schema.json"),

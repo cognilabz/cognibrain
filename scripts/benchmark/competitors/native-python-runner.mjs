@@ -4,10 +4,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const system = optionValue("--system") ?? process.env.COGNIBRAIN_COMPETITOR_SYSTEM;
 const python = process.env.MEMORY_ARENA_COMPETITOR_PYTHON ?? join(root, ".cognibrain", "native-runners", "competitors-venv", "bin", "python");
-const script = join(root, "scripts", "competitors", "native_python_runner.py");
+const script = join(root, "scripts", "benchmark", "competitors", "native_python_runner.py");
 const started = Date.now();
 const stdin = await readStdin();
 

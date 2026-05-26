@@ -122,15 +122,22 @@ Generated outputs stay local:
 
 | Path | Purpose |
 | --- | --- |
-| `bin/` | CLI entrypoints. |
+| `bin/` | Public CLI entrypoints. |
+| `src/` | Product source: API, MCP/connectors, core memory logic, CLI UI, dashboard and eval code. |
 | `src/api/` | Service, HTTP server and persistence adapters. |
-| `src/connectors/` | MCP server, connector registry and SDK scaffold. |
+| `src/connectors/` | MCP server and connector registry. |
 | `src/core/` | Memory model, retrieval, graph and policy logic. |
 | `src/cli/` | Ink TUI and memory command implementation. |
 | `src/eval/` | Internal benchmarks and verification generators. |
-| `sdk/python/` | Dependency-free Python client. |
+| `sdk/typescript/` | TypeScript HTTP client for app integrations. |
+| `sdk/python/` | Dependency-free Python HTTP client for Python agent frameworks. |
+| `scripts/` | Grouped runtime, release, benchmark, demo and local-dev automation. |
+| `fixtures/` | Small deterministic fixtures used by tests, demos and connector examples. |
 | `docs/` | Handwritten public documentation. |
 | `templates/` | Harness and integration templates. |
+| `docker/` | Optional self-host packaging. |
+| `deploy/` | Optional deployment manifests. |
+| `data/benchmarks/` | Large local benchmark corpora; ignored and not shipped in the package. |
 
 ## Documentation
 

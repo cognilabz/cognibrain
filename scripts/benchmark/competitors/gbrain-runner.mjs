@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const repo = resolve(process.env.MEMORY_ARENA_GBRAIN_REPO ?? join(root, ".cognibrain", "vendor", "gbrain"));
 const home = resolve(process.env.MEMORY_ARENA_GBRAIN_HOME ?? join(root, ".cognibrain", "native-runners", "gbrain-home"));
 

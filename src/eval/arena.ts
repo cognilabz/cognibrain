@@ -579,28 +579,28 @@ function externalAdapter(id: Exclude<MemorySystemId, "cognibrain">, profile: Con
 
 function autoNativeAdapter(id: Exclude<MemorySystemId, "cognibrain">, profile: ConstructorParameters<typeof ProfileAdapter>[1], envPrefix: string): BenchmarkSystemAdapter | undefined {
   if (process.env.MEMORY_ARENA_AUTO_NATIVE === "false") return undefined;
-  if (id === "gbrain" && existsSync(".cognibrain/vendor/gbrain/src/cli.ts") && existsSync("scripts/competitors/gbrain-runner.mjs")) {
+  if (id === "gbrain" && existsSync(".cognibrain/vendor/gbrain/src/cli.ts") && existsSync("scripts/benchmark/competitors/gbrain-runner.mjs")) {
     return new CommandRunnerAdapter(id, profile, {
-      command: `${process.execPath} scripts/competitors/gbrain-runner.mjs`,
+      command: `${process.execPath} scripts/benchmark/competitors/gbrain-runner.mjs`,
       commandEnv: `${envPrefix}_COMMAND:auto-gbrain-cli`,
       proofLevel: "same-run-cli",
       adapterMode: "cli-command"
     });
   }
   const mem0Key = process.env.MEM0_API_KEY ?? process.env[`${envPrefix}_API_KEY`];
-  if (id === "mem0" && mem0Key && existsSync("scripts/competitors/mem0-runner.mjs")) {
+  if (id === "mem0" && mem0Key && existsSync("scripts/benchmark/competitors/mem0-runner.mjs")) {
     process.env[`${envPrefix}_API_KEY`] = mem0Key;
     return new CommandRunnerAdapter(id, profile, {
-      command: `${process.execPath} scripts/competitors/mem0-runner.mjs`,
+      command: `${process.execPath} scripts/benchmark/competitors/mem0-runner.mjs`,
       commandEnv: `${envPrefix}_COMMAND:auto-mem0-cli`,
       proofLevel: "same-run-cloud-api",
       adapterMode: "cloud-command"
     });
   }
-  if (["mem0", "graphiti", "cognee", "langmem"].includes(id) && existsSync(".cognibrain/native-runners/competitors-venv/bin/python") && existsSync("scripts/competitors/native-python-runner.mjs")) {
+  if (["mem0", "graphiti", "cognee", "langmem"].includes(id) && existsSync(".cognibrain/native-runners/competitors-venv/bin/python") && existsSync("scripts/benchmark/competitors/native-python-runner.mjs")) {
     const proofLevel = id === "graphiti" || id === "cognee" ? "credential-blocked" : "same-run-native";
     return new CommandRunnerAdapter(id, profile, {
-      command: `${process.execPath} scripts/competitors/native-python-runner.mjs --system ${id}`,
+      command: `${process.execPath} scripts/benchmark/competitors/native-python-runner.mjs --system ${id}`,
       commandEnv: `${envPrefix}_COMMAND:auto-native-python`,
       proofLevel,
       adapterMode: proofLevel === "credential-blocked" ? "blocked-command" : "native-command"

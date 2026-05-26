@@ -6,7 +6,7 @@ import net from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const runtimeRoot = resolve(process.env.COGNIBRAIN_RUNTIME_ROOT ?? process.env.COGNIBRAIN_HOME ?? process.cwd());
 const defaultDbPath = process.env.MEMORY_DB_PATH ?? join(runtimeRoot, ".memory-harness.json");
 const stateDir = join(runtimeRoot, ".cognibrain");

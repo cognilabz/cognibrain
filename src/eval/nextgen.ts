@@ -396,7 +396,7 @@ export async function runNextgenEvaluation() {
       installedRetrieval.installState === "installed" &&
       service.getRetrievalProfiles().some((profile) => profile.id === "trust-heavy") &&
       migrationBundle.placeholders.sso.required &&
-      apiDescription.clients.typescript === "src/sdk/client.ts",
+      apiDescription.clients.typescript === "sdk/typescript/client.ts",
     detail: `${service.listMarketplaceModules().length} marketplace modules, migration memories=${migrationBundle.counts.memories}`
   });
 

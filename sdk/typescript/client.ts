@@ -1,4 +1,4 @@
-import type { ActionGuardReport, CodebaseScope, CodingContextPack, ConnectorManifest, ConnectorSyncRecord, ContextEnrichmentReport, EngineeringMemoryKind, EpisodeRecord, EvidencePack, FeedbackKind, GraphExplainReport, HarnessActionInput, MarketplaceModule, Memory, MemoryInput, MemoryPolicyOperation, MemoryPolicyRule, MemoryRouteReport, MemoryScope, PatchEvidenceTrail, PolicyDecision, QueryIntentReport, SearchOptions, SearchResult } from "../core";
+import type { ActionGuardReport, CodebaseScope, CodingContextPack, ConnectorManifest, ConnectorSyncRecord, ContextEnrichmentReport, EngineeringMemoryKind, EpisodeRecord, EvidencePack, FeedbackKind, GraphExplainReport, HarnessActionInput, MarketplaceModule, Memory, MemoryInput, MemoryPolicyOperation, MemoryPolicyRule, MemoryRouteReport, MemoryScope, PatchEvidenceTrail, PolicyDecision, QueryIntentReport, SearchOptions, SearchResult } from "../../src/core";
 
 export interface CognibrainClientOptions {
   baseUrl?: string;

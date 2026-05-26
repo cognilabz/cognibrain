@@ -30,7 +30,7 @@ Current local result, 30 deterministic engineering-memory scenarios:
 | LangMem | 0.2222 | same-run-api-shape | 1 | 2 |
 | Mem0 | 0.1111 | same-run-api-shape | 1 | 3 |
 
-Boundary: competitor rows are local API-shape adapters over the same scenario stream. They are not vendor-hosted certifications. Cognibrain's row uses the full local implementation.
+Boundary: competitor rows are local API-shape adapters over the same scenario stream. They are not vendor-hosted certifications. Cognibrain's row uses the full local implementation. No checked artifact currently proves a real Mem0, Graphiti/Zep, Cognee, LangMem or GBrain vendor/system run.
 
 Arena v2 can raise a competitor row when an external runner or artifact is configured:
 
@@ -42,6 +42,13 @@ MEMORY_ARENA_COGNEE_ARTIFACT=artifacts/vendor/cognee-arena.json npm run benchmar
 ```
 
 Without a runner or artifact, competitor rows stay `same-run-api-shape`.
+
+Run the code-first truth gate when you want to see whether the checked artifact is still only API-shape or has real competitor runners:
+
+```bash
+npx cognibrain proof
+npm run audit:truth
+```
 
 ## CogniCodeBench
 
@@ -85,7 +92,7 @@ These suites cover answer generation, multi-hop temporal recall, behavioral patt
 npm run release:check
 ```
 
-The release gate currently runs unit tests, dashboard build, status verification, CogniCodeBench, Benchmark Arena, first-win demo, docs audit, Postgres verification, connector compatibility, local runtime start, publish doctor, npm pack dry-run and Python SDK tests.
+The release gate currently runs unit tests, dashboard build, status verification, CogniCodeBench, Benchmark Arena, first-win demo, docs audit, product truth audit, Postgres verification, connector compatibility, local runtime start, publish doctor, npm pack dry-run and Python SDK tests.
 
 ## How To Read The Numbers
 

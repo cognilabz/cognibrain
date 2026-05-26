@@ -46,6 +46,8 @@ Recall is not enough. The next code change has to prove the memory worked.
 | Self-hosted service | Linux systemd, macOS launchd and Windows Task Scheduler service plans from the CLI. |
 | Benchmark proof | Local deterministic benchmark artifacts, public same-scenario reports and competitor comparison with explicit proof boundaries. |
 
+Docker is optional for deployment packaging. The CLI is the required control plane for install, setup, service automation, connectors, adapters, SDK scaffolding and proof inspection.
+
 ## CLI Screenshots
 
 <p align="center">
@@ -110,6 +112,7 @@ npx cognibrain memories coding-context "prepare the release patch"
 npx cognibrain connections
 npx cognibrain connections add github --set repo=cognilabz/cognibrain
 npx cognibrain connections doctor
+npx cognibrain proof
 npx cognibrain sdk platform acme --kind project_management --out integrations/acme
 ```
 
@@ -141,7 +144,7 @@ Current local Benchmark Arena result, 30 deterministic engineering-memory scenar
 | LangMem | 0.2222 | same-run-api-shape | 1 | 2 |
 | Mem0 | 0.1111 | same-run-api-shape | 1 | 3 |
 
-Boundary: competitor rows are local API-shape compatibility adapters, not vendor-hosted certifications. Cognibrain's row runs the full local implementation. See [docs/benchmarks.md](docs/benchmarks.md).
+Boundary: competitor rows are local API-shape compatibility adapters, not vendor-hosted certifications. Cognibrain's row runs the full local implementation. No checked artifact currently proves a real Mem0, Graphiti/Zep, Cognee, LangMem or GBrain vendor/system run. See [docs/benchmarks.md](docs/benchmarks.md).
 
 Arena v2 also supports stronger competitor proof when you configure real native/cloud/CLI runners or import a vendor artifact. The row stays `same-run-api-shape` until that happens. See [Same Benchmark](docs/market/same-benchmark.md) and the generated [Latest Arena](docs/benchmarks/latest-arena.md).
 
@@ -161,6 +164,8 @@ npm run verify:vendor-connectors
 npm run verify:vendor-live
 npm run connectors:maturity
 ```
+
+Current checked connector state: 19 hermetic drivers, 0 tenant live smokes and 0 production certifications. Live-system proof requires tenant credentials plus `MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live`; writeback to real systems stays dry-run unless explicitly enabled.
 
 Connector configs store non-secret choices and `env:` references. Token values stay outside the repo:
 
@@ -188,6 +193,7 @@ npm run release:check
 ```
 
 The current release check covers unit tests, dashboard build, status verification, CogniCodeBench, Benchmark Arena, first-win demo, docs audit, Postgres verification, connector compatibility, local runtime start, publish doctor, npm pack dry-run and Python SDK tests.
+`npm run audit:truth` is part of that gate and fails on code/doc overclaims while keeping open implementation gaps visible.
 
 This repository does not claim managed SaaS uptime, billing, hosted support, autoscaling or deployment-specific SSO readiness. Those remain future or deployment-specific claims. See [docs/operations.md](docs/operations.md) and [docs/claims.md](docs/claims.md).
 

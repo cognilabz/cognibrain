@@ -10,6 +10,7 @@ Textual compare pages are not strong enough for engineering-memory claims. Every
 | When to choose competitor | State the honest competitor fit. |
 | When to choose Cognibrain | Tie to engineering corrections, action guards, connector events and patch evidence. |
 | Capability gaps | Use declared gaps from the adapter report, not invented copy. |
+| Truth gate | Run `npm run audit:truth` and keep open gaps visible. |
 | Reproduce | Include the command and artifact path. |
 
 ## Core Copy
@@ -25,4 +26,5 @@ We do not ask whether the agent can remember. We test whether it changes future 
 ```bash
 npm run benchmark:arena
 npm run benchmark:arena:publish
+npm run audit:truth
 ```

@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "generatedAt": "2026-05-26T04:26:09.356Z",
+  "generatedAt": "2026-05-26T04:45:48.961Z",
   "suites": [
     {
       "id": "answer-generation",
@@ -107,7 +107,7 @@
           "expected": [
             "weak memory excluded"
           ],
-          "actual": "[0a2f57bc-21f5-434a-9e24-98d1428f7182] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release."
+          "actual": "[79a7dc98-417d-422e-80f0-0b3ed4e94229] trust=0.94 score=0.75 confidence=0.82 Atlas deployment requires reviewed npm test evidence before release."
         }
       ]
     },
@@ -159,17 +159,6 @@
   ],
   "trend": {
     "points": [
-      {
-        "generatedAt": "2026-05-25T11:48:11.288Z",
-        "suites": {
-          "answer-generation": 1,
-          "multi-hop-temporal": 1,
-          "behavioral-patterns": 0.845,
-          "retrieval-calibration": 0.9398860533328159,
-          "usp-evidence-pack": 1
-        },
-        "meanScore": 0.9569772106665632
-      },
       {
         "generatedAt": "2026-05-25T12:06:34.191Z",
         "suites": {
@@ -370,6 +359,17 @@
       },
       {
         "generatedAt": "2026-05-26T04:26:09.356Z",
+        "suites": {
+          "answer-generation": 1,
+          "multi-hop-temporal": 1,
+          "behavioral-patterns": 0.845,
+          "retrieval-calibration": 0.9398860533333333,
+          "usp-evidence-pack": 1
+        },
+        "meanScore": 0.9569772106666665
+      },
+      {
+        "generatedAt": "2026-05-26T04:45:48.961Z",
         "suites": {
           "answer-generation": 1,
           "multi-hop-temporal": 1,

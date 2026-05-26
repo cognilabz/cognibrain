@@ -9,6 +9,8 @@ npx cognibrain init
 npx cognibrain doctor --fix
 ```
 
+Docker is optional for people who want container packaging later. The CLI is the required control plane for setup, status, service automation, connectors, adapters, SDK scaffolding and proof checks.
+
 Checkout install:
 
 ```bash
@@ -30,6 +32,7 @@ npx cognibrain connections
 npx cognibrain config show
 npx cognibrain skill status
 npx cognibrain doctor --fix
+npx cognibrain proof
 ```
 
 Every workbench keeps a `--json` mode for automation.

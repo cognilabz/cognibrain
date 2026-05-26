@@ -17,6 +17,7 @@ The release check writes `artifacts/release-check.json` and runs:
 - Benchmark Arena,
 - first-win demo,
 - docs audit,
+- product truth audit,
 - Postgres verifier,
 - connector compatibility,
 - local runtime start,
@@ -61,6 +62,7 @@ Operational rules:
 - keep connector tokens in environment variables or a secret manager,
 - do not commit generated `.cognibrain/` runtime state,
 - run `npx cognibrain doctor --publish` before publishing,
+- run `npx cognibrain proof` before public claims or release notes,
 - use HTTPS or a documented TLS terminator for non-local deployments,
 - keep the dashboard opt-in unless a team explicitly wants a browser inspection view.
 
@@ -77,6 +79,9 @@ This repo does not claim:
 - hosted support,
 - autoscaling behavior,
 - deployment-specific SSO readiness,
+- tenant live connector certification,
+- production-certified connector rows,
+- real Mem0/GBrain/Graphiti/Cognee/LangMem runs in the checked artifact,
 - vendor-certified competitor benchmark results.
 
 Those claims require a deployment-specific control-plane run or vendor-hosted benchmark certification.

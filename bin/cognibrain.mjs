@@ -49,6 +49,11 @@ switch (command) {
     await statusCommand(commandArgs);
     break;
 
+  case "proof":
+  case "truth":
+    await proofCommand(commandArgs);
+    break;
+
   case "stop":
     runNodeAndExit("scripts/start-local.mjs", ["--stop"]);
     break;
@@ -157,6 +162,27 @@ async function statusCommand(statusArgs = []) {
     return;
   }
   await renderCliSurface("status", result, { title: "cognibrain status" });
+}
+
+async function proofCommand(proofArgs = []) {
+  if (proofArgs.includes("--help")) {
+    proofUsage(0);
+    return;
+  }
+  const refresh = !proofArgs.includes("--no-refresh");
+  let refreshError;
+  if (refresh) {
+    const result = runCapture(process.execPath, ["scripts/audit-product-truth.mjs"]);
+    if (result.status !== 0) refreshError = result.stderr || result.stdout || `audit exited with ${result.status}`;
+  }
+  const result = productTruthData(refreshError);
+  if (proofArgs.includes("--json")) {
+    printJson(result);
+    if (!result.passed) process.exit(1);
+    return;
+  }
+  await renderCliSurface("proof", result, { title: "cognibrain proof" });
+  if (!result.passed) process.exit(1);
 }
 
 async function memoriesCommand(memoryArgs = []) {
@@ -353,21 +379,31 @@ async function doctor(doctorArgs) {
   if (publish) {
     const pack = runCapture("npm", ["pack", "--dry-run"]);
     add("npm pack dry-run", pack.status === 0, pack.status === 0 ? "ok" : pack.stderr.trim());
+    const packOutput = `${pack.stdout}\n${pack.stderr}`;
+    const allowedPackArtifacts = [
+      "artifacts/arena/run.json",
+      "artifacts/connector-maturity.json",
+      "artifacts/product-truth-audit.json",
+      "artifacts/vendor-live-smoke.json"
+    ];
+    const unexpectedArtifacts = packOutput
+      .split(/\r?\n/)
+      .filter((line) => line.includes("artifacts/"))
+      .filter((line) => !allowedPackArtifacts.some((artifact) => line.includes(artifact)));
     const leaked = [
       ".cognibrain/",
       ".cognibrain-harness-package.json",
       ".memory-harness.json",
       ".playwright-cli",
       "output/",
-      "artifacts/",
       "data/benchmarks",
       "__pycache__",
       "sdk/python/build",
       "sdk/python/cognibrain.egg-info",
       "sdk/go",
       "sdk/rust"
-    ].filter((item) => `${pack.stdout}\n${pack.stderr}`.includes(item));
-    add("package excludes generated files", leaked.length === 0, leaked.length ? leaked.join(", ") : "clean");
+    ].filter((item) => packOutput.includes(item));
+    add("package excludes generated files", leaked.length === 0 && unexpectedArtifacts.length === 0, [...leaked, ...unexpectedArtifacts].length ? [...leaked, ...unexpectedArtifacts].join(", ") : "clean");
     const transport = transportSecurityCheck(state?.api?.url);
     add("transport security", transport.ok, transport.detail, transport.level);
     const harnessTemplates = harnessTemplateHealth();
@@ -1338,9 +1374,56 @@ async function cliHomeData() {
       "cognibrain connections",
       "cognibrain connections add github --set repo=owner/repo",
       "cognibrain config show",
+      "cognibrain proof",
       "cognibrain service plan",
       "cognibrain service install --activate",
       "cognibrain dashboard"
+    ]
+  };
+}
+
+function productTruthData(refreshError) {
+  const artifact = readJson(join(root, "artifacts", "product-truth-audit.json"), null);
+  const arena = readJson(join(root, "artifacts", "arena", "run.json"), { systems: [] });
+  const maturity = readJson(join(root, "artifacts", "connector-maturity.json"), { rows: [], summary: {} });
+  const systems = Array.isArray(arena.systems) ? arena.systems : [];
+  const maturityRows = Array.isArray(maturity.rows) ? maturity.rows : [];
+  const fallback = {
+    schemaVersion: "1.0",
+    generatedAt: new Date().toISOString(),
+    mode: "cli_truth_snapshot",
+    passed: !refreshError,
+    planComplete: false,
+    summary: {
+      checks: 0,
+      passed: 0,
+      failures: refreshError ? 1 : 0,
+      openGaps: 1,
+      realCompetitorRuns: systems.filter((system) => system.system !== "cognibrain" && ["same-run-native", "same-run-cloud-api", "same-run-cli", "vendor-signed", "real-customer-field"].includes(system.proofLevel)).length,
+      apiShapeCompetitors: systems.filter((system) => system.system !== "cognibrain" && system.proofLevel === "same-run-api-shape").length,
+      nativeConnectorRows: maturityRows.length,
+      hermeticDrivers: maturityRows.filter((row) => row.proofLevel === "hermetic-driver").length,
+      tenantLiveSmokes: maturityRows.filter((row) => row.maturity?.liveSmoke).length,
+      productionCertifiedConnectors: maturityRows.filter((row) => row.maturity?.productionCertified).length,
+      cliScreenshots: 0,
+      dockerOptional: undefined
+    },
+    truthTuples: [
+      ["arena.competitors.realRuns", systems.filter((system) => system.system !== "cognibrain" && ["same-run-native", "same-run-cloud-api", "same-run-cli", "vendor-signed", "real-customer-field"].includes(system.proofLevel)).length, "artifacts/arena/run.json"],
+      ["connectors.tenantLiveSmokes", maturityRows.filter((row) => row.maturity?.liveSmoke).length, "artifacts/connector-maturity.json"]
+    ],
+    checks: refreshError ? [{ id: "truth-refresh", message: String(refreshError).slice(0, 500), passed: false, severity: "fail", evidence: { command: "node scripts/audit-product-truth.mjs" } }] : [],
+    openGaps: []
+  };
+  return {
+    ...(artifact ?? fallback),
+    refreshError: refreshError ? String(refreshError).slice(0, 2000) : undefined,
+    commands: [
+      "cognibrain proof --json",
+      "npm run audit:truth",
+      "npm run benchmark:arena",
+      "MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live",
+      "npm run connectors:maturity"
     ]
   };
 }
@@ -2942,6 +3025,23 @@ function surfaceLines(kind, payload) {
       ]
     };
   }
+  if (kind === "proof") {
+    const summary = payload.summary ?? {};
+    return {
+      metrics: [
+        ["truth gate", payload.passed ? "claims bounded" : "overclaim found", payload.passed ? "green" : "red"],
+        ["plan state", payload.planComplete ? "complete" : `${summary.openGaps ?? 0} open code gaps`, payload.planComplete ? "green" : "yellow"],
+        ["arena", `${summary.realCompetitorRuns ?? 0} real competitors / ${summary.apiShapeCompetitors ?? 0} api-shape`, summary.realCompetitorRuns ? "green" : "yellow"],
+        ["connectors", `${summary.hermeticDrivers ?? 0} hermetic / ${summary.tenantLiveSmokes ?? 0} live / ${summary.productionCertifiedConnectors ?? 0} certified`, summary.tenantLiveSmokes ? "green" : "yellow"]
+      ],
+      sections: [
+        { title: "Truth Tuples", items: compactItems(payload.truthTuples ?? [], (item) => `${item[0]} = ${item[1]} (${item[2]})`, 12) },
+        { title: "Checks", items: compactItems(payload.checks ?? [], truthCheckLine, 10) },
+        { title: "Open Gaps", items: payload.openGaps?.length ? payload.openGaps.map((item) => `${item.id} - ${item.message}`) : ["none"] },
+        { title: "Commands", items: payload.commands ?? [] }
+      ]
+    };
+  }
   if (kind === "config") {
     return {
       metrics: [
@@ -3232,6 +3332,11 @@ function checkLine(check) {
   return `${state} ${check.name}${detail ? ` - ${detail}` : ""}`;
 }
 
+function truthCheckLine(check) {
+  const state = check.passed ? "ok" : check.severity === "gap" ? "gap" : "fail";
+  return `${state} ${check.id} - ${check.message}`;
+}
+
 function connectorCheckLine(check) {
   const state = check.ok ? "ok" : "fail";
   const missing = [...(check.missingSettings ?? []), ...(check.missingEnv ?? [])];
@@ -3328,6 +3433,8 @@ Usage:
       Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
   cognibrain start [--dashboard] | dev [--dashboard] | dashboard | status | stop
       Manage the local API runtime; the web dashboard is optional and starts only with dashboard opt-in
+  cognibrain proof|truth [--json] [--no-refresh]
+      Render the code-first truth workbench from benchmark, connector, CLI, and packaging artifacts
   cognibrain service [plan|status] [--platform linux|macos|windows] [--json]
       Inspect native service automation for systemd, launchd, or Windows Task Scheduler
   cognibrain service install [--activate] [--dashboard] [--system] [--env KEY=value]
@@ -3381,6 +3488,19 @@ Usage:
 
 function initUsage(exitCode) {
   console.log(`Usage: cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dry-run] [--dashboard] [--no-start] [--no-doctor] [--no-skill] [--no-demo]`);
+  process.exit(exitCode);
+}
+
+function proofUsage(exitCode) {
+  console.log(`Usage: cognibrain proof [--json] [--no-refresh]
+
+Shows the code-first product truth surface:
+- Benchmark Arena proof levels and real competitor-run count.
+- Connector maturity, tenant live-smoke count, and production certification count.
+- CLI Ink and screenshot evidence.
+- Docker optional/CLI-primary boundary.
+
+Default behavior refreshes artifacts/product-truth-audit.json before rendering.`);
   process.exit(exitCode);
 }
 

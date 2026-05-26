@@ -178,6 +178,8 @@ Generated from the CLI connector registry and verification artifacts at ${report
 
 Native connector means there is a first-party connector manifest and driver path. It does not mean customer production certification unless the production-certified column is true.
 
+Current checked connector state: ${report.summary.hermeticDrivers} hermetic drivers, ${report.summary.liveSmokeReady} tenant live smokes, ${report.summary.productionCertified} production certifications. Live-system proof requires tenant credentials plus \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`.
+
 | Connector | Category | Proof level | Driver | Fixture | Live smoke | Setup wizard | Poll/list | Writeback | Production-certified |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${rows}

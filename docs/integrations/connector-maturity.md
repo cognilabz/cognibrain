@@ -1,8 +1,10 @@
 # Connector Maturity Matrix
 
-Generated from the CLI connector registry and verification artifacts at 2026-05-26T04:28:13.050Z.
+Generated from the CLI connector registry and verification artifacts at 2026-05-26T04:49:24.036Z.
 
 Native connector means there is a first-party connector manifest and driver path. It does not mean customer production certification unless the production-certified column is true.
+
+Current checked connector state: 19 hermetic drivers, 0 tenant live smokes, 0 production certifications. Live-system proof requires tenant credentials plus `MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live`.
 
 | Connector | Category | Proof level | Driver | Fixture | Live smoke | Setup wizard | Poll/list | Writeback | Production-certified |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

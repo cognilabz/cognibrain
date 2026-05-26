@@ -27,6 +27,7 @@ Cognibrain stores durable engineering memory and returns cited context before th
 | Gate | Command | Artifact |
 | --- | --- | --- |
 | Release check | `npm run release:check` | `artifacts/release-check.json` |
+| Product truth | `npm run audit:truth` or `cognibrain proof` | `artifacts/product-truth-audit.json` |
 | Coding-agent memory | `npm run benchmark:cognicode` | `artifacts/cognicodebench/run.json` |
 | Competitor arena | `npm run benchmark:arena` | `artifacts/arena/run.json` |
 | Connector compatibility | `npm run verify:compatibility` | `artifacts/connectors-live.json`, `artifacts/vendor-connectors-live.json` |
@@ -35,3 +36,5 @@ Cognibrain stores durable engineering memory and returns cited context before th
 ## Claim Boundary
 
 Cognibrain is documented as a local-first, self-hosted production candidate after target-environment gates pass. Managed SaaS uptime, billing, hosted support, autoscaling and deployment-specific SSO readiness are not claimed by this repository.
+
+Current checked boundaries: competitor rows are API-shape unless a real runner artifact proves otherwise; connector rows are hermetic unless tenant live-smoke artifacts prove otherwise; Docker is optional while the CLI remains the control plane.

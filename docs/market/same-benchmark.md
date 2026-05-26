@@ -36,6 +36,8 @@ It checks:
 
 `same-run-api-shape` means the row is a local compatibility model. It is honest, but it is not a real vendor run.
 
+No checked artifact currently proves a real Mem0, Graphiti/Zep, Cognee, LangMem or GBrain vendor/system run. The public table should say that plainly until a row reaches `same-run-native`, `same-run-cloud-api`, `same-run-cli`, `vendor-signed` or `real-customer-field`.
+
 Use these environment variables to raise a competitor row to a stronger proof level:
 
 ```bash
@@ -53,4 +55,5 @@ The external runner reads one scenario JSON object from stdin and returns checks
 npm run benchmark:cognicode
 npm run benchmark:arena
 npm run benchmark:arena:publish
+npm run audit:truth
 ```

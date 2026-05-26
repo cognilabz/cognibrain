@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T04:28:04.750Z",
+  "generatedAt": "2026-05-26T04:49:15.632Z",
   "benchmark": "BenchmarkArena",
   "benchmarkInput": "cognicode",
   "adapterContract": {
@@ -64,11 +64,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "3564b243-9fd0-4972-885a-d0c30bc26ace",
-            "correctionId": "ded99bbf-ce30-46e0-9c46-ea2f6a1bf794",
-            "contextPackId": "code_ctx_1hru8du",
+            "wrongActionId": "ba6c4adf-4844-4e90-83e4-2ef1a10e2f43",
+            "correctionId": "cf03689b-2b8f-4686-bf28-6a48ff427fe1",
+            "contextPackId": "code_ctx_jqkjj6",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1dhlyy3"
+            "patchEvidenceTrailId": "patch_ev_aocdmo"
           }
         },
         {
@@ -83,11 +83,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "938f456c-d25f-49db-af67-7c3eeaad5dff",
-            "correctionId": "c4303bbc-ac0a-4dd0-9723-a9ff69a9c212",
-            "contextPackId": "code_ctx_lanncn",
+            "wrongActionId": "ba1bc40e-59dc-4551-9776-81f9606d63c2",
+            "correctionId": "cc59e654-895d-4836-911b-7fba1ed50d01",
+            "contextPackId": "code_ctx_1uf0l57",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1yaopvk"
+            "patchEvidenceTrailId": "patch_ev_uf0xi1"
           }
         },
         {
@@ -102,11 +102,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "5cf99c53-bda1-41d6-b7e2-e7e1de984fdb",
-            "correctionId": "cf96c194-a12c-49f5-a561-40846ee5b623",
-            "contextPackId": "code_ctx_pnyb34",
+            "wrongActionId": "e4949b46-6002-4b2c-8831-a96b0a1d8aa9",
+            "correctionId": "2024ad11-7f27-4342-bce6-be194e41cdf6",
+            "contextPackId": "code_ctx_2up8zu",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_7qdmv7"
+            "patchEvidenceTrailId": "patch_ev_h8z4aa"
           }
         },
         {
@@ -121,11 +121,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "dcd6a790-fd7c-443b-baba-6e1375178387",
-            "correctionId": "2c4a107f-8e3e-491a-b493-791987f24750",
-            "contextPackId": "code_ctx_1ks5s7h",
+            "wrongActionId": "d379a564-6031-4d82-b607-69220b7a4f5a",
+            "correctionId": "f6e6dc35-93a4-4301-b10a-78ec7e4cf725",
+            "contextPackId": "code_ctx_sjkn9t",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1qh0zby"
+            "patchEvidenceTrailId": "patch_ev_1tstbqd"
           }
         },
         {
@@ -140,11 +140,11 @@
           },
           "score": 0.8333,
           "evidence": {
-            "wrongActionId": "743a9cca-87d2-459b-83dd-707a96be4e20",
-            "correctionId": "dd185837-1bd3-4952-addd-f151613062ca",
-            "contextPackId": "code_ctx_1kiyp5i",
+            "wrongActionId": "b780f312-7bdc-4cf8-8919-c32ac91f8c28",
+            "correctionId": "296d2fd1-577f-4b89-af8a-4130cfa24527",
+            "contextPackId": "code_ctx_1afqphu",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_g9i3es"
+            "patchEvidenceTrailId": "patch_ev_1lar6np"
           }
         },
         {
@@ -159,11 +159,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "69edfce5-fa6b-4fd4-877e-88e6eeb8c11e",
-            "correctionId": "6c60ec28-86cf-41f1-a977-0b771d560e08",
-            "contextPackId": "code_ctx_1bgi7o5",
+            "wrongActionId": "a3eaa169-dd10-40f1-bdb8-3d52f6363103",
+            "correctionId": "b79a5c34-67a4-46af-ae20-d588dd7b0f75",
+            "contextPackId": "code_ctx_1t7sjwx",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_15en606"
+            "patchEvidenceTrailId": "patch_ev_7ovnqj"
           }
         },
         {
@@ -178,11 +178,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "8e751103-7457-47db-8129-bcc4a98e35bd",
-            "correctionId": "b26a05de-8a05-4eef-9598-677b03962e7d",
-            "contextPackId": "code_ctx_12rxyqw",
+            "wrongActionId": "1687be6d-0c8a-4c81-a35b-fabc695cf533",
+            "correctionId": "364f537d-ac2f-4e83-9706-365ca604bae1",
+            "contextPackId": "code_ctx_4szlqe",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_thychm"
+            "patchEvidenceTrailId": "patch_ev_1d0k7uf"
           }
         },
         {
@@ -197,11 +197,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "600c033d-5186-4440-943a-839b98a7d65f",
-            "correctionId": "a2a947f3-991a-46eb-9f35-14a8960ccded",
-            "contextPackId": "code_ctx_1tptp97",
+            "wrongActionId": "db36ce88-45a8-4242-a8d5-24e3990ab669",
+            "correctionId": "83e943a4-637c-493e-918e-c089e70443b4",
+            "contextPackId": "code_ctx_1xxdria",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1mi46g4"
+            "patchEvidenceTrailId": "patch_ev_hliud8"
           }
         },
         {
@@ -216,11 +216,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "f8a5814a-776c-4b1d-ab15-fbf0a4ff79ef",
-            "correctionId": "0f75e664-7b6c-4831-a5a2-9af1a47f88c2",
-            "contextPackId": "code_ctx_117pb5u",
+            "wrongActionId": "f6b18c72-162a-4667-ad45-118509b32a01",
+            "correctionId": "e5886a48-cf1f-4034-9292-88933ead0dd2",
+            "contextPackId": "code_ctx_jh9zkj",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_hw4yx8"
+            "patchEvidenceTrailId": "patch_ev_oteppz"
           }
         },
         {
@@ -235,11 +235,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "f2a67d82-ea4b-4f3c-a630-32497382511e",
-            "correctionId": "be522b4f-cf0a-4da3-a71f-d656c46b6a7a",
-            "contextPackId": "code_ctx_1mnetrn",
+            "wrongActionId": "a67501fd-3874-4bf6-991c-100d51072441",
+            "correctionId": "695cf2aa-9204-4820-8a1c-64e376f46ba2",
+            "contextPackId": "code_ctx_k1f9v",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_p5qxc4"
+            "patchEvidenceTrailId": "patch_ev_4509av"
           }
         },
         {
@@ -254,11 +254,11 @@
           },
           "score": 0.8333,
           "evidence": {
-            "wrongActionId": "94b6a4fd-8b20-4cb0-bfd4-66da5ac74ba9",
-            "correctionId": "28903b43-5c9f-4225-aa61-88964ad49048",
-            "contextPackId": "code_ctx_f2oscz",
+            "wrongActionId": "0693e0fd-e319-4d9b-b599-8d39886b646f",
+            "correctionId": "67efa0ec-61b1-4f09-bd1d-833e1c514894",
+            "contextPackId": "code_ctx_bk8z1i",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_66h1jc"
+            "patchEvidenceTrailId": "patch_ev_1x7f1ui"
           }
         },
         {
@@ -273,11 +273,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "ce7644a2-07a9-4f43-a8ac-92035efb1a9e",
-            "correctionId": "36989830-9087-4604-b363-9cbea47d2ae6",
-            "contextPackId": "code_ctx_1k3k2j4",
+            "wrongActionId": "abcc2024-1c2b-46d9-91f9-0114c65dff4d",
+            "correctionId": "277fbad8-3853-434b-9230-a15697d16e69",
+            "contextPackId": "code_ctx_8wa70z",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_vsvf8i"
+            "patchEvidenceTrailId": "patch_ev_12pa4cr"
           }
         },
         {
@@ -292,11 +292,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "135119cf-2945-4985-a533-8fbf7160f149",
-            "correctionId": "78aa0a62-6c1e-4938-8d23-c7d7cadf284f",
-            "contextPackId": "code_ctx_1gcqyg",
+            "wrongActionId": "24e4b8f0-0109-41e1-9b53-b4d7db0b5283",
+            "correctionId": "a92069b3-f979-4344-9f36-0cee71c1a29d",
+            "contextPackId": "code_ctx_14piepv",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_12q0ws"
+            "patchEvidenceTrailId": "patch_ev_oe6le4"
           }
         },
         {
@@ -311,11 +311,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "5aff3611-020e-4486-89af-c6c171b83e4d",
-            "correctionId": "32554bf9-3aa4-468e-b418-793f72a14bf6",
-            "contextPackId": "code_ctx_vzdhi3",
+            "wrongActionId": "0d32972e-4e20-4736-a2ba-e4a6ad90f704",
+            "correctionId": "a18afde2-bb01-497c-9f36-e096d37e38f1",
+            "contextPackId": "code_ctx_x6sacm",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_2s6325"
+            "patchEvidenceTrailId": "patch_ev_tcqunj"
           }
         },
         {
@@ -330,11 +330,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "be6814fb-b0e6-47e5-9b6d-70ae31a9181c",
-            "correctionId": "900a4c3b-6a85-4269-9fb2-bcf034505d82",
-            "contextPackId": "code_ctx_1ivglvb",
+            "wrongActionId": "e92e0b1b-2b0c-4c20-a070-92bc096bc25b",
+            "correctionId": "5f5b3f4b-09ba-4ab5-9fc0-39e26e689a7f",
+            "contextPackId": "code_ctx_qy7yyl",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_t42wsl"
+            "patchEvidenceTrailId": "patch_ev_r67h5b"
           }
         },
         {
@@ -349,11 +349,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "e11051f8-fa7c-4733-88f1-f8b76aca76a7",
-            "correctionId": "5c6b434e-beb4-40e4-aa87-284007c4f075",
-            "contextPackId": "code_ctx_117m3b0",
+            "wrongActionId": "aaff2b37-e30d-4ee9-8b57-18f5a6a905ae",
+            "correctionId": "16b83713-06d6-4159-a850-e404324fa084",
+            "contextPackId": "code_ctx_1aoysxx",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1evrc6o"
+            "patchEvidenceTrailId": "patch_ev_1n1xobj"
           }
         },
         {
@@ -368,11 +368,11 @@
           },
           "score": 0.8333,
           "evidence": {
-            "wrongActionId": "b44b851d-2ec1-45d2-b74d-7ba386bc735c",
-            "correctionId": "7108babb-1d83-4a79-96a3-a8cebdfba8d2",
-            "contextPackId": "code_ctx_16w6to5",
+            "wrongActionId": "cb3f6e6b-3d48-47fc-ae1f-4a2de21b8a8b",
+            "correctionId": "ea1d87a4-3018-4fa9-aed1-989c5e65f3fe",
+            "contextPackId": "code_ctx_ddi5ow",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1s2jc0f"
+            "patchEvidenceTrailId": "patch_ev_nstrb2"
           }
         },
         {
@@ -387,11 +387,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "6d6058c4-9731-468b-9411-625ba0322906",
-            "correctionId": "d01ab21e-2a5a-49f3-8e74-a0168d8f1de4",
-            "contextPackId": "code_ctx_dxg5q",
+            "wrongActionId": "333b4e5d-64b8-414d-9516-a03983fb03f3",
+            "correctionId": "3fb77a0c-d620-4221-973c-20a3e0471846",
+            "contextPackId": "code_ctx_1w0qihv",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1ne46s6"
+            "patchEvidenceTrailId": "patch_ev_1lcyyy7"
           }
         },
         {
@@ -406,11 +406,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "94a77aaf-b594-4362-8c23-b5195565fc04",
-            "correctionId": "728324f5-35ec-44a5-8db8-e9d81781393d",
-            "contextPackId": "code_ctx_18xmo7r",
+            "wrongActionId": "82b6c3a7-ad03-43f3-b5fd-c381793e84ed",
+            "correctionId": "710c9bee-3c18-4f69-9096-8b1e1bc900d8",
+            "contextPackId": "code_ctx_12rtxpr",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_15942bw"
+            "patchEvidenceTrailId": "patch_ev_13glx3z"
           }
         },
         {
@@ -425,11 +425,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "70b3b7a1-0150-45d1-b691-580e700db8f5",
-            "correctionId": "3b7381d2-f630-4017-9c03-b1b1b712287b",
-            "contextPackId": "code_ctx_sc1m6w",
+            "wrongActionId": "f621d99d-0c64-48df-97a3-12a8fe6f7b46",
+            "correctionId": "521448ea-02d5-4818-aaf7-79e203d32db6",
+            "contextPackId": "code_ctx_1nmkapj",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_pzenwc"
+            "patchEvidenceTrailId": "patch_ev_w47aua"
           }
         },
         {
@@ -444,11 +444,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "628d7a16-7cf9-47f0-b938-36fe04152812",
-            "correctionId": "16de2cea-604a-4e33-8d79-d85b94c62446",
-            "contextPackId": "code_ctx_sxmxkn",
+            "wrongActionId": "8284f03e-cc46-4d95-b095-224421a48798",
+            "correctionId": "298388d9-4716-416a-be50-0bab7c4ee567",
+            "contextPackId": "code_ctx_a8neio",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_xznufc"
+            "patchEvidenceTrailId": "patch_ev_axupm5"
           }
         },
         {
@@ -463,11 +463,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "642bf881-643e-4392-ac8a-8d0417a75f93",
-            "correctionId": "e5b98681-ab9f-47b5-b9f0-049e00998300",
-            "contextPackId": "code_ctx_1mpbdj3",
+            "wrongActionId": "ef67125a-a044-4dfe-84a6-0ba984ae17bd",
+            "correctionId": "473d0842-1a64-44a8-b713-5e29896fcae7",
+            "contextPackId": "code_ctx_1uupzj1",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_14sf2hf"
+            "patchEvidenceTrailId": "patch_ev_4nu648"
           }
         },
         {
@@ -482,11 +482,11 @@
           },
           "score": 0.8333,
           "evidence": {
-            "wrongActionId": "b39ce24e-00f7-4885-aa61-e7e4fc764cfb",
-            "correctionId": "37fc98f8-3732-45bf-a64a-36d95c9622b2",
-            "contextPackId": "code_ctx_qauku",
+            "wrongActionId": "67a03896-e4d3-4579-b595-804faba92116",
+            "correctionId": "3938f216-7f79-46c9-ac7c-194a0345ced7",
+            "contextPackId": "code_ctx_rtoztw",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1i791z7"
+            "patchEvidenceTrailId": "patch_ev_1rf352m"
           }
         },
         {
@@ -501,11 +501,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "ce78b1c9-6b62-4a3a-b841-3f6a562dd12e",
-            "correctionId": "06519591-ef16-4cb9-8952-7545e05f8e9a",
-            "contextPackId": "code_ctx_17ukhsu",
+            "wrongActionId": "adbf60f0-d2ac-46b0-87c8-e03c2b94f14e",
+            "correctionId": "1f863e7a-b5ac-434d-967a-d36cae631311",
+            "contextPackId": "code_ctx_1wpacrh",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_ber7wi"
+            "patchEvidenceTrailId": "patch_ev_a5ylob"
           }
         },
         {
@@ -520,11 +520,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "012bbbdc-d0a0-41cb-b810-7a5936f5cc8e",
-            "correctionId": "2e262219-3aaa-4ffe-b67f-e095757ec96d",
-            "contextPackId": "code_ctx_15h6umu",
+            "wrongActionId": "abc07e90-0ecb-443b-869d-ee4079cd7796",
+            "correctionId": "d9638fe5-c2d8-4d69-965a-9c04264f6860",
+            "contextPackId": "code_ctx_iftpip",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_jvhjki"
+            "patchEvidenceTrailId": "patch_ev_19xbfpb"
           }
         },
         {
@@ -539,11 +539,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "965ef808-33db-436d-87bb-872d2764afcc",
-            "correctionId": "084a9937-6eee-4a59-8647-6e7fefb51b04",
-            "contextPackId": "code_ctx_4raenr",
+            "wrongActionId": "164291fe-ed5f-4f5b-b1cc-4f40743fb7a2",
+            "correctionId": "2cb5dc1b-c1c4-41d0-b46d-c2309815dacc",
+            "contextPackId": "code_ctx_h18t4y",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_wjzr1g"
+            "patchEvidenceTrailId": "patch_ev_a1osw5"
           }
         },
         {
@@ -558,11 +558,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "8fe060cc-3c43-47c9-a6d8-61175d809cd9",
-            "correctionId": "d21610e4-b60f-4caa-8b47-fddf77323189",
-            "contextPackId": "code_ctx_p3nwud",
+            "wrongActionId": "38a15379-41a9-4fd7-96e1-3d5e465ec2ce",
+            "correctionId": "7f93e8a5-cea1-4de7-bfe6-29c1ad53bb0f",
+            "contextPackId": "code_ctx_1gytnj8",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1stny8j"
+            "patchEvidenceTrailId": "patch_ev_9e5ofj"
           }
         },
         {
@@ -577,11 +577,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "bc8c1edb-2fc3-4615-a33f-0a65f14eda59",
-            "correctionId": "82d0db1c-5c1c-4bce-82fd-f10691d9c2d1",
-            "contextPackId": "code_ctx_14pfv1o",
+            "wrongActionId": "6b2f0597-8c65-41ac-9eb5-91546d6ae88f",
+            "correctionId": "cc5a8187-21a7-4391-b883-22043fbadabd",
+            "contextPackId": "code_ctx_6kcf90",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1ezdf6h"
+            "patchEvidenceTrailId": "patch_ev_7qe2up"
           }
         },
         {
@@ -596,11 +596,11 @@
           },
           "score": 0.8333,
           "evidence": {
-            "wrongActionId": "493ae115-9515-43e7-9774-a318f7d02303",
-            "correctionId": "6d41bb9c-1187-499d-a8ae-96a779ae015b",
-            "contextPackId": "code_ctx_3itj9w",
+            "wrongActionId": "178b2b01-5dd6-4ad7-8377-e838adb2b70b",
+            "correctionId": "5f0d7eac-d106-441d-881f-1fd7fff9105f",
+            "contextPackId": "code_ctx_vve0bg",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_1iw9oic"
+            "patchEvidenceTrailId": "patch_ev_glhcui"
           }
         },
         {
@@ -615,11 +615,11 @@
           },
           "score": 1,
           "evidence": {
-            "wrongActionId": "337eb46d-7181-40bf-9386-1ab654a77824",
-            "correctionId": "abe921bd-1e6e-4390-af9d-49235c093900",
-            "contextPackId": "code_ctx_4udu4n",
+            "wrongActionId": "1c45a05f-2250-4597-8a75-cac85e314b73",
+            "correctionId": "f5e9592e-aa70-4cdf-9507-287539b274a8",
+            "contextPackId": "code_ctx_11vd3in",
             "actionGuardSeverity": "block",
-            "patchEvidenceTrailId": "patch_ev_iacymv"
+            "patchEvidenceTrailId": "patch_ev_1cffnmv"
           }
         }
       ]
@@ -3503,7 +3503,7 @@
   "winner": "Cognibrain",
   "passed": true,
   "publication": {
-    "publishedAt": "2026-05-26T04:28:13.533Z",
+    "publishedAt": "2026-05-26T04:49:24.640Z",
     "channel": "static-json-html-md",
     "claimScope": "Synthetic same-scenario engineering-memory benchmark with explicit proof levels."
   }

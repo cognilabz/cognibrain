@@ -8,6 +8,8 @@ Cognibrain can run as a local agent memory layer, a connector-backed memory hub,
 
 Native drivers are implemented for the systems below. Driver status is not the same as production certification; see the generated [Connector Maturity Matrix](integrations/connector-maturity.md) for fixture, live-smoke, writeback and certification status.
 
+Current checked connector state: 19 hermetic drivers, 0 tenant live smokes and 0 production certifications. That means the code has first-party driver paths and fixture proof, but this checkout has not proven a customer tenant for Jira, Confluence, Notion, Linear or the other vendors.
+
 | Category | Connectors |
 | --- | --- |
 | Code | GitHub, GitLab, Azure DevOps |
@@ -83,6 +85,15 @@ npm run verify:vendor-live
 npm run verify:compatibility
 npm run connectors:maturity
 ```
+
+Real live-system proof is opt-in:
+
+```bash
+MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live
+MEMORY_VENDOR_LIVE_SMOKE=true MEMORY_VENDOR_LIVE_WRITE=true npm run verify:vendor-live
+```
+
+The first command lists, polls and dry-runs writeback with tenant credentials. The second can write to real systems and should only run against a controlled test target.
 
 Artifacts:
 

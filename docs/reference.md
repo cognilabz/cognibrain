@@ -17,6 +17,7 @@ cognibrain connections add <connector-or-adapter> [--set key=value]
 cognibrain connections doctor
 cognibrain config show [--json]
 cognibrain config all
+cognibrain proof|truth [--json] [--no-refresh]
 cognibrain service plan [--platform linux|macos|windows] [--json]
 cognibrain service install [--activate] [--dashboard] [--system]
 cognibrain sdk platform <name> --kind project_management --out integrations/<name>
@@ -31,6 +32,7 @@ cognibrain mcp
 npm run benchmark:arena
 npm run benchmark:arena:publish
 npm run connectors:maturity
+npm run audit:truth
 npm run leaderboard:publish
 npm run release:check
 ```

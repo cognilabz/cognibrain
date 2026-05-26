@@ -18,6 +18,7 @@ describe("cognibrain CLI", () => {
     expect(output).toContain("cognibrain doctor");
     expect(output).toContain("cognibrain memories");
     expect(output).toContain("cognibrain connections");
+    expect(output).toContain("cognibrain proof|truth");
     expect(output).toContain("cognibrain service");
     expect(output).toContain("cognibrain memory search");
     expect(output).toContain("React/Ink guided");
@@ -83,6 +84,7 @@ describe("cognibrain CLI", () => {
       expect(status.package.name).toBe("@cognilabz/cognibrain");
       expect(homeJson.service.manager).toBeTruthy();
       expect(homeJson.commands).toContain("cognibrain service plan");
+      expect(homeJson.commands).toContain("cognibrain proof");
       expect(status.dashboard.optional).toBe(true);
       expect(status.runtime.dashboard.optional).toBe(true);
       expect(memoriesJson.recent.length).toBeGreaterThan(0);
@@ -101,6 +103,7 @@ describe("cognibrain CLI", () => {
         { args: ["connector", "list"], title: "cognibrain connectors" },
         { args: ["adapter", "list"], title: "cognibrain adapters" },
         { args: ["sdk", "list"], title: "cognibrain SDK" },
+        { args: ["proof", "--no-refresh"], title: "cognibrain proof" },
         { args: ["skill", "status"], title: "cognibrain skill" },
         { args: ["doctor", "--no-start", "--no-skill"], title: "cognibrain doctor" }
       ];

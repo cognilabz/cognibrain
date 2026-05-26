@@ -12,9 +12,13 @@ Public claims must stay tied to a command, artifact or source file. This page is
 | CB-PLATFORM-SDK | Custom systems can be integrated through an SDK scaffold. | `npm test -- tests/cli.test.ts` | `src/connectors/sdk.ts`, `cognibrain sdk platform` | Generated code still needs platform-specific endpoint mapping. |
 | CB-COGNICODE | CogniCodeBench verifies correction carry-over in 100 synthetic coding-agent scenarios. | `npm run benchmark:cognicode` | `artifacts/cognicodebench/run.json` | Synthetic scenarios are not a customer-repo guarantee. |
 | CB-ARENA | Benchmark Arena compares Cognibrain with Mem0, Graphiti/Zep, Cognee, LangMem and GBrain on the same local scenario stream. | `npm run benchmark:arena` | `artifacts/arena/run.json`, `public/benchmark-arena/results.json`, `docs/benchmarks/latest-arena.md` | Competitor rows are API-shape adapters unless native/cloud/CLI runners or imported artifacts are configured. |
+| CB-TRUTH-GATE | Product readiness is audited from code artifacts before claims are accepted. | `npm run audit:truth`, `cognibrain proof` | `scripts/audit-product-truth.mjs`, `artifacts/product-truth-audit.json`, `bin/cognibrain.mjs` | The gate passes when claims are honest; open implementation gaps can remain visible. |
+| CB-DOCKER-OPTIONAL | Docker files are optional deployment packaging, not the required install path. | `npm run audit:truth` | `docker/`, `docs/install.md`, `README.md` | The CLI remains the primary control plane. |
 | CB-POSTGRES | Postgres-backed operation has a verifier. | `npm run verify:postgres` | `artifacts/postgres-live.json` | Rerun on the target database before production claims. |
 | CB-RELEASE | The repo has a single release gate. | `npm run release:check` | `artifacts/release-check.json` | Passing locally does not equal a managed SaaS SLA. |
 
 ## Explicit Non-Claims
 
-Cognibrain does not currently claim Managed SaaS uptime, billing readiness, hosted support, autoscaling behavior, deployment-specific SSO readiness or vendor-certified competitor benchmark results.
+Cognibrain does not currently claim Managed SaaS uptime, billing readiness, hosted support, autoscaling behavior, deployment-specific SSO readiness, tenant live connector certification, production-certified connector rows, vendor-certified competitor benchmark results, or real Mem0/GBrain/Graphiti/Cognee/LangMem runs in the checked artifact.
+
+No checked artifact currently proves a real Mem0, Graphiti/Zep, Cognee, LangMem or GBrain vendor/system run. Current checked connector state: 19 hermetic drivers, 0 tenant live smokes and 0 production certifications.

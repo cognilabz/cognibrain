@@ -58,6 +58,7 @@ const checks = [
     has(files.readme, "Boundary: competitor rows are local API-shape compatibility adapters"),
     has(files.readme, "Recall is not enough. The next code change has to prove the memory worked."),
     has(files.readme, "Same Benchmark"),
+    has(files.readme, "npx cognibrain proof"),
     has(files.readme, "docs/assets/cli-home.svg"),
     has(files.readme, "docs/operations.md")
   ]),
@@ -78,6 +79,8 @@ const checks = [
     has(files.benchmarks, "0.9722"),
     has(files.benchmarks, "same-run-full"),
     has(files.benchmarks, "same-run-api-shape"),
+    has(files.benchmarks, "No checked artifact currently proves a real Mem0, Graphiti/Zep, Cognee, LangMem or GBrain vendor/system run."),
+    has(files.benchmarks, "npm run audit:truth"),
     has(files.landscape, "same-run-cloud-api"),
     has(files.landscape, "real-customer-field"),
     has(files.benchmarks, "not vendor-hosted certifications"),
@@ -92,6 +95,8 @@ const checks = [
     has(files.install, "systemd"),
     has(files.install, "launchd"),
     has(files.install, "Task Scheduler"),
+    has(files.install, "Docker is optional"),
+    has(files.install, "The CLI is the required control plane"),
     has(files.operations, "self-hosted operation first"),
     has(files.operations, "managed SaaS")
   ]),
@@ -100,6 +105,7 @@ const checks = [
     has(files.integrations, "GitHub, GitLab, Azure DevOps"),
     has(files.integrations, "Sentry, Datadog, PagerDuty and PostHog"),
     has(files.integrations, "Connector Maturity Matrix"),
+    has(files.integrations, "Current checked connector state: 19 hermetic drivers, 0 tenant live smokes and 0 production certifications."),
     has(files.connectorMaturity, "production-certified"),
     exists("artifacts/connector-maturity.json"),
     has(files.integrations, "Platform SDK"),
@@ -111,13 +117,17 @@ const checks = [
     countClaimRows(files.claims) >= 8,
     has(files.claims, "CB-CLI-INK"),
     has(files.claims, "CB-ARENA"),
+    has(files.claims, "CB-TRUTH-GATE"),
+    has(files.claims, "CB-DOCKER-OPTIONAL"),
     has(files.claims, "CB-CONNECTOR-MATURITY"),
     has(files.claims, "Explicit Non-Claims"),
     has(files.claims, "vendor-certified competitor benchmark results"),
+    has(files.claims, "No checked artifact currently proves a real Mem0, Graphiti/Zep, Cognee, LangMem or GBrain vendor/system run."),
     has(files.readme, "does not claim managed SaaS uptime")
   ]),
   check("market pages are proof-first, not slogan-only", [
     has(files.sameBenchmark, "Memory comparisons are full of slogans"),
+    has(files.sameBenchmark, "No checked artifact currently proves a real Mem0, Graphiti/Zep, Cognee, LangMem or GBrain vendor/system run."),
     has(files.sameBenchmark, "The external runner reads one scenario JSON object from stdin"),
     has(files.compare, "Every public comparison should start with a generated proof table"),
     has(files.compare, "A memory system that cannot prevent repeated mistakes is just searchable history.")

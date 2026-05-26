@@ -1,6 +1,6 @@
 # Latest Benchmark Arena
 
-Generated from `artifacts/arena/run.json` at 2026-05-26T04:28:13.533Z.
+Generated from `artifacts/arena/run.json` at 2026-05-26T04:49:24.640Z.
 
 Recall is not enough. The next code change has to prove the memory worked.
 

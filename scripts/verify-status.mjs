@@ -6,17 +6,18 @@ const root = new URL("..", import.meta.url).pathname;
 const read = (path) => readFileSync(join(root, path), "utf8");
 const exists = (path) => existsSync(join(root, path));
 const has = (content, needle) => content.includes(needle);
+const packageJson = JSON.parse(read("package.json"));
+const packageFiles = Array.isArray(packageJson.files) ? packageJson.files : [];
 
 const files = {
   readme: read("README.md"),
   docsHome: read("docs/README.md"),
   claims: read("docs/claims.md"),
+  status: read("docs/status.md"),
   benchmarks: read("docs/benchmarks.md"),
   reference: read("docs/reference.md"),
   integrations: read("docs/integrations.md"),
-  harnessMaturity: exists("docs/integrations/harness-maturity.md") ? read("docs/integrations/harness-maturity.md") : "",
-  landscape: exists("docs/benchmarks/landscape.md") ? read("docs/benchmarks/landscape.md") : "",
-  sameBenchmark: exists("docs/market/same-benchmark.md") ? read("docs/market/same-benchmark.md") : "",
+  operations: read("docs/operations.md"),
   package: read("package.json")
 };
 
@@ -25,44 +26,45 @@ const checks = [
     exists("docs/install.md"),
     exists("docs/benchmarks.md"),
     exists("docs/integrations.md"),
-    exists("docs/integrations/harness-maturity.md"),
+    exists("docs/status.md"),
     exists("docs/operations.md"),
     exists("docs/reference.md"),
-    exists("docs/benchmarks/landscape.md"),
-    exists("docs/market/same-benchmark.md"),
     exists("docs/claims.md"),
     has(files.docsHome, "Claim Boundary")
   ]),
   check("claim-to-test mapping is present", [
-    has(files.claims, "| Claim ID | Claim | Evidence gate | Artifact or source | Boundary |"),
+    has(files.claims, "| Claim ID | Claim | Evidence gate | Evidence | Boundary |"),
     countClaimRows(files.claims) >= 8,
     has(files.claims, "CB-COGNICODE"),
     has(files.claims, "CB-ARENA"),
+    has(files.claims, "CB-PRODUCTION-STATUS"),
+    has(files.claims, "CB-STORAGE-BOUNDARY"),
     has(files.claims, "Explicit Non-Claims"),
-    has(files.readme, "docs/claims.md")
+    has(files.readme, "docs/claims.md"),
+    has(files.readme, "docs/status.md")
   ]),
   check("marketing claims are bounded by evidence", [
     has(files.readme, "Self-hosted engineering memory for coding agents"),
     has(files.readme, "Stop fixing the same agent mistake twice"),
-    has(files.readme, "Boundary: competitor rows are only as strong as their proof level"),
+    has(files.readme, "Generated proof outputs are internal build artifacts"),
     has(files.claims, "does not currently claim Managed SaaS uptime"),
-    has(files.benchmarks, "The current hard Arena artifact uses explicit runner selection with `MEMORY_ARENA_AUTO_NATIVE=false`"),
-    has(files.benchmarks, "At least one competitor row in this checked artifact is a real same-run native or CLI proof"),
+    has(files.benchmarks, "The benchmark commands write ignored local reports under `artifacts/`"),
     has(files.benchmarks, "same-run-api-shape"),
     has(files.benchmarks, "same-run-native"),
-    has(files.harnessMaturity, "Harness Maturity Matrix"),
-    has(files.landscape, "real-customer-field"),
-    has(files.sameBenchmark, "Recall is not enough"),
-    has(files.integrations, "Connector Maturity Matrix"),
-    has(files.reference, "/openapi.json")
+    has(files.status, "Production Readiness Status"),
+    has(files.status, "DB-primary row persistence"),
+    has(files.status, "JWT/OIDC verifier"),
+    has(files.status, "Production policy mode default-denies"),
+    has(files.status, "Generated artifacts are internal CI/build outputs"),
+    has(files.integrations, "MCP first for agents"),
+    has(files.reference, "For agents, use MCP first")
   ]),
-  check("verification scripts are wired to canonical docs", [
+  check("generated outputs stay internal", [
+    packageFiles.every((path) => !path.startsWith("artifacts/")),
+    !packageFiles.includes("public/benchmark-arena/"),
+    !packageFiles.includes("public/leaderboard/"),
     has(files.package, "\"verify:status\""),
     has(files.package, "\"audit:docs\""),
-    has(files.package, "\"connectors:maturity\""),
-    has(files.package, "\"benchmark:arena:publish\""),
-    has(files.package, "npm run verify:status"),
-    has(files.package, "npm run audit:docs"),
     !has(files.package, "audit:plan1_")
   ])
 ];

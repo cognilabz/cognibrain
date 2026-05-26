@@ -10,8 +10,13 @@ import { runBeamBenchmark } from "../src/eval/beam";
 import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
 import { runCogniCodeBench } from "../src/eval/cognicodeBench";
 import { generateConnectorMaturity } from "../src/eval/connectorMaturity";
+import { generateConnectorCertification } from "../src/eval/connectorCertification";
+import { generateConnectorQualityReport } from "../src/eval/connectorQuality";
+import { runConnectorTransportProof } from "../src/eval/connectorTransportProof";
 import { generateConnectorWebhookProof } from "../src/eval/connectorWebhooks";
 import { generateHarnessMaturity } from "../src/eval/harnessMaturity";
+import { generateOperatorOsMaturity } from "../src/eval/operatorOsMaturity";
+import { generateBenchmarkHardeningReport } from "../src/eval/benchmarkHardening";
 import { publishArenaReport } from "../src/eval/publishArena";
 
 describe("self verification benchmark loop", () => {
@@ -185,6 +190,33 @@ describe("self verification benchmark loop", () => {
     expect(report.rows.every((row) => row.qualityScore > 0)).toBe(true);
   });
 
+  it("proves connector transport retry and pagination behavior", async () => {
+    const report = await runConnectorTransportProof({ out: "artifacts/connector-transport.json" });
+    expect(report.passed).toBe(true);
+    expect(report.checks.rateLimitBackoff).toBe(true);
+    expect(report.checks.cursorPagination).toBe(true);
+    expect(report.checks.transientRetry).toBe(true);
+    expect(report.listItems).toBeGreaterThanOrEqual(2);
+    expect(report.pollEvents).toBeGreaterThanOrEqual(3);
+  }, 30_000);
+
+  it("generates connector semantic quality and certification boundaries", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-certification-"));
+    const quality = generateConnectorQualityReport({
+      out: join(dir, "connector-quality.json"),
+      markdown: join(dir, "connector-quality.md")
+    });
+    const certification = generateConnectorCertification({
+      out: join(dir, "connector-certification.json"),
+      markdown: join(dir, "connector-certification.md")
+    });
+    expect(quality.passed).toBe(true);
+    expect(quality.summary.checkedCases).toBeGreaterThanOrEqual(19);
+    expect(certification.passed).toBe(true);
+    expect(certification.summary.credentialBlocked).toBeGreaterThanOrEqual(19);
+    expect(certification.summary.productionCertified).toBe(0);
+  });
+
   it("proves priority connector webhook signature, replay, normalization, and review queue paths", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-webhooks-"));
     const report = generateConnectorWebhookProof({ out: join(dir, "connector-webhooks.json") });
@@ -208,6 +240,24 @@ describe("self verification benchmark loop", () => {
     expect(report.rows.find((row) => row.harness === "devin-style")?.maturity.configGenerated).toBe(true);
     expect(report.goldenPaths.every((path) => path.passed)).toBe(true);
     expect(readFileSync(join(dir, "harness-maturity.md"), "utf8")).toContain("Harness Maturity Matrix");
+  });
+
+  it("generates terminal operator OS and benchmark hardening proof artifacts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-operator-benchmark-"));
+    const operator = generateOperatorOsMaturity({
+      out: join(dir, "operator-os-maturity.json"),
+      markdown: join(dir, "operator-os.md")
+    });
+    const benchmark = generateBenchmarkHardeningReport({
+      out: join(dir, "benchmark-hardening.json"),
+      markdown: join(dir, "benchmark-hardening.md")
+    });
+    expect(operator.passed).toBe(true);
+    expect(operator.rows.find((row) => row.surface === "Policies")?.passed).toBe(true);
+    expect(operator.rows.find((row) => row.surface === "Retention")?.passed).toBe(true);
+    expect(benchmark.passed).toBe(true);
+    expect(benchmark.dataset.sha256).toHaveLength(64);
+    expect(benchmark.realRepoTrack.repoCount).toBeGreaterThanOrEqual(5);
   });
 
   it("publishes a marketing scorecard with bars and per-scenario details", () => {

@@ -101,7 +101,7 @@ export function generateHarnessMaturity(options: { out?: string; markdown?: stri
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
     source: "harness-package",
-    artifacts: ["artifacts/harness-maturity.json", "docs/integrations/harness-maturity.md", "artifacts/connectors-live.json"],
+    artifacts: ["artifacts/harness-maturity.json", "artifacts/docs/harness-maturity.md", "artifacts/connectors-live.json"],
     rows,
     goldenPaths,
     summary: {
@@ -322,7 +322,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 function cliOptions(argv: string[]): { out?: string; markdown?: string } {
   return {
     out: optionValue(argv, "--out") ?? "artifacts/harness-maturity.json",
-    markdown: optionValue(argv, "--markdown") ?? "docs/integrations/harness-maturity.md"
+    markdown: optionValue(argv, "--markdown") ?? "artifacts/docs/harness-maturity.md"
   };
 }
 

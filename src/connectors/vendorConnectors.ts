@@ -46,6 +46,22 @@ export interface ExternalVendorWritebackResult {
 
 type FetchLike = typeof fetch;
 
+interface VendorFetchResult<T> {
+  ok: boolean;
+  status: number;
+  json?: T;
+  error?: string;
+  headers: Record<string, string>;
+  attempts: number;
+  rateLimitRetries: number;
+}
+
+interface VendorPagedFetchResult<TItem, TJson> extends VendorFetchResult<TJson> {
+  items: TItem[];
+  pageCount: number;
+  requests: Array<NonNullable<ConnectorSyncRecord["request"]>>;
+}
+
 const providerByConnectorId: Record<string, ExternalVendorProvider> = {
   "official-github": "github",
   "official-slack": "slack",
@@ -341,10 +357,13 @@ async function listGitHub(fetchImpl: FetchLike, timeoutMs: number): Promise<Exte
     per_page: process.env.MEMORY_VENDOR_PAGE_SIZE ?? "20"
   });
   const request = requestShape("GET", url, githubHeaders());
-  const response = await fetchJson<Array<Record<string, unknown>>>(request, fetchImpl, timeoutMs);
+  const response = await fetchPagedJson<Record<string, unknown>, Array<Record<string, unknown>>>(request, fetchImpl, timeoutMs, {
+    items: (json) => Array.isArray(json) ? json : [],
+    nextPage: (result) => nextLink(result.headers)
+  });
   return {
     status: response.ok ? "applied" : "failed",
-    items: response.ok && Array.isArray(response.json) ? response.json.map(githubPullItem) : [],
+    items: response.ok ? response.items.map(githubPullItem) : [],
     request: recordRequest(request),
     responseStatusCode: response.status,
     error: response.ok ? undefined : response.error
@@ -1586,25 +1605,102 @@ function recordRequest(request: NonNullable<ConnectorSyncRecord["request"]>): No
   return { ...request, headers };
 }
 
-async function fetchJson<T>(request: NonNullable<ConnectorSyncRecord["request"]>, fetchImpl: FetchLike, timeoutMs: number): Promise<{ ok: boolean; status: number; json?: T; error?: string }> {
-  try {
-    const response = await fetchImpl(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body: request.method === "GET" ? undefined : request.body,
-      signal: AbortSignal.timeout(Math.max(1, timeoutMs))
-    });
-    const json = await response.json().catch(() => undefined) as T | undefined;
-    return { ok: response.ok, status: response.status, json, error: response.ok ? undefined : `HTTP ${response.status}` };
-  } catch (error) {
-    return { ok: false, status: 0, error: error instanceof Error ? error.message : "vendor request failed" };
+async function fetchJson<T>(request: NonNullable<ConnectorSyncRecord["request"]>, fetchImpl: FetchLike, timeoutMs: number): Promise<VendorFetchResult<T>> {
+  const maxAttempts = Math.max(1, Number(process.env.MEMORY_VENDOR_RETRY_ATTEMPTS ?? 3));
+  let rateLimitRetries = 0;
+  let lastError = "vendor request failed";
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetchImpl(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: request.method === "GET" ? undefined : request.body,
+        signal: AbortSignal.timeout(Math.max(1, timeoutMs))
+      });
+      const headers = responseHeaders(response);
+      const json = await response.json().catch(() => undefined) as T | undefined;
+      if (retryableStatus(response.status) && attempt < maxAttempts) {
+        rateLimitRetries += response.status === 429 ? 1 : 0;
+        await sleep(retryDelayMs(headers["retry-after"], attempt));
+        continue;
+      }
+      return { ok: response.ok, status: response.status, json, headers, attempts: attempt, rateLimitRetries, error: response.ok ? undefined : `HTTP ${response.status}` };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "vendor request failed";
+      if (attempt < maxAttempts) {
+        await sleep(retryDelayMs(undefined, attempt));
+        continue;
+      }
+      return { ok: false, status: 0, headers: {}, attempts: attempt, rateLimitRetries, error: lastError };
+    }
   }
+  return { ok: false, status: 0, headers: {}, attempts: maxAttempts, rateLimitRetries, error: lastError };
+}
+
+async function fetchPagedJson<TItem, TJson>(
+  initialRequest: NonNullable<ConnectorSyncRecord["request"]>,
+  fetchImpl: FetchLike,
+  timeoutMs: number,
+  options: {
+    items: (json: TJson | undefined) => TItem[];
+    nextPage: (result: VendorFetchResult<TJson>, request: NonNullable<ConnectorSyncRecord["request"]>, pageIndex: number) => string | undefined;
+  }
+): Promise<VendorPagedFetchResult<TItem, TJson>> {
+  const maxPages = Math.max(1, Number(process.env.MEMORY_VENDOR_MAX_PAGES ?? 5));
+  const items: TItem[] = [];
+  const requests: Array<NonNullable<ConnectorSyncRecord["request"]>> = [];
+  let current = initialRequest;
+  let last: VendorFetchResult<TJson> = { ok: false, status: 0, headers: {}, attempts: 0, rateLimitRetries: 0, error: "not requested" };
+  for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+    requests.push(current);
+    last = await fetchJson<TJson>(current, fetchImpl, timeoutMs);
+    if (!last.ok) break;
+    items.push(...options.items(last.json));
+    const next = options.nextPage(last, current, pageIndex);
+    if (!next) break;
+    current = { ...current, url: next };
+  }
+  return { ...last, items, pageCount: requests.length, requests };
 }
 
 function apiUrl(base: string, path: string, query: Record<string, string | undefined> = {}): string {
   const url = new URL(`${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`);
   for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== "") url.searchParams.set(key, value);
   return url.toString();
+}
+
+function responseHeaders(response: Response): Record<string, string> {
+  const headers: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    headers[key.toLowerCase()] = value;
+  });
+  return headers;
+}
+
+function retryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function retryDelayMs(retryAfter: string | undefined, attempt: number): number {
+  if (retryAfter && /^\d+(\.\d+)?$/.test(retryAfter)) return Math.min(2_000, Math.max(0, Number(retryAfter) * 1000));
+  if (retryAfter) {
+    const date = Date.parse(retryAfter);
+    if (Number.isFinite(date)) return Math.min(2_000, Math.max(0, date - Date.now()));
+  }
+  return Math.min(2_000, 100 * 2 ** Math.max(0, attempt - 1));
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function nextLink(headers: Record<string, string>): string | undefined {
+  const link = headers.link;
+  if (!link) return undefined;
+  const segment = link.split(",").find((part) => /\brel="?next"?/i.test(part));
+  const match = segment?.match(/<([^>]+)>/);
+  return match?.[1];
 }
 
 function discordJumpUrl(message: Record<string, unknown>, channel: string): string | undefined {

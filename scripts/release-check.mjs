@@ -17,6 +17,8 @@ const steps = [
   ["connector compatibility", "npm", ["run", "verify:compatibility"]],
   ["connector maturity", "npm", ["run", "connectors:maturity"]],
   ["harness maturity", "npm", ["run", "harness:maturity"]],
+  ["operator maturity", "npm", ["run", "operator:maturity"]],
+  ["benchmark hardening", "npm", ["run", "benchmark:hardening"]],
   ["product truth audit", "npm", ["run", "audit:truth"]],
   ["public benchmark publish", "npm", ["run", "leaderboard:publish"]],
   ["local runtime start", process.execPath, ["bin/cognibrain.mjs", "start"]],

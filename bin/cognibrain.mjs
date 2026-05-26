@@ -377,8 +377,8 @@ async function doctor(doctorArgs) {
   add("adapter credentials", adapterReadiness.ok || adapterReadiness.checks.length === 0, adapterReadiness.checks.length ? `${adapterReadiness.checks.filter((check) => check.ok).length}/${adapterReadiness.checks.length} configured` : "no adapter configs yet", adapterReadiness.ok || adapterReadiness.checks.length === 0 ? "ok" : "warn");
   const publicArenaReady = existsSync(join(root, "public", "benchmark-arena", "results.json")) && existsSync(join(root, "docs", "benchmarks", "latest-arena.md"));
   add("benchmark artifacts fresh enough", publicArenaReady, publicArenaReady ? "public arena and latest markdown present" : "run npm run benchmark:arena && npm run benchmark:arena:publish", publicArenaReady ? "ok" : "warn");
-  const dashboardAssetsReady = ["dashboard-workbench.png", "dashboard-benchmarks.png"].every((name) => existsSync(join(root, "docs", "assets", name)));
-  add("dashboard assets", dashboardAssetsReady, dashboardAssetsReady ? "docs/assets dashboard screenshots present" : "missing docs/assets dashboard screenshots", dashboardAssetsReady ? "ok" : "warn");
+  const cliAssetsReady = ["cli-home.svg", "cli-connections.svg", "cli-service.svg"].every((name) => existsSync(join(root, "docs", "assets", name)));
+  add("docs assets", cliAssetsReady, cliAssetsReady ? "curated CLI docs assets present" : "run npm run docs:cli-screenshots", cliAssetsReady ? "ok" : "warn");
   const mcpReady = existsSync(join(root, "src", "connectors", "mcpServer.ts")) && existsSync(join(root, "src", "connectors", "mcpHandlers.ts"));
   add("MCP server files", mcpReady, mcpReady ? "src/connectors/mcpServer.ts" : "missing MCP server files");
 
@@ -400,20 +400,9 @@ async function doctor(doctorArgs) {
     const pack = runCapture("npm", ["pack", "--dry-run"]);
     add("npm pack dry-run", pack.status === 0, pack.status === 0 ? "ok" : pack.stderr.trim());
     const packOutput = `${pack.stdout}\n${pack.stderr}`;
-    const allowedPackArtifacts = [
-      "artifacts/arena/run.json",
-      "artifacts/arena/native-competitors.json",
-      "artifacts/connector-maturity.json",
-      "artifacts/connector-webhooks.json",
-      "artifacts/harness-maturity.json",
-      "artifacts/product-truth-audit.json",
-      "artifacts/vendor-api-specs.json",
-      "artifacts/vendor-live-smoke.json"
-    ];
     const unexpectedArtifacts = packOutput
       .split(/\r?\n/)
-      .filter((line) => line.includes("artifacts/"))
-      .filter((line) => !allowedPackArtifacts.some((artifact) => line.includes(artifact)));
+      .filter((line) => line.includes("artifacts/") || line.includes("public/benchmark-arena/") || line.includes("public/leaderboard/"));
     const leaked = [
       ".cognibrain/",
       ".cognibrain-harness-package.json",
@@ -946,7 +935,7 @@ function profileDefinition(name) {
       connectors: ["github", "jira", "notion", "linear"],
       adapters: ["benchmark-arena", "storage-sqlite"],
       runDemo: true,
-      nextSteps: ["Run benchmark:arena", "Open artifacts/arena/run.json", "Publish same-benchmark proof"]
+      nextSteps: ["Run benchmark:arena", "Review the ignored local report under artifacts/", "Run audit:truth before public claims"]
     }
   };
   const profile = profiles[name];

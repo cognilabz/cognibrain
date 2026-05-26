@@ -4,7 +4,7 @@ import { validateLeaderboardArtifact, type LeaderboardArtifact } from "./leaderb
 
 export function publishLeaderboardArtifact(options: { inputPath?: string; outputDir?: string } = {}) {
   const inputPath = options.inputPath ?? "artifacts/leaderboard.json";
-  const outputDir = options.outputDir ?? "public/leaderboard";
+  const outputDir = options.outputDir ?? "artifacts/public/leaderboard";
   const artifact = JSON.parse(readFileSync(inputPath, "utf8")) as LeaderboardArtifact;
   validateLeaderboardArtifact(artifact);
   mkdirSync(outputDir, { recursive: true });

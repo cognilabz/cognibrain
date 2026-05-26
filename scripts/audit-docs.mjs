@@ -7,198 +7,104 @@ const read = (path) => readFileSync(join(root, path), "utf8");
 const exists = (path) => existsSync(join(root, path));
 const has = (content, needle) => content.includes(needle);
 
-const docs = [
+const canonicalDocs = [
   "docs/README.md",
   "docs/install.md",
   "docs/benchmarks.md",
-  "docs/benchmarks/latest-arena.md",
-  "docs/benchmarks/landscape.md",
   "docs/integrations.md",
-  "docs/integrations/connector-maturity.md",
-  "docs/integrations/harness-maturity.md",
-  "docs/roadmap/terminal-memory-os-plan.md",
-  "docs/roadmap/benchmark-harness-connector-plan.md",
+  "docs/status.md",
   "docs/operations.md",
   "docs/reference.md",
-  "docs/claims.md",
-  "docs/market/same-benchmark.md",
-  "docs/market/compare.md"
+  "docs/claims.md"
+];
+const generatedDocPatterns = [
+  /^docs\/benchmarks\/(?:hardening|latest-arena|landscape)\.md$/,
+  /^docs\/integrations\/(?:connector-certification|connector-quality|connector-maturity|harness-maturity)\.md$/,
+  /^docs\/operations\/operator-os\.md$/,
+  /^docs\/roadmap\//,
+  /^docs\/market\//
 ];
 const markdownDocs = walk("docs").filter((path) => path.endsWith(".md")).sort();
 const rootMarkdown = ["README.md", "CONTRIBUTING.md", "SECURITY.md"];
 const files = {
   readme: read("README.md"),
+  docsHome: read("docs/README.md"),
+  dashboard: read("src/dashboard/main.tsx"),
   package: read("package.json"),
   install: read("docs/install.md"),
   benchmarks: read("docs/benchmarks.md"),
   integrations: read("docs/integrations.md"),
-  connectorMaturity: exists("docs/integrations/connector-maturity.md") ? read("docs/integrations/connector-maturity.md") : "",
-  harnessMaturity: exists("docs/integrations/harness-maturity.md") ? read("docs/integrations/harness-maturity.md") : "",
-  roadmap: read("docs/roadmap/terminal-memory-os-plan.md"),
-  benchmarkHarnessRoadmap: read("docs/roadmap/benchmark-harness-connector-plan.md"),
-  latestArena: exists("docs/benchmarks/latest-arena.md") ? read("docs/benchmarks/latest-arena.md") : "",
-  landscape: read("docs/benchmarks/landscape.md"),
+  status: read("docs/status.md"),
   operations: read("docs/operations.md"),
   reference: read("docs/reference.md"),
-  claims: read("docs/claims.md"),
-  sameBenchmark: read("docs/market/same-benchmark.md"),
-  compare: read("docs/market/compare.md")
+  claims: read("docs/claims.md")
 };
+const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmarks, files.integrations, files.status, files.operations, files.reference, files.claims].join("\n\n");
+const packageJson = JSON.parse(files.package);
+const packageFiles = Array.isArray(packageJson.files) ? packageJson.files : [];
 
 const checks = [
   check("documentation is compact and canonical", [
-    docs.every(exists),
-    markdownDocs.length === docs.length,
+    canonicalDocs.every(exists),
     rootMarkdown.every(exists),
+    markdownDocs.every((path) => canonicalDocs.includes(path) || path.startsWith("docs/schemas/")),
+    generatedDocPatterns.every((pattern) => !markdownDocs.some((path) => pattern.test(path))),
     !exists("PRODUCT.md"),
     !exists("DESIGN.md"),
     !exists("plan1_5.md"),
     !exists("nextplan.md")
   ]),
-  check("README represents the product clearly", [
+  check("README is product-first, not proof-artifact-first", [
     has(files.readme, "Self-hosted engineering memory for coding agents"),
     has(files.readme, "Stop fixing the same agent mistake twice"),
     has(files.readme, "npm i @cognilabz/cognibrain"),
-    has(files.readme, "Benchmark Arena"),
-    has(files.readme, "Current local Benchmark Arena result"),
-    has(files.readme, "competitor rows are only as strong as their proof level"),
-    has(files.readme, "Recall is not enough. The next code change has to prove the memory worked."),
-    has(files.readme, "Same Benchmark"),
-    has(files.readme, "npx cognibrain proof"),
-    has(files.readme, "docs/assets/cli-home.svg"),
-    has(files.readme, "docs/roadmap/terminal-memory-os-plan.md"),
-    has(files.readme, "docs/roadmap/benchmark-harness-connector-plan.md"),
-    has(files.readme, "docs/integrations/harness-maturity.md"),
-    has(files.readme, "docs/operations.md")
+    has(files.readme, "## Public Surface"),
+    has(files.readme, "MCP is the default integration path for agents"),
+    has(files.readme, "SDK/HTTP is for custom integrations"),
+    has(files.readme, "Generated proof outputs are internal build artifacts"),
+    has(files.readme, "docs/status.md"),
+    has(files.readme, "docs/claims.md")
   ]),
-  check("screenshots are real checked assets", [
+  check("screenshots are curated docs assets", [
     exists("docs/assets/cli-home.svg"),
     exists("docs/assets/cli-connections.svg"),
     exists("docs/assets/cli-service.svg"),
     exists("docs/assets/cli-config.svg"),
     exists("docs/assets/cli-sdk.svg"),
-    exists("docs/assets/dashboard-workbench.png"),
-    exists("docs/assets/dashboard-benchmarks.png"),
     has(files.package, "\"docs:cli-screenshots\"")
   ]),
-  check("benchmark claims are bounded by artifacts", [
-    has(files.benchmarks, "artifacts/arena/run.json"),
-    has(files.benchmarks, "docs/benchmarks/latest-arena.md"),
-    has(files.latestArena, "Latest Benchmark Arena"),
-    has(files.benchmarks, "0.9550"),
-    has(files.benchmarks, "same-run-full"),
-    has(files.benchmarks, "same-run-api-shape"),
-    has(files.benchmarks, "same-run-native"),
-    has(files.benchmarks, "MEMORY_ARENA_AUTO_NATIVE=false"),
-    has(files.benchmarks, "At least one competitor row in this checked artifact is a real same-run native or CLI proof"),
-    has(files.benchmarks, "API-shape rows remain compatibility models unless their row records native, cloud, CLI, vendor-signed or field proof."),
-    has(files.benchmarks, "1,000 hard CogniCodeBench v2"),
-    has(files.benchmarks, "20 correction types"),
-    has(files.benchmarks, "Public Market Benchmarks"),
-    has(files.benchmarks, "npm run benchmark:certified"),
-    has(files.benchmarks, "artifacts/market-gate.json"),
-    has(files.benchmarks, "LoCoMo"),
-    has(files.benchmarks, "BEAM 500K"),
-    has(files.benchmarks, "npm run audit:truth"),
-    has(files.landscape, "same-run-cloud-api"),
-    has(files.landscape, "real-customer-field"),
-    exists("artifacts/arena/run.json"),
-    exists("artifacts/cognicodebench/run.json"),
-    exists("public/benchmark-arena/index.html"),
-    exists("public/benchmark-arena/scorecard.html"),
-    exists("public/benchmark-arena/results.json")
+  check("artifacts are internal outputs, not package content", [
+    has(files.benchmarks, "Generated reports are written under `artifacts/`"),
+    has(files.operations, "`artifacts/` is ignored by git"),
+    has(files.status, "Generated artifacts are internal CI/build outputs"),
+    !/(^|[^A-Za-z0-9_/-])public\/benchmark-arena/.test(files.dashboard),
+    !/(^|[^A-Za-z0-9_/-])public\/leaderboard/.test(files.dashboard),
+    packageFiles.every((path) => !path.startsWith("artifacts/")),
+    !packageFiles.includes("public/benchmark-arena/"),
+    !packageFiles.includes("public/leaderboard/")
   ]),
-  check("install and service docs cover self-hosting", [
-    has(files.install, "npx cognibrain init"),
-    has(files.install, "npx cognibrain service install --activate"),
-    has(files.install, "systemd"),
-    has(files.install, "launchd"),
-    has(files.install, "Task Scheduler"),
-    has(files.install, "Docker is optional"),
-    has(files.install, "The CLI is the required control plane"),
-    has(files.operations, "self-hosted operation first"),
-    has(files.operations, "managed SaaS")
-  ]),
-  check("terminal memory os plan coverage is documented", [
-    has(files.roadmap, "Terminal Memory OS Plan Coverage"),
-    has(files.roadmap, "connector docs now match the 19 native vendor drivers"),
-    has(files.roadmap, "cognibrain tui"),
-    has(files.roadmap, "Ink action palette executes static commands"),
-    has(files.roadmap, "0 tenant-verified live smokes and 0 production certifications"),
-    has(files.roadmap, "Marketing and docs can make strong live-system claims only for `tenant-verified` or `production-certified` connector rows."),
-    Array.from({ length: 17 }, (_, index) => `#${367 + index}`).every((issue) => has(files.roadmap, issue)),
-    has(files.roadmap, "npm run connectors:maturity"),
-    has(files.roadmap, "npm run audit:docs"),
-    has(files.roadmap, "npm run verify:nextgen"),
-    has(files.install, "npx cognibrain tui"),
-    has(files.install, "Enter executes the selected static action"),
-    has(files.reference, "cognibrain tui|ui|home [--json]"),
-    has(files.reference, "placeholder")
-  ]),
-  check("benchmark harness connector plan coverage is documented", [
-    has(files.benchmarkHarnessRoadmap, "Benchmark, Harness And Connector Hardening Plan Coverage"),
-    Array.from({ length: 16 }, (_, index) => `#${384 + index}`).every((issue) => has(files.benchmarkHarnessRoadmap, issue)),
-    has(files.benchmarkHarnessRoadmap, "1,000 hard scenarios"),
-    has(files.benchmarkHarnessRoadmap, "16 generated harness packages"),
-    has(files.benchmarkHarnessRoadmap, "MEMORY_ARENA_AUTO_NATIVE=false"),
-    has(files.benchmarkHarnessRoadmap, "TUI connector setup wizard"),
-    has(files.benchmarkHarnessRoadmap, "Answer-generation has 0 questions")
-  ]),
-  check("connectors, adapters and SDK are discoverable", [
-    has(files.integrations, "Native Connectors"),
-    has(files.integrations, "GitHub, GitLab, Azure DevOps"),
-    has(files.integrations, "Sentry, Datadog, PagerDuty and PostHog"),
-    has(files.integrations, "Connector Maturity Matrix"),
-    has(files.integrations, "Current checked connector state: 19 hermetic drivers, 19 API/spec-verified drivers, 19 live-smoke-ready drivers, 10 webhook-verified priority drivers, 0 tenant-verified live smokes and 0 production certifications."),
-    has(files.integrations, "Harness Maturity Matrix"),
-    has(files.integrations, "Windsurf, Continue.dev, Aider, Roo Code/Cline, Goose, Sourcegraph Amp and a Devin-style external-agent mode"),
-    has(files.harnessMaturity, "16 generated harness packages"),
-    exists("artifacts/harness-maturity.json"),
-    exists("artifacts/vendor-api-specs.json"),
-    has(files.connectorMaturity, "production-certified"),
-    exists("artifacts/connector-maturity.json"),
-    has(files.integrations, "Platform SDK"),
-    has(files.integrations, "cognibrain sdk platform"),
-    has(files.reference, "cognibrain connections add"),
-    has(files.reference, "/openapi.json")
-  ]),
-  check("communication contract is explicit and current", [
-    has(files.readme, "## Communication Contract"),
-    has(files.readme, "Use the surfaces by role"),
-    has(files.integrations, "Agent harness communication is layered"),
-    has(files.reference, "## Communication Contract"),
-    has(files.reference, "memory_coding_context_pack"),
-    has(files.reference, "/coding-context-pack"),
-    has(files.reference, "/code/action-guard"),
-    has(files.reference, "/patch-evidence"),
+  check("communication contract is simple", [
+    has(files.integrations, "MCP first for agents"),
+    has(files.integrations, "CLI for humans and automation"),
+    has(files.integrations, "SDK/HTTP only for app and connector integrations"),
+    has(files.reference, "For agents, use MCP first"),
+    has(files.reference, "For operators, use the CLI"),
+    has(files.reference, "For product integrations, use SDK/HTTP"),
     !has(files.reference, "| `/context-pack` |")
   ]),
-  check("claim map keeps marketing honest", [
-    countClaimRows(files.claims) >= 8,
-    has(files.claims, "CB-CLI-INK"),
-    has(files.claims, "CB-ARENA"),
-    has(files.claims, "CB-TRUTH-GATE"),
-    has(files.claims, "CB-DOCKER-OPTIONAL"),
-    has(files.claims, "CB-CONNECTOR-MATURITY"),
+  check("production boundary remains honest", [
+    has(files.status, "Production Readiness Status"),
+    has(files.status, "DB-primary row persistence"),
+    has(files.status, "JWT/OIDC verifier"),
+    has(files.status, "route-level RBAC"),
+    has(files.status, "Production policy mode default-denies"),
+    has(files.status, "0 tenant-verified live smokes and 0 production certifications"),
     has(files.claims, "Explicit Non-Claims"),
-    has(files.claims, "vendor-certified competitor benchmark results"),
-    has(files.claims, "LangMem is same-run-native in the current checked artifact"),
-    has(files.claims, "API-shape rows remain compatibility models unless their row records native, cloud, CLI, vendor-signed or field proof."),
-    has(files.claims, "Current checked harness state: 16 generated harness packages"),
-    has(files.readme, "does not claim managed SaaS uptime")
+    has(files.claims, "does not currently claim Managed SaaS uptime"),
+    has(files.claims, "vendor-certified competitor benchmark results")
   ]),
-  check("market pages are proof-first, not slogan-only", [
-    has(files.sameBenchmark, "Memory comparisons are full of slogans"),
-    has(files.sameBenchmark, "The current hard 300-scenario Arena artifact uses explicit runner selection with `MEMORY_ARENA_AUTO_NATIVE=false`"),
-    has(files.sameBenchmark, "records LangMem as `same-run-native`"),
-    has(files.sameBenchmark, "export MEMORY_ARENA_AUTO_NATIVE=false"),
-    has(files.sameBenchmark, "The external runner reads one scenario JSON object from stdin"),
-    has(files.compare, "Every public comparison should start with a generated proof table"),
-    has(files.compare, "A memory system that cannot prevent repeated mistakes is just searchable history.")
-  ]),
-  check("legacy plan-era wording is gone from product docs and scripts", [
-    !/(plan1_|nextplan|Plan1_|Plan1)/.test(files.readme),
-    !/(plan1_|nextplan|Plan1_|Plan1)/.test(docs.map(read).join("\n")),
+  check("legacy plan-era docs are gone", [
+    !/(plan1_|nextplan|Plan1_|Plan1)/.test(docsCorpus),
     !has(files.package, "audit:plan1_"),
     !has(files.package, "demo:plan1_"),
     !exists("scripts/audit-plan1_5.mjs"),
@@ -219,10 +125,6 @@ console.log(`docs audit passed: ${checks.length}/${checks.length} checks`);
 function check(name, assertions) {
   const failed = assertions.map((value, index) => ({ value, index })).filter((item) => !item.value).map((item) => `assertion ${item.index + 1}`);
   return { name, passed: failed.length === 0, failed };
-}
-
-function countClaimRows(content) {
-  return content.split(/\r?\n/).filter((line) => /^\| CB-/.test(line)).length;
 }
 
 function localMarkdownLinks() {

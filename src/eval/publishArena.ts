@@ -83,8 +83,8 @@ const CHECK_LABELS: Array<{ key: CheckKey; label: string }> = [
 
 export function publishArenaReport(options: { inputPath?: string; outputDir?: string; markdownPath?: string; marketGatePath?: string } = {}) {
   const inputPath = options.inputPath ?? "artifacts/arena/run.json";
-  const outputDir = options.outputDir ?? "public/benchmark-arena";
-  const markdownPath = options.markdownPath ?? "docs/benchmarks/latest-arena.md";
+  const outputDir = options.outputDir ?? "artifacts/public/benchmark-arena";
+  const markdownPath = options.markdownPath ?? "artifacts/docs/latest-arena.md";
   if (!existsSync(inputPath)) throw new Error(`Arena artifact missing: ${inputPath}`);
   const report = JSON.parse(readFileSync(inputPath, "utf8")) as ArenaReport;
   validateArenaReport(report);

@@ -206,6 +206,27 @@ export class SQLitePersistenceAdapter implements MemoryPersistenceAdapter {
   }
 
   load(): PersistedMemoryFile | undefined {
+    const db = this.db();
+    const snapshot = this.latestSnapshot();
+    const rows = db.prepare("select payload from memories order by updated_at desc").all() as Array<{ payload?: string }>;
+    if (rows.length) {
+      const auditRows = db.prepare("select payload from audit_events order by created_at asc").all() as Array<{ payload?: string }>;
+      const contextRows = db.prepare("select payload from context_packs order by created_at desc").all() as Array<{ payload?: string }>;
+      const profileRows = db.prepare("select payload from retrieval_profiles order by updated_at desc").all() as Array<{ payload?: string }>;
+      const retentionRows = db.prepare("select payload from retention_rules order by updated_at desc").all() as Array<{ payload?: string }>;
+      return {
+        ...(snapshot ?? { version: 2 as const, maintenance: { users: {} }, memories: [] }),
+        memories: rows.map((row) => JSON.parse(row.payload ?? "{}") as Memory),
+        auditEvents: auditRows.map((row) => JSON.parse(row.payload ?? "{}") as AuditEvent),
+        evidencePacks: contextRows.map((row) => JSON.parse(row.payload ?? "{}") as EvidencePack),
+        retrievalProfiles: profileRows.map((row) => JSON.parse(row.payload ?? "{}") as RetrievalProfile),
+        retentionRules: retentionRows.map((row) => JSON.parse(row.payload ?? "{}") as RetentionRule)
+      };
+    }
+    return snapshot;
+  }
+
+  private latestSnapshot(): PersistedMemoryFile | undefined {
     const row = this.db()
       .prepare("select payload from memory_snapshots order by id desc limit 1")
       .get() as { payload?: string } | undefined;
@@ -216,24 +237,48 @@ export class SQLitePersistenceAdapter implements MemoryPersistenceAdapter {
     const db = this.db();
     const serialized = JSON.stringify(payload);
     const createdAt = new Date().toISOString();
+    const previousRows = db.prepare("select id, payload from memories").all() as Array<{ id: string; payload: string }>;
+    const previous = new Map(previousRows.map((row) => [row.id, row.payload]));
+    const nextIds = new Set(payload.memories.map((memory) => memory.id));
     db.exec("begin immediate");
     try {
       db.prepare("insert into memory_snapshots (created_at, version, payload) values (?, ?, ?)").run(createdAt, payload.version, serialized);
-      db.prepare("insert into persistence_events (created_at, event_type, payload) values (?, ?, ?)").run(createdAt, "snapshot", serialized);
-      db.prepare("delete from memories").run();
-      db.prepare("delete from relations").run();
-      db.prepare("delete from entities").run();
-      db.prepare("delete from audit_events").run();
-      db.prepare("delete from context_packs").run();
-      db.prepare("delete from retrieval_profiles").run();
-      db.prepare("delete from retention_rules").run();
-      db.prepare("delete from memory_fts").run();
+      db.prepare("insert into persistence_events (created_at, event_type, payload) values (?, ?, ?)").run(createdAt, "snapshot.compacted", serialized);
+      for (const [id, oldPayload] of previous) {
+        if (nextIds.has(id)) continue;
+        db.prepare("insert into persistence_events (created_at, event_type, payload) values (?, ?, ?)").run(createdAt, "memory.deleted", oldPayload);
+        db.prepare("delete from memories where id = ?").run(id);
+        db.prepare("delete from memory_fts where id = ?").run(id);
+      }
       for (const memory of payload.memories) {
+        const memoryPayload = JSON.stringify(memory);
+        const previousPayload = previous.get(memory.id);
+        if (!previousPayload) {
+          db.prepare("insert into persistence_events (created_at, event_type, payload) values (?, ?, ?)").run(createdAt, "memory.created", memoryPayload);
+        } else if (previousPayload !== memoryPayload) {
+          db.prepare("insert into persistence_events (created_at, event_type, payload) values (?, ?, ?)").run(createdAt, "memory.updated", memoryPayload);
+        }
         db.prepare(`
           insert into memories (
             id, user_id, brain_id, source_id, project_id, org_id, content, type, layer,
             belief_state, visibility, created_at, updated_at, valid_from, valid_until, payload
           ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(id) do update set
+            user_id = excluded.user_id,
+            brain_id = excluded.brain_id,
+            source_id = excluded.source_id,
+            project_id = excluded.project_id,
+            org_id = excluded.org_id,
+            content = excluded.content,
+            type = excluded.type,
+            layer = excluded.layer,
+            belief_state = excluded.belief_state,
+            visibility = excluded.visibility,
+            created_at = excluded.created_at,
+            updated_at = excluded.updated_at,
+            valid_from = excluded.valid_from,
+            valid_until = excluded.valid_until,
+            payload = excluded.payload
         `).run(
           memory.id,
           memory.userId,
@@ -250,12 +295,15 @@ export class SQLitePersistenceAdapter implements MemoryPersistenceAdapter {
           new Date(memory.updatedAt).toISOString(),
           memory.temporal.validFrom ? new Date(memory.temporal.validFrom).toISOString() : null,
           memory.temporal.validUntil ? new Date(memory.temporal.validUntil).toISOString() : null,
-          JSON.stringify(memory)
+          memoryPayload
         );
+        db.prepare("delete from memory_fts where id = ?").run(memory.id);
         db.prepare("insert into memory_fts (id, content, entities) values (?, ?, ?)").run(memory.id, memory.content, memory.entities.join(" "));
+        db.prepare("delete from entities where memory_id = ?").run(memory.id);
         for (const entity of memory.entities) {
           db.prepare("insert into entities (memory_id, entity, user_id, created_at) values (?, ?, ?, ?)").run(memory.id, entity, memory.userId, createdAt);
         }
+        db.prepare("delete from relations where memory_id = ?").run(memory.id);
         for (const relation of memory.relations) {
           db.prepare("insert into relations (memory_id, relation_type, source_entity, target_id, target_entity, valid_from, valid_until, payload) values (?, ?, ?, ?, ?, ?, ?, ?)").run(
             memory.id,
@@ -270,7 +318,7 @@ export class SQLitePersistenceAdapter implements MemoryPersistenceAdapter {
         }
       }
       for (const event of payload.auditEvents ?? []) {
-        db.prepare("insert into audit_events (id, event_type, user_id, memory_id, actor_id, created_at, payload) values (?, ?, ?, ?, ?, ?, ?)").run(
+        db.prepare("insert or replace into audit_events (id, event_type, user_id, memory_id, actor_id, created_at, payload) values (?, ?, ?, ?, ?, ?, ?)").run(
           event.id,
           event.type,
           event.userId ?? null,
@@ -281,13 +329,13 @@ export class SQLitePersistenceAdapter implements MemoryPersistenceAdapter {
         );
       }
       for (const pack of payload.evidencePacks ?? []) {
-        db.prepare("insert into context_packs (id, user_id, query, created_at, hash, payload) values (?, ?, ?, ?, ?, ?)").run(pack.id, pack.userId, pack.query, pack.generatedAt, pack.hash, JSON.stringify(pack));
+        db.prepare("insert into context_packs (id, user_id, query, created_at, hash, payload) values (?, ?, ?, ?, ?, ?) on conflict(id) do update set user_id = excluded.user_id, query = excluded.query, created_at = excluded.created_at, hash = excluded.hash, payload = excluded.payload").run(pack.id, pack.userId, pack.query, pack.generatedAt, pack.hash, JSON.stringify(pack));
       }
       for (const profile of payload.retrievalProfiles ?? []) {
-        db.prepare("insert into retrieval_profiles (id, label, updated_at, payload) values (?, ?, ?, ?)").run(profile.id, profile.label, new Date(profile.updatedAt).toISOString(), JSON.stringify(profile));
+        db.prepare("insert into retrieval_profiles (id, label, updated_at, payload) values (?, ?, ?, ?) on conflict(id) do update set label = excluded.label, updated_at = excluded.updated_at, payload = excluded.payload").run(profile.id, profile.label, new Date(profile.updatedAt).toISOString(), JSON.stringify(profile));
       }
       for (const rule of payload.retentionRules ?? []) {
-        db.prepare("insert into retention_rules (id, label, action, updated_at, payload) values (?, ?, ?, ?, ?)").run(rule.id, rule.label, rule.action, new Date(rule.updatedAt).toISOString(), JSON.stringify(rule));
+        db.prepare("insert into retention_rules (id, label, action, updated_at, payload) values (?, ?, ?, ?, ?) on conflict(id) do update set label = excluded.label, action = excluded.action, updated_at = excluded.updated_at, payload = excluded.payload").run(rule.id, rule.label, rule.action, new Date(rule.updatedAt).toISOString(), JSON.stringify(rule));
       }
       db.prepare("delete from memory_snapshots where id not in (select id from memory_snapshots order by id desc limit 20)").run();
       db.exec("commit");
@@ -328,7 +376,10 @@ export class SQLitePersistenceAdapter implements MemoryPersistenceAdapter {
       replication: "none",
       sharding: "none",
       lexical: { strategy: "sqlite-fts5", indexed: true, notes: ["memory_fts virtual table is refreshed transactionally with each snapshot.", "Retrieval can consume SQLite BM25 scores through the lexical provider hook."] },
-      notes: ["SQLite transactional snapshot store with an append-only event table for local production deployments."]
+      notes: [
+        "SQLite DB-primary repository: memories, entities, relations, audit events, context packs, retrieval profiles and retention rules are row-upserted transactionally.",
+        "Snapshots are retained only as backup/compaction artifacts; persistence_events records granular memory.created, memory.updated and memory.deleted entries."
+      ]
     };
   }
 
@@ -452,7 +503,14 @@ export class PostgresCompatiblePersistenceAdapter implements MemoryPersistenceAd
     if (!existsSync(this.path)) return undefined;
     const database = JSON.parse(readFileSync(this.path, "utf8")) as PostgresCompatibleDatabase;
     const latest = database.tables.memory_snapshots.at(-1);
-    return latest ? (JSON.parse(latest.payload) as PersistedMemoryFile) : undefined;
+    const snapshot = latest ? (JSON.parse(latest.payload) as PersistedMemoryFile) : undefined;
+    if (!database.tables.memories?.length) return snapshot;
+    return {
+      ...(snapshot ?? { version: 2 as const, maintenance: { users: {} }, memories: [] }),
+      memories: database.tables.memories.map((row) => JSON.parse(row.payload) as Memory),
+      auditEvents: database.tables.audit_events?.map((row) => JSON.parse(row.payload) as AuditEvent) ?? snapshot?.auditEvents ?? [],
+      evidencePacks: database.tables.context_packs?.map((row) => JSON.parse(row.payload) as EvidencePack) ?? snapshot?.evidencePacks ?? []
+    };
   }
 
   save(payload: PersistedMemoryFile): void {
@@ -460,6 +518,18 @@ export class PostgresCompatiblePersistenceAdapter implements MemoryPersistenceAd
     const current = this.readDatabase();
     const serialized = JSON.stringify(payload);
     const committedAt = new Date().toISOString();
+    const previous = new Map((current.tables.memories ?? []).map((row) => [row.memory_id, row.payload]));
+    const nextIds = new Set(payload.memories.map((memory) => memory.id));
+    const deletedEvents = [...previous.entries()]
+      .filter(([id]) => !nextIds.has(id))
+      .map(([id, oldPayload], index) => ({ id: current.tables.persistence_events.length + index + 2, created_at: committedAt, event_type: "memory.deleted", payload: oldPayload, memory_id: id }));
+    const memoryEvents = payload.memories.flatMap((memory, index) => {
+      const memoryPayload = JSON.stringify(memory);
+      const oldPayload = previous.get(memory.id);
+      if (!oldPayload) return [{ id: current.tables.persistence_events.length + deletedEvents.length + index + 2, created_at: committedAt, event_type: "memory.created", payload: memoryPayload, memory_id: memory.id }];
+      if (oldPayload !== memoryPayload) return [{ id: current.tables.persistence_events.length + deletedEvents.length + index + 2, created_at: committedAt, event_type: "memory.updated", payload: memoryPayload, memory_id: memory.id }];
+      return [];
+    });
     const next: PostgresCompatibleDatabase = {
       dialect: "postgres-compatible",
       committedAt,
@@ -471,8 +541,38 @@ export class PostgresCompatiblePersistenceAdapter implements MemoryPersistenceAd
         ].slice(-50),
         persistence_events: [
           ...current.tables.persistence_events,
-          { id: current.tables.persistence_events.length + 1, created_at: committedAt, event_type: "snapshot", payload: serialized }
-        ]
+          { id: current.tables.persistence_events.length + 1, created_at: committedAt, event_type: "snapshot.compacted", payload: serialized },
+          ...deletedEvents,
+          ...memoryEvents
+        ],
+        memories: payload.memories.map((memory) => ({
+          memory_id: memory.id,
+          user_id: memory.userId,
+          brain_id: memory.brainId,
+          source_id: memory.sourceId,
+          project_id: memory.projectId,
+          org_id: memory.orgId,
+          content: memory.content,
+          updated_at: new Date(memory.updatedAt).toISOString(),
+          payload: JSON.stringify(memory)
+        })),
+        audit_events: (payload.auditEvents ?? []).map((event) => ({
+          event_id: event.id,
+          event_type: event.type,
+          user_id: event.userId,
+          memory_id: event.memoryId,
+          actor_id: event.actorId,
+          created_at: new Date(event.timestamp).toISOString(),
+          payload: JSON.stringify(event)
+        })),
+        context_packs: (payload.evidencePacks ?? []).map((pack) => ({
+          context_pack_id: pack.id,
+          user_id: pack.userId,
+          query: pack.query,
+          created_at: new Date(pack.generatedAt).toISOString(),
+          hash: pack.hash,
+          payload: JSON.stringify(pack)
+        }))
       },
       replication: {
         mode: process.env.MEMORY_STORAGE_REPLICATION_MODE ?? "logical",
@@ -497,8 +597,8 @@ export class PostgresCompatiblePersistenceAdapter implements MemoryPersistenceAd
       sharding: Number(process.env.MEMORY_STORAGE_SHARDS ?? 1) > 1 ? "hash" : "external",
       lexical: { strategy: "postgres-tsvector", indexed: false, notes: ["Postgres-compatible CI mode preserves the tsvector contract boundary; live tsvector indexing belongs to the remote driver deployment."] },
       notes: [
-        "Postgres-compatible adapter with transactional snapshot commits and append-only event rows.",
-        "Use MEMORY_POSTGRES_URL for real deployments; the local file-backed SQL emulator is intended for CI and offline migration tests.",
+        "Postgres-compatible DB-primary emulator with row-level memory tables and append-only granular persistence events.",
+        "Use MEMORY_POSTGRES_URL for real deployments; snapshots are backup/compaction artifacts instead of the primary write path.",
         "CockroachDB can use the same PostgreSQL wire protocol; Cassandra-class stores require a dedicated wide-column adapter before direct Cassandra claims."
       ]
     };
@@ -606,46 +706,85 @@ export class PostgresRemotePersistenceAdapter implements MemoryPersistenceAdapte
 
   load(): PersistedMemoryFile | undefined {
     this.ensureSchema();
-    const encoded = this.psql("select payload_base64 from cognibrain_snapshots order by id desc limit 1").trim();
-    return encoded ? (JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as PersistedMemoryFile) : undefined;
+    const snapshotEncoded = this.psql("select payload_base64 from cognibrain_snapshots order by id desc limit 1").trim();
+    const snapshot = snapshotEncoded ? (JSON.parse(Buffer.from(snapshotEncoded, "base64").toString("utf8")) as PersistedMemoryFile) : undefined;
+    const memoryRows = this.psql("select encode(convert_to(payload::text, 'UTF8'), 'hex') from cognibrain_memories order by updated_at desc").trim();
+    if (!memoryRows) return snapshot;
+    const auditRows = this.psql("select encode(convert_to(payload::text, 'UTF8'), 'hex') from cognibrain_audit_events order by created_at asc").trim();
+    const contextRows = this.psql("select encode(convert_to(payload::text, 'UTF8'), 'hex') from cognibrain_context_packs order by created_at desc").trim();
+    return {
+      ...(snapshot ?? { version: 2 as const, maintenance: { users: {} }, memories: [] }),
+      memories: parseHexJsonLines<Memory>(memoryRows),
+      auditEvents: parseHexJsonLines<AuditEvent>(auditRows),
+      evidencePacks: parseHexJsonLines<EvidencePack>(contextRows)
+    };
   }
 
   save(payload: PersistedMemoryFile): void {
     this.ensureSchema();
     const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
-    const memoryRows = payload.memories.map((memory) => `(
-      ${sqlString(memory.id)},
-      ${sqlString(memory.userId)},
-      ${sqlNullable(memory.brainId)},
-      ${sqlNullable(memory.sourceId)},
-      ${sqlNullable(memory.projectId)},
-      ${sqlNullable(memory.orgId)},
-      ${sqlString(memory.content)},
-      ${sqlString(memory.type)},
-      ${sqlString(memory.layer)},
-      ${sqlString(memory.beliefState)},
-      ${sqlString(memory.consent.visibility)},
-      ${sqlString(new Date(memory.createdAt).toISOString())}::timestamptz,
-      ${sqlString(new Date(memory.updatedAt).toISOString())}::timestamptz,
-      ${memory.temporal.validFrom ? `${sqlString(new Date(memory.temporal.validFrom).toISOString())}::timestamptz` : "null"},
-      ${memory.temporal.validUntil ? `${sqlString(new Date(memory.temporal.validUntil).toISOString())}::timestamptz` : "null"},
-      ${sqlString(JSON.stringify(memory))}::jsonb
-    )`);
-    const entityRows = payload.memories.flatMap((memory) =>
-      memory.entities.map((entity) => `(${sqlString(memory.id)}, ${sqlString(entity)}, ${sqlString(memory.userId)}, now())`)
-    );
-    const relationRows = payload.memories.flatMap((memory) =>
-      memory.relations.map((relation) => `(
-        ${sqlString(memory.id)},
-        ${sqlString(relation.type)},
-        ${sqlNullable(relation.sourceEntity)},
-        ${sqlNullable(relation.targetId)},
-        ${sqlNullable(relation.targetEntity)},
-        ${relation.validFrom ? `${sqlString(new Date(relation.validFrom).toISOString())}::timestamptz` : "null"},
-        ${relation.validUntil ? `${sqlString(new Date(relation.validUntil).toISOString())}::timestamptz` : "null"},
-        ${sqlString(JSON.stringify(relation))}::jsonb
-      )`)
-    );
+    const previousIds = this.psql("select memory_id from cognibrain_memories").trim().split(/\r?\n/).filter(Boolean);
+    const nextIds = new Set(payload.memories.map((memory) => memory.id));
+    const deletedIds = previousIds.filter((id) => !nextIds.has(id));
+    const memoryStatements = payload.memories.map((memory) => {
+      const entityRows = memory.entities.map((entity) => `(${sqlString(memory.id)}, ${sqlString(entity)}, ${sqlString(memory.userId)}, now())`);
+      const relationRows = memory.relations.map((relation) => `(
+          ${sqlString(memory.id)},
+          ${sqlString(relation.type)},
+          ${sqlNullable(relation.sourceEntity)},
+          ${sqlNullable(relation.targetId)},
+          ${sqlNullable(relation.targetEntity)},
+          ${relation.validFrom ? `${sqlString(new Date(relation.validFrom).toISOString())}::timestamptz` : "null"},
+          ${relation.validUntil ? `${sqlString(new Date(relation.validUntil).toISOString())}::timestamptz` : "null"},
+          ${sqlString(JSON.stringify(relation))}::jsonb
+        )`);
+      const memoryPayload = JSON.stringify(memory);
+      return `
+        insert into cognibrain_persistence_events(event_type, memory_id, payload_base64)
+          values ((case when exists (select 1 from cognibrain_memories where memory_id = ${sqlString(memory.id)}) then 'memory.updated' else 'memory.created' end), ${sqlString(memory.id)}, '${Buffer.from(memoryPayload, "utf8").toString("base64")}');
+        insert into cognibrain_memories (
+          memory_id, user_id, brain_id, source_id, project_id, org_id, content, memory_type, layer,
+          belief_state, visibility, created_at, updated_at, valid_from, valid_until, payload
+        ) values (
+          ${sqlString(memory.id)},
+          ${sqlString(memory.userId)},
+          ${sqlNullable(memory.brainId)},
+          ${sqlNullable(memory.sourceId)},
+          ${sqlNullable(memory.projectId)},
+          ${sqlNullable(memory.orgId)},
+          ${sqlString(memory.content)},
+          ${sqlString(memory.type)},
+          ${sqlString(memory.layer)},
+          ${sqlString(memory.beliefState)},
+          ${sqlString(memory.consent.visibility)},
+          ${sqlString(new Date(memory.createdAt).toISOString())}::timestamptz,
+          ${sqlString(new Date(memory.updatedAt).toISOString())}::timestamptz,
+          ${memory.temporal.validFrom ? `${sqlString(new Date(memory.temporal.validFrom).toISOString())}::timestamptz` : "null"},
+          ${memory.temporal.validUntil ? `${sqlString(new Date(memory.temporal.validUntil).toISOString())}::timestamptz` : "null"},
+          ${sqlString(memoryPayload)}::jsonb
+        )
+        on conflict (memory_id) do update set
+          user_id = excluded.user_id,
+          brain_id = excluded.brain_id,
+          source_id = excluded.source_id,
+          project_id = excluded.project_id,
+          org_id = excluded.org_id,
+          content = excluded.content,
+          memory_type = excluded.memory_type,
+          layer = excluded.layer,
+          belief_state = excluded.belief_state,
+          visibility = excluded.visibility,
+          created_at = excluded.created_at,
+          updated_at = excluded.updated_at,
+          valid_from = excluded.valid_from,
+          valid_until = excluded.valid_until,
+          payload = excluded.payload;
+        delete from cognibrain_entities where memory_id = ${sqlString(memory.id)};
+        delete from cognibrain_relations where memory_id = ${sqlString(memory.id)};
+        ${entityRows.length ? `insert into cognibrain_entities(memory_id, entity, user_id, created_at) values ${entityRows.join(",")};` : ""}
+        ${relationRows.length ? `insert into cognibrain_relations(memory_id, relation_type, source_entity, target_id, target_entity, valid_from, valid_until, payload) values ${relationRows.join(",")};` : ""}
+      `;
+    });
     const auditRows = (payload.auditEvents ?? []).map((event) => `(
       ${sqlString(event.id)},
       ${sqlString(event.type)},
@@ -663,19 +802,20 @@ export class PostgresRemotePersistenceAdapter implements MemoryPersistenceAdapte
       ${sqlNullable(pack.hash)},
       ${sqlString(JSON.stringify(pack))}::jsonb
     )`);
+    const deletedStatements = deletedIds.map((id) => `
+      insert into cognibrain_persistence_events(event_type, memory_id, payload_base64)
+        select 'memory.deleted', memory_id, replace(encode(convert_to(payload::text, 'UTF8'), 'base64'), E'\n', '')
+        from cognibrain_memories where memory_id = ${sqlString(id)};
+      delete from cognibrain_memories where memory_id = ${sqlString(id)};
+    `);
     this.psql(`
       begin;
       insert into cognibrain_snapshots(version, payload_base64) values (${payload.version}, '${encoded}');
-      insert into cognibrain_persistence_events(event_type, payload_base64) values ('snapshot', '${encoded}');
-      truncate table cognibrain_context_packs, cognibrain_audit_events, cognibrain_relations, cognibrain_entities, cognibrain_memories;
-      ${memoryRows.length ? `insert into cognibrain_memories (
-        memory_id, user_id, brain_id, source_id, project_id, org_id, content, memory_type, layer,
-        belief_state, visibility, created_at, updated_at, valid_from, valid_until, payload
-      ) values ${memoryRows.join(",")};` : ""}
-      ${entityRows.length ? `insert into cognibrain_entities(memory_id, entity, user_id, created_at) values ${entityRows.join(",")};` : ""}
-      ${relationRows.length ? `insert into cognibrain_relations(memory_id, relation_type, source_entity, target_id, target_entity, valid_from, valid_until, payload) values ${relationRows.join(",")};` : ""}
-      ${auditRows.length ? `insert into cognibrain_audit_events(event_id, event_type, user_id, memory_id, actor_id, created_at, payload) values ${auditRows.join(",")};` : ""}
-      ${contextRows.length ? `insert into cognibrain_context_packs(context_pack_id, user_id, query, created_at, hash, payload) values ${contextRows.join(",")};` : ""}
+      insert into cognibrain_persistence_events(event_type, payload_base64) values ('snapshot.compacted', '${encoded}');
+      ${deletedStatements.join("\n")}
+      ${memoryStatements.join("\n")}
+      ${auditRows.length ? `insert into cognibrain_audit_events(event_id, event_type, user_id, memory_id, actor_id, created_at, payload) values ${auditRows.join(",")} on conflict (event_id) do update set event_type = excluded.event_type, user_id = excluded.user_id, memory_id = excluded.memory_id, actor_id = excluded.actor_id, created_at = excluded.created_at, payload = excluded.payload;` : ""}
+      ${contextRows.length ? `insert into cognibrain_context_packs(context_pack_id, user_id, query, created_at, hash, payload) values ${contextRows.join(",")} on conflict (context_pack_id) do update set user_id = excluded.user_id, query = excluded.query, created_at = excluded.created_at, hash = excluded.hash, payload = excluded.payload;` : ""}
       delete from cognibrain_snapshots where id not in (select id from cognibrain_snapshots order by id desc limit 20);
       commit;
     `);
@@ -721,9 +861,9 @@ export class PostgresRemotePersistenceAdapter implements MemoryPersistenceAdapte
       lexical: { strategy: "postgres-tsvector", indexed: true, notes: ["Remote driver maintains an indexed generated tsvector column for live Postgres lexical scoring."] },
       vector: { strategy: "pgvector", indexed: false, notes: ["Remote Postgres deployments can enable pgvector indexes for external embedding providers; embeddings stay optional and can be disabled by privacy policy."] },
       notes: [
-        `${this.options.cockroach ? "CockroachDB" : "Postgres"} remote driver using psql-compatible wire protocol and transactional append-only snapshot tables.`,
+        `${this.options.cockroach ? "CockroachDB" : "Postgres"} remote DB-primary driver with transactional row-level memory upserts and append-only memory.created, memory.updated and memory.deleted events.`,
         "Set MEMORY_STORAGE_BACKEND=postgres-remote or cockroach-remote and MEMORY_POSTGRES_URL for production deployments.",
-        "The synchronous persistence boundary shells through psql so local CLI/API startup remains zero-dependency."
+        "Snapshots are retained as backup/compaction artifacts while cognibrain_memories is the durable source of truth."
       ]
     };
   }
@@ -745,8 +885,10 @@ export class PostgresRemotePersistenceAdapter implements MemoryPersistenceAdapte
         id bigserial primary key,
         created_at timestamptz not null default now(),
         event_type text not null,
+        memory_id text,
         payload_base64 text not null
       );
+      alter table cognibrain_persistence_events add column if not exists memory_id text;
       create table if not exists cognibrain_memories (
         memory_id text primary key,
         user_id text not null,
@@ -842,6 +984,22 @@ function sqlString(value: string): string {
 
 function sqlNullable(value: string | undefined): string {
   return value === undefined ? "null" : sqlString(value);
+}
+
+function parseBase64JsonLines<T>(rows: string): T[] {
+  return rows
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(Buffer.from(line, "base64").toString("utf8")) as T);
+}
+
+function parseHexJsonLines<T>(rows: string): T[] {
+  return rows
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(Buffer.from(line, "hex").toString("utf8")) as T);
 }
 
 export class CassandraRemotePersistenceAdapter implements MemoryPersistenceAdapter {
@@ -978,7 +1136,10 @@ interface PostgresCompatibleDatabase {
   schemaVersion: 1;
   tables: {
     memory_snapshots: Array<{ id: number; created_at: string; version: number; payload: string }>;
-    persistence_events: Array<{ id: number; created_at: string; event_type: string; payload: string }>;
+    persistence_events: Array<{ id: number; created_at: string; event_type: string; payload: string; memory_id?: string }>;
+    memories?: Array<{ memory_id: string; user_id: string; brain_id?: string; source_id?: string; project_id?: string; org_id?: string; content: string; updated_at: string; payload: string }>;
+    audit_events?: Array<{ event_id: string; event_type: string; user_id?: string; memory_id?: string; actor_id?: string; created_at: string; payload: string }>;
+    context_packs?: Array<{ context_pack_id: string; user_id: string; query: string; created_at: string; hash?: string; payload: string }>;
   };
   replication: { mode: string; shardCount: number };
 }

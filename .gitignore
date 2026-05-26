@@ -24,7 +24,7 @@ venv/
 .memory-harness.json
 .cognibrain/
 artifacts/*
-!artifacts/harness-maturity.json
+public/benchmark-arena/
 public/leaderboard/
 data/benchmarks/locomo/*.json
 data/benchmarks/longmemeval/*.json

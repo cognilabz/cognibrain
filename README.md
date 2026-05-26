@@ -2,79 +2,26 @@
 
 Self-hosted engineering memory for coding agents.
 
-Cognibrain gives coding agents and orchestration harnesses a durable memory layer for corrections, decisions, tool outcomes, connector events and release evidence. The goal is practical: Stop fixing the same agent mistake twice.
-
-<p align="center">
-  <img src="docs/assets/cli-home.svg" alt="Cognibrain Ink CLI home" width="900">
-</p>
-
-## Why It Exists
-
-Modern coding agents are strong in a single session and forgetful across weeks, tools and repositories. Cognibrain stores the durable parts of engineering work, then returns compact, cited context before the next patch:
-
-- repo rules and reviewer corrections,
-- failed commands and the command that should be used next time,
-- source-system events from issues, chat, docs, incidents and analytics,
-- temporal facts, graph links and policy decisions,
-- patch evidence that explains why a memory was used.
-
-The primary product surface is the installable Ink CLI. The dashboard is optional.
+Cognibrain stores durable engineering context such as repo rules, reviewer corrections, failed commands, connector events and patch evidence, then returns compact context before the next agent action. The practical goal is simple: Stop fixing the same agent mistake twice.
 
 ```bash
 npm i @cognilabz/cognibrain
 npx cognibrain
 ```
 
-Proof-first story:
-
-1. A coding agent repeats a wrong action.
-2. A reviewer correction becomes durable engineering memory.
-3. The next patch receives cited context and an action guard.
-4. The benchmark checks whether the same mistake was avoided.
-
-Recall is not enough. The next code change has to prove the memory worked.
-
-## What You Get
-
-| Surface | What it does |
-| --- | --- |
-| Ink CLI | Home, memories, connections, service automation, config, connectors, adapters, SDK, skill and doctor workbenches. |
-| Memory OS API | Local HTTP API, MCP server, typed TypeScript SDK and Python client. |
-| Agent setup | Generates Codex, Claude Code, Cursor, Copilot, VS Code, OpenCode, OpenClaw, LangGraph, CrewAI, Windsurf, Continue.dev, Aider, Roo/Cline, Goose, Sourcegraph Amp and external-agent integration files. |
-| Native connectors | GitHub, GitLab, Azure DevOps, Slack, Discord, Teams, Jira, Confluence, Notion, Linear, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog. |
-| Platform SDK | Scaffold a real custom integration when your source system is not built in yet. |
-| Self-hosted service | Linux systemd, macOS launchd and Windows Task Scheduler service plans from the CLI. |
-| Benchmark proof | Local deterministic benchmark artifacts, public same-scenario reports and competitor comparison with explicit proof boundaries. |
-
-Docker is optional for deployment packaging. The CLI is the required control plane for install, setup, service automation, connectors, adapters, SDK scaffolding and proof inspection.
-
-## Communication Contract
-
-Use the surfaces by role:
-
-| Surface | Use it for |
-| --- | --- |
-| CLI | Human and script control: install, start, status, config, connectors, adapters, skills, service, proof and fallback memory commands. |
-| MCP | In-agent memory calls: context packs before long work, action guards before risky tools, durable writes, correction capture, patch evidence and dream maintenance. |
-| SDK/HTTP | Application and custom integration code: platform connectors, polling/writeback, typed clients and non-MCP harness helpers. |
-
-For coding harnesses, prefer MCP when the host can call tools directly. Use `memory_context_pack` as the portable baseline, `memory_coding_context_pack` when the host exposes the coding-specific tool, and `memory_action_guard` before shell or file operations with durable side effects. Use CLI fallback commands such as `npx cognibrain memories coding-context "<task>"` only when MCP is unavailable. Use the SDK or HTTP endpoints when you are building an app, connector, LangGraph/CrewAI helper, or another runtime integration.
-
-## CLI Screenshots
-
 <p align="center">
-  <img src="docs/assets/cli-connections.svg" alt="Cognibrain Ink connections workbench" width="900">
+  <img src="docs/assets/cli-home.svg" alt="Cognibrain CLI home" width="900">
 </p>
 
-<p align="center">
-  <img src="docs/assets/cli-service.svg" alt="Cognibrain Ink service automation" width="900">
-</p>
+## Public Surface
 
-Regenerate the screenshots from real CLI output:
+| Surface | Role |
+| --- | --- |
+| CLI | Human and automation control plane: setup, status, service, connectors, config, proof and fallback memory commands. |
+| MCP | Default integration path for agents: context packs, coding context, action guards, durable writes, corrections, patch evidence and maintenance. |
+| SDK/HTTP | Custom product integrations: source-system connectors, polling/writeback, dashboards and non-MCP runtimes. |
 
-```bash
-npm run docs:cli-screenshots
-```
+MCP is the default integration path for agents. CLI is the operator surface. SDK/HTTP is for custom integrations, not a second primary agent path.
 
 ## Install
 
@@ -84,7 +31,7 @@ npx cognibrain init
 npx cognibrain doctor --fix
 ```
 
-Package-free checkout path:
+Checkout path:
 
 ```bash
 git clone https://github.com/cognilabz/cognibrain.git
@@ -94,22 +41,11 @@ npm install
 ./bin/cognibrain.mjs doctor --fix
 ```
 
-Dashboard is opt-in:
+Dashboard is optional:
 
 ```bash
 npx cognibrain dashboard
-# or
 npx cognibrain start --dashboard
-```
-
-Service startup is CLI-controlled:
-
-```bash
-npx cognibrain service plan
-npx cognibrain service plan --platform linux --json
-npx cognibrain service plan --platform macos --json
-npx cognibrain service plan --platform windows --json
-npx cognibrain service install --activate
 ```
 
 More setup detail: [docs/install.md](docs/install.md).
@@ -123,80 +59,14 @@ npx cognibrain memories add "This repo uses npm test, not pnpm."
 npx cognibrain memories coding-context "prepare the release patch"
 npx cognibrain connections
 npx cognibrain connections add github --set repo=cognilabz/cognibrain
-npx cognibrain connections doctor
 npx cognibrain proof
-npx cognibrain sdk platform acme --kind project_management --out integrations/acme
 ```
 
-The lower-level memory command remains available for scripts:
+For agents, use MCP tools first. Use `npx cognibrain memories coding-context "<task>"` only when MCP is unavailable.
 
-```bash
-npx cognibrain memory add "Release patches must include npm test output."
-npx cognibrain memory search "release command"
-npx cognibrain memory why-used "Why did this release memory appear?"
-npx cognibrain memory patch-evidence "release patch"
-```
+## Connectors
 
-## Benchmark Evidence
-
-Checked artifact: `artifacts/arena/run.json`, generated by:
-
-```bash
-MEMORY_ARENA_AUTO_NATIVE=false \
-MEMORY_ARENA_LANGMEM_COMMAND="$(command -v node) scripts/competitors/native-python-runner.mjs --system langmem" \
-MEMORY_ARENA_LANGMEM_PROOF_LEVEL=same-run-native \
-npm run benchmark:arena:run -- --count 300 --systems cognibrain,mem0,graphiti,zep,cognee,langmem,gbrain --difficulty hard --noise-ratio 0.5 --sessions 12 --repos 100 --stale-ratio 0.25
-```
-
-Current local Benchmark Arena result, 300 hard CogniCodeBench v2 engineering-memory scenarios:
-
-| System | Score | Proof level | Repeated mistake rate | Gaps |
-| --- | ---: | --- | ---: | ---: |
-| Cognibrain | 0.9550 | same-run-full | 0.0100 | 0 |
-| Graphiti/Zep | 0.6667 | same-run-api-shape | 0.9500 | 2 |
-| Zep | 0.6667 | same-run-api-shape | 0.9500 | 2 |
-| GBrain | 0.6667 | same-run-api-shape | 0.9500 | 2 |
-| LangMem | 0.6667 | same-run-native | 1.0000 | 6 |
-| Cognee | 0.6000 | same-run-api-shape | 1.0000 | 2 |
-| Mem0 | 0.1500 | same-run-api-shape | 1.0000 | 3 |
-
-Boundary: competitor rows are only as strong as their proof level. Cognibrain's row runs the full local implementation. The current hard Arena artifact uses explicit runner selection with `MEMORY_ARENA_AUTO_NATIVE=false`; LangMem is a same-run native package proof through the checked native runner. API-shape rows remain compatibility models unless their row records native, cloud, CLI, vendor-signed or field proof. See [docs/benchmarks.md](docs/benchmarks.md).
-
-Arena v2 supports native package runners, cloud/API runners, CLI runners and imported vendor artifacts. Rows stay `credential-blocked` or `same-run-api-shape` until code executes the stronger path. See [Same Benchmark](docs/market/same-benchmark.md), the generated [Latest Arena](docs/benchmarks/latest-arena.md) and the marketing-ready [scorecard HTML](public/benchmark-arena/scorecard.html) with points, bars, capability breakdowns and the per-scenario matrix.
-
-Public benchmark gate, generated by `npm run benchmark:certified`:
-
-| Dataset | Cognibrain | Best local baseline | Margin |
-| --- | ---: | ---: | ---: |
-| LoCoMo | 0.7415 | 0.6387 | +0.1029 |
-| LongMemEval-S | 0.9960 | 0.9900 | +0.0060 |
-| BEAM 100K | 0.9650 | 0.8200 | +0.1450 |
-| BEAM 500K | 0.9771 | 0.7914 | +0.1857 |
-
-CogniCodeBench also runs 1,000 hard synthetic coding-agent scenarios with connector-backed source refs, noisy and stale memory traps, multi-session horizons and granular synthetic patch models:
-
-```bash
-npm run benchmark:cognicode
-```
-
-## Integrations
-
-Native connector verification:
-
-```bash
-npm run verify:connectors
-npm run verify:vendor-connectors
-npm run verify:vendor-api-specs
-npm run verify:vendor-live
-npm run connectors:maturity
-npm run harness:maturity
-```
-
-Current checked connector state: 19 hermetic drivers, 19 API/spec-verified drivers, 19 live-smoke-ready drivers, 10 webhook-verified priority drivers, 0 tenant-verified live smokes and 0 production certifications. Live-system proof requires tenant credentials plus `MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live`; writeback to real systems stays dry-run unless explicitly enabled.
-
-Current checked harness state: 16 generated harness packages, 10 MCP-capable targets, 13 pre-tool guard targets, 15 correction-capture targets, 15 patch-evidence targets and 16 golden-path demos. Devin-style external agent mode is generated through the external-agent JSON-command contract. See [docs/integrations/harness-maturity.md](docs/integrations/harness-maturity.md).
-
-Connector configs store non-secret choices and `env:` references. Token values stay outside the repo:
+Native connector drivers exist for GitHub, GitLab, Azure DevOps, Slack, Discord, Teams, Jira, Confluence, Notion, Linear, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog.
 
 ```bash
 npx cognibrain connections add jira --set baseUrl=https://example.atlassian.net --set project=ENG
@@ -204,65 +74,70 @@ npx cognibrain connections add slack --set channelId=C123 --token-env MEMORY_SLA
 npx cognibrain connections add storage-postgres --url-env MEMORY_POSTGRES_URL
 ```
 
-Build your own source integration:
+Connector configs store non-secret values and `env:` references. Token values stay outside the repo.
+
+## Benchmarks And Proof
+
+Generated proof outputs are internal build artifacts. Commands write ignored local reports under `artifacts/`; they are useful for CI and release review, but they are not committed or shipped in the npm package.
 
 ```bash
-npx cognibrain sdk platform acme --kind project_management --out integrations/acme
-npx cognibrain memory connector-register "$(cat integrations/acme/acme.connector.json)"
+npm run benchmark:cognicode
+npm run benchmark:arena
+npm run verify:compatibility
+npm run audit:truth
 ```
 
-More detail: [docs/integrations.md](docs/integrations.md).
+Benchmark claims are bounded by proof level. `same-run-full` means Cognibrain executed locally. `same-run-native`, `same-run-cloud-api` and `same-run-cli` require configured external runners. `same-run-api-shape` is only a compatibility model.
 
 ## Production Boundary
 
-Cognibrain is packaged as a self-hosted production candidate. The release gate is:
+Cognibrain is a self-hosted production candidate, not a managed SaaS product.
+
+Current implemented boundaries:
+
+- DB-primary row persistence with snapshots retained only as backup/compaction artifacts.
+- API-key/Bearer auth plus optional JWT/OIDC verifier, route-level RBAC and actor-bound scopes.
+- Production policy mode default-denies when no rule matches.
+- Connector rows are native driver paths and implementation-ready certification rows, not tenant production certifications.
+
+This repository does not claim managed SaaS uptime, billing, hosted support, autoscaling, deployment-specific SSO rollout, tenant-verified connector live smokes or production-certified connector rows. See [docs/status.md](docs/status.md), [docs/operations.md](docs/operations.md) and [docs/claims.md](docs/claims.md).
+
+## Development
 
 ```bash
+npm test
+npm run build
+npm run verify:status
+npm run audit:docs
+npm run audit:truth
 npm run release:check
 ```
 
-The current release check covers unit tests, dashboard build, status verification, CogniCodeBench, Benchmark Arena, first-win demo, docs audit, Postgres verification, connector compatibility including API/spec checks, local runtime start, publish doctor, npm pack dry-run and Python SDK tests.
-`npm run audit:truth` is part of that gate and fails on code/doc overclaims while keeping open implementation gaps visible.
+Generated outputs stay local:
 
-This repository does not claim managed SaaS uptime, billing, hosted support, autoscaling or deployment-specific SSO readiness. Those remain future or deployment-specific claims. See [docs/operations.md](docs/operations.md) and [docs/claims.md](docs/claims.md).
+- `artifacts/`
+- `.cognibrain/`
 
-## Optional Dashboard
+## Repository Map
 
-The CLI is the default product. The browser dashboard is a visual inspection layer over the same runtime.
-
-<p align="center">
-  <img src="docs/assets/dashboard-workbench.png" alt="Cognibrain memory workbench dashboard" width="48%">
-  <img src="docs/assets/dashboard-benchmarks.png" alt="Cognibrain benchmark dashboard" width="48%">
-</p>
+| Path | Purpose |
+| --- | --- |
+| `bin/` | CLI entrypoints. |
+| `src/api/` | Service, HTTP server and persistence adapters. |
+| `src/connectors/` | MCP server, connector registry and SDK scaffold. |
+| `src/core/` | Memory model, retrieval, graph and policy logic. |
+| `src/cli/` | Ink TUI and memory command implementation. |
+| `src/eval/` | Internal benchmarks and verification generators. |
+| `sdk/python/` | Dependency-free Python client. |
+| `docs/` | Handwritten public documentation. |
+| `templates/` | Harness and integration templates. |
 
 ## Documentation
 
 - [Documentation home](docs/README.md)
 - [Install and self-hosting](docs/install.md)
-- [Benchmarks and competitor proof](docs/benchmarks.md)
-- [Connectors, adapters and SDK](docs/integrations.md)
-- [Harness maturity matrix](docs/integrations/harness-maturity.md)
-- [Terminal Memory OS plan coverage](docs/roadmap/terminal-memory-os-plan.md)
-- [Benchmark and harness hardening plan coverage](docs/roadmap/benchmark-harness-connector-plan.md)
+- [Connectors and integration surfaces](docs/integrations.md)
 - [Operations and production boundary](docs/operations.md)
-- [CLI, API and SDK reference](docs/reference.md)
+- [CLI, MCP, API and SDK reference](docs/reference.md)
+- [Benchmarks](docs/benchmarks.md)
 - [Claims and evidence map](docs/claims.md)
-
-## Repository Map
-
-```text
-bin/                 installable CLI entrypoints
-src/api/             local HTTP API and service layer
-src/cli/             memory command surface
-src/connectors/      native vendor drivers, MCP server and Platform SDK helpers
-src/core/            memory types, retrieval, policy, graph and lifecycle logic
-src/dashboard/       optional React dashboard
-src/eval/            benchmark and verification suites
-scripts/             release, docs and demo automation
-docs/                compact product documentation and screenshots
-sdk/python/          dependency-free Python client
-```
-
-## License
-
-MIT. See [LICENSE](LICENSE).

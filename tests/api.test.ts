@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { server } from "../src/api/server";
 
@@ -17,12 +18,36 @@ async function close(): Promise<void> {
   });
 }
 
+function signJwt(payload: Record<string, unknown>): string {
+  const header = { alg: "HS256", typ: "JWT" };
+  const encodedHeader = base64Url(JSON.stringify(header));
+  const encodedPayload = base64Url(JSON.stringify(payload));
+  const signature = createHmac("sha256", process.env.MEMORY_JWT_HS256_SECRET ?? "jwt-test-secret")
+    .update(`${encodedHeader}.${encodedPayload}`)
+    .digest("base64url");
+  return `${encodedHeader}.${encodedPayload}.${signature}`;
+}
+
+function base64Url(value: string): string {
+  return Buffer.from(value).toString("base64url");
+}
+
 describe("cognibrain HTTP API contract", () => {
   afterEach(async () => {
     await close();
     delete process.env.MEMORY_API_KEY;
     delete process.env.MEMORY_API_KEYS;
     delete process.env.MEMORY_REQUIRE_AUTH;
+    delete process.env.MEMORY_JWT_ISSUER;
+    delete process.env.MEMORY_JWT_AUDIENCE;
+    delete process.env.MEMORY_JWT_HS256_SECRET;
+    delete process.env.MEMORY_CORS_ORIGINS;
+    delete process.env.MEMORY_RATE_LIMIT_MAX;
+    delete process.env.MEMORY_RATE_LIMIT_WINDOW_MS;
+    delete process.env.MEMORY_REQUEST_BODY_LIMIT_BYTES;
+    delete process.env.MEMORY_POLICY_MODE;
+    delete process.env.MEMORY_SECURITY_MODE;
+    delete process.env.MEMORY_PRODUCTION_MODE;
   });
 
   it("accepts governed marketplace module metadata over HTTP", async () => {
@@ -146,6 +171,62 @@ describe("cognibrain HTTP API contract", () => {
 
     const allowed = await fetch(`${baseUrl}/memories`, { headers: { "x-api-key": "test-secret", "x-actor-id": "api-test" } });
     expect(allowed.status).toBe(200);
+  });
+
+  it("validates JWT issuer/audience/scopes and binds actor scope", async () => {
+    process.env.MEMORY_JWT_ISSUER = "https://issuer.example";
+    process.env.MEMORY_JWT_AUDIENCE = "cognibrain-api";
+    process.env.MEMORY_JWT_HS256_SECRET = "jwt-test-secret";
+    const baseUrl = await listen();
+    const writeToken = signJwt({
+      iss: "https://issuer.example",
+      aud: "cognibrain-api",
+      sub: "jwt-user",
+      orgId: "org-jwt",
+      scope: "memory:write",
+      exp: Math.floor(Date.now() / 1000) + 300
+    });
+
+    const created = await fetch(`${baseUrl}/memories`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${writeToken}` },
+      body: JSON.stringify({ userId: "jwt-user", orgId: "org-jwt", content: "JWT actor-bound writes stay in scope." })
+    });
+    expect(created.status).toBe(201);
+
+    const spoofed = await fetch(`${baseUrl}/memories`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${writeToken}` },
+      body: JSON.stringify({ userId: "other-user", orgId: "org-jwt", content: "This should not cross scopes." })
+    });
+    expect(spoofed.status).toBe(403);
+
+    const readDenied = await fetch(`${baseUrl}/memories?userId=jwt-user`, { headers: { authorization: `Bearer ${writeToken}` } });
+    expect(readDenied.status).toBe(403);
+  });
+
+  it("applies configurable CORS, request body limits, and rate limits", async () => {
+    process.env.MEMORY_CORS_ORIGINS = "https://app.example";
+    process.env.MEMORY_REQUEST_BODY_LIMIT_BYTES = "80";
+    process.env.MEMORY_RATE_LIMIT_MAX = "2";
+    process.env.MEMORY_RATE_LIMIT_WINDOW_MS = "60000";
+    const baseUrl = await listen();
+
+    const options = await fetch(`${baseUrl}/memories`, { method: "OPTIONS", headers: { origin: "https://app.example" } });
+    expect(options.status).toBe(204);
+    expect(options.headers.get("access-control-allow-origin")).toBe("https://app.example");
+
+    const tooLarge = await fetch(`${baseUrl}/memories`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId: "body-limit", content: "x".repeat(200) })
+    });
+    expect(tooLarge.status).toBe(413);
+
+    const first = await fetch(`${baseUrl}/health`);
+    const second = await fetch(`${baseUrl}/health`);
+    const third = await fetch(`${baseUrl}/health`);
+    expect([first.status, second.status, third.status]).toContain(429);
   });
 
   it("exposes a structured OpenAPI contract for SDK generation", async () => {

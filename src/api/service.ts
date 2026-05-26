@@ -2720,7 +2720,7 @@ export class MemoryService {
     return submission;
   }
 
-  apiDescription(auth?: { mode: "open-local-dev" | "api-key"; protected: boolean; warning?: string }) {
+  apiDescription(auth?: { mode: "open-local-dev" | "api-key" | "jwt-oidc"; protected: boolean; warning?: string; scopes?: string[] }) {
     const protectedAuth: Array<Record<string, string[]>> = auth?.protected ? [{ ApiKeyAuth: [] }, { BearerAuth: [] }] : [];
     const routeMethods: Record<string, string[]> = {
       "/memories": ["GET", "POST"],
@@ -3121,13 +3121,13 @@ export class MemoryService {
       .filter((rule) => rule.operations.includes("all") || rule.operations.includes(operation))
       .filter((rule) => policyRuleMatches(rule, target, actor));
     const decisive = matching[0];
-    const allowed = decisive ? decisive.effect === "allow" : true;
+    const allowed = decisive ? decisive.effect === "allow" : !productionPolicyMode();
     return {
       operation,
       allowed,
       memoryId: "id" in target ? target.id : undefined,
       matchedRules: matching.map((rule) => ({ id: rule.id, label: rule.label, effect: rule.effect, reason: rule.reason })),
-      reasons: matching.length ? matching.map((rule) => rule.reason ?? `${rule.effect} by ${rule.label}`) : ["no matching policy rule"]
+      reasons: matching.length ? matching.map((rule) => rule.reason ?? `${rule.effect} by ${rule.label}`) : [productionPolicyMode() ? "no matching policy rule in production mode" : "no matching policy rule"]
     };
   }
 
@@ -4168,6 +4168,22 @@ export class MemoryService {
     } catch (error) {
       return { ...operation, status: "failed", reason: error instanceof Error ? error.message : "unknown sync failure" };
     }
+  }
+
+  recordSecurityEvent(input: { actorId?: string; userId?: string; path: string; method: string; status: number; code: string }): AuditEvent {
+    const event = this.recordAudit("policy.violation", {
+      actorId: input.actorId,
+      userId: input.userId,
+      metadata: {
+        resource: "http-auth",
+        path: input.path,
+        method: input.method,
+        status: input.status,
+        code: input.code
+      }
+    });
+    this.persist();
+    return event;
   }
 
   private recordAudit(type: AuditEvent["type"], event: Partial<AuditEvent>): AuditEvent {
@@ -5879,6 +5895,10 @@ function policyRuleMatches(rule: MemoryPolicyRule, target: Memory | MemoryInput,
   if (scope.tag && !value.tags.includes(scope.tag)) return false;
   if (memory && scope.visibility && memory.consent.visibility !== scope.visibility) return false;
   return true;
+}
+
+function productionPolicyMode(): boolean {
+  return process.env.MEMORY_POLICY_MODE === "production" || process.env.MEMORY_SECURITY_MODE === "production" || process.env.MEMORY_PRODUCTION_MODE === "true";
 }
 
 function retentionRuleMatches(memory: Memory, rule: RetentionRule, now: Date): boolean {

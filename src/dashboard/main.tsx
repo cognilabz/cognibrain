@@ -364,7 +364,7 @@ const benchmarkArenaProof = [
   ["Cognee", "same-run-api-shape"],
   ["LangMem", "same-run-native"],
   ["GBrain", "same-run-api-shape"],
-  ["public table", "public/benchmark-arena"]
+  ["internal table", "artifacts/public/benchmark-arena"]
 ];
 
 const platformSignals = [

@@ -325,7 +325,7 @@ function buildViews(payload) {
         ]),
         section("Review Queue", (memories.reviewQueue?.items?.length ? memories.reviewQueue.items : []).slice(0, 5).map((candidate) => item(`${shortId(candidate.id)} ${candidate.connectorId ?? "memory"} pending`, "yellow", "-")).concat(memories.reviewQueue?.items?.length ? [] : [item("No pending memory candidates.", "green", "-")]))
       ],
-      actions: actions(["cognibrain memories list", "cognibrain memory list --limit 10", "cognibrain memory dream", "cognibrain memory maintenance"])
+      actions: actions(["cognibrain memories list", "cognibrain memory list --limit 10", "cognibrain memory evidence-pack <query>", "cognibrain memory graph <query>", "cognibrain memory dream", "cognibrain memory maintenance"])
     },
     {
       id: "memory-management",
@@ -497,7 +497,91 @@ function buildViews(payload) {
         section("Truth Tuples", compact(truth.truthTuples ?? [], (tuple) => item(`${tuple[0]} = ${tuple[1]} (${tuple[2]})`, "white", "-"), 8)),
         section("Open Gaps", (truth.openGaps?.length ? truth.openGaps : []).slice(0, 6).map((gap) => item(`${gap.id}: ${gap.message}`, "yellow", "-")).concat(truth.openGaps?.length ? [] : [item("No open proof gaps in current artifact.", "green", "-")]))
       ],
-      actions: actions(["cognibrain proof --json", "npm run benchmark:arena", "npm run benchmark:competitors:native", "npm run audit:truth"])
+      actions: actions(["cognibrain proof --json", "npm run benchmark:arena", "npm run benchmark:competitors:native", "npm run audit:truth", "npm run audit:docs"])
+    },
+    {
+      id: "policies",
+      label: "Policies",
+      icon: "Shield",
+      title: "Policy rules",
+      subtitle: "Evaluate and edit memory access rules from the terminal with production default-deny visibility.",
+      accent: palette.warn,
+      primaryCommand: "cognibrain memory policy-rules",
+      metrics: [
+        metric("Mode", payload.reports?.summary?.defaultDenyPolicy ? "default-deny" : "default-allow", payload.reports?.summary?.defaultDenyPolicy ? palette.ok : palette.warn),
+        metric("Rules", payload.security?.policyRules ?? "cli", palette.text),
+        metric("Audit", "enabled", palette.ok)
+      ],
+      sections: [
+        section("Policy Commands", [
+          item("cognibrain memory policy-rules"),
+          item("cognibrain memory policy-rule <label> <allow|deny> <operation[,operation]> [scope-json]"),
+          item("cognibrain memory policy-evaluate <write|retrieve|dream|export|delete> <memory-id>")
+        ]),
+        section("Guardrails", [
+          item("Production policy mode default-denies when no rule matches.", payload.reports?.summary?.defaultDenyPolicy ? "green" : "yellow"),
+          item("HTTP routes map JWT scopes to read, write and admin permissions."),
+          item("Auth denials are recorded as security audit events.")
+        ])
+      ],
+      actions: actions(["cognibrain memory policy-rules", "cognibrain memory policy-rule <label> deny retrieve", "cognibrain memory policy-evaluate retrieve <memory-id>", "cognibrain proof --json"])
+    },
+    {
+      id: "retention",
+      label: "Retention",
+      icon: "Archive",
+      title: "Retention and compliance",
+      subtitle: "Review, enforce and export memory lifecycle policy without opening the browser.",
+      accent: palette.adapter,
+      primaryCommand: "cognibrain memory retention-review",
+      metrics: [
+        metric("Rules", payload.security?.retentionRules ?? "cli", palette.text),
+        metric("Export", "available", palette.ok),
+        metric("Enforce", "guarded", palette.warn)
+      ],
+      sections: [
+        section("Lifecycle Commands", [
+          item("cognibrain memory retention-rules"),
+          item("cognibrain memory retention-rule <label> <retention-days> <archive|delete> [scope-json]"),
+          item("cognibrain memory retention-review"),
+          item("cognibrain memory retention-enforce")
+        ]),
+        section("Compliance", [
+          item("Export and delete-user paths are command-backed."),
+          item("Retention enforcement records audit events."),
+          item("Destructive action execution requires explicit command confirmation.")
+        ])
+      ],
+      actions: actions(["cognibrain memory retention-rules", "cognibrain memory retention-review", "cognibrain memory retention-enforce", "cognibrain memory compliance-export"])
+    },
+    {
+      id: "docs",
+      label: "Docs",
+      icon: "Docs",
+      title: "Claim and docs gates",
+      subtitle: "Keep README, status, claims and operations aligned with code.",
+      accent: palette.report,
+      primaryCommand: "npm run audit:docs",
+      metrics: [
+        metric("Truth", truth.passed ? "bounded" : "check", truth.passed ? palette.ok : palette.warn),
+        metric("Docs", "audited", palette.ok),
+        metric("Status", "matrix", palette.brand)
+      ],
+      sections: [
+        section("Canonical Pages", [
+          item("docs/status.md"),
+          item("docs/claims.md"),
+          item("docs/operations.md"),
+          item("docs/integrations.md"),
+          item("docs/benchmarks.md")
+        ]),
+        section("Gates", [
+          item("npm run verify:status"),
+          item("npm run audit:docs"),
+          item("npm run audit:truth")
+        ])
+      ],
+      actions: actions(["npm run verify:status", "npm run audit:docs", "npm run audit:truth", "cognibrain proof --json"])
     },
     {
       id: "sdk",

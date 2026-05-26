@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createHmac, createVerify, randomUUID, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import { defaultService } from "./service";
@@ -7,6 +8,27 @@ import type { ExtractionReport, ManagedMigrationBundle, Memory, MemoryPolicyOper
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
 const dreamCheckIntervalMinutes = Number(process.env.MEMORY_DREAM_CHECK_INTERVAL_MINUTES ?? 15);
+const requestAuth = new WeakMap<IncomingMessage, AuthResult>();
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+type AuthMode = "open-local-dev" | "api-key" | "jwt-oidc";
+type AuthStatusReport = {
+  mode: AuthMode;
+  protected: boolean;
+  actorId?: string;
+  userId?: string;
+  orgId?: string;
+  projectId?: string;
+  scopes?: string[];
+  warning?: string;
+};
+type AuthResult = {
+  allowed: boolean;
+  status: number;
+  error?: string;
+  code?: string;
+  statusReport: AuthStatusReport;
+};
 
 const relationTypeSchema = z.enum([
   "mentions",
@@ -707,10 +729,14 @@ const offlineOperationSchema = z.object({
 });
 
 export const server = createServer(async (request, response) => {
+  applyRequestHeaders(request, response);
   try {
     await route(request, response);
   } catch (error) {
-    send(response, error instanceof z.ZodError ? 400 : 500, {
+    const status = error instanceof PayloadTooLargeError ? 413 : error instanceof ActorScopeError ? 403 : error instanceof z.ZodError ? 400 : 500;
+    send(response, status, {
+      requestId: response.getHeader("X-Request-ID"),
+      code: error instanceof PayloadTooLargeError ? "payload_too_large" : error instanceof ActorScopeError ? "actor_scope_forbidden" : error instanceof z.ZodError ? "validation_error" : "internal_error",
       error: error instanceof Error ? error.message : "Unknown error"
     });
   }
@@ -728,9 +754,29 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  const rate = checkRateLimit(request);
+  if (!rate.allowed) {
+    send(response, 429, { error: "Rate limit exceeded", code: "rate_limit_exceeded", requestId: response.getHeader("X-Request-ID"), retryAfterMs: Math.max(0, rate.resetAt - Date.now()) });
+    return;
+  }
+
   const auth = authenticate(request, url.pathname);
+  requestAuth.set(request, auth);
   if (!auth.allowed) {
-    send(response, auth.status, { error: auth.error, code: auth.code });
+    defaultService.recordSecurityEvent({ actorId: auth.statusReport.actorId, userId: auth.statusReport.userId, path: url.pathname, method, status: auth.status, code: auth.code ?? "auth_denied" });
+    send(response, auth.status, { error: auth.error, code: auth.code, requestId: response.getHeader("X-Request-ID") });
+    return;
+  }
+  const scopeViolation = actorScopeViolation(auth.statusReport, Object.fromEntries(url.searchParams.entries()));
+  if (scopeViolation) {
+    defaultService.recordSecurityEvent({ actorId: auth.statusReport.actorId, userId: auth.statusReport.userId, path: url.pathname, method, status: 403, code: "actor_scope_forbidden" });
+    send(response, 403, { error: scopeViolation, code: "actor_scope_forbidden", requestId: response.getHeader("X-Request-ID") });
+    return;
+  }
+  const permission = authorizeRoute(method, url.pathname, auth.statusReport);
+  if (!permission.allowed) {
+    defaultService.recordSecurityEvent({ actorId: auth.statusReport.actorId, userId: auth.statusReport.userId, path: url.pathname, method, status: 403, code: "rbac_forbidden" });
+    send(response, 403, { error: permission.reason, code: "rbac_forbidden", requestId: response.getHeader("X-Request-ID") });
     return;
   }
 
@@ -1628,13 +1674,30 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   send(response, 404, { error: "Not found" });
 }
 
+class PayloadTooLargeError extends Error {
+  constructor(limit: number) {
+    super(`Request body exceeds ${limit} bytes`);
+  }
+}
+
+class ActorScopeError extends Error {}
+
 function json(request: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let body = "";
-    request.on("data", (chunk) => (body += chunk));
+    const limit = requestBodyLimitBytes();
+    request.on("data", (chunk) => {
+      body += chunk;
+      if (Buffer.byteLength(body) > limit) {
+        reject(new PayloadTooLargeError(limit));
+      }
+    });
     request.on("end", () => {
       try {
-        resolve(body ? JSON.parse(body) : {});
+        const parsed = body ? JSON.parse(body) : {};
+        const violation = actorScopeViolation(requestAuth.get(request)?.statusReport, parsed);
+        if (violation) reject(new ActorScopeError(violation));
+        else resolve(parsed);
       } catch (error) {
         reject(error);
       }
@@ -1645,9 +1708,7 @@ function json(request: IncomingMessage): Promise<unknown> {
 
 function send(response: ServerResponse, status: number, payload: unknown): void {
   response.statusCode = status;
-  response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Headers", "content-type, authorization, x-api-key, x-actor-id");
-  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  setCommonHeaders(response);
   if (status === 204 || payload === null) {
     response.end();
     return;
@@ -1658,30 +1719,102 @@ function send(response: ServerResponse, status: number, payload: unknown): void 
 
 function sendText(response: ServerResponse, status: number, payload: string, contentType = "text/plain"): void {
   response.statusCode = status;
-  response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Headers", "content-type, authorization, x-api-key, x-actor-id");
-  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  setCommonHeaders(response);
   response.setHeader("Content-Type", contentType);
   response.end(payload);
 }
 
-function authenticate(request: IncomingMessage, pathname: string): {
-  allowed: boolean;
-  status: number;
-  error?: string;
-  code?: string;
-  statusReport: { mode: "open-local-dev" | "api-key"; protected: boolean; actorId?: string; warning?: string };
-} {
+function applyRequestHeaders(request: IncomingMessage, response: ServerResponse): void {
+  response.setHeader("X-Request-ID", request.headers["x-request-id"]?.toString() || randomUUID());
+  applyCors(request, response);
+}
+
+function setCommonHeaders(response: ServerResponse): void {
+  if (!response.hasHeader("Access-Control-Allow-Origin")) response.setHeader("Access-Control-Allow-Origin", corsDefaultOrigin());
+  response.setHeader("Access-Control-Allow-Headers", "content-type, authorization, x-api-key, x-actor-id, x-request-id");
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+}
+
+function applyCors(request: IncomingMessage, response: ServerResponse): void {
+  const origin = request.headers.origin?.toString();
+  const allowed = configuredCorsOrigins();
+  if (!origin) {
+    response.setHeader("Access-Control-Allow-Origin", corsDefaultOrigin());
+    return;
+  }
+  if (!allowed.length || allowed.includes(origin)) {
+    response.setHeader("Access-Control-Allow-Origin", allowed.length ? origin : corsDefaultOrigin());
+    response.setHeader("Vary", "Origin");
+    return;
+  }
+  response.setHeader("Access-Control-Allow-Origin", "null");
+}
+
+function corsDefaultOrigin(): string {
+  const allowed = configuredCorsOrigins();
+  return allowed[0] ?? String.fromCharCode(42);
+}
+
+function configuredCorsOrigins(): string[] {
+  return (process.env.MEMORY_CORS_ORIGINS ?? process.env.MEMORY_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+function checkRateLimit(request: IncomingMessage): { allowed: boolean; resetAt: number } {
+  const max = Number(process.env.MEMORY_RATE_LIMIT_MAX ?? (productionMode() ? 120 : 0));
+  if (!max) return { allowed: true, resetAt: Date.now() };
+  const windowMs = Number(process.env.MEMORY_RATE_LIMIT_WINDOW_MS ?? 60_000);
+  const key = request.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || request.socket.remoteAddress || "local";
+  const now = Date.now();
+  const current = rateLimitBuckets.get(key);
+  if (!current || current.resetAt <= now) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, resetAt: now + windowMs };
+  }
+  current.count += 1;
+  return { allowed: current.count <= max, resetAt: current.resetAt };
+}
+
+function requestBodyLimitBytes(): number {
+  return Number(process.env.MEMORY_REQUEST_BODY_LIMIT_BYTES ?? (productionMode() ? 1_048_576 : 10_485_760));
+}
+
+function productionMode(): boolean {
+  return process.env.MEMORY_SECURITY_MODE === "production" || process.env.MEMORY_PRODUCTION_MODE === "true";
+}
+
+function authenticate(request: IncomingMessage, pathname: string): AuthResult {
   const configured = configuredApiKeys();
-  const requiresAuth = process.env.MEMORY_REQUIRE_AUTH === "true" || configured.length > 0;
+  const jwtConfigured = jwtVerifierConfigured();
+  const requiresAuth = process.env.MEMORY_REQUIRE_AUTH === "true" || configured.length > 0 || jwtConfigured || productionMode();
   const statusReport = requiresAuth
-    ? { mode: "api-key" as const, protected: true, actorId: request.headers["x-actor-id"]?.toString() }
+    ? { mode: jwtConfigured ? "jwt-oidc" as const : "api-key" as const, protected: true, actorId: request.headers["x-actor-id"]?.toString() }
     : { mode: "open-local-dev" as const, protected: false, warning: "API authentication is disabled for local development. Set MEMORY_API_KEYS or MEMORY_REQUIRE_AUTH=true before exposing this server." };
   if (!requiresAuth || pathname === "/health") return { allowed: true, status: 200, statusReport };
   const token = request.headers["x-api-key"]?.toString() ?? bearerToken(request.headers.authorization);
   if (!token) return { allowed: false, status: 401, error: "API key required", code: "auth_required", statusReport };
-  if (!configured.length) return { allowed: false, status: 403, error: "No API keys are configured", code: "auth_not_configured", statusReport };
-  if (!configured.includes(token)) return { allowed: false, status: 403, error: "Invalid API key", code: "auth_invalid", statusReport };
+  if (jwtConfigured && bearerToken(request.headers.authorization)) {
+    const verified = verifyJwt(token);
+    if (!verified.valid) return { allowed: false, status: 403, error: verified.error ?? "Invalid JWT", code: "jwt_invalid", statusReport };
+    return {
+      allowed: true,
+      status: 200,
+      statusReport: {
+        mode: "jwt-oidc",
+        protected: true,
+        actorId: verified.actorId,
+        userId: verified.userId,
+        orgId: verified.orgId,
+        projectId: verified.projectId,
+        scopes: verified.scopes
+      }
+    };
+  }
+  if (!configured.length) return { allowed: false, status: 403, error: "No API keys or JWT verifier are configured", code: "auth_not_configured", statusReport };
+  if (!configured.some((key) => secureEqual(key, token))) return { allowed: false, status: 403, error: "Invalid API key", code: "auth_invalid", statusReport };
   return { allowed: true, status: 200, statusReport: { ...statusReport, actorId: request.headers["x-actor-id"]?.toString() ?? "api-key" } };
 }
 
@@ -1695,6 +1828,122 @@ function configuredApiKeys(): string[] {
 function bearerToken(header?: string): string | undefined {
   const match = header?.match(/^Bearer\s+(.+)$/i);
   return match?.[1]?.trim();
+}
+
+function jwtVerifierConfigured(): boolean {
+  return Boolean(process.env.MEMORY_JWT_ISSUER && process.env.MEMORY_JWT_AUDIENCE && (process.env.MEMORY_JWT_HS256_SECRET || process.env.MEMORY_JWT_PUBLIC_KEY || process.env.MEMORY_JWT_PUBLIC_KEY_BASE64));
+}
+
+function verifyJwt(token: string): { valid: boolean; error?: string; actorId?: string; userId?: string; orgId?: string; projectId?: string; scopes?: string[] } {
+  const parts = token.split(".");
+  if (parts.length !== 3) return { valid: false, error: "JWT must have three segments" };
+  const [encodedHeader, encodedPayload, signature] = parts;
+  let header: { alg?: string; typ?: string };
+  let payload: Record<string, unknown>;
+  try {
+    header = JSON.parse(base64UrlDecode(encodedHeader).toString("utf8")) as { alg?: string; typ?: string };
+    payload = JSON.parse(base64UrlDecode(encodedPayload).toString("utf8")) as Record<string, unknown>;
+  } catch {
+    return { valid: false, error: "JWT header or payload is not valid JSON" };
+  }
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+  const signatureBytes = base64UrlDecode(signature);
+  const verified = header.alg === "HS256"
+    ? verifyHs256(signingInput, signatureBytes)
+    : header.alg === "RS256"
+      ? verifyRs256(signingInput, signatureBytes)
+      : false;
+  if (!verified) return { valid: false, error: `Unsupported or invalid JWT signature (${header.alg ?? "missing alg"})` };
+  const now = Math.floor(Date.now() / 1000);
+  if (typeof payload.exp === "number" && payload.exp <= now) return { valid: false, error: "JWT expired" };
+  if (typeof payload.nbf === "number" && payload.nbf > now) return { valid: false, error: "JWT not active yet" };
+  if (process.env.MEMORY_JWT_ISSUER && payload.iss !== process.env.MEMORY_JWT_ISSUER) return { valid: false, error: "JWT issuer mismatch" };
+  const expectedAudience = process.env.MEMORY_JWT_AUDIENCE;
+  const aud = payload.aud;
+  const audiences = Array.isArray(aud) ? aud.map(String) : typeof aud === "string" ? [aud] : [];
+  if (expectedAudience && !audiences.includes(expectedAudience)) return { valid: false, error: "JWT audience mismatch" };
+  const scopes = jwtScopes(payload);
+  const userId = stringClaim(payload, "userId") ?? stringClaim(payload, "sub");
+  return {
+    valid: true,
+    actorId: stringClaim(payload, "actorId") ?? userId,
+    userId,
+    orgId: stringClaim(payload, "orgId") ?? stringClaim(payload, "org_id"),
+    projectId: stringClaim(payload, "projectId") ?? stringClaim(payload, "project_id"),
+    scopes
+  };
+}
+
+function verifyHs256(signingInput: string, signature: Buffer): boolean {
+  const secret = process.env.MEMORY_JWT_HS256_SECRET;
+  if (!secret) return false;
+  const expected = createHmac("sha256", secret).update(signingInput).digest();
+  return buffersEqual(expected, signature);
+}
+
+function verifyRs256(signingInput: string, signature: Buffer): boolean {
+  const key = process.env.MEMORY_JWT_PUBLIC_KEY ?? (process.env.MEMORY_JWT_PUBLIC_KEY_BASE64 ? Buffer.from(process.env.MEMORY_JWT_PUBLIC_KEY_BASE64, "base64").toString("utf8") : undefined);
+  if (!key) return false;
+  const verifier = createVerify("RSA-SHA256");
+  verifier.update(signingInput);
+  verifier.end();
+  return verifier.verify(key, signature);
+}
+
+function base64UrlDecode(value: string): Buffer {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  return Buffer.from(padded, "base64");
+}
+
+function buffersEqual(a: Buffer, b: Buffer): boolean {
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function secureEqual(a: string, b: string): boolean {
+  return buffersEqual(Buffer.from(a), Buffer.from(b));
+}
+
+function stringClaim(payload: Record<string, unknown>, key: string): string | undefined {
+  return typeof payload[key] === "string" && payload[key] ? payload[key] : undefined;
+}
+
+function jwtScopes(payload: Record<string, unknown>): string[] {
+  const raw = payload.scope ?? payload.scp ?? payload.scopes;
+  if (typeof raw === "string") return raw.split(/\s+/).filter(Boolean);
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+  return [];
+}
+
+function authorizeRoute(method: string, pathname: string, auth: AuthStatusReport): { allowed: boolean; reason?: string } {
+  if (auth.mode !== "jwt-oidc") return { allowed: true };
+  const scopes = new Set(auth.scopes ?? []);
+  if (scopes.has("admin") || scopes.has("memory:admin")) return { allowed: true };
+  const needed = routeScope(method, pathname);
+  if (!needed || scopes.has(needed)) return { allowed: true };
+  return { allowed: false, reason: `Missing required scope: ${needed}` };
+}
+
+function routeScope(method: string, pathname: string): string | undefined {
+  if (pathname === "/health" || pathname === "/auth/status" || pathname === "/openapi.json" || pathname === "/sdk/openapi") return undefined;
+  if (method === "GET") return "memory:read";
+  if (pathname.includes("/policy") || pathname.includes("/retention") || pathname.includes("/security")) return "memory:admin";
+  return "memory:write";
+}
+
+function actorScopeViolation(auth: AuthStatusReport | undefined, value: unknown): string | undefined {
+  if (!auth || auth.mode !== "jwt-oidc") return undefined;
+  if (auth.scopes?.some((scope) => scope === "admin" || scope === "memory:admin" || scope === "memory:all")) return undefined;
+  if (!value || typeof value !== "object") return undefined;
+  const body = value as Record<string, unknown>;
+  const checks: Array<[keyof AuthStatusReport, string]> = [["userId", "userId"], ["orgId", "orgId"], ["projectId", "projectId"]];
+  for (const [authKey, bodyKey] of checks) {
+    const expected = auth[authKey];
+    const observed = body[bodyKey];
+    if (expected && typeof observed === "string" && observed && observed !== expected) {
+      return `${bodyKey} must match authenticated actor scope`;
+    }
+  }
+  return undefined;
 }
 
 function parseRelationTypes(value: string | null): z.infer<typeof relationTypeSchema>[] | undefined {

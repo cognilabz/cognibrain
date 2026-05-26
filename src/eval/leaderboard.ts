@@ -26,12 +26,13 @@ export interface LeaderboardArtifact {
   };
 }
 
-export function buildLeaderboardArtifact(options: { nextgenPath?: string; evaluationPath?: string; answerGenerationPath?: string; marketGatePath?: string; cognicodePath?: string; outputPath?: string } = {}): LeaderboardArtifact {
+export function buildLeaderboardArtifact(options: { nextgenPath?: string; evaluationPath?: string; answerGenerationPath?: string; marketGatePath?: string; cognicodePath?: string; arenaPath?: string; outputPath?: string } = {}): LeaderboardArtifact {
   const nextgenPath = options.nextgenPath ?? "artifacts/nextgen-benchmarks.json";
   const evaluationPath = options.evaluationPath ?? "artifacts/evaluation-report.json";
   const answerGenerationPath = options.answerGenerationPath ?? "artifacts/answer-generation.json";
   const marketGatePath = options.marketGatePath ?? "artifacts/market-gate.json";
   const cognicodePath = options.cognicodePath ?? "artifacts/cognicodebench/run.json";
+  const arenaPath = options.arenaPath ?? "artifacts/arena/run.json";
   const entries: LeaderboardArtifact["entries"] = [];
   if (existsSync(nextgenPath)) {
     const report = JSON.parse(readFileSync(nextgenPath, "utf8"));
@@ -76,6 +77,28 @@ export function buildLeaderboardArtifact(options: { nextgenPath?: string; evalua
         "Measures whether coding agents carry corrections, procedures, tool outcomes, and codebase changes into the next patch.",
         `correctionCarryover=${Number(report.metrics?.correctionCarryoverRate ?? 0)}`,
         `repeatedMistakeRate=${Number(report.metrics?.repeatedMistakeRate ?? 1)}`
+      ]
+    });
+  }
+  if (existsSync(arenaPath)) {
+    const report = JSON.parse(readFileSync(arenaPath, "utf8"));
+    const cognibrain = (report.systems ?? []).find((system: { system?: string }) => system.system === "cognibrain");
+    entries.push({
+      suite: "benchmark-arena",
+      category: "engineering_memory",
+      metric: "same_scenario_score",
+      score: Number(cognibrain?.score ?? 0),
+      artifact: arenaPath,
+      proof: "local-deterministic",
+      methodology: {
+        dataset: "cognicodebench-scenario-stream",
+        systems: (report.systems ?? []).map((system: { displayName?: string; proofLevel?: string }) => ({ system: system.displayName, proofLevel: system.proofLevel })),
+        adapterContract: report.adapterContract?.lifecycle ?? []
+      },
+      notes: [
+        "Cognibrain row is same-run-full.",
+        "Competitor rows require their own proof levels; same-run-api-shape is not a vendor certification.",
+        `winner=${report.winner ?? ""}`
       ]
     });
   }

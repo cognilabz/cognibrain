@@ -279,6 +279,8 @@
   ],
   "publication": {
     "anonymized": true,
-    "claimScope": "Scores describe the listed artifact and metric only; direct vendor comparisons require comparable imported artifacts."
+    "claimScope": "Scores describe the listed artifact and metric only; direct vendor comparisons require comparable imported artifacts.",
+    "publishedAt": "2026-05-26T04:28:13.293Z",
+    "channel": "static-json"
   }
 }

@@ -30,10 +30,12 @@ const checks = [
     has(files.package, "verify:compatibility"),
     has(files.package, "verify:vendor-live"),
     has(files.integrations, "Native Connectors"),
+    has(files.integrations, "Connector Maturity Matrix"),
     has(files.integrations, "verify:vendor-connectors"),
     artifact("artifacts/connectors-live.json", (report) => report.passed === true && (report.harnesses ?? []).length >= 8),
     artifact("artifacts/vendor-connectors-live.json", (report) => report.passed === true),
-    artifact("artifacts/vendor-live-smoke.json", (report) => report.passed === true && report.mode === "credential_smoke")
+    artifact("artifacts/vendor-live-smoke.json", (report) => report.passed === true && report.mode === "credential_smoke"),
+    artifact("artifacts/connector-maturity.json", (report) => report.passed === true && report.summary?.total >= 19)
   ]),
   check("Postgres self-hosted hardening proof is fresh enough", [
     artifact("artifacts/postgres-live.json", (report) =>

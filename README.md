@@ -25,6 +25,15 @@ npm i @cognilabz/cognibrain
 npx cognibrain
 ```
 
+Proof-first story:
+
+1. A coding agent repeats a wrong action.
+2. A reviewer correction becomes durable engineering memory.
+3. The next patch receives cited context and an action guard.
+4. The benchmark checks whether the same mistake was avoided.
+
+Recall is not enough. The next code change has to prove the memory worked.
+
 ## What You Get
 
 | Surface | What it does |
@@ -35,7 +44,7 @@ npx cognibrain
 | Native connectors | GitHub, GitLab, Azure DevOps, Slack, Discord, Teams, Jira, Confluence, Notion, Linear, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog. |
 | Platform SDK | Scaffold a real custom integration when your source system is not built in yet. |
 | Self-hosted service | Linux systemd, macOS launchd and Windows Task Scheduler service plans from the CLI. |
-| Benchmark proof | Local deterministic benchmark artifacts and same-scenario competitor comparison with explicit proof boundaries. |
+| Benchmark proof | Local deterministic benchmark artifacts, public same-scenario reports and competitor comparison with explicit proof boundaries. |
 
 ## CLI Screenshots
 
@@ -134,6 +143,8 @@ Current local Benchmark Arena result, 30 deterministic engineering-memory scenar
 
 Boundary: competitor rows are local API-shape compatibility adapters, not vendor-hosted certifications. Cognibrain's row runs the full local implementation. See [docs/benchmarks.md](docs/benchmarks.md).
 
+Arena v2 also supports stronger competitor proof when you configure real native/cloud/CLI runners or import a vendor artifact. The row stays `same-run-api-shape` until that happens. See [Same Benchmark](docs/market/same-benchmark.md) and the generated [Latest Arena](docs/benchmarks/latest-arena.md).
+
 CogniCodeBench also runs 100 deterministic synthetic coding-agent scenarios:
 
 ```bash
@@ -148,6 +159,7 @@ Native connector verification:
 npm run verify:connectors
 npm run verify:vendor-connectors
 npm run verify:vendor-live
+npm run connectors:maturity
 ```
 
 Connector configs store non-secret choices and `env:` references. Token values stay outside the repo:

@@ -36,6 +36,14 @@ Every workbench keeps a `--json` mode for automation.
 
 ## Setup Profiles
 
+Running `npx cognibrain init` in a TTY opens the guided wizard. It asks:
+
+- what should improve first: repeated mistakes, repo rules/tests, work-system connectors, benchmark demo or team server,
+- which agent you use: Codex, Claude Code, Cursor, Copilot or LangGraph/CrewAI,
+- connector, storage, auth and first-win demo choices.
+
+For CI, docs and deterministic setup, use `--profile ... --yes`.
+
 | Profile | Use it for | Command |
 | --- | --- | --- |
 | `solo-dev` | Local developer memory with local storage and GitHub defaults. | `npx cognibrain init --profile solo-dev --yes` |

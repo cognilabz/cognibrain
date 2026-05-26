@@ -13,6 +13,9 @@ const files = {
   claims: read("docs/claims.md"),
   benchmarks: read("docs/benchmarks.md"),
   reference: read("docs/reference.md"),
+  integrations: read("docs/integrations.md"),
+  landscape: exists("docs/benchmarks/landscape.md") ? read("docs/benchmarks/landscape.md") : "",
+  sameBenchmark: exists("docs/market/same-benchmark.md") ? read("docs/market/same-benchmark.md") : "",
   package: read("package.json")
 };
 
@@ -23,6 +26,8 @@ const checks = [
     exists("docs/integrations.md"),
     exists("docs/operations.md"),
     exists("docs/reference.md"),
+    exists("docs/benchmarks/landscape.md"),
+    exists("docs/market/same-benchmark.md"),
     exists("docs/claims.md"),
     has(files.docsHome, "Claim Boundary")
   ]),
@@ -40,11 +45,16 @@ const checks = [
     has(files.readme, "Boundary: competitor rows are local API-shape compatibility adapters"),
     has(files.claims, "does not currently claim Managed SaaS uptime"),
     has(files.benchmarks, "not vendor-hosted certifications"),
+    has(files.landscape, "real-customer-field"),
+    has(files.sameBenchmark, "Recall is not enough"),
+    has(files.integrations, "Connector Maturity Matrix"),
     has(files.reference, "/openapi.json")
   ]),
   check("verification scripts are wired to canonical docs", [
     has(files.package, "\"verify:status\""),
     has(files.package, "\"audit:docs\""),
+    has(files.package, "\"connectors:maturity\""),
+    has(files.package, "\"benchmark:arena:publish\""),
     has(files.package, "npm run verify:status"),
     has(files.package, "npm run audit:docs"),
     !has(files.package, "audit:plan1_")

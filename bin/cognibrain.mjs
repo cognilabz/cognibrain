@@ -321,6 +321,20 @@ async function doctor(doctorArgs) {
   add("guided setup state", existsSync(join(runtimeRoot, ".cognibrain", "setup-state.json")), join(runtimeRoot, ".cognibrain", "setup-state.json"), existsSync(join(runtimeRoot, ".cognibrain", "setup-state.json")) ? "ok" : "warn");
   add("connector config directory", existsSync(join(runtimeRoot, ".cognibrain", "connectors")), join(runtimeRoot, ".cognibrain", "connectors"), existsSync(join(runtimeRoot, ".cognibrain", "connectors")) ? "ok" : "warn");
   add("adapter config directory", existsSync(join(runtimeRoot, ".cognibrain", "adapters")), join(runtimeRoot, ".cognibrain", "adapters"), existsSync(join(runtimeRoot, ".cognibrain", "adapters")) ? "ok" : "warn");
+  const paths = configPaths();
+  const setupState = readJson(paths.setupState, null);
+  add("storage backend selected", Boolean(setupState?.storage || process.env.MEMORY_STORAGE_BACKEND), setupState?.storage ?? process.env.MEMORY_STORAGE_BACKEND ?? "missing", setupState?.storage || process.env.MEMORY_STORAGE_BACKEND ? "ok" : "warn");
+  add("auth mode selected", Boolean(setupState?.auth), setupState?.auth ?? "missing", setupState?.auth ? "ok" : "warn");
+  const connectorReadiness = connectorDoctor();
+  add("connector credentials", connectorReadiness.ok || connectorReadiness.checks.length === 0, connectorReadiness.checks.length ? `${connectorReadiness.checks.filter((check) => check.ok).length}/${connectorReadiness.checks.length} configured` : "no connector configs yet", connectorReadiness.ok || connectorReadiness.checks.length === 0 ? "ok" : "warn");
+  const adapterReadiness = adapterDoctor();
+  add("adapter credentials", adapterReadiness.ok || adapterReadiness.checks.length === 0, adapterReadiness.checks.length ? `${adapterReadiness.checks.filter((check) => check.ok).length}/${adapterReadiness.checks.length} configured` : "no adapter configs yet", adapterReadiness.ok || adapterReadiness.checks.length === 0 ? "ok" : "warn");
+  const publicArenaReady = existsSync(join(root, "public", "benchmark-arena", "results.json")) && existsSync(join(root, "docs", "benchmarks", "latest-arena.md"));
+  add("benchmark artifacts fresh enough", publicArenaReady, publicArenaReady ? "public arena and latest markdown present" : "run npm run benchmark:arena && npm run benchmark:arena:publish", publicArenaReady ? "ok" : "warn");
+  const dashboardAssetsReady = ["dashboard-workbench.png", "dashboard-benchmarks.png"].every((name) => existsSync(join(root, "docs", "assets", name)));
+  add("dashboard assets", dashboardAssetsReady, dashboardAssetsReady ? "docs/assets dashboard screenshots present" : "missing docs/assets dashboard screenshots", dashboardAssetsReady ? "ok" : "warn");
+  const mcpReady = existsSync(join(root, "src", "connectors", "mcpServer.ts")) && existsSync(join(root, "src", "connectors", "mcpHandlers.ts"));
+  add("MCP server files", mcpReady, mcpReady ? "src/connectors/mcpServer.ts" : "missing MCP server files");
 
   const state = readRuntimeState();
   const apiAlive = state?.api?.pid ? isAlive(state.api.pid) : false;
@@ -689,7 +703,10 @@ async function promptInitProfile(defaultProfileName) {
   try {
     const profileChoice = await ask(rl, "Profile [1 solo-dev, 2 team, 3 enterprise, 4 benchmark]", defaultProfileName);
     const profile = profileDefinition(choiceToProfile(profileChoice, defaultProfileName));
-    const harnesses = splitList(await ask(rl, "Harnesses", profile.harnesses.join(",")), profile.harnesses);
+    const goal = choiceToGoal(await ask(rl, "Improve first [1 repeated mistakes, 2 repo rules/tests, 3 GitHub/Jira/docs, 4 benchmark demo, 5 team server]", profile.goalChoice ?? "1"));
+    const primaryAgent = choiceToAgent(await ask(rl, "Primary agent [1 Codex, 2 Claude Code, 3 Cursor, 4 Copilot, 5 LangGraph/CrewAI]", profile.primaryAgent ?? "codex"));
+    const defaultHarnesses = primaryAgent === "langgraph-crewai" ? ["langgraph", "crewai"] : [primaryAgent];
+    const harnesses = splitList(await ask(rl, "Harnesses", (profile.harnesses.length ? profile.harnesses : defaultHarnesses).join(",")), profile.harnesses.length ? profile.harnesses : defaultHarnesses);
     const storage = await ask(rl, "Storage [local-json, sqlite, postgres]", profile.storage);
     const auth = await ask(rl, "Auth [local-only, api-key, oidc-or-sso]", profile.auth);
     const connectors = splitList(await ask(rl, "Connectors", profile.connectors.join(",")), profile.connectors).filter((name) => connectorDefinitions()[name]);
@@ -700,6 +717,8 @@ async function promptInitProfile(defaultProfileName) {
       harnesses,
       storage,
       auth,
+      goal,
+      primaryAgent,
       connectors,
       adapters,
       runDemo,
@@ -750,6 +769,24 @@ function choiceToProfile(value, fallback) {
   return choices[normalized] ?? (normalized || fallback);
 }
 
+function choiceToGoal(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  const choices = {
+    "1": "stop repeated coding-agent mistakes",
+    "2": "remember repo rules and test commands",
+    "3": "connect GitHub, Jira, Confluence or Notion",
+    "4": "run benchmark demo",
+    "5": "set up a team memory server"
+  };
+  return choices[normalized] ?? (normalized || choices["1"]);
+}
+
+function choiceToAgent(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  const choices = { "1": "codex", "2": "claude", "3": "cursor", "4": "copilot", "5": "langgraph-crewai", "claude code": "claude" };
+  return choices[normalized] ?? (normalized || "codex");
+}
+
 function splitList(value, fallback) {
   const items = String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
   return items.length ? items : fallback;
@@ -784,6 +821,9 @@ function profileDefinition(name) {
       harnesses: ["codex", "cursor"],
       storage: "local-json",
       auth: "local-only",
+      goalChoice: "1",
+      goal: "stop repeated coding-agent mistakes",
+      primaryAgent: "codex",
       connectors: ["github"],
       adapters: ["storage-sqlite"],
       runDemo: true,
@@ -797,6 +837,9 @@ function profileDefinition(name) {
       harnesses: ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai"],
       storage: "local-json-or-postgres",
       auth: "reverse-proxy-or-oidc",
+      goalChoice: "3",
+      goal: "connect GitHub, Jira, Confluence or Notion",
+      primaryAgent: "codex",
       connectors: ["github", "slack", "jira", "confluence", "notion", "linear"],
       adapters: ["storage-postgres", "embedding-openai-compatible", "intelligence-json-command"],
       runDemo: true,
@@ -810,6 +853,9 @@ function profileDefinition(name) {
       harnesses: ["all"],
       storage: "postgres",
       auth: "oidc-or-sso",
+      goalChoice: "5",
+      goal: "set up a team memory server",
+      primaryAgent: "codex",
       connectors: ["github", "slack", "discord", "jira", "confluence", "notion", "linear"],
       adapters: ["storage-postgres", "mcp-remote", "intelligence-json-command", "media-json-command"],
       runDemo: true,
@@ -823,6 +869,9 @@ function profileDefinition(name) {
       harnesses: ["all"],
       storage: "local-json",
       auth: "local-only",
+      goalChoice: "4",
+      goal: "run benchmark demo",
+      primaryAgent: "codex",
       connectors: ["github", "jira", "notion", "linear"],
       adapters: ["benchmark-arena", "storage-sqlite"],
       runDemo: true,
@@ -851,6 +900,8 @@ function writeSetupState(profile, metadata = {}) {
     harnesses: profile.harnesses,
     storage: profile.storage,
     auth: profile.auth,
+    goal: profile.goal,
+    primaryAgent: profile.primaryAgent,
     connectors: profile.connectors,
     adapters: profile.adapters ?? [],
     runDemo: profile.runDemo,
@@ -2217,6 +2268,9 @@ function writeConnectorConfig(provider, metadata = {}) {
     docs: definition.docs,
     preview: {
       dryRunPoll: `cognibrain memory connector-poll ${definition.connectorId}`,
+      credentialValidation: `cognibrain connector doctor ${provider}`,
+      liveSmoke: "npm run verify:vendor-live",
+      writePolicy: "dry-run preview before writeback; explicit dryRun=false required for writes",
       sampleMemoryEvents: definition.sampleEvents ?? []
     },
     healthCommand: `cognibrain memory connector-health ${definition.connectorId}`,

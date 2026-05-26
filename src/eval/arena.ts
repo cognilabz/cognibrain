@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { MemoryService } from "../api/service";
@@ -5,13 +6,66 @@ import type { CogniCodeScenario } from "./cognicodeBench";
 import { generateCogniCodeScenarios } from "./cognicodeBench";
 
 type MemorySystemId = "cognibrain" | "mem0" | "graphiti" | "zep" | "cognee" | "langmem" | "gbrain";
-type ProofLevel = "same-run-full" | "same-run-api-shape" | "artifact-import" | "planned";
+type ProofLevel =
+  | "local-baseline"
+  | "public-claim-only"
+  | "artifact-import"
+  | "same-run-api-shape"
+  | "same-run-native"
+  | "same-run-cloud-api"
+  | "same-run-cli"
+  | "same-run-full"
+  | "vendor-signed"
+  | "real-customer-field"
+  | "planned";
 
-interface MemorySystemAdapter {
+type AdapterMode = "full-local" | "api-shape" | "native-command" | "cloud-command" | "cli-command" | "artifact-import" | "planned" | "public-claim";
+
+interface BenchmarkEvent {
+  scenarioId: string;
+  type: "repo_seed" | "wrong_action" | "correction" | "next_task";
+  payload: Record<string, unknown>;
+}
+
+interface BenchmarkQuery {
+  scenarioId: string;
+  prompt: string;
+  expectedCommand?: string;
+}
+
+interface RetrievedContext {
+  text?: string;
+  memoryIds?: string[];
+  evidence?: Record<string, unknown>;
+}
+
+interface BenchmarkAction {
+  scenarioId: string;
+  command?: string;
+  filesChanged?: string[];
+  failureReason?: string;
+}
+
+interface BenchmarkCorrection {
+  scenarioId: string;
+  content: string;
+  correctAction: string;
+  kind: string;
+}
+
+interface BenchmarkSystemAdapter {
   id: MemorySystemId;
   displayName: string;
   proofLevel: ProofLevel;
+  adapterMode: AdapterMode;
   capabilityGaps: string[];
+  setup(): Promise<void> | void;
+  ingest(event: BenchmarkEvent): Promise<void> | void;
+  retrieve(query: BenchmarkQuery): Promise<RetrievedContext> | RetrievedContext;
+  recordAction?(action: BenchmarkAction): Promise<void> | void;
+  recordCorrection?(correction: BenchmarkCorrection): Promise<void> | void;
+  exportEvidence?(): Promise<unknown> | unknown;
+  teardown(): Promise<void> | void;
   reset(): void;
   runScenario(scenario: CogniCodeScenario): Promise<ArenaScenarioResult> | ArenaScenarioResult;
 }
@@ -34,7 +88,9 @@ interface ArenaSystemResult {
   system: MemorySystemId;
   displayName: string;
   proofLevel: ProofLevel;
+  adapterMode: AdapterMode;
   sameRun: boolean;
+  vendorCredentialsUsed: boolean;
   scenarioCount: number;
   score: number;
   metrics: {
@@ -49,6 +105,11 @@ interface ArenaSystemResult {
   };
   capabilityGaps: string[];
   scenarios: ArenaScenarioResult[];
+  runner?: {
+    commandEnv?: string;
+    artifactEnv?: string;
+    artifactPath?: string;
+  };
 }
 
 interface ArenaReport {
@@ -60,6 +121,7 @@ interface ArenaReport {
     sameScenarioStream: boolean;
     noVendorCredentialsRequired: boolean;
     deterministicLocalRun: boolean;
+    lifecycle: string[];
     proofLevels: Record<ProofLevel, string>;
   };
   systems: ArenaSystemResult[];
@@ -76,10 +138,18 @@ export async function runBenchmarkArena(options: { systems?: string[]; benchmark
 
   for (const adapter of adapters) {
     adapter.reset();
+    await adapter.setup();
     const start = Date.now();
     const scenarioResults = [];
-    for (const scenario of scenarios) scenarioResults.push(await adapter.runScenario(scenario));
+    for (const scenario of scenarios) {
+      await adapter.ingest({ scenarioId: scenario.id, type: "repo_seed", payload: scenario.repoSeed as unknown as Record<string, unknown> });
+      await adapter.recordAction?.({ scenarioId: scenario.id, command: scenario.wrongAction.command, filesChanged: scenario.wrongAction.filesChanged, failureReason: scenario.wrongAction.reason });
+      await adapter.recordCorrection?.({ scenarioId: scenario.id, content: scenario.correction.content, correctAction: scenario.correction.correctAction, kind: scenario.correction.memoryKind });
+      await adapter.retrieve({ scenarioId: scenario.id, prompt: scenario.nextTask, expectedCommand: scenario.expected.command });
+      scenarioResults.push(await adapter.runScenario(scenario));
+    }
     const elapsed = Date.now() - start;
+    await adapter.teardown();
     systems.push(systemResult(adapter, scenarioResults, elapsed));
   }
 
@@ -93,12 +163,20 @@ export async function runBenchmarkArena(options: { systems?: string[]; benchmark
     benchmarkInput: "cognicode",
     adapterContract: {
       sameScenarioStream: true,
-      noVendorCredentialsRequired: true,
-      deterministicLocalRun: true,
+      noVendorCredentialsRequired: systems.every((system) => !system.vendorCredentialsUsed),
+      deterministicLocalRun: systems.every((system) => ["full-local", "api-shape", "artifact-import"].includes(system.adapterMode)),
+      lifecycle: ["setup", "ingest", "retrieve", "recordAction", "recordCorrection", "exportEvidence", "teardown"],
       proofLevels: {
-        "same-run-full": "Adapter executes the same scenario stream through the local product pipeline.",
-        "same-run-api-shape": "Adapter executes the same scenario stream through a local API-shaped compatibility model with documented gaps.",
+        "local-baseline": "Local baseline or fixture that does not represent a product run.",
+        "public-claim-only": "Public claim or documentation row without direct same-scenario execution.",
         "artifact-import": "Adapter result was imported from a prior artifact and was not rerun.",
+        "same-run-api-shape": "Adapter executes the same scenario stream through a local API-shaped compatibility model with documented gaps.",
+        "same-run-native": "Adapter executes the same scenario stream through a real local package, SDK, or service configured by the operator.",
+        "same-run-cloud-api": "Adapter executes the same scenario stream against a hosted API using operator-supplied credentials.",
+        "same-run-cli": "Adapter executes the same scenario stream through a real CLI runner configured by the operator.",
+        "same-run-full": "Adapter executes the same scenario stream through the local product pipeline.",
+        "vendor-signed": "Vendor-reviewed or vendor-signed artifact for the same scenario contract.",
+        "real-customer-field": "Anonymized customer-field evidence from a real deployment, not a synthetic benchmark.",
         planned: "Adapter is listed for roadmap tracking only."
       }
     },
@@ -123,7 +201,7 @@ function loadScenarios(count: number): CogniCodeScenario[] {
   return generateCogniCodeScenarios({ count }).slice(0, count);
 }
 
-function createAdapter(id: MemorySystemId): MemorySystemAdapter {
+function createAdapter(id: MemorySystemId): BenchmarkSystemAdapter {
   if (id === "cognibrain") return new CognibrainAdapter();
   const profiles: Record<Exclude<MemorySystemId, "cognibrain">, ConstructorParameters<typeof ProfileAdapter>[1]> = {
     mem0: {
@@ -163,15 +241,32 @@ function createAdapter(id: MemorySystemId): MemorySystemAdapter {
       gaps: ["graph recall without self-hosted install wizard proof", "no vendor connector writeback verifier"]
     }
   };
-  return new ProfileAdapter(id, profiles[id]);
+  return externalAdapter(id, profiles[id]) ?? new ProfileAdapter(id, profiles[id]);
 }
 
-class CognibrainAdapter implements MemorySystemAdapter {
+class CognibrainAdapter implements BenchmarkSystemAdapter {
   id: MemorySystemId = "cognibrain";
   displayName = "Cognibrain";
   proofLevel: ProofLevel = "same-run-full";
+  adapterMode: AdapterMode = "full-local";
   capabilityGaps: string[] = [];
   private service = new MemoryService();
+
+  setup(): void {
+    return undefined;
+  }
+
+  ingest(): void {
+    return undefined;
+  }
+
+  retrieve(): RetrievedContext {
+    return {};
+  }
+
+  teardown(): void {
+    return undefined;
+  }
 
   reset(): void {
     this.service = new MemoryService();
@@ -245,10 +340,11 @@ class CognibrainAdapter implements MemorySystemAdapter {
   }
 }
 
-class ProfileAdapter implements MemorySystemAdapter {
+class ProfileAdapter implements BenchmarkSystemAdapter {
   capabilityGaps: string[];
   displayName: string;
   proofLevel: ProofLevel;
+  adapterMode: AdapterMode = "api-shape";
   private capabilities: Record<string, boolean>;
 
   constructor(public id: Exclude<MemorySystemId, "cognibrain">, profile: { displayName: string; proofLevel: ProofLevel; capabilities: Record<string, boolean>; gaps: string[] }) {
@@ -256,6 +352,22 @@ class ProfileAdapter implements MemorySystemAdapter {
     this.proofLevel = profile.proofLevel;
     this.capabilities = profile.capabilities;
     this.capabilityGaps = profile.gaps;
+  }
+
+  setup(): void {
+    return undefined;
+  }
+
+  ingest(): void {
+    return undefined;
+  }
+
+  retrieve(): RetrievedContext {
+    return {};
+  }
+
+  teardown(): void {
+    return undefined;
   }
 
   reset(): void {
@@ -285,7 +397,116 @@ class ProfileAdapter implements MemorySystemAdapter {
   }
 }
 
-function systemResult(adapter: MemorySystemAdapter, scenarios: ArenaScenarioResult[], elapsedMs: number): ArenaSystemResult {
+class CommandRunnerAdapter extends ProfileAdapter {
+  adapterMode: AdapterMode;
+  proofLevel: ProofLevel;
+  capabilityGaps: string[];
+
+  constructor(
+    id: Exclude<MemorySystemId, "cognibrain">,
+    profile: ConstructorParameters<typeof ProfileAdapter>[1],
+    public readonly runner: { command: string; commandEnv: string; proofLevel: ProofLevel; adapterMode: AdapterMode }
+  ) {
+    super(id, profile);
+    this.adapterMode = runner.adapterMode;
+    this.proofLevel = runner.proofLevel;
+    this.capabilityGaps = [`external runner configured by ${runner.commandEnv}; capability gaps come from runner output when provided`, ...profile.gaps];
+  }
+
+  runScenario(scenario: CogniCodeScenario): ArenaScenarioResult {
+    const payload = {
+      schemaVersion: "1.0",
+      contract: "cognibrain-benchmark-system-adapter-v2",
+      system: this.id,
+      scenario,
+      expectedOutput: {
+        checks: ["correctionCarryover", "repeatedMistakeAvoided", "procedureRecall", "patchCorrectness", "evidenceCompleteness", "wrongMemorySuppression"],
+        note: "Return JSON with a checks object and optional evidence/capabilityGaps/latencyMs."
+      }
+    };
+    const result = spawnSync(this.runner.command, [], {
+      input: `${JSON.stringify(payload)}\n`,
+      encoding: "utf8",
+      shell: true,
+      timeout: Number(process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS ?? 30_000),
+      maxBuffer: 10 * 1024 * 1024
+    });
+    if (result.status !== 0) {
+      const checks = emptyChecks();
+      return {
+        id: scenario.id,
+        checks,
+        score: 0,
+        evidence: {
+          adapter: this.id,
+          proofLevel: this.proofLevel,
+          commandEnv: this.runner.commandEnv,
+          runnerFailed: true,
+          status: result.status,
+          stderrTail: tail(result.stderr)
+        }
+      };
+    }
+    const parsed = parseRunnerOutput(result.stdout);
+    const checks = normalizeChecks(parsed?.checks) ?? checksFromRunnerText(scenario, JSON.stringify(parsed ?? result.stdout));
+    return {
+      id: scenario.id,
+      checks,
+      score: scoreChecks(checks),
+      evidence: {
+        adapter: this.id,
+        proofLevel: this.proofLevel,
+        commandEnv: this.runner.commandEnv,
+        runner: "external-json-command",
+        latencyMs: parsed?.latencyMs,
+        capabilityGaps: parsed?.capabilityGaps,
+        evidence: parsed?.evidence ?? parsed
+      }
+    };
+  }
+}
+
+class ArtifactImportAdapter extends ProfileAdapter {
+  adapterMode: AdapterMode = "artifact-import";
+  proofLevel: ProofLevel = "artifact-import";
+  capabilityGaps: string[];
+  private importedScenarios: Map<string, ArenaScenarioResult>;
+
+  constructor(id: Exclude<MemorySystemId, "cognibrain">, profile: ConstructorParameters<typeof ProfileAdapter>[1], public readonly artifactPath: string, public readonly artifactEnv: string) {
+    super(id, profile);
+    this.capabilityGaps = [`imported artifact via ${artifactEnv}; rerun required for same-run proof`, ...profile.gaps];
+    this.importedScenarios = loadImportedScenarios(artifactPath, id);
+  }
+
+  runScenario(scenario: CogniCodeScenario): ArenaScenarioResult {
+    const imported = this.importedScenarios.get(scenario.id);
+    if (imported) {
+      return {
+        ...imported,
+        id: scenario.id,
+        evidence: {
+          ...imported.evidence,
+          adapter: this.id,
+          proofLevel: this.proofLevel,
+          artifactPath: this.artifactPath,
+          artifactEnv: this.artifactEnv
+        }
+      };
+    }
+    const fallback = super.runScenario(scenario);
+    return {
+      ...fallback,
+      evidence: {
+        ...fallback.evidence,
+        artifactPath: this.artifactPath,
+        artifactEnv: this.artifactEnv,
+        artifactScenarioMissing: scenario.id
+      }
+    };
+  }
+}
+
+function systemResult(adapter: BenchmarkSystemAdapter, scenarios: ArenaScenarioResult[], elapsedMs: number): ArenaSystemResult {
   const rate = (key: keyof ArenaScenarioResult["checks"]) => ratio(scenarios.filter((scenario) => scenario.checks[key]).length, scenarios.length);
   const correctionCarryover = rate("correctionCarryover");
   const repeatedMistakeAvoided = rate("repeatedMistakeAvoided");
@@ -298,7 +519,9 @@ function systemResult(adapter: MemorySystemAdapter, scenarios: ArenaScenarioResu
     system: adapter.id,
     displayName: adapter.displayName,
     proofLevel: adapter.proofLevel,
+    adapterMode: adapter.adapterMode,
     sameRun: adapter.proofLevel.startsWith("same-run"),
+    vendorCredentialsUsed: ["same-run-cloud-api", "vendor-signed", "real-customer-field"].includes(adapter.proofLevel),
     scenarioCount: scenarios.length,
     score,
     metrics: {
@@ -312,8 +535,104 @@ function systemResult(adapter: MemorySystemAdapter, scenarios: ArenaScenarioResu
       tokenBudget: adapter.id === "cognibrain" ? 900 : 0
     },
     capabilityGaps: adapter.capabilityGaps,
-    scenarios
+    scenarios,
+    runner: runnerMetadata(adapter)
   };
+}
+
+function externalAdapter(id: Exclude<MemorySystemId, "cognibrain">, profile: ConstructorParameters<typeof ProfileAdapter>[1]): BenchmarkSystemAdapter | undefined {
+  const envPrefix = `MEMORY_ARENA_${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
+  const artifactEnv = `${envPrefix}_ARTIFACT`;
+  const artifactPath = process.env[artifactEnv];
+  if (artifactPath) return new ArtifactImportAdapter(id, profile, artifactPath, artifactEnv);
+
+  const commandEnv = `${envPrefix}_COMMAND`;
+  const command = process.env[commandEnv];
+  if (!command) return undefined;
+  const requestedProof = normalizeProofLevel(process.env[`${envPrefix}_PROOF_LEVEL`]);
+  const defaultProof = id === "gbrain" ? "same-run-cli" : process.env[`${envPrefix}_API_KEY`] || process.env[`${envPrefix}_TOKEN`] ? "same-run-cloud-api" : "same-run-native";
+  const proofLevel = requestedProof ?? defaultProof;
+  const adapterMode: AdapterMode = proofLevel === "same-run-cloud-api" ? "cloud-command" : proofLevel === "same-run-cli" ? "cli-command" : "native-command";
+  return new CommandRunnerAdapter(id, profile, { command, commandEnv, proofLevel, adapterMode });
+}
+
+function runnerMetadata(adapter: BenchmarkSystemAdapter): ArenaSystemResult["runner"] {
+  if (adapter instanceof CommandRunnerAdapter) return { commandEnv: adapter.runner.commandEnv };
+  if (adapter instanceof ArtifactImportAdapter) return { artifactEnv: adapter.artifactEnv, artifactPath: adapter.artifactPath };
+  return undefined;
+}
+
+function loadImportedScenarios(path: string, id: MemorySystemId): Map<string, ArenaScenarioResult> {
+  const map = new Map<string, ArenaScenarioResult>();
+  try {
+    const artifact = JSON.parse(readFileSync(path, "utf8")) as { scenarios?: ArenaScenarioResult[]; systems?: Array<{ system?: string; scenarios?: ArenaScenarioResult[] }> };
+    const scenarios = artifact.scenarios ?? artifact.systems?.find((system) => system.system === id)?.scenarios ?? [];
+    for (const scenario of scenarios) if (scenario.id && scenario.checks) map.set(scenario.id, scenario);
+  } catch {
+    return map;
+  }
+  return map;
+}
+
+function parseRunnerOutput(stdout: string): { checks?: Partial<ArenaScenarioResult["checks"]>; evidence?: Record<string, unknown>; capabilityGaps?: string[]; latencyMs?: number } | undefined {
+  const trimmed = stdout.trim();
+  if (!trimmed) return undefined;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const jsonLine = trimmed.split(/\r?\n/).reverse().find((line) => line.trim().startsWith("{"));
+    if (!jsonLine) return undefined;
+    try {
+      return JSON.parse(jsonLine);
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+function normalizeChecks(value: unknown): ArenaScenarioResult["checks"] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const checks = value as Partial<Record<keyof ArenaScenarioResult["checks"], unknown>>;
+  return {
+    correctionCarryover: Boolean(checks.correctionCarryover),
+    repeatedMistakeAvoided: Boolean(checks.repeatedMistakeAvoided),
+    procedureRecall: Boolean(checks.procedureRecall),
+    patchCorrectness: Boolean(checks.patchCorrectness),
+    evidenceCompleteness: Boolean(checks.evidenceCompleteness),
+    wrongMemorySuppression: Boolean(checks.wrongMemorySuppression)
+  };
+}
+
+function checksFromRunnerText(scenario: CogniCodeScenario, output: string): ArenaScenarioResult["checks"] {
+  const haystack = output.toLowerCase();
+  return {
+    correctionCarryover: haystack.includes(scenario.correction.content.slice(0, 24).toLowerCase()) || haystack.includes(scenario.correction.correctAction.toLowerCase()),
+    repeatedMistakeAvoided: !haystack.includes(scenario.wrongAction.command?.toLowerCase() ?? "__no_wrong_command__"),
+    procedureRecall: haystack.includes(scenario.expected.command.toLowerCase()),
+    patchCorrectness: scenario.expected.filesChanged.every((file) => haystack.includes(file.toLowerCase())),
+    evidenceCompleteness: haystack.includes("evidence") || haystack.includes("citation"),
+    wrongMemorySuppression: !haystack.includes(scenario.expected.staleRuleSuppressed?.toLowerCase() ?? "__no_stale_rule__")
+  };
+}
+
+function emptyChecks(): ArenaScenarioResult["checks"] {
+  return {
+    correctionCarryover: false,
+    repeatedMistakeAvoided: false,
+    procedureRecall: false,
+    patchCorrectness: false,
+    evidenceCompleteness: false,
+    wrongMemorySuppression: false
+  };
+}
+
+function normalizeProofLevel(value: string | undefined): ProofLevel | undefined {
+  const proofLevels: ProofLevel[] = ["local-baseline", "public-claim-only", "artifact-import", "same-run-api-shape", "same-run-native", "same-run-cloud-api", "same-run-cli", "same-run-full", "vendor-signed", "real-customer-field", "planned"];
+  return proofLevels.includes(value as ProofLevel) ? value as ProofLevel : undefined;
+}
+
+function tail(value: string | undefined): string {
+  return String(value ?? "").split(/\r?\n/).slice(-20).join("\n");
 }
 
 function scoreChecks(checks: ArenaScenarioResult["checks"]): number {

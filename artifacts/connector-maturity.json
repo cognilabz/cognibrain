@@ -1,0 +1,627 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-26T04:28:13.050Z",
+  "source": "connector-registry",
+  "artifacts": [
+    "artifacts/vendor-connectors-live.json",
+    "artifacts/vendor-live-smoke.json",
+    "artifacts/connectors-live.json"
+  ],
+  "rows": [
+    {
+      "provider": "github",
+      "connectorId": "official-github",
+      "category": "code",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add github",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "slack",
+      "connectorId": "official-slack",
+      "category": "chat",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add slack",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "discord",
+      "connectorId": "official-discord",
+      "category": "chat",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add discord",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "jira",
+      "connectorId": "official-jira",
+      "category": "planning-docs",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add jira",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "confluence",
+      "connectorId": "official-confluence",
+      "category": "planning-docs",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add confluence",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "notion",
+      "connectorId": "official-notion",
+      "category": "planning-docs",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add notion",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "linear",
+      "connectorId": "official-linear",
+      "category": "planning-docs",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add linear",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "gitlab",
+      "connectorId": "official-gitlab",
+      "category": "code",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add gitlab",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "azure-devops",
+      "connectorId": "official-azure-devops",
+      "category": "code",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add azure-devops",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "teams",
+      "connectorId": "official-microsoft-teams",
+      "category": "chat",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add teams",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "gmail",
+      "connectorId": "official-gmail",
+      "category": "google-workspace",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add gmail",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "google-drive",
+      "connectorId": "official-google-drive",
+      "category": "google-workspace",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add google-drive",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "google-calendar",
+      "connectorId": "official-google-calendar",
+      "category": "google-workspace",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add google-calendar",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "asana",
+      "connectorId": "official-asana",
+      "category": "work-tracking",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add asana",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "clickup",
+      "connectorId": "official-clickup",
+      "category": "work-tracking",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add clickup",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "sentry",
+      "connectorId": "official-sentry",
+      "category": "operations-product",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add sentry",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "datadog",
+      "connectorId": "official-datadog",
+      "category": "operations-product",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add datadog",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "pagerduty",
+      "connectorId": "official-pagerduty",
+      "category": "operations-product",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add pagerduty",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    },
+    {
+      "provider": "posthog",
+      "connectorId": "official-posthog",
+      "category": "operations-product",
+      "status": "vendor-driver",
+      "proofLevel": "hermetic-driver",
+      "maturity": {
+        "listed": true,
+        "manifest": true,
+        "driver": true,
+        "fixture": true,
+        "liveSmoke": false,
+        "oauthOrSetupWizard": true,
+        "pollOrList": true,
+        "webhook": false,
+        "writeback": true,
+        "docs": true,
+        "productionCertified": false
+      },
+      "evidence": {
+        "docs": "docs/integrations.md#native-connectors",
+        "addCommand": "cognibrain connections add posthog",
+        "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+      },
+      "gaps": [
+        "tenant live-smoke not run in checked artifact",
+        "webhook delivery not claimed for native vendor row",
+        "production-certified proof not claimed"
+      ]
+    }
+  ],
+  "summary": {
+    "total": 19,
+    "hermeticDrivers": 19,
+    "liveSmokeReady": 0,
+    "productionCertified": 0
+  },
+  "passed": true
+}

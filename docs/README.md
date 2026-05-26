@@ -6,10 +6,15 @@ Cognibrain is a self-hosted Engineering Memory OS for coding agents. The CLI is 
 
 - [Install and self-hosting](install.md)
 - [Benchmarks and competitor proof](benchmarks.md)
+- [Latest Benchmark Arena](benchmarks/latest-arena.md)
+- [Benchmark landscape](benchmarks/landscape.md)
 - [Connectors, adapters and SDK](integrations.md)
+- [Connector maturity matrix](integrations/connector-maturity.md)
 - [Operations and production boundary](operations.md)
 - [CLI, API and SDK reference](reference.md)
 - [Claims and evidence map](claims.md)
+- [Same Benchmark market page](market/same-benchmark.md)
+- [Table-first comparisons](market/compare.md)
 
 ## Product Snapshot
 

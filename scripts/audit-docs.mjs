@@ -11,10 +11,15 @@ const docs = [
   "docs/README.md",
   "docs/install.md",
   "docs/benchmarks.md",
+  "docs/benchmarks/latest-arena.md",
+  "docs/benchmarks/landscape.md",
   "docs/integrations.md",
+  "docs/integrations/connector-maturity.md",
   "docs/operations.md",
   "docs/reference.md",
-  "docs/claims.md"
+  "docs/claims.md",
+  "docs/market/same-benchmark.md",
+  "docs/market/compare.md"
 ];
 const markdownDocs = walk("docs").filter((path) => path.endsWith(".md")).sort();
 const rootMarkdown = ["README.md", "CONTRIBUTING.md", "SECURITY.md"];
@@ -24,9 +29,14 @@ const files = {
   install: read("docs/install.md"),
   benchmarks: read("docs/benchmarks.md"),
   integrations: read("docs/integrations.md"),
+  connectorMaturity: exists("docs/integrations/connector-maturity.md") ? read("docs/integrations/connector-maturity.md") : "",
+  latestArena: exists("docs/benchmarks/latest-arena.md") ? read("docs/benchmarks/latest-arena.md") : "",
+  landscape: read("docs/benchmarks/landscape.md"),
   operations: read("docs/operations.md"),
   reference: read("docs/reference.md"),
-  claims: read("docs/claims.md")
+  claims: read("docs/claims.md"),
+  sameBenchmark: read("docs/market/same-benchmark.md"),
+  compare: read("docs/market/compare.md")
 };
 
 const checks = [
@@ -46,6 +56,8 @@ const checks = [
     has(files.readme, "Benchmark Arena"),
     has(files.readme, "Current local Benchmark Arena result"),
     has(files.readme, "Boundary: competitor rows are local API-shape compatibility adapters"),
+    has(files.readme, "Recall is not enough. The next code change has to prove the memory worked."),
+    has(files.readme, "Same Benchmark"),
     has(files.readme, "docs/assets/cli-home.svg"),
     has(files.readme, "docs/operations.md")
   ]),
@@ -61,12 +73,18 @@ const checks = [
   ]),
   check("benchmark claims are bounded by artifacts", [
     has(files.benchmarks, "artifacts/arena/run.json"),
+    has(files.benchmarks, "docs/benchmarks/latest-arena.md"),
+    has(files.latestArena, "Latest Benchmark Arena"),
     has(files.benchmarks, "0.9722"),
     has(files.benchmarks, "same-run-full"),
     has(files.benchmarks, "same-run-api-shape"),
+    has(files.landscape, "same-run-cloud-api"),
+    has(files.landscape, "real-customer-field"),
     has(files.benchmarks, "not vendor-hosted certifications"),
     exists("artifacts/arena/run.json"),
-    exists("artifacts/cognicodebench/run.json")
+    exists("artifacts/cognicodebench/run.json"),
+    exists("public/benchmark-arena/index.html"),
+    exists("public/benchmark-arena/results.json")
   ]),
   check("install and service docs cover self-hosting", [
     has(files.install, "npx cognibrain init"),
@@ -81,6 +99,9 @@ const checks = [
     has(files.integrations, "Native Connectors"),
     has(files.integrations, "GitHub, GitLab, Azure DevOps"),
     has(files.integrations, "Sentry, Datadog, PagerDuty and PostHog"),
+    has(files.integrations, "Connector Maturity Matrix"),
+    has(files.connectorMaturity, "production-certified"),
+    exists("artifacts/connector-maturity.json"),
     has(files.integrations, "Platform SDK"),
     has(files.integrations, "cognibrain sdk platform"),
     has(files.reference, "cognibrain connections add"),
@@ -90,9 +111,16 @@ const checks = [
     countClaimRows(files.claims) >= 8,
     has(files.claims, "CB-CLI-INK"),
     has(files.claims, "CB-ARENA"),
+    has(files.claims, "CB-CONNECTOR-MATURITY"),
     has(files.claims, "Explicit Non-Claims"),
     has(files.claims, "vendor-certified competitor benchmark results"),
     has(files.readme, "does not claim managed SaaS uptime")
+  ]),
+  check("market pages are proof-first, not slogan-only", [
+    has(files.sameBenchmark, "Memory comparisons are full of slogans"),
+    has(files.sameBenchmark, "The external runner reads one scenario JSON object from stdin"),
+    has(files.compare, "Every public comparison should start with a generated proof table"),
+    has(files.compare, "A memory system that cannot prevent repeated mistakes is just searchable history.")
   ]),
   check("legacy plan-era wording is gone from product docs and scripts", [
     !/(plan1_|nextplan|Plan1_|Plan1)/.test(files.readme),

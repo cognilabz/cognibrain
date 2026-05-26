@@ -25,6 +25,16 @@ cognibrain doctor [--fix] [--publish]
 cognibrain mcp
 ```
 
+## Proof Commands
+
+```bash
+npm run benchmark:arena
+npm run benchmark:arena:publish
+npm run connectors:maturity
+npm run leaderboard:publish
+npm run release:check
+```
+
 ## Memory Commands
 
 ```bash

@@ -15,6 +15,8 @@ Artifact:
 ```text
 artifacts/arena/run.json
 public/benchmark-arena/results.json
+public/benchmark-arena/index.html
+docs/benchmarks/latest-arena.md
 ```
 
 Current local result, 30 deterministic engineering-memory scenarios:
@@ -29,6 +31,17 @@ Current local result, 30 deterministic engineering-memory scenarios:
 | Mem0 | 0.1111 | same-run-api-shape | 1 | 3 |
 
 Boundary: competitor rows are local API-shape adapters over the same scenario stream. They are not vendor-hosted certifications. Cognibrain's row uses the full local implementation.
+
+Arena v2 can raise a competitor row when an external runner or artifact is configured:
+
+```bash
+MEMORY_ARENA_MEM0_COMMAND="node adapters/mem0-runner.js" npm run benchmark:arena
+MEMORY_ARENA_GRAPHITI_COMMAND="python adapters/graphiti_runner.py" npm run benchmark:arena
+MEMORY_ARENA_GBRAIN_COMMAND="gbrain arena-run --json" npm run benchmark:arena
+MEMORY_ARENA_COGNEE_ARTIFACT=artifacts/vendor/cognee-arena.json npm run benchmark:arena
+```
+
+Without a runner or artifact, competitor rows stay `same-run-api-shape`.
 
 ## CogniCodeBench
 
@@ -79,5 +92,9 @@ The release gate currently runs unit tests, dashboard build, status verification
 - A score is only meaningful with its proof level.
 - Same-run-full means Cognibrain executed the full local memory implementation.
 - Same-run-api-shape means an adapter exposed the same interface over deterministic scenarios.
+- Same-run-native, same-run-cloud-api and same-run-cli require operator-supplied external runners.
+- Artifact-import means the result was imported, not rerun in this checkout.
 - Repeated mistake rate measures whether the next patch repeated a known wrong action.
 - Gaps are declared missing capabilities in the comparison adapter.
+
+See [Benchmark Landscape](benchmarks/landscape.md), [Latest Arena](benchmarks/latest-arena.md) and [Same Benchmark](market/same-benchmark.md).

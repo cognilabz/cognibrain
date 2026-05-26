@@ -1,20 +1,3510 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-25T16:03:08.612Z",
+  "generatedAt": "2026-05-26T04:28:04.750Z",
   "benchmark": "BenchmarkArena",
-  "scenarioCount": 30,
+  "benchmarkInput": "cognicode",
   "adapterContract": {
     "sameScenarioStream": true,
+    "noVendorCredentialsRequired": true,
     "deterministicLocalRun": true,
-    "noVendorCredentialsRequired": true
+    "lifecycle": [
+      "setup",
+      "ingest",
+      "retrieve",
+      "recordAction",
+      "recordCorrection",
+      "exportEvidence",
+      "teardown"
+    ],
+    "proofLevels": {
+      "local-baseline": "Local baseline or fixture that does not represent a product run.",
+      "public-claim-only": "Public claim or documentation row without direct same-scenario execution.",
+      "artifact-import": "Adapter result was imported from a prior artifact and was not rerun.",
+      "same-run-api-shape": "Adapter executes the same scenario stream through a local API-shaped compatibility model with documented gaps.",
+      "same-run-native": "Adapter executes the same scenario stream through a real local package, SDK, or service configured by the operator.",
+      "same-run-cloud-api": "Adapter executes the same scenario stream against a hosted API using operator-supplied credentials.",
+      "same-run-cli": "Adapter executes the same scenario stream through a real CLI runner configured by the operator.",
+      "same-run-full": "Adapter executes the same scenario stream through the local product pipeline.",
+      "vendor-signed": "Vendor-reviewed or vendor-signed artifact for the same scenario contract.",
+      "real-customer-field": "Anonymized customer-field evidence from a real deployment, not a synthetic benchmark.",
+      "planned": "Adapter is listed for roadmap tracking only."
+    }
   },
-  "leaderboard": [
-    { "system": "Cognibrain", "score": 0.9722, "proofLevel": "same-run-full", "repeatedMistakeRate": 0, "gaps": 0 },
-    { "system": "Graphiti/Zep", "score": 0.6667, "proofLevel": "same-run-api-shape", "repeatedMistakeRate": 0.8333, "gaps": 2 },
-    { "system": "GBrain", "score": 0.6667, "proofLevel": "same-run-api-shape", "repeatedMistakeRate": 0.8333, "gaps": 2 },
-    { "system": "Cognee", "score": 0.4445, "proofLevel": "same-run-api-shape", "repeatedMistakeRate": 1, "gaps": 2 },
-    { "system": "LangMem", "score": 0.2222, "proofLevel": "same-run-api-shape", "repeatedMistakeRate": 1, "gaps": 2 },
-    { "system": "Mem0", "score": 0.1111, "proofLevel": "same-run-api-shape", "repeatedMistakeRate": 1, "gaps": 3 }
+  "systems": [
+    {
+      "system": "cognibrain",
+      "displayName": "Cognibrain",
+      "proofLevel": "same-run-full",
+      "adapterMode": "full-local",
+      "sameRun": true,
+      "vendorCredentialsUsed": false,
+      "scenarioCount": 30,
+      "score": 0.9722,
+      "metrics": {
+        "correctionCarryover": 1,
+        "repeatedMistakeRate": 0,
+        "procedureRecall": 1,
+        "patchCorrectness": 1,
+        "evidenceCompleteness": 1,
+        "wrongMemorySuppression": 0.8333,
+        "latencyP50Ms": 4,
+        "tokenBudget": 900
+      },
+      "capabilityGaps": [],
+      "scenarios": [
+        {
+          "id": "cognicode-001",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "3564b243-9fd0-4972-885a-d0c30bc26ace",
+            "correctionId": "ded99bbf-ce30-46e0-9c46-ea2f6a1bf794",
+            "contextPackId": "code_ctx_1hru8du",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1dhlyy3"
+          }
+        },
+        {
+          "id": "cognicode-002",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "938f456c-d25f-49db-af67-7c3eeaad5dff",
+            "correctionId": "c4303bbc-ac0a-4dd0-9723-a9ff69a9c212",
+            "contextPackId": "code_ctx_lanncn",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1yaopvk"
+          }
+        },
+        {
+          "id": "cognicode-003",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "5cf99c53-bda1-41d6-b7e2-e7e1de984fdb",
+            "correctionId": "cf96c194-a12c-49f5-a561-40846ee5b623",
+            "contextPackId": "code_ctx_pnyb34",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_7qdmv7"
+          }
+        },
+        {
+          "id": "cognicode-004",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "dcd6a790-fd7c-443b-baba-6e1375178387",
+            "correctionId": "2c4a107f-8e3e-491a-b493-791987f24750",
+            "contextPackId": "code_ctx_1ks5s7h",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1qh0zby"
+          }
+        },
+        {
+          "id": "cognicode-005",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.8333,
+          "evidence": {
+            "wrongActionId": "743a9cca-87d2-459b-83dd-707a96be4e20",
+            "correctionId": "dd185837-1bd3-4952-addd-f151613062ca",
+            "contextPackId": "code_ctx_1kiyp5i",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_g9i3es"
+          }
+        },
+        {
+          "id": "cognicode-006",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "69edfce5-fa6b-4fd4-877e-88e6eeb8c11e",
+            "correctionId": "6c60ec28-86cf-41f1-a977-0b771d560e08",
+            "contextPackId": "code_ctx_1bgi7o5",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_15en606"
+          }
+        },
+        {
+          "id": "cognicode-007",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "8e751103-7457-47db-8129-bcc4a98e35bd",
+            "correctionId": "b26a05de-8a05-4eef-9598-677b03962e7d",
+            "contextPackId": "code_ctx_12rxyqw",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_thychm"
+          }
+        },
+        {
+          "id": "cognicode-008",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "600c033d-5186-4440-943a-839b98a7d65f",
+            "correctionId": "a2a947f3-991a-46eb-9f35-14a8960ccded",
+            "contextPackId": "code_ctx_1tptp97",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1mi46g4"
+          }
+        },
+        {
+          "id": "cognicode-009",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "f8a5814a-776c-4b1d-ab15-fbf0a4ff79ef",
+            "correctionId": "0f75e664-7b6c-4831-a5a2-9af1a47f88c2",
+            "contextPackId": "code_ctx_117pb5u",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_hw4yx8"
+          }
+        },
+        {
+          "id": "cognicode-010",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "f2a67d82-ea4b-4f3c-a630-32497382511e",
+            "correctionId": "be522b4f-cf0a-4da3-a71f-d656c46b6a7a",
+            "contextPackId": "code_ctx_1mnetrn",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_p5qxc4"
+          }
+        },
+        {
+          "id": "cognicode-011",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.8333,
+          "evidence": {
+            "wrongActionId": "94b6a4fd-8b20-4cb0-bfd4-66da5ac74ba9",
+            "correctionId": "28903b43-5c9f-4225-aa61-88964ad49048",
+            "contextPackId": "code_ctx_f2oscz",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_66h1jc"
+          }
+        },
+        {
+          "id": "cognicode-012",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "ce7644a2-07a9-4f43-a8ac-92035efb1a9e",
+            "correctionId": "36989830-9087-4604-b363-9cbea47d2ae6",
+            "contextPackId": "code_ctx_1k3k2j4",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_vsvf8i"
+          }
+        },
+        {
+          "id": "cognicode-013",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "135119cf-2945-4985-a533-8fbf7160f149",
+            "correctionId": "78aa0a62-6c1e-4938-8d23-c7d7cadf284f",
+            "contextPackId": "code_ctx_1gcqyg",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_12q0ws"
+          }
+        },
+        {
+          "id": "cognicode-014",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "5aff3611-020e-4486-89af-c6c171b83e4d",
+            "correctionId": "32554bf9-3aa4-468e-b418-793f72a14bf6",
+            "contextPackId": "code_ctx_vzdhi3",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_2s6325"
+          }
+        },
+        {
+          "id": "cognicode-015",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "be6814fb-b0e6-47e5-9b6d-70ae31a9181c",
+            "correctionId": "900a4c3b-6a85-4269-9fb2-bcf034505d82",
+            "contextPackId": "code_ctx_1ivglvb",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_t42wsl"
+          }
+        },
+        {
+          "id": "cognicode-016",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "e11051f8-fa7c-4733-88f1-f8b76aca76a7",
+            "correctionId": "5c6b434e-beb4-40e4-aa87-284007c4f075",
+            "contextPackId": "code_ctx_117m3b0",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1evrc6o"
+          }
+        },
+        {
+          "id": "cognicode-017",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.8333,
+          "evidence": {
+            "wrongActionId": "b44b851d-2ec1-45d2-b74d-7ba386bc735c",
+            "correctionId": "7108babb-1d83-4a79-96a3-a8cebdfba8d2",
+            "contextPackId": "code_ctx_16w6to5",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1s2jc0f"
+          }
+        },
+        {
+          "id": "cognicode-018",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "6d6058c4-9731-468b-9411-625ba0322906",
+            "correctionId": "d01ab21e-2a5a-49f3-8e74-a0168d8f1de4",
+            "contextPackId": "code_ctx_dxg5q",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1ne46s6"
+          }
+        },
+        {
+          "id": "cognicode-019",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "94a77aaf-b594-4362-8c23-b5195565fc04",
+            "correctionId": "728324f5-35ec-44a5-8db8-e9d81781393d",
+            "contextPackId": "code_ctx_18xmo7r",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_15942bw"
+          }
+        },
+        {
+          "id": "cognicode-020",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "70b3b7a1-0150-45d1-b691-580e700db8f5",
+            "correctionId": "3b7381d2-f630-4017-9c03-b1b1b712287b",
+            "contextPackId": "code_ctx_sc1m6w",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_pzenwc"
+          }
+        },
+        {
+          "id": "cognicode-021",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "628d7a16-7cf9-47f0-b938-36fe04152812",
+            "correctionId": "16de2cea-604a-4e33-8d79-d85b94c62446",
+            "contextPackId": "code_ctx_sxmxkn",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_xznufc"
+          }
+        },
+        {
+          "id": "cognicode-022",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "642bf881-643e-4392-ac8a-8d0417a75f93",
+            "correctionId": "e5b98681-ab9f-47b5-b9f0-049e00998300",
+            "contextPackId": "code_ctx_1mpbdj3",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_14sf2hf"
+          }
+        },
+        {
+          "id": "cognicode-023",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.8333,
+          "evidence": {
+            "wrongActionId": "b39ce24e-00f7-4885-aa61-e7e4fc764cfb",
+            "correctionId": "37fc98f8-3732-45bf-a64a-36d95c9622b2",
+            "contextPackId": "code_ctx_qauku",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1i791z7"
+          }
+        },
+        {
+          "id": "cognicode-024",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "ce78b1c9-6b62-4a3a-b841-3f6a562dd12e",
+            "correctionId": "06519591-ef16-4cb9-8952-7545e05f8e9a",
+            "contextPackId": "code_ctx_17ukhsu",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_ber7wi"
+          }
+        },
+        {
+          "id": "cognicode-025",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "012bbbdc-d0a0-41cb-b810-7a5936f5cc8e",
+            "correctionId": "2e262219-3aaa-4ffe-b67f-e095757ec96d",
+            "contextPackId": "code_ctx_15h6umu",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_jvhjki"
+          }
+        },
+        {
+          "id": "cognicode-026",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "965ef808-33db-436d-87bb-872d2764afcc",
+            "correctionId": "084a9937-6eee-4a59-8647-6e7fefb51b04",
+            "contextPackId": "code_ctx_4raenr",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_wjzr1g"
+          }
+        },
+        {
+          "id": "cognicode-027",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "8fe060cc-3c43-47c9-a6d8-61175d809cd9",
+            "correctionId": "d21610e4-b60f-4caa-8b47-fddf77323189",
+            "contextPackId": "code_ctx_p3nwud",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1stny8j"
+          }
+        },
+        {
+          "id": "cognicode-028",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "bc8c1edb-2fc3-4615-a33f-0a65f14eda59",
+            "correctionId": "82d0db1c-5c1c-4bce-82fd-f10691d9c2d1",
+            "contextPackId": "code_ctx_14pfv1o",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1ezdf6h"
+          }
+        },
+        {
+          "id": "cognicode-029",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.8333,
+          "evidence": {
+            "wrongActionId": "493ae115-9515-43e7-9774-a318f7d02303",
+            "correctionId": "6d41bb9c-1187-499d-a8ae-96a779ae015b",
+            "contextPackId": "code_ctx_3itj9w",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_1iw9oic"
+          }
+        },
+        {
+          "id": "cognicode-030",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 1,
+          "evidence": {
+            "wrongActionId": "337eb46d-7181-40bf-9386-1ab654a77824",
+            "correctionId": "abe921bd-1e6e-4390-af9d-49235c093900",
+            "contextPackId": "code_ctx_4udu4n",
+            "actionGuardSeverity": "block",
+            "patchEvidenceTrailId": "patch_ev_iacymv"
+          }
+        }
+      ]
+    },
+    {
+      "system": "mem0",
+      "displayName": "Mem0",
+      "proofLevel": "same-run-api-shape",
+      "adapterMode": "api-shape",
+      "sameRun": true,
+      "vendorCredentialsUsed": false,
+      "scenarioCount": 30,
+      "score": 0.1111,
+      "metrics": {
+        "correctionCarryover": 0.6667,
+        "repeatedMistakeRate": 1,
+        "procedureRecall": 0,
+        "patchCorrectness": 0,
+        "evidenceCompleteness": 0,
+        "wrongMemorySuppression": 0,
+        "latencyP50Ms": 1,
+        "tokenBudget": 0
+      },
+      "capabilityGaps": [
+        "no typed coding-action guard",
+        "no patch evidence trail",
+        "limited temporal stale-rule suppression"
+      ],
+      "scenarios": [
+        {
+          "id": "cognicode-001",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-002",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-003",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-004",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-005",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-006",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-007",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-008",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-009",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-010",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-011",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-012",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-013",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-014",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-015",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-016",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-017",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-018",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-019",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-020",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-021",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-022",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-023",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-024",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-025",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-026",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-027",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-028",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-029",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-030",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.1667,
+          "evidence": {
+            "adapter": "mem0",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        }
+      ]
+    },
+    {
+      "system": "graphiti",
+      "displayName": "Graphiti/Zep",
+      "proofLevel": "same-run-api-shape",
+      "adapterMode": "api-shape",
+      "sameRun": true,
+      "vendorCredentialsUsed": false,
+      "scenarioCount": 30,
+      "score": 0.6667,
+      "metrics": {
+        "correctionCarryover": 1,
+        "repeatedMistakeRate": 0.8333,
+        "procedureRecall": 1,
+        "patchCorrectness": 0.6667,
+        "evidenceCompleteness": 1,
+        "wrongMemorySuppression": 0.1667,
+        "latencyP50Ms": 1,
+        "tokenBudget": 0
+      },
+      "capabilityGaps": [
+        "no first-class patch evidence trail",
+        "no pre-tool forbidden-action gate"
+      ],
+      "scenarios": [
+        {
+          "id": "cognicode-001",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-002",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-003",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-004",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.5,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-005",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 0.8333,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-006",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-007",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-008",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-009",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-010",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.5,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-011",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 0.8333,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-012",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-013",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-014",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-015",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-016",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.5,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-017",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 0.8333,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-018",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-019",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-020",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-021",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-022",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.5,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-023",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 0.8333,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-024",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-025",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-026",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-027",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-028",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.5,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-029",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 0.8333,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-030",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "graphiti",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        }
+      ]
+    },
+    {
+      "system": "cognee",
+      "displayName": "Cognee",
+      "proofLevel": "same-run-api-shape",
+      "adapterMode": "api-shape",
+      "sameRun": true,
+      "vendorCredentialsUsed": false,
+      "scenarioCount": 30,
+      "score": 0.4445,
+      "metrics": {
+        "correctionCarryover": 0.6667,
+        "repeatedMistakeRate": 1,
+        "procedureRecall": 0.6667,
+        "patchCorrectness": 0.6667,
+        "evidenceCompleteness": 0.6667,
+        "wrongMemorySuppression": 0,
+        "latencyP50Ms": 1,
+        "tokenBudget": 0
+      },
+      "capabilityGaps": [
+        "knowledge pipeline focus, not pre-tool action prevention",
+        "no command outcome evidence trail"
+      ],
+      "scenarios": [
+        {
+          "id": "cognicode-001",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-002",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-003",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-004",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-005",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-006",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-007",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-008",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-009",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-010",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-011",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-012",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-013",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-014",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-015",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-016",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-017",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-018",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-019",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-020",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-021",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-022",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-023",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-024",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-025",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-026",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-027",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-028",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-029",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-030",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "cognee",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        }
+      ]
+    },
+    {
+      "system": "langmem",
+      "displayName": "LangMem",
+      "proofLevel": "same-run-api-shape",
+      "adapterMode": "api-shape",
+      "sameRun": true,
+      "vendorCredentialsUsed": false,
+      "scenarioCount": 30,
+      "score": 0.2222,
+      "metrics": {
+        "correctionCarryover": 0.6667,
+        "repeatedMistakeRate": 1,
+        "procedureRecall": 0.6667,
+        "patchCorrectness": 0,
+        "evidenceCompleteness": 0,
+        "wrongMemorySuppression": 0,
+        "latencyP50Ms": 1,
+        "tokenBudget": 0
+      },
+      "capabilityGaps": [
+        "framework memory primitive, not productized connector/writeback proof",
+        "no typed graph-path or patch evidence trail"
+      ],
+      "scenarios": [
+        {
+          "id": "cognicode-001",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-002",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-003",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-004",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-005",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-006",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-007",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-008",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-009",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-010",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-011",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-012",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-013",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-014",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-015",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-016",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-017",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-018",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-019",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-020",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-021",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-022",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-023",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-024",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-025",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-026",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-027",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-028",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-029",
+          "checks": {
+            "correctionCarryover": false,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": false,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-030",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": false,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.3333,
+          "evidence": {
+            "adapter": "langmem",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        }
+      ]
+    },
+    {
+      "system": "gbrain",
+      "displayName": "GBrain",
+      "proofLevel": "same-run-api-shape",
+      "adapterMode": "api-shape",
+      "sameRun": true,
+      "vendorCredentialsUsed": false,
+      "scenarioCount": 30,
+      "score": 0.6667,
+      "metrics": {
+        "correctionCarryover": 1,
+        "repeatedMistakeRate": 0.8333,
+        "procedureRecall": 1,
+        "patchCorrectness": 0.6667,
+        "evidenceCompleteness": 1,
+        "wrongMemorySuppression": 0.1667,
+        "latencyP50Ms": 1,
+        "tokenBudget": 0
+      },
+      "capabilityGaps": [
+        "graph recall without self-hosted install wizard proof",
+        "no vendor connector writeback verifier"
+      ],
+      "scenarios": [
+        {
+          "id": "cognicode-001",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-002",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-003",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-004",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.5,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-005",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 0.8333,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-006",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-007",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-008",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-009",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-010",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.5,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-011",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 0.8333,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-012",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-013",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-014",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-015",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-016",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.5,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-017",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 0.8333,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-018",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-019",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-020",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-021",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-022",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.5,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-023",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 0.8333,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-024",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        },
+        {
+          "id": "cognicode-025",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "command_correction"
+          }
+        },
+        {
+          "id": "cognicode-026",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "architecture_correction"
+          }
+        },
+        {
+          "id": "cognicode-027",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "library_correction"
+          }
+        },
+        {
+          "id": "cognicode-028",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.5,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "forbidden_file_correction"
+          }
+        },
+        {
+          "id": "cognicode-029",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": true,
+            "procedureRecall": true,
+            "patchCorrectness": false,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": true
+          },
+          "score": 0.8333,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "temporal_migration_correction"
+          }
+        },
+        {
+          "id": "cognicode-030",
+          "checks": {
+            "correctionCarryover": true,
+            "repeatedMistakeAvoided": false,
+            "procedureRecall": true,
+            "patchCorrectness": true,
+            "evidenceCompleteness": true,
+            "wrongMemorySuppression": false
+          },
+          "score": 0.6667,
+          "evidence": {
+            "adapter": "gbrain",
+            "proofLevel": "same-run-api-shape",
+            "localCompatibilityModel": true,
+            "correctionType": "style_correction"
+          }
+        }
+      ]
+    }
   ],
-  "boundary": "Competitor rows are local API-shape compatibility adapters, not vendor-hosted certifications."
+  "leaderboard": [
+    {
+      "system": "Cognibrain",
+      "score": 0.9722,
+      "proofLevel": "same-run-full",
+      "repeatedMistakeRate": 0,
+      "gaps": 0
+    },
+    {
+      "system": "Graphiti/Zep",
+      "score": 0.6667,
+      "proofLevel": "same-run-api-shape",
+      "repeatedMistakeRate": 0.8333,
+      "gaps": 2
+    },
+    {
+      "system": "GBrain",
+      "score": 0.6667,
+      "proofLevel": "same-run-api-shape",
+      "repeatedMistakeRate": 0.8333,
+      "gaps": 2
+    },
+    {
+      "system": "Cognee",
+      "score": 0.4445,
+      "proofLevel": "same-run-api-shape",
+      "repeatedMistakeRate": 1,
+      "gaps": 2
+    },
+    {
+      "system": "LangMem",
+      "score": 0.2222,
+      "proofLevel": "same-run-api-shape",
+      "repeatedMistakeRate": 1,
+      "gaps": 2
+    },
+    {
+      "system": "Mem0",
+      "score": 0.1111,
+      "proofLevel": "same-run-api-shape",
+      "repeatedMistakeRate": 1,
+      "gaps": 3
+    }
+  ],
+  "winner": "Cognibrain",
+  "passed": true,
+  "publication": {
+    "publishedAt": "2026-05-26T04:28:13.533Z",
+    "channel": "static-json-html-md",
+    "claimScope": "Synthetic same-scenario engineering-memory benchmark with explicit proof levels."
+  }
 }

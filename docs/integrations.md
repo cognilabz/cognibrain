@@ -6,7 +6,7 @@ Cognibrain can run as a local agent memory layer, a connector-backed memory hub,
 
 ![Cognibrain connections CLI](assets/cli-connections.svg)
 
-Native drivers are implemented for:
+Native drivers are implemented for the systems below. Driver status is not the same as production certification; see the generated [Connector Maturity Matrix](integrations/connector-maturity.md) for fixture, live-smoke, writeback and certification status.
 
 | Category | Connectors |
 | --- | --- |
@@ -81,6 +81,7 @@ npm run verify:connectors
 npm run verify:vendor-connectors
 npm run verify:vendor-live
 npm run verify:compatibility
+npm run connectors:maturity
 ```
 
 Artifacts:
@@ -89,4 +90,6 @@ Artifacts:
 artifacts/connectors-live.json
 artifacts/vendor-connectors-live.json
 artifacts/vendor-live-smoke.json
+artifacts/connector-maturity.json
+docs/integrations/connector-maturity.md
 ```

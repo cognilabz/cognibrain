@@ -15,6 +15,8 @@ const steps = [
   ["docs audit", "npm", ["run", "audit:docs"]],
   ["Postgres verifier", "npm", ["run", "verify:postgres"]],
   ["connector compatibility", "npm", ["run", "verify:compatibility"]],
+  ["connector maturity", "npm", ["run", "connectors:maturity"]],
+  ["public benchmark publish", "npm", ["run", "leaderboard:publish"]],
   ["local runtime start", process.execPath, ["bin/cognibrain.mjs", "start"]],
   ["publish doctor", "npm", ["run", "doctor:publish"]],
   ["npm pack dry-run", "npm", ["pack", "--dry-run"]],

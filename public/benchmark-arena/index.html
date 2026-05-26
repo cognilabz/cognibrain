@@ -1,65 +1,52 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Cognibrain Benchmark Arena</title>
-    <style>
-      :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17201a; background: #f7f4ed; }
-      body { margin: 0; }
-      main { max-width: 1080px; margin: 0 auto; padding: 56px 24px 72px; }
-      header { display: grid; gap: 14px; margin-bottom: 36px; }
-      h1 { margin: 0; font-size: clamp(2.2rem, 6vw, 5rem); line-height: .92; letter-spacing: 0; }
-      p { max-width: 760px; line-height: 1.65; font-size: 1.05rem; }
-      .kicker { font-weight: 750; color: #2d6548; text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; }
-      .summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 28px 0; }
-      .summary div, table { background: #fffaf1; border: 1px solid #ded6c6; border-radius: 8px; box-shadow: 0 14px 36px rgb(30 24 14 / 8%); }
-      .summary div { padding: 18px; }
-      .summary span { display: block; color: #6d6556; font-size: .82rem; }
-      .summary strong { display: block; margin-top: 6px; font-size: 1.5rem; }
-      table { width: 100%; border-collapse: collapse; overflow: hidden; }
-      th, td { padding: 14px 16px; border-bottom: 1px solid #ebe4d6; text-align: left; }
-      th { color: #5b5347; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
-      td.score { font-weight: 760; }
-      tr:last-child td { border-bottom: 0; }
-      code { padding: 3px 7px; border-radius: 6px; background: #e8f0e9; color: #204933; }
-      .note { margin-top: 18px; color: #625b4f; font-size: .95rem; }
-      @media (max-width: 720px) { main { padding: 36px 16px 56px; } .summary { grid-template-columns: 1fr; } th, td { padding: 12px 10px; font-size: .88rem; } }
-    </style>
-  </head>
-  <body>
-    <main>
-      <header>
-        <span class="kicker">Same benchmark, no slogan</span>
-        <h1>Benchmark Arena</h1>
-        <p>Cognibrain runs the same engineering-memory correction scenarios against itself and API-shaped competitor adapters. The point is not a vague memory claim; it is whether the next patch avoids the corrected mistake with evidence.</p>
-      </header>
-      <section class="summary" aria-label="Benchmark summary">
-        <div><span>Winner</span><strong>Cognibrain</strong></div>
-        <div><span>Proof level</span><strong>same-run-full</strong></div>
-        <div><span>Repeated mistakes</span><strong>0.00%</strong></div>
-      </section>
-      <table>
-        <thead>
-          <tr>
-            <th>Rank</th>
-            <th>System</th>
-            <th>Score</th>
-            <th>Repeated mistake rate</th>
-            <th>Proof level</th>
-            <th>Gaps</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>1</td><td>Cognibrain</td><td class="score">97.22%</td><td>0.00%</td><td><code>same-run-full</code></td><td>0</td></tr>
-          <tr><td>2</td><td>Graphiti/Zep</td><td class="score">66.67%</td><td>83.33%</td><td><code>same-run-api-shape</code></td><td>2</td></tr>
-          <tr><td>3</td><td>GBrain</td><td class="score">66.67%</td><td>83.33%</td><td><code>same-run-api-shape</code></td><td>2</td></tr>
-          <tr><td>4</td><td>Cognee</td><td class="score">44.45%</td><td>100.00%</td><td><code>same-run-api-shape</code></td><td>2</td></tr>
-          <tr><td>5</td><td>LangMem</td><td class="score">22.22%</td><td>100.00%</td><td><code>same-run-api-shape</code></td><td>2</td></tr>
-          <tr><td>6</td><td>Mem0</td><td class="score">11.11%</td><td>100.00%</td><td><code>same-run-api-shape</code></td><td>3</td></tr>
-        </tbody>
-      </table>
-      <p class="note">Boundary: competitor rows are local compatibility adapters with declared gaps. They are not managed-cloud certifications or vendor-hosted benchmark results.</p>
-    </main>
-  </body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cognibrain Benchmark Arena</title>
+  <style>
+    :root { color-scheme: light; --ink:#17201a; --muted:#56635b; --line:#d9e2dc; --wash:#f5f8f5; --accent:#166447; }
+    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: #fff; }
+    main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 72px; }
+    h1 { font-size: clamp(2rem, 5vw, 4rem); line-height: 1; margin: 0 0 16px; letter-spacing: 0; }
+    p { color: var(--muted); font-size: 1.05rem; line-height: 1.6; }
+    table { border-collapse: collapse; width: 100%; margin: 28px 0; font-size: 0.96rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 12px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--wash); color: var(--ink); }
+    .badge { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; background: #fff; color: var(--accent); font-weight: 650; }
+    .callout { border-left: 4px solid var(--accent); padding: 12px 16px; background: var(--wash); margin: 28px 0; }
+    code { background: var(--wash); padding: 2px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Benchmark Arena</h1>
+    <p>Recall is not enough. The next code change has to prove the memory worked.</p>
+    <div class="callout">Generated at 2026-05-26T04:28:13.533Z from <code>artifacts/arena/run.json</code>. Synthetic same-scenario engineering-memory benchmark with explicit proof levels.</div>
+    <table>
+      <thead><tr><th>System</th><th>Score</th><th>Proof level</th><th>Repeated mistake rate</th><th>Gaps</th></tr></thead>
+      <tbody><tr><td>Cognibrain</td><td>0.9722</td><td><span class="badge">same-run-full</span></td><td>0.0000</td><td>0</td></tr>
+<tr><td>Graphiti/Zep</td><td>0.6667</td><td><span class="badge">same-run-api-shape</span></td><td>0.8333</td><td>2</td></tr>
+<tr><td>GBrain</td><td>0.6667</td><td><span class="badge">same-run-api-shape</span></td><td>0.8333</td><td>2</td></tr>
+<tr><td>Cognee</td><td>0.4445</td><td><span class="badge">same-run-api-shape</span></td><td>1.0000</td><td>2</td></tr>
+<tr><td>LangMem</td><td>0.2222</td><td><span class="badge">same-run-api-shape</span></td><td>1.0000</td><td>2</td></tr>
+<tr><td>Mem0</td><td>0.1111</td><td><span class="badge">same-run-api-shape</span></td><td>1.0000</td><td>3</td></tr></tbody>
+    </table>
+    <h2>Proof levels</h2>
+    <table>
+      <thead><tr><th>Level</th><th>Meaning</th></tr></thead>
+      <tbody><tr><td><span class="badge">local-baseline</span></td><td>Local baseline or fixture that does not represent a product run.</td></tr>
+<tr><td><span class="badge">public-claim-only</span></td><td>Public claim or documentation row without direct same-scenario execution.</td></tr>
+<tr><td><span class="badge">artifact-import</span></td><td>Adapter result was imported from a prior artifact and was not rerun.</td></tr>
+<tr><td><span class="badge">same-run-api-shape</span></td><td>Adapter executes the same scenario stream through a local API-shaped compatibility model with documented gaps.</td></tr>
+<tr><td><span class="badge">same-run-native</span></td><td>Adapter executes the same scenario stream through a real local package, SDK, or service configured by the operator.</td></tr>
+<tr><td><span class="badge">same-run-cloud-api</span></td><td>Adapter executes the same scenario stream against a hosted API using operator-supplied credentials.</td></tr>
+<tr><td><span class="badge">same-run-cli</span></td><td>Adapter executes the same scenario stream through a real CLI runner configured by the operator.</td></tr>
+<tr><td><span class="badge">same-run-full</span></td><td>Adapter executes the same scenario stream through the local product pipeline.</td></tr>
+<tr><td><span class="badge">vendor-signed</span></td><td>Vendor-reviewed or vendor-signed artifact for the same scenario contract.</td></tr>
+<tr><td><span class="badge">real-customer-field</span></td><td>Anonymized customer-field evidence from a real deployment, not a synthetic benchmark.</td></tr>
+<tr><td><span class="badge">planned</span></td><td>Adapter is listed for roadmap tracking only.</td></tr></tbody>
+    </table>
+  </main>
+</body>
 </html>

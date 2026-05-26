@@ -22,15 +22,15 @@
   <main>
     <h1>Benchmark Arena</h1>
     <p>Recall is not enough. The next code change has to prove the memory worked.</p>
-    <div class="callout">Generated at 2026-05-26T05:27:38.809Z from <code>artifacts/arena/run.json</code>. Synthetic same-scenario engineering-memory benchmark with explicit proof levels.</div>
+    <div class="callout">Generated at 2026-05-26T07:06:18.335Z from <code>artifacts/arena/run.json</code>. Synthetic same-scenario engineering-memory benchmark with explicit proof levels.</div>
     <table>
       <thead><tr><th>System</th><th>Score</th><th>Proof level</th><th>Repeated mistake rate</th><th>Gaps</th></tr></thead>
       <tbody><tr><td>Cognibrain</td><td>0.9722</td><td><span class="badge">same-run-full</span></td><td>0.0000</td><td>0</td></tr>
-<tr><td>Graphiti/Zep</td><td>0.6667</td><td><span class="badge">same-run-api-shape</span></td><td>0.8333</td><td>2</td></tr>
-<tr><td>Cognee</td><td>0.4445</td><td><span class="badge">same-run-api-shape</span></td><td>1.0000</td><td>2</td></tr>
-<tr><td>LangMem</td><td>0.2222</td><td><span class="badge">same-run-api-shape</span></td><td>1.0000</td><td>2</td></tr>
+<tr><td>LangMem</td><td>0.6667</td><td><span class="badge">same-run-native</span></td><td>1.0000</td><td>6</td></tr>
+<tr><td>Mem0</td><td>0.6667</td><td><span class="badge">same-run-native</span></td><td>1.0000</td><td>7</td></tr>
 <tr><td>GBrain</td><td>0.1556</td><td><span class="badge">same-run-cli</span></td><td>1.0000</td><td>5</td></tr>
-<tr><td>Mem0</td><td>0.1111</td><td><span class="badge">same-run-api-shape</span></td><td>1.0000</td><td>3</td></tr></tbody>
+<tr><td>Graphiti/Zep</td><td>0.0000</td><td><span class="badge">credential-blocked</span></td><td>1.0000</td><td>4</td></tr>
+<tr><td>Cognee</td><td>0.0000</td><td><span class="badge">credential-blocked</span></td><td>1.0000</td><td>4</td></tr></tbody>
     </table>
     <h2>Proof levels</h2>
     <table>
@@ -38,6 +38,7 @@
       <tbody><tr><td><span class="badge">local-baseline</span></td><td>Local baseline or fixture that does not represent a product run.</td></tr>
 <tr><td><span class="badge">public-claim-only</span></td><td>Public claim or documentation row without direct same-scenario execution.</td></tr>
 <tr><td><span class="badge">artifact-import</span></td><td>Adapter result was imported from a prior artifact and was not rerun.</td></tr>
+<tr><td><span class="badge">credential-blocked</span></td><td>A real runner exists, but this checked run could not execute the product path because required credentials or external services were not configured.</td></tr>
 <tr><td><span class="badge">same-run-api-shape</span></td><td>Adapter executes the same scenario stream through a local API-shaped compatibility model with documented gaps.</td></tr>
 <tr><td><span class="badge">same-run-native</span></td><td>Adapter executes the same scenario stream through a real local package, SDK, or service configured by the operator.</td></tr>
 <tr><td><span class="badge">same-run-cloud-api</span></td><td>Adapter executes the same scenario stream against a hosted API using operator-supplied credentials.</td></tr>

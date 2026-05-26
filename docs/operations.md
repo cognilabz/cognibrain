@@ -81,7 +81,7 @@ This repo does not claim:
 - deployment-specific SSO readiness,
 - tenant live connector certification,
 - production-certified connector rows,
-- real Mem0/GBrain/Graphiti/Cognee/LangMem runs in the checked artifact,
+- real Graphiti/Zep or Cognee runs without LLM/vendor credentials,
 - vendor-certified competitor benchmark results.
 
 Those claims require a deployment-specific control-plane run or vendor-hosted benchmark certification.

@@ -13,10 +13,10 @@ Every comparison starts with the table:
 | System | Score | Proof level | Repeated mistake rate | Gaps |
 | --- | ---: | --- | ---: | ---: |
 | Cognibrain | from artifact | same-run-full | from artifact | from artifact |
-| Mem0 | from adapter | same-run-native, same-run-cloud-api, artifact-import or same-run-api-shape | from artifact | from artifact |
-| Graphiti/Zep | from adapter | same-run-native, same-run-cloud-api, artifact-import or same-run-api-shape | from artifact | from artifact |
-| Cognee | from adapter | same-run-native, same-run-cloud-api, artifact-import or same-run-api-shape | from artifact | from artifact |
-| LangMem | from adapter | same-run-native, same-run-cli, artifact-import or same-run-api-shape | from artifact | from artifact |
+| Mem0 | from adapter | same-run-native, same-run-cloud-api, artifact-import, credential-blocked or same-run-api-shape | from artifact | from artifact |
+| Graphiti/Zep | from adapter | same-run-native, same-run-cloud-api, artifact-import, credential-blocked or same-run-api-shape | from artifact | from artifact |
+| Cognee | from adapter | same-run-native, same-run-cloud-api, artifact-import, credential-blocked or same-run-api-shape | from artifact | from artifact |
+| LangMem | from adapter | same-run-native, same-run-cli, artifact-import, credential-blocked or same-run-api-shape | from artifact | from artifact |
 | GBrain | from adapter | same-run-cli, artifact-import or same-run-api-shape | from artifact | from artifact |
 
 ## What CogniCodeBench Measures
@@ -36,9 +36,11 @@ It checks:
 
 `same-run-api-shape` means the row is a local compatibility model. It is honest, but it is not a real vendor run.
 
-GBrain is now checked as a real same-run-cli competitor row. The runner clones GBrain, initializes a local PGLite brain with no embedding key, captures each CogniCode correction, searches, opens the returned page, and reports the resulting checks.
+Mem0 and LangMem are now checked through real same-run-native package runners. Mem0 uses `mem0ai` with local Qdrant/FastEmbed and `infer=false`; LangMem uses `create_manage_memory_tool` and `create_search_memory_tool` with LangGraph `InMemoryStore`.
 
-Mem0 remains same-run-api-shape in the checked artifact because no MEM0_API_KEY was available. The native runner verifies `mem0ai@3.0.3` and `@mem0/cli@0.2.7`; it upgrades to `same-run-cloud-api` when credentials are supplied. Graphiti/Zep, Cognee and LangMem remain API-shape until native/cloud runners or imported artifacts are configured.
+GBrain is checked as a real same-run-cli competitor row. The runner clones GBrain, initializes a local PGLite brain with no embedding key, captures each CogniCode correction, searches, opens the returned page, and reports the resulting checks.
+
+Graphiti/Zep and Cognee are credential-blocked in the checked artifact unless LLM/vendor credentials are supplied. That is intentional: no API-shape score is substituted when the real package path cannot execute.
 
 Use these environment variables to raise a competitor row to a stronger proof level:
 

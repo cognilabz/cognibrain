@@ -24,13 +24,13 @@ Current local result, 30 deterministic engineering-memory scenarios:
 | System | Score | Proof level | Repeated mistake rate | Gaps |
 | --- | ---: | --- | ---: | ---: |
 | Cognibrain | 0.9722 | same-run-full | 0 | 0 |
-| Graphiti/Zep | 0.6667 | same-run-api-shape | 0.8333 | 2 |
-| Cognee | 0.4445 | same-run-api-shape | 1 | 2 |
-| LangMem | 0.2222 | same-run-api-shape | 1 | 2 |
-| GBrain | 0.1778 | same-run-cli | 1 | 5 |
-| Mem0 | 0.1111 | same-run-api-shape | 1 | 3 |
+| LangMem | 0.6667 | same-run-native | 1 | 6 |
+| Mem0 | 0.6667 | same-run-native | 1 | 7 |
+| GBrain | 0.1556 | same-run-cli | 1 | 5 |
+| Graphiti/Zep | 0.0000 | credential-blocked | 1 | 4 |
+| Cognee | 0.0000 | credential-blocked | 1 | 4 |
 
-Boundary: competitor rows are local API-shape compatibility adapters unless their proof level says otherwise. They are not vendor-hosted certifications. Cognibrain's row uses the full local implementation. GBrain is now checked as a real same-run-cli competitor row through `gbrain capture/search/get` from a cloned GBrain repo. Mem0 remains same-run-api-shape in the checked artifact because no MEM0_API_KEY was available; `artifacts/arena/native-competitors.json` records the install check and credential block.
+Boundary: competitor rows are only as strong as their proof level. Cognibrain's row uses the full local implementation. Mem0 and LangMem are now checked through real same-run-native package runners. GBrain is checked as a real same-run-cli competitor row through `gbrain capture/search/get` from a cloned GBrain repo. Graphiti/Zep and Cognee are credential-blocked unless LLM/vendor credentials are supplied; no API-shape score is shown for them in the checked artifact.
 
 Arena v2 can raise a competitor row when an external runner or artifact is configured:
 
@@ -41,7 +41,7 @@ MEMORY_ARENA_GBRAIN_COMMAND="gbrain arena-run --json" npm run benchmark:arena
 MEMORY_ARENA_COGNEE_ARTIFACT=artifacts/vendor/cognee-arena.json npm run benchmark:arena
 ```
 
-Without a runner or artifact, competitor rows stay `same-run-api-shape`.
+Without a runner or artifact, competitor rows stay `same-run-api-shape`. With a runner that cannot execute because credentials or services are missing, the row is `credential-blocked`.
 
 Native competitor run:
 
@@ -49,7 +49,7 @@ Native competitor run:
 npm run benchmark:competitors:native
 ```
 
-This installs/checks `mem0ai@3.0.3`, `@mem0/cli@0.2.7` and `gbrain@0.41.14.0`. With the current environment, GBrain produced a same-run-cli row and Mem0 was installed but not executed against the cloud API because no MEM0_API_KEY was configured.
+This installs/checks `mem0ai==2.0.2`, `graphiti-core[kuzu]==0.29.1`, `langmem==0.0.30`, `cognee==1.1.0`, `fastembed==0.7.3`, `@mem0/cli@0.2.7` and `gbrain@0.41.14.0`. With the current environment, Mem0 and LangMem produced same-run-native rows, GBrain produced a same-run-cli row, and Graphiti/Zep plus Cognee were credential-blocked because no LLM/vendor keys were configured.
 
 Run the code-first truth gate when you want to see whether the checked artifact is still only API-shape or has real competitor runners:
 

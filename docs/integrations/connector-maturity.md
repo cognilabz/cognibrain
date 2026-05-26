@@ -1,6 +1,6 @@
 # Connector Maturity Matrix
 
-Generated from the CLI connector registry and verification artifacts at 2026-05-26T05:27:38.189Z.
+Generated from the CLI connector registry and verification artifacts at 2026-05-26T07:06:17.716Z.
 
 Native connector means there is a first-party connector manifest and driver path. It does not mean customer production certification unless the production-certified column is true.
 

@@ -10,6 +10,7 @@ type ProofLevel =
   | "local-baseline"
   | "public-claim-only"
   | "artifact-import"
+  | "credential-blocked"
   | "same-run-api-shape"
   | "same-run-native"
   | "same-run-cloud-api"
@@ -19,7 +20,7 @@ type ProofLevel =
   | "real-customer-field"
   | "planned";
 
-type AdapterMode = "full-local" | "api-shape" | "native-command" | "cloud-command" | "cli-command" | "artifact-import" | "planned" | "public-claim";
+type AdapterMode = "full-local" | "api-shape" | "native-command" | "cloud-command" | "cli-command" | "blocked-command" | "artifact-import" | "planned" | "public-claim";
 
 interface BenchmarkEvent {
   scenarioId: string;
@@ -170,6 +171,7 @@ export async function runBenchmarkArena(options: { systems?: string[]; benchmark
         "local-baseline": "Local baseline or fixture that does not represent a product run.",
         "public-claim-only": "Public claim or documentation row without direct same-scenario execution.",
         "artifact-import": "Adapter result was imported from a prior artifact and was not rerun.",
+        "credential-blocked": "A real runner exists, but this checked run could not execute the product path because required credentials or external services were not configured.",
         "same-run-api-shape": "Adapter executes the same scenario stream through a local API-shaped compatibility model with documented gaps.",
         "same-run-native": "Adapter executes the same scenario stream through a real local package, SDK, or service configured by the operator.",
         "same-run-cloud-api": "Adapter executes the same scenario stream against a hosted API using operator-supplied credentials.",
@@ -449,6 +451,9 @@ class CommandRunnerAdapter extends ProfileAdapter {
       };
     }
     const parsed = parseRunnerOutput(result.stdout);
+    const runnerProof = normalizeProofLevel(parsed?.proofLevel);
+    if (runnerProof) this.proofLevel = runnerProof;
+    if (isAdapterMode(parsed?.adapterMode)) this.adapterMode = parsed.adapterMode;
     const checks = normalizeChecks(parsed?.checks) ?? checksFromRunnerText(scenario, JSON.stringify(parsed ?? result.stdout));
     this.addCapabilityGaps(parsed?.capabilityGaps);
     return {
@@ -583,6 +588,15 @@ function autoNativeAdapter(id: Exclude<MemorySystemId, "cognibrain">, profile: C
       adapterMode: "cloud-command"
     });
   }
+  if (["mem0", "graphiti", "cognee", "langmem"].includes(id) && existsSync(".cognibrain/native-runners/competitors-venv/bin/python") && existsSync("scripts/competitors/native-python-runner.mjs")) {
+    const proofLevel = id === "graphiti" || id === "cognee" ? "credential-blocked" : "same-run-native";
+    return new CommandRunnerAdapter(id, profile, {
+      command: `${process.execPath} scripts/competitors/native-python-runner.mjs --system ${id}`,
+      commandEnv: `${envPrefix}_COMMAND:auto-native-python`,
+      proofLevel,
+      adapterMode: proofLevel === "credential-blocked" ? "blocked-command" : "native-command"
+    });
+  }
   return undefined;
 }
 
@@ -604,7 +618,7 @@ function loadImportedScenarios(path: string, id: MemorySystemId): Map<string, Ar
   return map;
 }
 
-function parseRunnerOutput(stdout: string): { checks?: Partial<ArenaScenarioResult["checks"]>; evidence?: Record<string, unknown>; capabilityGaps?: string[]; latencyMs?: number } | undefined {
+function parseRunnerOutput(stdout: string): { checks?: Partial<ArenaScenarioResult["checks"]>; evidence?: Record<string, unknown>; capabilityGaps?: string[]; latencyMs?: number; proofLevel?: string; adapterMode?: string } | undefined {
   const trimmed = stdout.trim();
   if (!trimmed) return undefined;
   try {
@@ -657,8 +671,12 @@ function emptyChecks(): ArenaScenarioResult["checks"] {
 }
 
 function normalizeProofLevel(value: string | undefined): ProofLevel | undefined {
-  const proofLevels: ProofLevel[] = ["local-baseline", "public-claim-only", "artifact-import", "same-run-api-shape", "same-run-native", "same-run-cloud-api", "same-run-cli", "same-run-full", "vendor-signed", "real-customer-field", "planned"];
+  const proofLevels: ProofLevel[] = ["local-baseline", "public-claim-only", "artifact-import", "credential-blocked", "same-run-api-shape", "same-run-native", "same-run-cloud-api", "same-run-cli", "same-run-full", "vendor-signed", "real-customer-field", "planned"];
   return proofLevels.includes(value as ProofLevel) ? value as ProofLevel : undefined;
+}
+
+function isAdapterMode(value: string | undefined): value is AdapterMode {
+  return ["full-local", "api-shape", "native-command", "cloud-command", "cli-command", "blocked-command", "artifact-import", "planned", "public-claim"].includes(String(value));
 }
 
 function tail(value: string | undefined): string {

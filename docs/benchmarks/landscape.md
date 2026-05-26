@@ -19,6 +19,7 @@ Cognibrain does not try to win every memory benchmark by stretching the claim. I
 | local-baseline | Local baseline or fixture that does not represent a product run. |
 | public-claim-only | Public claim or documentation row without direct same-scenario execution. |
 | artifact-import | Result imported from an artifact; useful, but not rerun in this checkout. |
+| credential-blocked | A real runner exists, but required credentials or services were not configured. |
 | same-run-api-shape | Same scenario stream through a compatibility model with declared gaps. |
 | same-run-native | Same scenario stream through a real local package, SDK or service. |
 | same-run-cloud-api | Same scenario stream through a hosted API with operator-supplied credentials. |

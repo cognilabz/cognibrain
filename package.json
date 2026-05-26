@@ -55,7 +55,7 @@
     "benchmark:nextgen": "tsx src/eval/nextgenBenchmarks.ts --out artifacts/nextgen-benchmarks.json",
     "benchmark:cognicode:generate": "tsx src/eval/cognicodeBench.ts --generate-only --count 100 --scenarios-out artifacts/cognicodebench/scenarios.json --out artifacts/cognicodebench/generate-report.json",
     "benchmark:cognicode": "tsx src/eval/cognicodeBench.ts --count 100 --scenarios-out artifacts/cognicodebench/scenarios.json --out artifacts/cognicodebench/run.json",
-    "benchmark:arena": "tsx src/eval/arena.ts --systems cognibrain,mem0,graphiti,cognee,langmem,gbrain --benchmark cognicode --out artifacts/arena/run.json && npm run benchmark:arena:publish",
+    "benchmark:arena": "node scripts/benchmark-native-competitors.mjs",
     "benchmark:arena:run": "tsx src/eval/arena.ts --systems cognibrain,mem0,graphiti,cognee,langmem,gbrain --benchmark cognicode --out artifacts/arena/run.json",
     "benchmark:arena:publish": "tsx src/eval/publishArena.ts --input artifacts/arena/run.json --out public/benchmark-arena --markdown docs/benchmarks/latest-arena.md",
     "benchmark:competitors:native": "node scripts/benchmark-native-competitors.mjs",

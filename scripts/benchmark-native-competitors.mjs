@@ -6,20 +6,37 @@ import { spawnSync } from "node:child_process";
 const root = new URL("..", import.meta.url).pathname;
 const out = optionValue("--out") ?? "artifacts/arena/native-competitors.json";
 const count = optionValue("--count") ?? "30";
+const pythonVenv = process.env.MEMORY_ARENA_COMPETITOR_VENV ?? join(root, ".cognibrain", "native-runners", "competitors-venv");
+const pythonBin = process.env.MEMORY_ARENA_COMPETITOR_PYTHON ?? join(pythonVenv, "bin", "python");
 const gbrainRepo = process.env.MEMORY_ARENA_GBRAIN_REPO ?? join(root, ".cognibrain", "vendor", "gbrain");
 const gbrainHome = process.env.MEMORY_ARENA_GBRAIN_HOME ?? join(root, ".cognibrain", "native-runners", "gbrain-home");
 
 const installations = {
-  mem0: installMem0(),
+  pythonCompetitors: installPythonCompetitors(),
+  mem0: installMem0Cli(),
+  graphiti: pythonPackageStatus("graphiti-core"),
+  cognee: pythonPackageStatus("cognee"),
+  langmem: pythonPackageStatus("langmem"),
   gbrain: installGBrain()
 };
 
 const env = {
   ...process.env,
+  MEMORY_ARENA_COMPETITOR_PYTHON: pythonBin,
+  MEMORY_ARENA_MEM0_COMMAND: `${process.execPath} ${join(root, "scripts", "competitors", "native-python-runner.mjs")} --system mem0`,
+  MEMORY_ARENA_MEM0_PROOF_LEVEL: "same-run-native",
+  MEMORY_ARENA_GRAPHITI_COMMAND: `${process.execPath} ${join(root, "scripts", "competitors", "native-python-runner.mjs")} --system graphiti`,
+  MEMORY_ARENA_GRAPHITI_PROOF_LEVEL: "credential-blocked",
+  MEMORY_ARENA_COGNEE_COMMAND: `${process.execPath} ${join(root, "scripts", "competitors", "native-python-runner.mjs")} --system cognee`,
+  MEMORY_ARENA_COGNEE_PROOF_LEVEL: "credential-blocked",
+  MEMORY_ARENA_LANGMEM_COMMAND: `${process.execPath} ${join(root, "scripts", "competitors", "native-python-runner.mjs")} --system langmem`,
+  MEMORY_ARENA_LANGMEM_PROOF_LEVEL: "same-run-native",
   MEMORY_ARENA_GBRAIN_COMMAND: `${process.execPath} ${join(root, "scripts", "competitors", "gbrain-runner.mjs")}`,
   MEMORY_ARENA_GBRAIN_PROOF_LEVEL: "same-run-cli",
   MEMORY_ARENA_GBRAIN_REPO: gbrainRepo,
-  MEMORY_ARENA_GBRAIN_HOME: gbrainHome
+  MEMORY_ARENA_GBRAIN_HOME: gbrainHome,
+  MEMORY_ARENA_RUNNER_TIMEOUT_MS: process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS ?? "120000",
+  MEMORY_ARENA_PYTHON_RUNNER_TIMEOUT_MS: process.env.MEMORY_ARENA_PYTHON_RUNNER_TIMEOUT_MS ?? "120000"
 };
 
 if (process.env.MEM0_API_KEY || process.env.MEMORY_ARENA_MEM0_API_KEY) {
@@ -53,7 +70,52 @@ const report = writeReport({ installations, arena: commandEntry(arena), publishe
 console.log(JSON.stringify(report, null, 2));
 if (publish.status !== 0) process.exit(publish.status ?? 1);
 
-function installMem0() {
+function installPythonCompetitors() {
+  const uv = spawnSync("uv", ["--version"], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 30_000,
+    maxBuffer: 4 * 1024 * 1024
+  });
+  if (uv.status !== 0) return { installed: false, blockedReason: "uv is required to install isolated Python competitor packages", uv: commandEntry(uv), venv: pythonVenv, install: null };
+
+  const pythonCandidate = process.env.MEMORY_ARENA_PYTHON ?? "/opt/homebrew/bin/python3.13";
+  let venv = { status: 0, stdout: "already exists", stderr: "" };
+  if (!existsSync(pythonBin)) {
+    mkdirSync(dirname(pythonVenv), { recursive: true });
+    venv = spawnSync("uv", ["venv", pythonVenv, "--python", pythonCandidate], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 180_000,
+      maxBuffer: 20 * 1024 * 1024
+    });
+    if (venv.status !== 0) return { installed: false, uv: commandEntry(uv), venv: pythonVenv, create: commandEntry(venv), install: null };
+  }
+
+  const packages = [
+    "mem0ai==2.0.2",
+    "graphiti-core[kuzu]==0.29.1",
+    "langmem==0.0.30",
+    "cognee==1.1.0",
+    "fastembed==0.7.3"
+  ];
+  const install = spawnSync("uv", ["pip", "install", "--python", pythonBin, ...packages], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 600_000,
+    maxBuffer: 80 * 1024 * 1024
+  });
+  return {
+    installed: install.status === 0 && existsSync(pythonBin),
+    python: pythonBin,
+    packages,
+    uv: commandEntry(uv),
+    create: commandEntry(venv),
+    install: commandEntry(install)
+  };
+}
+
+function installMem0Cli() {
   const cli = spawnSync("npm", ["exec", "--yes", "--package", "@mem0/cli@0.2.7", "--", "mem0", "--version"], {
     cwd: root,
     encoding: "utf8",
@@ -73,13 +135,13 @@ function installMem0() {
     maxBuffer: 20 * 1024 * 1024
   });
   return {
-    package: "mem0ai@3.0.3 + @mem0/cli@0.2.7",
+    package: "mem0ai@3.0.3 npm metadata + @mem0/cli@0.2.7; native Python runner uses mem0ai==2.0.2",
     installed: cli.status === 0 && sdk.status === 0 && registry.status === 0,
     cli: commandEntry(cli),
     sdk: commandEntry(sdk),
     registry: commandEntry(registry),
     liveRunnable: Boolean(process.env.MEM0_API_KEY || process.env.MEMORY_ARENA_MEM0_API_KEY),
-    blockedReason: process.env.MEM0_API_KEY || process.env.MEMORY_ARENA_MEM0_API_KEY ? null : "missing MEM0_API_KEY or MEMORY_ARENA_MEM0_API_KEY"
+    blockedReason: process.env.MEM0_API_KEY || process.env.MEMORY_ARENA_MEM0_API_KEY ? null : "missing MEM0_API_KEY or MEMORY_ARENA_MEM0_API_KEY for Mem0 cloud; native OSS runner still executes"
   };
 }
 
@@ -134,9 +196,9 @@ function writeReport(details) {
       runner: system.runner
     })),
     realCompetitorRuns: systems.filter((system) => system.system !== "cognibrain" && ["same-run-native", "same-run-cloud-api", "same-run-cli", "vendor-signed", "real-customer-field"].includes(system.proofLevel)).length,
-    blocked: [
-      details.installations.mem0.blockedReason ? { system: "mem0", reason: details.installations.mem0.blockedReason } : null
-    ].filter(Boolean)
+    blocked: systems
+      .filter((system) => system.system !== "cognibrain" && system.proofLevel === "credential-blocked")
+      .map((system) => ({ system: system.system, displayName: system.displayName, gaps: system.capabilityGaps }))
   };
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
@@ -167,6 +229,23 @@ function readVersion(path) {
   } catch {
     return null;
   }
+}
+
+function pythonPackageStatus(packageName) {
+  if (!existsSync(pythonBin)) return { package: packageName, installed: false, version: null, python: pythonBin };
+  const version = spawnSync(pythonBin, ["-c", `import importlib.metadata as m; print(m.version(${JSON.stringify(packageName)}))`], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 30_000,
+    maxBuffer: 4 * 1024 * 1024
+  });
+  return {
+    package: packageName,
+    installed: version.status === 0,
+    version: version.status === 0 ? version.stdout.trim() : null,
+    python: pythonBin,
+    check: commandEntry(version)
+  };
 }
 
 function tail(value = "", limit = 3000) {

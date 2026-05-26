@@ -138,15 +138,15 @@ Current local Benchmark Arena result, 30 deterministic engineering-memory scenar
 | System | Score | Proof level | Repeated mistake rate | Gaps |
 | --- | ---: | --- | ---: | ---: |
 | Cognibrain | 0.9722 | same-run-full | 0 | 0 |
-| Graphiti/Zep | 0.6667 | same-run-api-shape | 0.8333 | 2 |
-| Cognee | 0.4445 | same-run-api-shape | 1 | 2 |
-| LangMem | 0.2222 | same-run-api-shape | 1 | 2 |
-| GBrain | 0.1778 | same-run-cli | 1 | 5 |
-| Mem0 | 0.1111 | same-run-api-shape | 1 | 3 |
+| LangMem | 0.6667 | same-run-native | 1 | 6 |
+| Mem0 | 0.6667 | same-run-native | 1 | 7 |
+| GBrain | 0.1556 | same-run-cli | 1 | 5 |
+| Graphiti/Zep | 0.0000 | credential-blocked | 1 | 4 |
+| Cognee | 0.0000 | credential-blocked | 1 | 4 |
 
-Boundary: competitor rows are local API-shape compatibility adapters unless their proof level says otherwise. Cognibrain's row runs the full local implementation. GBrain is now checked as a real same-run-cli competitor row through `gbrain capture/search/get` on the same scenario stream. Mem0 remains same-run-api-shape in the checked artifact because no MEM0_API_KEY was available; the runner and install check are in `artifacts/arena/native-competitors.json`. See [docs/benchmarks.md](docs/benchmarks.md).
+Boundary: competitor rows are only as strong as their proof level. Cognibrain's row runs the full local implementation. Mem0 and LangMem are now checked through real same-run-native package runners. GBrain is checked as a real same-run-cli competitor row through `gbrain capture/search/get`. Graphiti/Zep and Cognee are credential-blocked unless LLM/vendor credentials are supplied; no API-shape score is shown for them in the checked artifact. See [docs/benchmarks.md](docs/benchmarks.md).
 
-Arena v2 also supports stronger competitor proof when you configure real native/cloud/CLI runners or import a vendor artifact. The row stays `same-run-api-shape` until that happens. See [Same Benchmark](docs/market/same-benchmark.md) and the generated [Latest Arena](docs/benchmarks/latest-arena.md).
+Arena v2 supports native package runners, cloud/API runners, CLI runners and imported vendor artifacts. Rows stay `credential-blocked` or `same-run-api-shape` until code executes the stronger path. See [Same Benchmark](docs/market/same-benchmark.md) and the generated [Latest Arena](docs/benchmarks/latest-arena.md).
 
 CogniCodeBench also runs 100 deterministic synthetic coding-agent scenarios:
 

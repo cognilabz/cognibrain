@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 const root = new URL("..", import.meta.url).pathname;
 const artifactPath = join(root, "artifacts", "product-truth-audit.json");
 const realCompetitorLevels = new Set(["same-run-native", "same-run-cloud-api", "same-run-cli", "vendor-signed", "real-customer-field"]);
-const acceptableModeledLevels = new Set(["same-run-api-shape", "artifact-import", "public-claim-only", "planned"]);
+const acceptableModeledLevels = new Set(["same-run-api-shape", "artifact-import", "credential-blocked", "public-claim-only", "planned"]);
 
 const files = {
   packageJson: readJson("package.json", {}),
@@ -27,6 +27,7 @@ const arenaSystems = Array.isArray(files.arena.systems) ? files.arena.systems : 
 const competitors = arenaSystems.filter((system) => system.system !== "cognibrain");
 const realCompetitors = competitors.filter((system) => realCompetitorLevels.has(system.proofLevel));
 const apiShapeCompetitors = competitors.filter((system) => system.proofLevel === "same-run-api-shape");
+const blockedCompetitors = competitors.filter((system) => system.proofLevel === "credential-blocked");
 const unsupportedCompetitorLevels = competitors.filter((system) => !realCompetitorLevels.has(system.proofLevel) && !acceptableModeledLevels.has(system.proofLevel));
 const cognibrainArena = arenaSystems.find((system) => system.system === "cognibrain");
 
@@ -56,10 +57,10 @@ const checks = [
   check("arena-proof-levels-known", "Every competitor row uses a known proof level.", unsupportedCompetitorLevels.length === 0, "fail", {
     unsupported: unsupportedCompetitorLevels.map((system) => `${system.displayName ?? system.system}:${system.proofLevel}`)
   }),
-  check("benchmark-docs-boundary", "Benchmark docs explicitly separate the GBrain same-run CLI artifact from API-shape and credential-blocked competitor rows.", docsContainAll([
-    "GBrain is now checked as a real same-run-cli competitor row",
-    "Mem0 remains same-run-api-shape in the checked artifact because no MEM0_API_KEY was available",
-    "competitor rows are local API-shape compatibility adapters unless their proof level says otherwise"
+  check("benchmark-docs-boundary", "Benchmark docs explicitly separate real native/CLI rows from credential-blocked rows.", docsContainAll([
+    "Mem0 and LangMem are now checked through real same-run-native package runners",
+    "GBrain is checked as a real same-run-cli competitor row",
+    "Graphiti/Zep and Cognee are credential-blocked unless LLM/vendor credentials are supplied"
   ]), "fail", {
     docs: ["README.md", "docs/benchmarks.md", "docs/claims.md", "docs/market/same-benchmark.md"]
   }),
@@ -126,6 +127,7 @@ const report = {
     openGaps: gaps.length,
     realCompetitorRuns: realCompetitors.length,
     apiShapeCompetitors: apiShapeCompetitors.length,
+    blockedCompetitors: blockedCompetitors.length,
     nativeConnectorRows: maturityRows.length,
     hermeticDrivers: hermeticRows.length,
     apiSpecVerifiedConnectors: apiSpecVerifiedRows.length,
@@ -138,6 +140,7 @@ const report = {
     ["arena.cognibrain.proof", cognibrainArena?.proofLevel ?? "missing", "artifacts/arena/run.json"],
     ["arena.competitors.realRuns", realCompetitors.length, "artifacts/arena/run.json"],
     ["arena.competitors.apiShape", apiShapeCompetitors.length, "artifacts/arena/run.json"],
+    ["arena.competitors.credentialBlocked", blockedCompetitors.length, "artifacts/arena/run.json"],
     ["connectors.hermeticDrivers", hermeticRows.length, "artifacts/connector-maturity.json"],
     ["connectors.apiSpecVerified", apiSpecVerifiedRows.length, "artifacts/vendor-api-specs.json"],
     ["connectors.tenantLiveSmokes", liveSmokeRows.length, "artifacts/vendor-live-smoke.json"],

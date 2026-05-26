@@ -42,9 +42,9 @@ const checks = [
   check("marketing claims are bounded by evidence", [
     has(files.readme, "Self-hosted engineering memory for coding agents"),
     has(files.readme, "Stop fixing the same agent mistake twice"),
-    has(files.readme, "Boundary: competitor rows are local API-shape compatibility adapters"),
+    has(files.readme, "Boundary: competitor rows are only as strong as their proof level"),
     has(files.claims, "does not currently claim Managed SaaS uptime"),
-    has(files.benchmarks, "not vendor-hosted certifications"),
+    has(files.benchmarks, "Graphiti/Zep and Cognee are credential-blocked unless LLM/vendor credentials are supplied"),
     has(files.landscape, "real-customer-field"),
     has(files.sameBenchmark, "Recall is not enough"),
     has(files.integrations, "Connector Maturity Matrix"),

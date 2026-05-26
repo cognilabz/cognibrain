@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T05:27:38.330Z",
+  "generatedAt": "2026-05-26T07:06:17.843Z",
   "mode": "code_truth_audit",
   "passed": true,
   "planComplete": false,
@@ -9,8 +9,9 @@
     "passed": 11,
     "failures": 0,
     "openGaps": 1,
-    "realCompetitorRuns": 1,
-    "apiShapeCompetitors": 4,
+    "realCompetitorRuns": 3,
+    "apiShapeCompetitors": 0,
+    "blockedCompetitors": 2,
     "nativeConnectorRows": 19,
     "hermeticDrivers": 19,
     "apiSpecVerifiedConnectors": 19,
@@ -27,12 +28,17 @@
     ],
     [
       "arena.competitors.realRuns",
-      1,
+      3,
       "artifacts/arena/run.json"
     ],
     [
       "arena.competitors.apiShape",
-      4,
+      0,
+      "artifacts/arena/run.json"
+    ],
+    [
+      "arena.competitors.credentialBlocked",
+      2,
       "artifacts/arena/run.json"
     ],
     [
@@ -85,14 +91,11 @@
       "evidence": {
         "artifact": "artifacts/arena/run.json",
         "realCompetitorRuns": [
+          "Mem0:same-run-native",
+          "LangMem:same-run-native",
           "GBrain:same-run-cli"
         ],
-        "apiShapeCompetitors": [
-          "Mem0",
-          "Graphiti/Zep",
-          "Cognee",
-          "LangMem"
-        ]
+        "apiShapeCompetitors": []
       }
     },
     {
@@ -106,7 +109,7 @@
     },
     {
       "id": "benchmark-docs-boundary",
-      "message": "Benchmark docs explicitly separate the GBrain same-run CLI artifact from API-shape and credential-blocked competitor rows.",
+      "message": "Benchmark docs explicitly separate real native/CLI rows from credential-blocked rows.",
       "passed": true,
       "severity": "fail",
       "evidence": {

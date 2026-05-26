@@ -80,7 +80,7 @@ Recall is not enough. The next code change has to prove the memory worked.
 | --- | ---: | --- | ---: | ---: |
 ${rows}
 
-Boundary: competitor rows are only as strong as their proof level. \`same-run-api-shape\` is a local compatibility model. \`same-run-native\`, \`same-run-cloud-api\` and \`same-run-cli\` require configured external runners.
+Boundary: competitor rows are only as strong as their proof level. \`same-run-api-shape\` is a local compatibility model. \`credential-blocked\` means the real runner exists but could not execute without required credentials or services. \`same-run-native\`, \`same-run-cloud-api\` and \`same-run-cli\` require configured external runners.
 
 ## Proof Levels
 

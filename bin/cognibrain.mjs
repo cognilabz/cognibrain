@@ -143,12 +143,24 @@ async function cliHome(homeArgs = []) {
     usage(0);
     return;
   }
-  const result = await cliHomeData();
+  const result = await cliAppData();
   if (homeArgs.includes("--json")) {
     printJson(result);
     return;
   }
-  await renderCliSurface("home", result, { title: "cognibrain CLI home" });
+  if (homeArgs.includes("--classic")) {
+    await renderCliSurface("home", result, { title: "cognibrain CLI home" });
+    return;
+  }
+  try {
+    const { renderInteractiveCliApp } = await import(pathToFileURL(join(root, "src", "cli", "inkApp.mjs")).href);
+    await renderInteractiveCliApp(result, {
+      interactive: process.stdout.isTTY === true && process.env.COGNIBRAIN_FORCE_INK !== "true" && !homeArgs.includes("--snapshot"),
+      snapshotMs: Number(process.env.COGNIBRAIN_CLI_SNAPSHOT_MS ?? 80)
+    });
+  } catch {
+    await renderCliSurface("home", result, { title: "cognibrain CLI home" });
+  }
 }
 
 async function statusCommand(statusArgs = []) {
@@ -382,8 +394,10 @@ async function doctor(doctorArgs) {
     const packOutput = `${pack.stdout}\n${pack.stderr}`;
     const allowedPackArtifacts = [
       "artifacts/arena/run.json",
+      "artifacts/arena/native-competitors.json",
       "artifacts/connector-maturity.json",
       "artifacts/product-truth-audit.json",
+      "artifacts/vendor-api-specs.json",
       "artifacts/vendor-live-smoke.json"
     ];
     const unexpectedArtifacts = packOutput
@@ -1379,6 +1393,46 @@ async function cliHomeData() {
       "cognibrain service install --activate",
       "cognibrain dashboard"
     ]
+  };
+}
+
+async function cliAppData() {
+  const home = await cliHomeData();
+  const apiSpec = readJson(join(root, "artifacts", "vendor-api-specs.json"), {
+    schemaVersion: "1.0",
+    generatedAt: null,
+    passed: false,
+    summary: { total: 0, passed: 0, failed: 0 },
+    rows: []
+  });
+  return {
+    ...home,
+    surface: "interactive-ink-cli",
+    configCatalog: configCatalog(),
+    connectors: {
+      ...home.connections.connectors,
+      catalog: connectorCatalog(),
+      doctor: connectorDoctor(),
+      apiSpec: {
+        ...apiSpec,
+        artifact: "artifacts/vendor-api-specs.json"
+      }
+    },
+    adapters: {
+      ...home.connections.adapters,
+      catalog: adapterCatalog(),
+      doctor: adapterDoctor()
+    },
+    reports: productTruthData(),
+    sdk: {
+      catalog: sdkCatalog(),
+      doctor: sdkDoctor()
+    },
+    doctor: {
+      config: configurationDoctor(),
+      connections: combinedConnectionsDoctor(),
+      sdk: sdkDoctor()
+    }
   };
 }
 

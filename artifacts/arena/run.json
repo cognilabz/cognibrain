@@ -4197,10 +4197,5 @@
     }
   ],
   "winner": "Cognibrain",
-  "passed": true,
-  "publication": {
-    "publishedAt": "2026-05-26T05:27:38.809Z",
-    "channel": "static-json-html-md",
-    "claimScope": "Synthetic same-scenario engineering-memory benchmark with explicit proof levels."
-  }
+  "passed": true
 }

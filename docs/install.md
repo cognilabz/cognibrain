@@ -9,6 +9,8 @@ npx cognibrain init
 npx cognibrain doctor --fix
 ```
 
+Running only `npx cognibrain` opens the full graphical CLI app. Use the sidebar to move between Home, Memories, Connections, Connectors, Adapters, Config, Service, Reports, SDK and Doctor. The command forms stay available for scripts, but day-to-day operation can happen from the interactive surface.
+
 Docker is optional for people who want container packaging later. The CLI is the required control plane for setup, status, service automation, connectors, adapters, SDK scaffolding and proof checks.
 
 Checkout install:

@@ -433,6 +433,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
     });
     if (result.status !== 0) {
       const checks = emptyChecks();
+      this.addCapabilityGaps([`runner failed for ${scenario.id}`]);
       return {
         id: scenario.id,
         checks,
@@ -449,6 +450,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
     }
     const parsed = parseRunnerOutput(result.stdout);
     const checks = normalizeChecks(parsed?.checks) ?? checksFromRunnerText(scenario, JSON.stringify(parsed ?? result.stdout));
+    this.addCapabilityGaps(parsed?.capabilityGaps);
     return {
       id: scenario.id,
       checks,
@@ -463,6 +465,11 @@ class CommandRunnerAdapter extends ProfileAdapter {
         evidence: parsed?.evidence ?? parsed
       }
     };
+  }
+
+  private addCapabilityGaps(gaps: string[] | undefined): void {
+    if (!Array.isArray(gaps)) return;
+    this.capabilityGaps = [...new Set([...this.capabilityGaps, ...gaps.filter(Boolean)])];
   }
 }
 
@@ -548,12 +555,35 @@ function externalAdapter(id: Exclude<MemorySystemId, "cognibrain">, profile: Con
 
   const commandEnv = `${envPrefix}_COMMAND`;
   const command = process.env[commandEnv];
-  if (!command) return undefined;
+  if (!command) return autoNativeAdapter(id, profile, envPrefix);
   const requestedProof = normalizeProofLevel(process.env[`${envPrefix}_PROOF_LEVEL`]);
   const defaultProof = id === "gbrain" ? "same-run-cli" : process.env[`${envPrefix}_API_KEY`] || process.env[`${envPrefix}_TOKEN`] ? "same-run-cloud-api" : "same-run-native";
   const proofLevel = requestedProof ?? defaultProof;
   const adapterMode: AdapterMode = proofLevel === "same-run-cloud-api" ? "cloud-command" : proofLevel === "same-run-cli" ? "cli-command" : "native-command";
   return new CommandRunnerAdapter(id, profile, { command, commandEnv, proofLevel, adapterMode });
+}
+
+function autoNativeAdapter(id: Exclude<MemorySystemId, "cognibrain">, profile: ConstructorParameters<typeof ProfileAdapter>[1], envPrefix: string): BenchmarkSystemAdapter | undefined {
+  if (process.env.MEMORY_ARENA_AUTO_NATIVE === "false") return undefined;
+  if (id === "gbrain" && existsSync(".cognibrain/vendor/gbrain/src/cli.ts") && existsSync("scripts/competitors/gbrain-runner.mjs")) {
+    return new CommandRunnerAdapter(id, profile, {
+      command: `${process.execPath} scripts/competitors/gbrain-runner.mjs`,
+      commandEnv: `${envPrefix}_COMMAND:auto-gbrain-cli`,
+      proofLevel: "same-run-cli",
+      adapterMode: "cli-command"
+    });
+  }
+  const mem0Key = process.env.MEM0_API_KEY ?? process.env[`${envPrefix}_API_KEY`];
+  if (id === "mem0" && mem0Key && existsSync("scripts/competitors/mem0-runner.mjs")) {
+    process.env[`${envPrefix}_API_KEY`] = mem0Key;
+    return new CommandRunnerAdapter(id, profile, {
+      command: `${process.execPath} scripts/competitors/mem0-runner.mjs`,
+      commandEnv: `${envPrefix}_COMMAND:auto-mem0-cli`,
+      proofLevel: "same-run-cloud-api",
+      adapterMode: "cloud-command"
+    });
+  }
+  return undefined;
 }
 
 function runnerMetadata(adapter: BenchmarkSystemAdapter): ArenaSystemResult["runner"] {

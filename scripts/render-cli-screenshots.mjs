@@ -13,11 +13,31 @@ const runtimeRoot = mkdtempSync(join(tmpdir(), "cognibrain-cli-screens-"));
 const env = {
   ...process.env,
   COGNIBRAIN_FORCE_INK: "true",
-  FORCE_COLOR: "0",
-  NO_COLOR: "1",
+  COLUMNS: "120",
+  FORCE_COLOR: "1",
   MEMORY_AUTO_DREAM: "false",
   MEMORY_USER_ID: "cli-screenshot",
   MEMORY_DB_PATH: join(runtimeRoot, "memory.json")
+};
+delete env.NO_COLOR;
+
+const ansiColors = {
+  30: "#1e2a32",
+  31: "#ff7b72",
+  32: "#8ee6a5",
+  33: "#ffd166",
+  34: "#7db7ff",
+  35: "#d6a2ff",
+  36: "#82e6f2",
+  37: "#e8f2f1",
+  90: "#8da3aa",
+  91: "#ff9a95",
+  92: "#a7f3bd",
+  93: "#ffe08a",
+  94: "#9cc8ff",
+  95: "#e1b5ff",
+  96: "#a1eef7",
+  97: "#f4faf9"
 };
 
 const captures = [
@@ -69,7 +89,7 @@ function terminalSvg({ command, output }) {
   const height = 78 + lines.length * lineHeight + 34;
   const body = lines.map((line, index) => {
     const y = 78 + index * lineHeight;
-    return `<text x="30" y="${y}" fill="#e8f2f1" font-family="Menlo, Consolas, monospace" font-size="${fontSize}">${escapeXmlPreserved(line)}</text>`;
+    return `<text x="30" y="${y}" fill="#e8f2f1" font-family="Menlo, Consolas, monospace" font-size="${fontSize}">${ansiToSvg(line)}</text>`;
   }).join("\n");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(command)} terminal screenshot">
   <defs>
@@ -98,6 +118,42 @@ ${body}
 
 function visualLength(value) {
   return String(value).replace(/\u001b\[[0-9;]*m/g, "").length;
+}
+
+function ansiToSvg(value) {
+  const text = String(value);
+  const matches = [...text.matchAll(/\u001b\[([0-9;]*)m/g)];
+  if (!matches.length) return escapeXmlPreserved(text);
+  let cursor = 0;
+  let color = "#e8f2f1";
+  let bold = false;
+  const spans = [];
+  for (const match of matches) {
+    if (match.index > cursor) spans.push(span(text.slice(cursor, match.index), color, bold));
+    const codes = String(match[1] || "0").split(";").map((code) => Number(code || "0"));
+    for (const code of codes) {
+      if (code === 0) {
+        color = "#e8f2f1";
+        bold = false;
+      } else if (code === 1) {
+        bold = true;
+      } else if (code === 22) {
+        bold = false;
+      } else if (code === 39) {
+        color = "#e8f2f1";
+      } else if (ansiColors[code]) {
+        color = ansiColors[code];
+      }
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) spans.push(span(text.slice(cursor), color, bold));
+  return spans.join("");
+}
+
+function span(text, color, bold) {
+  if (!text) return "";
+  return `<tspan fill="${color}"${bold ? ` font-weight="700"` : ""}>${escapeXmlPreserved(text)}</tspan>`;
 }
 
 function escapeXml(value) {

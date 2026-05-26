@@ -74,9 +74,11 @@ describe("cognibrain CLI", () => {
       const memories = execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories"], { cwd: dir, env, encoding: "utf8" });
       const connections = execFileSync(process.execPath, [cli, "--runtime-root", dir, "connections"], { cwd: dir, env, encoding: "utf8" });
 
-      expect(home).toContain("cognibrain CLI home");
-      expect(home).toContain("dashboard: optional");
-      expect(home).toContain("cognibrain memories search <query>");
+      expect(home).toContain("COGNIBRAIN");
+      expect(home).toContain("WORKBENCHES");
+      expect(home).toContain("One-command control plane");
+      expect(home).toContain("ACTION PALETTE");
+      expect(home).toContain("Snapshot mode");
       expect(memories).toContain("cognibrain memories");
       expect(memories).toContain("primary product surface");
       expect(connections).toContain("cognibrain connections");

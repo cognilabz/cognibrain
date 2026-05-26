@@ -31,6 +31,8 @@ cognibrain mcp
 ```bash
 npm run benchmark:arena
 npm run benchmark:arena:publish
+npm run benchmark:competitors:native
+npm run verify:vendor-api-specs
 npm run connectors:maturity
 npm run audit:truth
 npm run leaderboard:publish

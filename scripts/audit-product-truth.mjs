@@ -11,6 +11,7 @@ const files = {
   packageJson: readJson("package.json", {}),
   arena: readJson("artifacts/arena/run.json", { systems: [] }),
   maturity: readJson("artifacts/connector-maturity.json", { rows: [], summary: {} }),
+  vendorApiSpecs: readJson("artifacts/vendor-api-specs.json", { rows: [], summary: {} }),
   vendorLive: readJson("artifacts/vendor-live-smoke.json", { liveRequested: false, writebackEnabled: false, providers: [] }),
   releaseCheck: read("scripts/release-check.mjs"),
   cli: read("bin/cognibrain.mjs"),
@@ -30,9 +31,11 @@ const unsupportedCompetitorLevels = competitors.filter((system) => !realCompetit
 const cognibrainArena = arenaSystems.find((system) => system.system === "cognibrain");
 
 const maturityRows = Array.isArray(files.maturity.rows) ? files.maturity.rows : [];
+const apiSpecRows = Array.isArray(files.vendorApiSpecs.rows) ? files.vendorApiSpecs.rows : [];
 const liveSmokeRows = maturityRows.filter((row) => row?.maturity?.liveSmoke === true);
 const productionCertifiedRows = maturityRows.filter((row) => row?.maturity?.productionCertified === true);
 const hermeticRows = maturityRows.filter((row) => row?.proofLevel === "hermetic-driver" || row?.proofLevel === "vendor-smoke" || row?.proofLevel === "production-certified");
+const apiSpecVerifiedRows = maturityRows.filter((row) => row?.maturity?.apiSpec === true);
 const vendorLiveProviders = Array.isArray(files.vendorLive.providers) ? files.vendorLive.providers : [];
 const vendorLiveAttempted = vendorLiveProviders.filter((provider) => provider && provider.skipped === false);
 
@@ -45,7 +48,7 @@ const checks = [
     artifact: "artifacts/arena/run.json",
     observed: `${cognibrainArena?.proofLevel ?? "missing"} / ${cognibrainArena?.adapterMode ?? "missing"}`
   }),
-  check("arena-competitor-real-runs", "Checked artifacts contain no real competitor system runs yet; competitors are modeled or imported until runners are configured.", realCompetitors.length > 0, "gap", {
+  check("arena-competitor-real-runs", "Checked artifacts contain at least one real competitor system run; other competitors remain modeled or credential-blocked unless their proof level says otherwise.", realCompetitors.length > 0, "gap", {
     artifact: "artifacts/arena/run.json",
     realCompetitorRuns: realCompetitors.map((system) => `${system.displayName ?? system.system}:${system.proofLevel}`),
     apiShapeCompetitors: apiShapeCompetitors.map((system) => system.displayName ?? system.system)
@@ -53,9 +56,10 @@ const checks = [
   check("arena-proof-levels-known", "Every competitor row uses a known proof level.", unsupportedCompetitorLevels.length === 0, "fail", {
     unsupported: unsupportedCompetitorLevels.map((system) => `${system.displayName ?? system.system}:${system.proofLevel}`)
   }),
-  check("benchmark-docs-boundary", "Benchmark docs explicitly state the current checked competitor rows are not real vendor executions.", docsContainAll([
-    "No checked artifact currently proves a real Mem0, Graphiti/Zep, Cognee, LangMem or GBrain vendor/system run.",
-    "competitor rows are local API-shape compatibility adapters"
+  check("benchmark-docs-boundary", "Benchmark docs explicitly separate the GBrain same-run CLI artifact from API-shape and credential-blocked competitor rows.", docsContainAll([
+    "GBrain is now checked as a real same-run-cli competitor row",
+    "Mem0 remains same-run-api-shape in the checked artifact because no MEM0_API_KEY was available",
+    "competitor rows are local API-shape compatibility adapters unless their proof level says otherwise"
   ]), "fail", {
     docs: ["README.md", "docs/benchmarks.md", "docs/claims.md", "docs/market/same-benchmark.md"]
   }),
@@ -64,14 +68,20 @@ const checks = [
     total: maturityRows.length,
     hermeticDrivers: hermeticRows.length
   }),
+  check("connector-api-specs", "Connector drivers are checked against codified vendor API contracts for method, path, auth and writeback shape.", apiSpecRows.length >= 19 && apiSpecVerifiedRows.length >= 19 && files.vendorApiSpecs.passed === true, "fail", {
+    artifact: "artifacts/vendor-api-specs.json",
+    total: apiSpecRows.length,
+    apiSpecVerified: apiSpecVerifiedRows.length
+  }),
   check("connector-live-smoke", "Checked artifacts contain no tenant live-smoke certification unless credentials were supplied and attempted.", liveSmokeRows.length > 0, "gap", {
     artifact: "artifacts/vendor-live-smoke.json",
     liveRequested: Boolean(files.vendorLive.liveRequested),
     attempted: vendorLiveAttempted.map((provider) => provider.provider),
     liveSmokeReady: liveSmokeRows.length
   }),
-  check("connector-docs-boundary", "Connector docs state the checked artifact level: hermetic drivers, no tenant live-smoke, no production certification.", docsContainAll([
+  check("connector-docs-boundary", "Connector docs state the checked artifact level: hermetic drivers, API/spec verification, no tenant live-smoke, no production certification.", docsContainAll([
     "Current checked connector state:",
+    "19 API/spec-verified drivers",
     "0 tenant live smokes",
     "0 production certifications"
   ]), "fail", {
@@ -91,6 +101,7 @@ const checks = [
     "artifacts/arena/run.json",
     "artifacts/connector-maturity.json",
     "artifacts/product-truth-audit.json",
+    "artifacts/vendor-api-specs.json",
     "artifacts/vendor-live-smoke.json"
   ].every((path) => packageFiles.has(path) && existsSync(join(root, path))), "fail", {
     packageFiles: ["artifacts/arena/run.json", "artifacts/connector-maturity.json", "artifacts/product-truth-audit.json", "artifacts/vendor-live-smoke.json"]
@@ -117,6 +128,7 @@ const report = {
     apiShapeCompetitors: apiShapeCompetitors.length,
     nativeConnectorRows: maturityRows.length,
     hermeticDrivers: hermeticRows.length,
+    apiSpecVerifiedConnectors: apiSpecVerifiedRows.length,
     tenantLiveSmokes: liveSmokeRows.length,
     productionCertifiedConnectors: productionCertifiedRows.length,
     cliScreenshots: screenshotAssets.length,
@@ -127,6 +139,7 @@ const report = {
     ["arena.competitors.realRuns", realCompetitors.length, "artifacts/arena/run.json"],
     ["arena.competitors.apiShape", apiShapeCompetitors.length, "artifacts/arena/run.json"],
     ["connectors.hermeticDrivers", hermeticRows.length, "artifacts/connector-maturity.json"],
+    ["connectors.apiSpecVerified", apiSpecVerifiedRows.length, "artifacts/vendor-api-specs.json"],
     ["connectors.tenantLiveSmokes", liveSmokeRows.length, "artifacts/vendor-live-smoke.json"],
     ["connectors.productionCertified", productionCertifiedRows.length, "artifacts/connector-maturity.json"],
     ["cli.inkScreenshots", screenshotAssets.length, "docs/assets/cli-*.svg"],

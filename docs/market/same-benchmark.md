@@ -36,7 +36,9 @@ It checks:
 
 `same-run-api-shape` means the row is a local compatibility model. It is honest, but it is not a real vendor run.
 
-No checked artifact currently proves a real Mem0, Graphiti/Zep, Cognee, LangMem or GBrain vendor/system run. The public table should say that plainly until a row reaches `same-run-native`, `same-run-cloud-api`, `same-run-cli`, `vendor-signed` or `real-customer-field`.
+GBrain is now checked as a real same-run-cli competitor row. The runner clones GBrain, initializes a local PGLite brain with no embedding key, captures each CogniCode correction, searches, opens the returned page, and reports the resulting checks.
+
+Mem0 remains same-run-api-shape in the checked artifact because no MEM0_API_KEY was available. The native runner verifies `mem0ai@3.0.3` and `@mem0/cli@0.2.7`; it upgrades to `same-run-cloud-api` when credentials are supplied. Graphiti/Zep, Cognee and LangMem remain API-shape until native/cloud runners or imported artifacts are configured.
 
 Use these environment variables to raise a competitor row to a stronger proof level:
 
@@ -54,6 +56,7 @@ The external runner reads one scenario JSON object from stdin and returns checks
 ```bash
 npm run benchmark:cognicode
 npm run benchmark:arena
+npm run benchmark:competitors:native
 npm run benchmark:arena:publish
 npm run audit:truth
 ```

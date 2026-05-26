@@ -1,0 +1,821 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-26T05:27:36.796Z",
+  "sourceArtifact": "artifacts/vendor-connectors-live.json",
+  "mode": "api-spec-contract",
+  "rows": [
+    {
+      "provider": "github",
+      "docs": "https://docs.github.com/en/rest",
+      "authModel": "Bearer token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "pulls.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/github\\/repos\\/[^/]+\\/[^/]+\\/pulls$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/github/repos/cognilabz/cognibrain/pulls",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "actions.runs",
+          "purpose": "poll",
+          "method": "GET",
+          "path": "^\\/github\\/repos\\/[^/]+\\/[^/]+\\/actions\\/runs$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/github/repos/cognilabz/cognibrain/actions/runs",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "issues.comments.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/github\\/repos\\/[^/]+\\/[^/]+\\/issues\\/\\d+\\/comments$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/github/repos/cognilabz/cognibrain/issues/42/comments",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "slack",
+      "docs": "https://api.slack.com/methods",
+      "authModel": "Bearer bot token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "conversations.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/slack\\/api\\/conversations\\.list$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/slack/api/conversations.list",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "conversations.history",
+          "purpose": "poll",
+          "method": "GET",
+          "path": "^\\/slack\\/api\\/conversations\\.history$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/slack/api/conversations.history",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "chat.postMessage",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/slack\\/api\\/chat\\.postMessage$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/slack/api/chat.postMessage",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "discord",
+      "docs": "https://discord.com/developers/docs/reference",
+      "authModel": "Bot token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "channel.messages",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/discord\\/api\\/v\\d+\\/channels\\/[^/]+\\/messages$",
+          "auth": "Bot",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/discord/api/v10/channels/D123/messages",
+            "authorizationScheme": "Bot"
+          }
+        },
+        {
+          "id": "channel.messages.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/discord\\/api\\/v\\d+\\/channels\\/[^/]+\\/messages$",
+          "auth": "Bot",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/discord/api/v10/channels/D123/messages",
+            "authorizationScheme": "Bot"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "jira",
+      "docs": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/",
+      "authModel": "Basic email plus API token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "issue.search",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/jira\\/rest\\/api\\/3\\/search$",
+          "auth": "Basic",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/jira/rest/api/3/search",
+            "authorizationScheme": "Basic"
+          }
+        },
+        {
+          "id": "issue.comment.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/jira\\/rest\\/api\\/3\\/issue\\/[^/]+\\/comment$",
+          "auth": "Basic",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/jira/rest/api/3/issue/CB-42/comment",
+            "authorizationScheme": "Basic"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "confluence",
+      "docs": "https://developer.atlassian.com/cloud/confluence/rest/v1/",
+      "authModel": "Basic email plus API token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "content.search",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/confluence\\/wiki\\/rest\\/api\\/content$",
+          "auth": "Basic",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/confluence/wiki/rest/api/content",
+            "authorizationScheme": "Basic"
+          }
+        },
+        {
+          "id": "content.comment.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/confluence\\/wiki\\/rest\\/api\\/content\\/[^/]+\\/child\\/comment$",
+          "auth": "Basic",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/confluence/wiki/rest/api/content/123/child/comment",
+            "authorizationScheme": "Basic"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "notion",
+      "docs": "https://developers.notion.com/reference/intro",
+      "authModel": "Bearer integration token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "database.query",
+          "purpose": "list",
+          "method": "POST",
+          "path": "^\\/notion\\/v1\\/databases\\/[^/]+\\/query$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/notion/v1/databases/db123/query",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "block.children.append",
+          "purpose": "writeback",
+          "method": "PATCH",
+          "path": "^\\/notion\\/v1\\/blocks\\/[^/]+\\/children$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "PATCH",
+            "path": "/notion/v1/blocks/page123/children",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "linear",
+      "docs": "https://developers.linear.app/docs/graphql/working-with-the-graphql-api",
+      "authModel": "Linear API key",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "graphql.issues",
+          "purpose": "list",
+          "method": "POST",
+          "path": "^\\/linear\\/graphql$",
+          "auth": "Raw",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/linear/graphql",
+            "authorizationScheme": "Raw"
+          }
+        },
+        {
+          "id": "graphql.commentCreate",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/linear\\/graphql$",
+          "auth": "Raw",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/linear/graphql",
+            "authorizationScheme": "Raw"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "gitlab",
+      "docs": "https://docs.gitlab.com/api/rest/",
+      "authModel": "PRIVATE-TOKEN header",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "merge_requests.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/gitlab\\/api\\/v4\\/projects\\/.+\\/merge_requests$",
+          "auth": "Token",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/gitlab/api/v4/projects/cognilabz%2Fcognibrain/merge_requests",
+            "authorizationScheme": "Token"
+          }
+        },
+        {
+          "id": "merge_requests.notes.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/gitlab\\/api\\/v4\\/projects\\/.+\\/merge_requests\\/\\d+\\/notes$",
+          "auth": "Token",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/gitlab/api/v4/projects/cognilabz%2Fcognibrain/merge_requests/42/notes",
+            "authorizationScheme": "Token"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "azure-devops",
+      "docs": "https://learn.microsoft.com/en-us/rest/api/azure/devops/",
+      "authModel": "Basic PAT",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "git.pullrequests.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/azure\\/[^/]+\\/[^/]+\\/_apis\\/git\\/pullrequests$",
+          "auth": "Basic",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/azure/org/project/_apis/git/pullrequests",
+            "authorizationScheme": "Basic"
+          }
+        },
+        {
+          "id": "git.pullrequestthreads.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/azure\\/[^/]+\\/[^/]+\\/_apis\\/git\\/repositories\\/[^/]+\\/pullRequests\\/\\d+\\/threads$",
+          "auth": "Basic",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/azure/org/project/_apis/git/repositories/repo123/pullRequests/42/threads",
+            "authorizationScheme": "Basic"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "teams",
+      "docs": "https://learn.microsoft.com/en-us/graph/api/resources/teams-api-overview",
+      "authModel": "Microsoft Graph Bearer token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "channel.messages.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/teams\\/v1\\.0\\/teams\\/[^/]+\\/channels\\/[^/]+\\/messages$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/teams/v1.0/teams/team123/channels/channel123/messages",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "channel.messages.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/teams\\/v1\\.0\\/teams\\/[^/]+\\/channels\\/[^/]+\\/messages$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/teams/v1.0/teams/team123/channels/channel123/messages",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "gmail",
+      "docs": "https://developers.google.com/gmail/api/reference/rest",
+      "authModel": "Google OAuth Bearer token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "messages.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/google\\/gmail\\/v1\\/users\\/[^/]+\\/messages$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/google/gmail/v1/users/me/messages",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "messages.modify",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/google\\/gmail\\/v1\\/users\\/[^/]+\\/messages\\/[^/]+\\/modify$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/google/gmail/v1/users/me/messages/msg123/modify",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "google-drive",
+      "docs": "https://developers.google.com/drive/api/reference/rest/v3",
+      "authModel": "Google OAuth Bearer token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "files.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/google\\/drive\\/v3\\/files$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/google/drive/v3/files",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "files.update",
+          "purpose": "writeback",
+          "method": "PATCH",
+          "path": "^\\/google\\/drive\\/v3\\/files\\/[^/]+$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "PATCH",
+            "path": "/google/drive/v3/files/file123",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "google-calendar",
+      "docs": "https://developers.google.com/calendar/api/v3/reference",
+      "authModel": "Google OAuth Bearer token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "events.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/google\\/calendar\\/v3\\/calendars\\/[^/]+\\/events$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/google/calendar/v3/calendars/primary/events",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "events.patch",
+          "purpose": "writeback",
+          "method": "PATCH",
+          "path": "^\\/google\\/calendar\\/v3\\/calendars\\/[^/]+\\/events\\/[^/]+$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "PATCH",
+            "path": "/google/calendar/v3/calendars/primary/events/event123",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "asana",
+      "docs": "https://developers.asana.com/reference/rest-api-reference",
+      "authModel": "Bearer token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "tasks.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/asana\\/api\\/1\\.0\\/tasks$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/asana/api/1.0/tasks",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "stories.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/asana\\/api\\/1\\.0\\/tasks\\/[^/]+\\/stories$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/asana/api/1.0/tasks/task123/stories",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "clickup",
+      "docs": "https://clickup.com/api",
+      "authModel": "ClickUp token header",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "tasks.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/clickup\\/api\\/v2\\/list\\/[^/]+\\/task$",
+          "auth": "Raw",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/clickup/api/v2/list/list123/task",
+            "authorizationScheme": "Raw"
+          }
+        },
+        {
+          "id": "task.comment.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/clickup\\/api\\/v2\\/task\\/[^/]+\\/comment$",
+          "auth": "Raw",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/clickup/api/v2/task/click123/comment",
+            "authorizationScheme": "Raw"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "sentry",
+      "docs": "https://docs.sentry.io/api/",
+      "authModel": "Bearer token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "project.issues.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/sentry\\/api\\/0\\/projects\\/[^/]+\\/[^/]+\\/issues\\/$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/sentry/api/0/projects/org/project/issues/",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "issue.comments.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/sentry\\/api\\/0\\/issues\\/[^/]+\\/comments\\/$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/sentry/api/0/issues/sentry123/comments/",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "datadog",
+      "docs": "https://docs.datadoghq.com/api/latest/",
+      "authModel": "DD-API-KEY plus DD-APPLICATION-KEY",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "monitors.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/datadog\\/api\\/v1\\/monitor$",
+          "auth": "DD",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/datadog/api/v1/monitor",
+            "authorizationScheme": "DD"
+          }
+        },
+        {
+          "id": "events.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/datadog\\/api\\/v1\\/events$",
+          "auth": "DD",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/datadog/api/v1/events",
+            "authorizationScheme": "DD"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "pagerduty",
+      "docs": "https://developer.pagerduty.com/api-reference/",
+      "authModel": "Bearer token",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "incidents.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/pagerduty\\/incidents$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/pagerduty/incidents",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "incident.notes.create",
+          "purpose": "writeback",
+          "method": "POST",
+          "path": "^\\/pagerduty\\/incidents\\/[^/]+\\/notes$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "POST",
+            "path": "/pagerduty/incidents/pd123/notes",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    },
+    {
+      "provider": "posthog",
+      "docs": "https://posthog.com/docs/api",
+      "authModel": "Bearer personal API key",
+      "checked": true,
+      "passed": true,
+      "endpoints": [
+        {
+          "id": "feature_flags.list",
+          "purpose": "list",
+          "method": "GET",
+          "path": "^\\/posthog\\/api\\/projects\\/[^/]+\\/feature_flags\\/$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "GET",
+            "path": "/posthog/api/projects/1/feature_flags/",
+            "authorizationScheme": "Bearer"
+          }
+        },
+        {
+          "id": "feature_flags.patch",
+          "purpose": "writeback",
+          "method": "PATCH",
+          "path": "^\\/posthog\\/api\\/projects\\/[^/]+\\/feature_flags\\/[^/]+\\/$",
+          "auth": "Bearer",
+          "matched": true,
+          "matchedCall": {
+            "method": "PATCH",
+            "path": "/posthog/api/projects/1/feature_flags/flag123/",
+            "authorizationScheme": "Bearer"
+          }
+        }
+      ],
+      "capabilities": {
+        "listOrPoll": true,
+        "writeback": true,
+        "authorization": true
+      },
+      "gaps": []
+    }
+  ],
+  "summary": {
+    "total": 19,
+    "passed": 19,
+    "failed": 0,
+    "writebackReady": 19,
+    "authReady": 19
+  },
+  "passed": true
+}

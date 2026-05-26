@@ -1,6 +1,6 @@
 # Latest Benchmark Arena
 
-Generated from `artifacts/arena/run.json` at 2026-05-26T04:49:24.640Z.
+Generated from `artifacts/arena/run.json` at 2026-05-26T05:27:38.809Z.
 
 Recall is not enough. The next code change has to prove the memory worked.
 
@@ -8,9 +8,9 @@ Recall is not enough. The next code change has to prove the memory worked.
 | --- | ---: | --- | ---: | ---: |
 | Cognibrain | 0.9722 | same-run-full | 0.0000 | 0 |
 | Graphiti/Zep | 0.6667 | same-run-api-shape | 0.8333 | 2 |
-| GBrain | 0.6667 | same-run-api-shape | 0.8333 | 2 |
 | Cognee | 0.4445 | same-run-api-shape | 1.0000 | 2 |
 | LangMem | 0.2222 | same-run-api-shape | 1.0000 | 2 |
+| GBrain | 0.1556 | same-run-cli | 1.0000 | 5 |
 | Mem0 | 0.1111 | same-run-api-shape | 1.0000 | 3 |
 
 Boundary: competitor rows are only as strong as their proof level. `same-run-api-shape` is a local compatibility model. `same-run-native`, `same-run-cloud-api` and `same-run-cli` require configured external runners.

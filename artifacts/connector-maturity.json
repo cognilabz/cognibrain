@@ -1,9 +1,10 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T04:49:24.036Z",
+  "generatedAt": "2026-05-26T05:27:38.189Z",
   "source": "connector-registry",
   "artifacts": [
     "artifacts/vendor-connectors-live.json",
+    "artifacts/vendor-api-specs.json",
     "artifacts/vendor-live-smoke.json",
     "artifacts/connectors-live.json"
   ],
@@ -19,6 +20,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -31,8 +33,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add github",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -51,6 +54,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -63,8 +67,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add slack",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -83,6 +88,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -95,8 +101,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add discord",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -115,6 +122,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -127,8 +135,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add jira",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -147,6 +156,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -159,8 +169,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add confluence",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -179,6 +190,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -191,8 +203,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add notion",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -211,6 +224,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -223,8 +237,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add linear",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -243,6 +258,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -255,8 +271,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add gitlab",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -275,6 +292,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -287,8 +305,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add azure-devops",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -307,6 +326,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -319,8 +339,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add teams",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -339,6 +360,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -351,8 +373,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add gmail",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -371,6 +394,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -383,8 +407,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add google-drive",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -403,6 +428,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -415,8 +441,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add google-calendar",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -435,6 +462,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -447,8 +475,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add asana",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -467,6 +496,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -479,8 +509,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add clickup",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -499,6 +530,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -511,8 +543,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add sentry",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -531,6 +564,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -543,8 +577,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add datadog",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -563,6 +598,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -575,8 +611,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add pagerduty",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -595,6 +632,7 @@
         "manifest": true,
         "driver": true,
         "fixture": true,
+        "apiSpec": true,
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
@@ -607,8 +645,9 @@
         "docs": "docs/integrations.md#native-connectors",
         "addCommand": "cognibrain connections add posthog",
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
+        "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
@@ -620,6 +659,7 @@
   "summary": {
     "total": 19,
     "hermeticDrivers": 19,
+    "apiSpecVerified": 19,
     "liveSmokeReady": 0,
     "productionCertified": 0
   },

@@ -8,7 +8,7 @@ Cognibrain can run as a local agent memory layer, a connector-backed memory hub,
 
 Native drivers are implemented for the systems below. Driver status is not the same as production certification; see the generated [Connector Maturity Matrix](integrations/connector-maturity.md) for fixture, live-smoke, writeback and certification status.
 
-Current checked connector state: 19 hermetic drivers, 0 tenant live smokes and 0 production certifications. That means the code has first-party driver paths and fixture proof, but this checkout has not proven a customer tenant for Jira, Confluence, Notion, Linear or the other vendors.
+Current checked connector state: 19 hermetic drivers, 19 API/spec-verified drivers, 0 tenant live smokes and 0 production certifications. That means the code has first-party driver paths, fixture proof, and API-contract checks for method, path, auth and writeback shape. This checkout has not proven a customer tenant for Jira, Confluence, Notion, Linear or the other vendors.
 
 | Category | Connectors |
 | --- | --- |
@@ -81,6 +81,7 @@ Supported harness outputs cover Codex, Claude Code, GitHub Copilot, Cursor, VS C
 ```bash
 npm run verify:connectors
 npm run verify:vendor-connectors
+npm run verify:vendor-api-specs
 npm run verify:vendor-live
 npm run verify:compatibility
 npm run connectors:maturity
@@ -100,6 +101,7 @@ Artifacts:
 ```text
 artifacts/connectors-live.json
 artifacts/vendor-connectors-live.json
+artifacts/vendor-api-specs.json
 artifacts/vendor-live-smoke.json
 artifacts/connector-maturity.json
 docs/integrations/connector-maturity.md

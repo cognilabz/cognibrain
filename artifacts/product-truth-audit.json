@@ -1,18 +1,19 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T04:49:24.166Z",
+  "generatedAt": "2026-05-26T05:27:38.330Z",
   "mode": "code_truth_audit",
   "passed": true,
   "planComplete": false,
   "summary": {
-    "checks": 11,
-    "passed": 9,
+    "checks": 12,
+    "passed": 11,
     "failures": 0,
-    "openGaps": 2,
-    "realCompetitorRuns": 0,
-    "apiShapeCompetitors": 5,
+    "openGaps": 1,
+    "realCompetitorRuns": 1,
+    "apiShapeCompetitors": 4,
     "nativeConnectorRows": 19,
     "hermeticDrivers": 19,
+    "apiSpecVerifiedConnectors": 19,
     "tenantLiveSmokes": 0,
     "productionCertifiedConnectors": 0,
     "cliScreenshots": 5,
@@ -26,18 +27,23 @@
     ],
     [
       "arena.competitors.realRuns",
-      0,
+      1,
       "artifacts/arena/run.json"
     ],
     [
       "arena.competitors.apiShape",
-      5,
+      4,
       "artifacts/arena/run.json"
     ],
     [
       "connectors.hermeticDrivers",
       19,
       "artifacts/connector-maturity.json"
+    ],
+    [
+      "connectors.apiSpecVerified",
+      19,
+      "artifacts/vendor-api-specs.json"
     ],
     [
       "connectors.tenantLiveSmokes",
@@ -73,18 +79,19 @@
     },
     {
       "id": "arena-competitor-real-runs",
-      "message": "Checked artifacts contain no real competitor system runs yet; competitors are modeled or imported until runners are configured.",
-      "passed": false,
+      "message": "Checked artifacts contain at least one real competitor system run; other competitors remain modeled or credential-blocked unless their proof level says otherwise.",
+      "passed": true,
       "severity": "gap",
       "evidence": {
         "artifact": "artifacts/arena/run.json",
-        "realCompetitorRuns": [],
+        "realCompetitorRuns": [
+          "GBrain:same-run-cli"
+        ],
         "apiShapeCompetitors": [
           "Mem0",
           "Graphiti/Zep",
           "Cognee",
-          "LangMem",
-          "GBrain"
+          "LangMem"
         ]
       }
     },
@@ -99,7 +106,7 @@
     },
     {
       "id": "benchmark-docs-boundary",
-      "message": "Benchmark docs explicitly state the current checked competitor rows are not real vendor executions.",
+      "message": "Benchmark docs explicitly separate the GBrain same-run CLI artifact from API-shape and credential-blocked competitor rows.",
       "passed": true,
       "severity": "fail",
       "evidence": {
@@ -123,6 +130,17 @@
       }
     },
     {
+      "id": "connector-api-specs",
+      "message": "Connector drivers are checked against codified vendor API contracts for method, path, auth and writeback shape.",
+      "passed": true,
+      "severity": "fail",
+      "evidence": {
+        "artifact": "artifacts/vendor-api-specs.json",
+        "total": 19,
+        "apiSpecVerified": 19
+      }
+    },
+    {
       "id": "connector-live-smoke",
       "message": "Checked artifacts contain no tenant live-smoke certification unless credentials were supplied and attempted.",
       "passed": false,
@@ -136,7 +154,7 @@
     },
     {
       "id": "connector-docs-boundary",
-      "message": "Connector docs state the checked artifact level: hermetic drivers, no tenant live-smoke, no production certification.",
+      "message": "Connector docs state the checked artifact level: hermetic drivers, API/spec verification, no tenant live-smoke, no production certification.",
       "passed": true,
       "severity": "fail",
       "evidence": {
@@ -196,21 +214,6 @@
     }
   ],
   "openGaps": [
-    {
-      "id": "arena-competitor-real-runs",
-      "message": "Checked artifacts contain no real competitor system runs yet; competitors are modeled or imported until runners are configured.",
-      "evidence": {
-        "artifact": "artifacts/arena/run.json",
-        "realCompetitorRuns": [],
-        "apiShapeCompetitors": [
-          "Mem0",
-          "Graphiti/Zep",
-          "Cognee",
-          "LangMem",
-          "GBrain"
-        ]
-      }
-    },
     {
       "id": "connector-live-smoke",
       "message": "Checked artifacts contain no tenant live-smoke certification unless credentials were supplied and attempted.",

@@ -1513,6 +1513,302 @@ describe("TypeScript memory core", () => {
     }
   });
 
+  it("runs autoDream through the full dream cycle and schedules verification", () => {
+    const service = new MemoryService({ autoDream: { enabled: true, writeThreshold: 2, intervalHours: 6 } });
+    const risky = service.add({
+      userId: "u1",
+      content: "The current memory backend needs operator verification.",
+      beliefState: "needs_verification",
+      source: { kind: "human", confidence: 0.96 }
+    });
+    expect(service.get(risky.id).temporal.verificationDueAt).toBeUndefined();
+
+    service.add({
+      userId: "u1",
+      content: "Dream cycles should keep verification state fresh.",
+      source: { kind: "human", confidence: 0.96 }
+    });
+
+    const refreshed = service.get(risky.id);
+    const status = service.maintenanceStatus().users.u1;
+    expect(refreshed.temporal.verificationDueAt).toBeDefined();
+    expect(refreshed.metadata.verification).toMatchObject({ status: "queued", reason: "dream belief revision" });
+    expect(status.writesSinceDream).toBe(0);
+    expect(status.lastDreamAt).toBeDefined();
+  });
+
+  it("plans dream cycles with harness and source-aware recommendations", () => {
+    const service = new MemoryService({ autoDream: { enabled: false, writeThreshold: 12, intervalHours: 6 } });
+    service.add({
+      userId: "u1",
+      content: "GitHub PR review requested changes for the release branch.",
+      source: { kind: "tool", confidence: 0.9 },
+      sourceRef: {
+        connectorId: "official-github",
+        externalId: "pr-42",
+        timestamp: "2026-05-01T00:00:00.000Z",
+        version: "1"
+      }
+    });
+
+    const plan = service.dreamPlan({
+      userId: "u1",
+      trigger: "harness_handoff",
+      mode: "dream",
+      sourceRefresh: true,
+      harnessRunId: "run-1"
+    });
+
+    expect(plan.shouldDream).toBe(true);
+    expect(plan.trigger).toBe("harness_handoff");
+    expect(plan.sourceRefresh).toBe(true);
+    expect(plan.connectorIds).toContain("official-github");
+    expect(plan.recommendedActions).toContain("poll connectors: official-github");
+    expect(plan.recommendedActions).toContain("revalidate 1 sourceRefs");
+    expect(plan.reasons).toContain("handoff needs a prepared memory state");
+  });
+
+  it("revalidates sourceRefs and supersedes stale connector-backed memories", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.registerConnectorManifest({
+      id: "test-github",
+      name: "Test GitHub",
+      kind: "code",
+      version: "1.0.0",
+      direction: "ingest",
+      capabilities: ["ingest"],
+      auth: "none",
+      defaultSourceKind: "tool",
+      metadataMapping: {},
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z"
+    });
+    const firstRecord = service.syncConnectorEvents("test-github", [{
+      role: "tool",
+      content: "PR 42 CI status is pending.",
+      externalId: "pr-42",
+      timestamp: "2026-05-01T00:00:00.000Z",
+      metadata: { version: "1" }
+    }], { userId: "u1" });
+    const firstMemoryId = firstRecord.memoryIds[0];
+
+    service.syncConnectorEvents("test-github", [{
+      role: "tool",
+      content: "PR 42 CI status is passed.",
+      externalId: "pr-42",
+      timestamp: "2026-05-02T00:00:00.000Z",
+      metadata: { version: "2" }
+    }], { userId: "u1" });
+
+    const report = service.revalidateSourceRefs("u1", { connectorIds: ["test-github"] });
+    const superseded = report.results.find((result) => result.memoryId === firstMemoryId);
+    expect(superseded).toMatchObject({ status: "superseded", connectorId: "test-github", externalId: "pr-42", previousVersion: "1", currentVersion: "2" });
+    expect(service.get(firstMemoryId).beliefState).toBe("superseded");
+  });
+
+  it("resolves verification queue items and records harness lifecycle dream plans", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.registerConnectorManifest({
+      id: "test-jira",
+      name: "Test Jira",
+      kind: "project_management",
+      version: "1.0.0",
+      direction: "ingest",
+      capabilities: ["ingest"],
+      auth: "none",
+      defaultSourceKind: "tool",
+      metadataMapping: {},
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z"
+    });
+    const record = service.syncConnectorEvents("test-jira", [{
+      role: "tool",
+      content: "Jira CB-7 is ready for release.",
+      externalId: "CB-7",
+      timestamp: "2026-05-01T00:00:00.000Z",
+      metadata: { version: "3" }
+    }], { userId: "u1" });
+    const memoryId = record.memoryIds[0];
+    service.update(memoryId, { beliefState: "needs_verification" });
+
+    const resolved = service.resolveVerificationQueue("u1");
+    expect(resolved.results.find((result) => result.memoryId === memoryId)?.status).toBe("confirmed");
+    expect(service.get(memoryId).beliefState).toBe("active");
+    expect(service.get(memoryId).temporal.verificationDueAt).toBeUndefined();
+
+    const event = service.recordHarnessLifecycleEvent({
+      userId: "u1",
+      event: "tests_failed",
+      command: "npm test",
+      tests: [{ name: "vitest", status: "failed" }],
+      failureReason: "unit regression",
+      runDream: false
+    });
+    expect(event.eventMemory.tags).toContain("harness:tests_failed");
+    expect(event.actionMemory?.tags).toContain("test-failure");
+    expect(event.dream.plan.trigger).toBe("after_negative_feedback");
+    expect(event.dream.plan.shouldDream).toBe(true);
+
+    const job = await service.startDreamJob({ userId: "u1", trigger: "harness_handoff", mode: "dream", sourceRefresh: true }, fetch, 10_000, { wait: true });
+    expect(job.status).toBe("done");
+    expect(job.progress.memoriesEvaluated).toBeGreaterThan(0);
+    expect(service.dreamJobStatus(job.jobId)[0].jobId).toBe(job.jobId);
+  });
+
+  it("tracks connector sync state cursor metadata from poll records", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.registerConnectorManifest({
+      id: "cursor-jira",
+      name: "Cursor Jira",
+      kind: "project_management",
+      version: "1.0.0",
+      direction: "ingest",
+      capabilities: ["ingest", "poll"],
+      auth: "none",
+      defaultSourceKind: "tool",
+      metadataMapping: {},
+      poll: { endpoint: "https://example.invalid/poll", method: "GET" },
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z"
+    });
+    const fetchImpl = async () => new Response(JSON.stringify({
+      nextCursor: "cursor-2",
+      lastExternalUpdatedAt: "2026-05-03T00:00:00.000Z",
+      etag: "etag-2",
+      sourceVersion: "v2",
+      events: [{
+        role: "tool",
+        content: "Jira CB-8 is done.",
+        externalId: "CB-8",
+        timestamp: "2026-05-03T00:00:00.000Z",
+        metadata: { version: "2" }
+      }]
+    }), { status: 200, headers: { "content-type": "application/json" } });
+
+    const record = await service.pollConnector("cursor-jira", { userId: "u1" }, fetchImpl as typeof fetch);
+    const state = service.connectorSyncState("cursor-jira")[0];
+    expect(record.status).toBe("applied");
+    expect(state).toMatchObject({
+      connectorId: "cursor-jira",
+      cursor: "cursor-2",
+      lastExternalUpdatedAt: "2026-05-03T00:00:00.000Z",
+      etag: "etag-2",
+      sourceVersion: "v2",
+      lastStatus: "applied"
+    });
+  });
+
+  it("persists connector cursor state independently from sync history replay", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cursor-"));
+    try {
+      const path = join(dir, "memory.json");
+      const service = new MemoryService({
+        persistence: new JsonFilePersistenceAdapter(path),
+        autoDream: { enabled: false }
+      });
+      service.registerConnectorManifest({
+        id: "persisted-jira",
+        name: "Persisted Jira",
+        kind: "project_management",
+        version: "1.0.0",
+        direction: "ingest",
+        capabilities: ["ingest", "poll"],
+        auth: "none",
+        defaultSourceKind: "tool",
+        metadataMapping: {},
+        poll: { endpoint: "https://example.invalid/poll", method: "GET" },
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z"
+      });
+      const fetchImpl = async () => new Response(JSON.stringify({
+        nextCursor: "cursor-persisted",
+        sourceVersion: "jira-v7",
+        events: [{ role: "tool", content: "Jira CB-9 is released.", externalId: "CB-9", timestamp: "2026-05-04T00:00:00.000Z" }]
+      }), { status: 200, headers: { "content-type": "application/json" } });
+      await service.pollConnector("persisted-jira", { userId: "u1" }, fetchImpl as typeof fetch);
+
+      const reloaded = new MemoryService({
+        persistence: new JsonFilePersistenceAdapter(path),
+        autoDream: { enabled: false }
+      });
+      expect(reloaded.connectorSyncState("persisted-jira")[0]).toMatchObject({
+        connectorId: "persisted-jira",
+        cursor: "cursor-persisted",
+        sourceVersion: "jira-v7",
+        lastStatus: "applied"
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("runs source-refresh dream jobs by polling connectors before revalidation", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.registerConnectorManifest({
+      id: "job-github",
+      name: "Job GitHub",
+      kind: "code",
+      version: "1.0.0",
+      direction: "ingest",
+      capabilities: ["ingest", "poll"],
+      auth: "none",
+      defaultSourceKind: "tool",
+      metadataMapping: {},
+      poll: { endpoint: "https://example.invalid/github/poll", method: "GET" },
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z"
+    });
+    const fetchImpl = async () => new Response(JSON.stringify({
+      nextCursor: "gh-cursor-3",
+      sourceVersion: "run-3",
+      events: [{
+        role: "tool",
+        content: "GitHub PR 42 CI status is passed.",
+        externalId: "pr-42",
+        timestamp: "2026-05-05T00:00:00.000Z",
+        metadata: { version: "3" }
+      }]
+    }), { status: 200, headers: { "content-type": "application/json" } });
+    const job = await service.startDreamJob({
+      userId: "u1",
+      trigger: "before_release",
+      mode: "dream",
+      budget: "release",
+      sourceRefresh: true,
+      connectorIds: ["job-github"],
+      force: true
+    }, fetchImpl as typeof fetch, 10_000, { wait: true });
+
+    expect(job.status).toBe("done");
+    expect(job.progress.connectorPolls).toBe(1);
+    expect(job.report?.dreamCycle.connectorRefresh).toMatchObject({ attempted: 1, applied: 1, failed: 0 });
+    expect(service.connectorSyncState("job-github")[0]).toMatchObject({ cursor: "gh-cursor-3", sourceVersion: "run-3" });
+    expect(service.search({ userId: "u1", query: "PR 42 CI status" })[0].memory.content).toContain("passed");
+  });
+
+  it("uses source quality hierarchy when resolving contradictory claims", () => {
+    const store = new MemoryStore();
+    const agentGuess = store.add({
+      userId: "u1",
+      content: "target repo is /workspace/old-platform",
+      source: { kind: "agent", confidence: 0.98 },
+      tags: ["agent-inference"],
+      timestamp: "2026-05-01T00:00:00.000Z"
+    });
+    const userCorrection = store.add({
+      userId: "u1",
+      content: "target repo is /workspace/new-platform",
+      source: { kind: "human", confidence: 0.72 },
+      tags: ["correction"],
+      timestamp: "2026-04-01T00:00:00.000Z"
+    });
+
+    const report = new ReflectionEngine(store).run("u1");
+    expect(report.contradictions[0].kept.id).toBe(userCorrection.id);
+    expect(store.get(agentGuess.id).beliefState).toBe("contradicted");
+    expect(store.get(userCorrection.id).beliefState).toBe("active");
+  });
+
   it("supports an append-only durable persistence backend", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-log-"));
     try {
@@ -1848,7 +2144,7 @@ describe("TypeScript memory core", () => {
       const sqlite = JSON.parse(readFileSync(sqlitePath, "utf8"));
       const mcpRemote = JSON.parse(readFileSync(mcpRemotePath, "utf8"));
       expect(setup.profile).toBe("solo-dev");
-      expect(setup.metadata.uiFramework).toBe("ink-react");
+      expect(setup.metadata.uiFramework).toBe("plain-cli");
       expect(setup.adapters).toContain("storage-sqlite");
       expect(connector.configured).toBe(true);
       expect(connector.requiredEnv.every((item: { valueRef?: string }) => item.valueRef?.startsWith("env:"))).toBe(true);

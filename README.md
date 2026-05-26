@@ -9,9 +9,7 @@ npm i @cognilabz/cognibrain
 npx cognibrain
 ```
 
-<p align="center">
-  <img src="docs/assets/cli-home.svg" alt="Cognibrain CLI home" width="900">
-</p>
+The default command prints a stable operator CLI snapshot. It does not depend on an animated terminal UI, so it stays readable in small panes, CI logs and remote shells.
 
 ## Public Surface
 
@@ -127,7 +125,7 @@ Generated outputs stay local:
 | `src/api/` | Service, HTTP server and persistence adapters. |
 | `src/connectors/` | MCP server and connector registry. |
 | `src/core/` | Memory model, retrieval, graph and policy logic. |
-| `src/cli/` | Ink TUI and memory command implementation. |
+| `src/cli/` | Script-safe memory command implementation. |
 | `src/eval/` | Internal benchmarks and verification generators. |
 | `sdk/typescript/` | TypeScript HTTP client for app integrations. |
 | `sdk/python/` | Dependency-free Python HTTP client for Python agent frameworks. |

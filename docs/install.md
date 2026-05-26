@@ -1,6 +1,6 @@
 # Install And Self-Hosting
 
-The install path is intentionally terminal-first. Install the package, open the Ink CLI, and keep the dashboard off unless you want a browser view.
+The install path is intentionally terminal-first. Install the package, use the stable operator CLI, and keep the dashboard off unless you want a browser view.
 
 ```bash
 npm i @cognilabz/cognibrain
@@ -10,7 +10,7 @@ npx cognibrain init
 npx cognibrain doctor --fix
 ```
 
-Running only `npx cognibrain` or explicitly `npx cognibrain tui` opens the full graphical CLI app. Use the sidebar to move between Home, Memories, Memory Ops, Connections, Connector Setup Wizard, Connectors, Adapters, Config, Service, Reports, SDK and Doctor. In a real TTY, Enter executes the selected static action, placeholder commands are guarded, and service or destructive actions ask for confirmation. The command forms stay available for scripts, but day-to-day operation can happen from the interactive surface.
+Running only `npx cognibrain` or explicitly `npx cognibrain tui` prints the same compact operator snapshot. The CLI is deliberately line-oriented: no jumping frames, no alternate-screen state, no minimum-wide terminal requirement. Use subcommands for each workflow and `--json` wherever automation needs structured output.
 
 Docker is optional for people who want container packaging later. The CLI is the required control plane for setup, status, service automation, connectors, adapters, SDK scaffolding and proof checks.
 
@@ -25,8 +25,6 @@ npm install
 ```
 
 ## CLI Workbenches
-
-![Cognibrain configuration CLI](assets/cli-config.svg)
 
 ```bash
 npx cognibrain status
@@ -60,8 +58,6 @@ For CI, docs and deterministic setup, use `--profile ... --yes`.
 | `benchmark` | Local proof lab for repeatable benchmark artifacts. | `npx cognibrain init --profile benchmark --yes` |
 
 ## Service Automation
-
-![Cognibrain service CLI](assets/cli-service.svg)
 
 ```bash
 npx cognibrain service plan

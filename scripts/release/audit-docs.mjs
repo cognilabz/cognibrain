@@ -65,13 +65,12 @@ const checks = [
     has(files.readme, "docs/status.md"),
     has(files.readme, "docs/claims.md")
   ]),
-  check("screenshots are curated docs assets", [
-    exists("docs/assets/cli-home.svg"),
-    exists("docs/assets/cli-connections.svg"),
-    exists("docs/assets/cli-service.svg"),
-    exists("docs/assets/cli-config.svg"),
-    exists("docs/assets/cli-sdk.svg"),
-    has(files.package, "\"docs:cli-screenshots\"")
+  check("operator CLI docs are text-first", [
+    has(files.readme, "stable operator CLI"),
+    has(files.install, "stable operator CLI"),
+    !has(files.package, "\"docs:cli-screenshots\""),
+    !exists("scripts/release/render-cli-screenshots.mjs"),
+    !exists("src/cli/inkApp.mjs")
   ]),
   check("artifacts are internal outputs, not package content", [
     has(files.benchmarks, "Generated reports are written under `artifacts/`"),

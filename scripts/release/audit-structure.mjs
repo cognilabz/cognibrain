@@ -31,10 +31,10 @@ checks.push(check("script package commands use grouped paths", () => {
 checks.push(check("SDKs live under sdk", () => {
   return exists("sdk/typescript/client.ts")
     && exists("sdk/python/cognibrain_client.py")
-    && read("src/sdk/client.ts").trim() === 'export * from "../../sdk/typescript/client";'
+    && !exists("src/sdk/client.ts")
     && packageFiles.has("sdk/typescript/")
     && packageFiles.has("sdk/python/cognibrain_client.py");
-}, { compatibilityShim: "src/sdk/client.ts" }));
+}, { publicSdkRoots: ["sdk/typescript", "sdk/python"] }));
 
 checks.push(check("generated and local-only outputs are not packaged", () => {
   const forbidden = [

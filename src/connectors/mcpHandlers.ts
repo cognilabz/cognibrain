@@ -1,5 +1,5 @@
 import { MemoryService } from "../api/service";
-import type { CodebaseScope, EngineeringMemoryKind, HarnessActionInput, Memory, MemoryInput, MemoryPolicyOperation, Provenance, SearchResult } from "../core";
+import type { CodebaseScope, DreamBudget, DreamCycleInput, DreamCycleMode, DreamCycleScope, DreamCycleTrigger, DreamCycleReport, EngineeringMemoryKind, HarnessActionInput, HarnessLifecycleEventInput, HarnessLifecycleEventReport, Memory, MemoryInput, MemoryPolicyOperation, Provenance, SearchResult } from "../core";
 
 export interface MemoryAddArgs {
   userId: string;
@@ -85,6 +85,43 @@ export interface MemoryListArgs {
 export interface MemoryReflectArgs {
   userId: string;
 }
+
+export interface MemoryDreamCycleArgs {
+  userId: string;
+  trigger?: DreamCycleTrigger;
+  mode?: DreamCycleMode;
+  scope?: DreamCycleScope;
+  budget?: DreamBudget;
+  sourceRefresh?: boolean;
+  connectorIds?: string[];
+  harnessRunId?: string;
+  force?: boolean;
+}
+
+export interface MemoryDreamPrepareArgs extends MemoryDreamCycleArgs {
+  run?: boolean;
+}
+
+export interface MemoryDreamJobArgs extends MemoryDreamCycleArgs {
+  jobId?: string;
+}
+
+export interface MemoryDreamJobStatusArgs {
+  jobId?: string;
+}
+
+export interface MemoryRevalidateArgs {
+  userId: string;
+  memoryId?: string;
+  connectorIds?: string[];
+  limit?: number;
+}
+
+export interface ConnectorSyncStateArgs {
+  connectorId?: string;
+}
+
+export interface MemoryHarnessEventArgs extends HarnessLifecycleEventInput {}
 
 export interface MemoryHealthArgs {
   userId?: string;
@@ -352,31 +389,59 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
     },
 
     reflect(args: MemoryReflectArgs) {
-      const report = service.reflect(args.userId);
-      return {
-        created: report.created.map(serializeMemory),
-        demoted: report.demoted.map(serializeMemory),
-        contradictions: report.contradictions.map((item) => ({
-          kept: serializeMemory(item.kept),
-          demoted: serializeMemory(item.demoted),
-          reason: item.reason
-        })),
-        lifecycle: report.lifecycle
-      };
+      return serializeDreamCycleReport(service.reflect(args.userId));
     },
 
     dream(args: MemoryReflectArgs) {
-      const report = service.dream(args.userId);
-      return {
-        created: report.created.map(serializeMemory),
-        demoted: report.demoted.map(serializeMemory),
-        contradictions: report.contradictions.map((item) => ({
-          kept: serializeMemory(item.kept),
-          demoted: serializeMemory(item.demoted),
-          reason: item.reason
-        })),
-        lifecycle: report.lifecycle
-      };
+      return serializeDreamCycleReport(service.dream(args.userId));
+    },
+
+    dreamPlan(args: MemoryDreamCycleArgs) {
+      return service.dreamPlan(dreamCycleInput(args));
+    },
+
+    dreamDue(args: MemoryDreamCycleArgs) {
+      return service.dreamPlan(dreamCycleInput({ ...args, trigger: args.trigger ?? "auto_interval" }));
+    },
+
+    async dreamRun(args: MemoryDreamCycleArgs) {
+      return serializeDreamCycleReport(await service.runDreamCycleAsync(dreamCycleInput({ ...args, mode: args.mode ?? "dream", trigger: args.trigger ?? "manual_dream" })));
+    },
+
+    async dreamJobStart(args: MemoryDreamJobArgs) {
+      return service.startDreamJob(dreamCycleInput({ ...args, mode: args.mode ?? "dream", trigger: args.trigger ?? "manual_dream" }));
+    },
+
+    dreamJobStatus(args: MemoryDreamJobStatusArgs) {
+      return service.dreamJobStatus(args.jobId);
+    },
+
+    sessionEnd(args: MemoryDreamPrepareArgs) {
+      return serializeDreamPreparation(service.prepareDream({ ...dreamCycleInput({ ...args, trigger: "harness_session_end", mode: args.mode ?? "dream" }), run: args.run }));
+    },
+
+    handoffPrepare(args: MemoryDreamPrepareArgs) {
+      return serializeDreamPreparation(service.prepareDream({ ...dreamCycleInput({ ...args, trigger: "harness_handoff", mode: args.mode ?? "dream", sourceRefresh: args.sourceRefresh ?? true }), run: args.run }));
+    },
+
+    releasePrepare(args: MemoryDreamPrepareArgs) {
+      return serializeDreamPreparation(service.prepareDream({ ...dreamCycleInput({ ...args, trigger: "before_release", mode: args.mode ?? "dream", budget: args.budget ?? "release", sourceRefresh: args.sourceRefresh ?? true }), run: args.run }));
+    },
+
+    revalidateSourceRefs(args: MemoryRevalidateArgs) {
+      return args.memoryId ? service.revalidateMemory(args.memoryId, args.userId) : service.revalidateSourceRefs(args.userId, { connectorIds: args.connectorIds, limit: args.limit });
+    },
+
+    resolveVerification(args: MemoryRevalidateArgs) {
+      return service.resolveVerificationQueue(args.userId, { connectorIds: args.connectorIds, limit: args.limit });
+    },
+
+    connectorSyncState(args: ConnectorSyncStateArgs) {
+      return service.connectorSyncState(args.connectorId);
+    },
+
+    harnessEvent(args: MemoryHarnessEventArgs) {
+      return serializeHarnessLifecycleEvent(service.recordHarnessLifecycleEvent(args));
     },
 
     health(args: MemoryHealthArgs) {
@@ -403,6 +468,49 @@ function serializeSearchResult(result: SearchResult) {
   return {
     ...result,
     memory: serializeMemory(result.memory)
+  };
+}
+
+function serializeDreamCycleReport(report: DreamCycleReport) {
+  return {
+    created: report.created.map(serializeMemory),
+    demoted: report.demoted.map(serializeMemory),
+    contradictions: report.contradictions.map((item) => ({
+      kept: serializeMemory(item.kept),
+      demoted: serializeMemory(item.demoted),
+      reason: item.reason
+    })),
+    lifecycle: report.lifecycle,
+    dreamCycle: report.dreamCycle
+  };
+}
+
+function serializeDreamPreparation(report: ReturnType<MemoryService["prepareDream"]>) {
+  return {
+    plan: report.plan,
+    report: report.report ? serializeDreamCycleReport(report.report) : undefined
+  };
+}
+
+function serializeHarnessLifecycleEvent(report: HarnessLifecycleEventReport) {
+  return {
+    eventMemory: serializeMemory(report.eventMemory),
+    actionMemory: report.actionMemory ? serializeMemory(report.actionMemory) : undefined,
+    dream: serializeDreamPreparation(report.dream)
+  };
+}
+
+function dreamCycleInput(args: MemoryDreamCycleArgs): DreamCycleInput {
+  return {
+    userId: args.userId,
+    trigger: args.trigger,
+    mode: args.mode,
+    scope: args.scope,
+    budget: args.budget,
+    sourceRefresh: args.sourceRefresh,
+    connectorIds: args.connectorIds,
+    harnessRunId: args.harnessRunId,
+    force: args.force
   };
 }
 

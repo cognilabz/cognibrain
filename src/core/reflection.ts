@@ -498,7 +498,29 @@ function normalizeClaimValue(value: string): string {
 }
 
 function evidenceWeight(memory: Memory): number {
-  return memory.trust * 0.55 + memory.importance * 0.25 + memory.source.confidence * 0.2 + memory.createdAt.getTime() / 10 ** 14;
+  const recencyTieBreaker = memory.createdAt.getTime() / 10 ** 16;
+  return memory.trust * 0.34 + memory.importance * 0.18 + memory.source.confidence * 0.16 + sourceQuality(memory) * 0.3 + recencyTieBreaker;
+}
+
+function sourceQuality(memory: Memory): number {
+  const tags = new Set(memory.tags.map((tag) => tag.toLowerCase()));
+  const metadata = JSON.stringify(memory.metadata ?? {}).toLowerCase();
+  const connectorId = memory.provenance.sourceRef?.connectorId?.toLowerCase() ?? "";
+  const content = memory.content.toLowerCase();
+  const sourceKind = memory.source.kind;
+  if (sourceKind === "human" && (tags.has("correction") || tags.has("engineering-correction") || tags.has("user-correction") || metadata.includes("correction"))) return 1;
+  if ((connectorId.includes("github") || connectorId.includes("gitlab") || connectorId.includes("azure")) && /\b(review|requested changes|changes requested|pull request|merge request)\b/.test(`${content} ${metadata}`)) return 0.92;
+  if (sourceKind === "tool" && (tags.has("harness-action") || tags.has("tests") || tags.has("test-failure") || tags.has("success-pattern") || /\b(ci|test|tests|pipeline|benchmark|exitcode|exit code)\b/.test(`${content} ${metadata}`))) return 0.88;
+  if (sourceKind === "reviewed_code") return 0.86;
+  if ((connectorId.includes("confluence") || connectorId.includes("notion") || connectorId.includes("docs")) && /\b(adr|architecture decision|spec|decision)\b/.test(`${content} ${metadata}`)) return 0.82;
+  if (/\b(jira|linear|asana|clickup)\b/.test(connectorId)) return 0.74;
+  if (/\b(slack|discord|teams)\b/.test(connectorId)) return 0.64;
+  if (sourceKind === "human") return 0.78;
+  if (sourceKind === "tool") return 0.72;
+  if (sourceKind === "import") return 0.58;
+  if (sourceKind === "agent") return 0.44;
+  if (sourceKind === "transcript") return 0.28;
+  return 0.5;
 }
 
 function sharesEvidenceSurface(a: Memory, b: Memory): boolean {

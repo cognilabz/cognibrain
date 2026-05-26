@@ -4,8 +4,8 @@ import { dirname } from "node:path";
 interface OperatorRow {
   surface: string;
   cliCommands: string[];
-  tuiView: boolean;
-  actionPalette: boolean;
+  cliSurface: boolean;
+  compactOutput: boolean;
   transactionalPath: boolean;
   validation: boolean;
   evidence: string[];
@@ -27,23 +27,24 @@ interface OperatorOsReport {
 }
 
 const surfaces = [
-  surface("Home", ["cognibrain", "cognibrain status"], ["id: \"home\"", "cognibrain proof"], ["tests/cli.test.ts"]),
-  surface("Memories", ["cognibrain memories", "cognibrain memory inspect <id>", "cognibrain memory retract <id>"], ["id: \"memories\"", "id: \"memory-management\"", "Review Queue"], ["tests/cli.test.ts", "src/cli/memctl.ts"]),
-  surface("Evidence", ["cognibrain memory evidence-pack <query>", "cognibrain memory graph <query>"], ["evidence packs", "graph and timeline"], ["src/cli/memctl.ts"]),
-  surface("Connectors", ["cognibrain connector wizard github", "cognibrain connector doctor", "cognibrain connector list"], ["id: \"connector-wizard\"", "id: \"connectors\""], ["tests/cli.test.ts"]),
-  surface("Runtime", ["cognibrain service plan", "cognibrain service logs", "cognibrain status"], ["id: \"service\"", "service logs"], ["tests/cli.test.ts"]),
-  surface("Config", ["cognibrain config show", "cognibrain config doctor", "cognibrain config all"], ["id: \"config\"", "Setup profile"], ["tests/cli.test.ts"]),
-  surface("Benchmarks", ["npm run benchmark:arena", "npm run audit:truth", "cognibrain proof"], ["id: \"reports\"", "Proof and benchmark reports"], ["tests/evaluation.test.ts"]),
-  surface("Logs", ["cognibrain service logs", "cognibrain doctor --publish"], ["service logs", "Readiness doctor"], ["bin/cognibrain.mjs"]),
-  surface("Policies", ["cognibrain memory policy-rule", "cognibrain memory policy-evaluate"], ["id: \"policies\"", "Policy rules"], ["src/cli/memctl.ts", "src/api/server.ts"]),
-  surface("Retention", ["cognibrain memory retention-rule", "cognibrain memory retention-enforce"], ["id: \"retention\"", "Retention and compliance"], ["src/cli/memctl.ts", "src/api/server.ts"]),
+  surface("Home", ["cognibrain", "cognibrain status"], ["surface: \"operator-cli\"", "function renderPlainSurface"], ["tests/cli.test.ts"]),
+  surface("Memories", ["cognibrain memories", "cognibrain memory inspect <id>", "cognibrain memory retract <id>"], ["cognibrain memories", "memory inspect"], ["tests/cli.test.ts", "src/cli/memctl.ts"]),
+  surface("Evidence", ["cognibrain memory evidence-pack <query>", "cognibrain memory graph <query>"], ["evidence packs", "graph/timeline"], ["src/cli/memctl.ts"]),
+  surface("Connectors", ["cognibrain connector wizard github", "cognibrain connector doctor", "cognibrain connector list"], ["cognibrain connector", "connector wizard"], ["tests/cli.test.ts"]),
+  surface("Runtime", ["cognibrain service plan", "cognibrain service logs", "cognibrain status"], ["cognibrain service", "service logs"], ["tests/cli.test.ts"]),
+  surface("Config", ["cognibrain config show", "cognibrain config doctor", "cognibrain config all"], ["cognibrain config", "setup"], ["tests/cli.test.ts"]),
+  surface("Benchmarks", ["npm run benchmark:arena", "npm run audit:truth", "cognibrain proof"], ["cognibrain proof", "benchmark:arena"], ["tests/evaluation.test.ts"]),
+  surface("Logs", ["cognibrain service logs", "cognibrain doctor --publish"], ["service logs", "doctor --publish"], ["bin/cognibrain.mjs"]),
+  surface("Policies", ["cognibrain memory policy-rule", "cognibrain memory policy-evaluate"], ["policy", "retention"], ["src/cli/memctl.ts", "src/api/server.ts"]),
+  surface("Retention", ["cognibrain memory retention-rule", "cognibrain memory retention-enforce"], ["retention", "compliance"], ["src/cli/memctl.ts", "src/api/server.ts"]),
   surface("Docs", ["cognibrain proof", "npm run audit:docs"], ["docs/status.md", "docs/claims.md"], ["scripts/release/audit-docs.mjs"])
 ];
 
 export function generateOperatorOsMaturity(options: { out?: string; markdown?: string } = {}): OperatorOsReport {
   const files = {
     cli: read("bin/cognibrain.mjs"),
-    ink: read("src/cli/inkApp.mjs"),
+    cliRuntime: read("bin/lib/cliRuntime.mjs"),
+    render: read("bin/lib/render.mjs"),
     memctl: read("src/cli/memctl.ts"),
     server: read("src/api/server.ts"),
     packageJson: read("package.json"),
@@ -77,23 +78,23 @@ export function generateOperatorOsMaturity(options: { out?: string; markdown?: s
 }
 
 function operatorRow(item: ReturnType<typeof surface>, files: Record<string, string>, all: string): OperatorRow {
-  const cliCommands = item.commands.filter((command) => commandIncludes(files.cli + files.memctl + files.packageJson, command));
-  const tuiView = item.tuiNeedles.every((needle) => all.includes(needle));
-  const actionPalette = files.ink.includes("ACTION PALETTE") && item.commands.some((command) => files.ink.includes(command.split(" <")[0]) || files.ink.includes(command));
-  const transactionalPath = cliCommands.length === item.commands.length && files.ink.includes("runActionCommand") && files.ink.includes("actionNeedsConfirmation");
+  const cliCommands = item.commands.filter((command) => commandIncludes(files.cli + files.cliRuntime + files.memctl + files.packageJson, command));
+  const cliSurface = item.surfaceNeedles.every((needle) => all.includes(needle));
+  const compactOutput = (((files.cli + files.cliRuntime).includes("clipText") && (files.cli + files.cliRuntime).includes("terminalWidth")) || (files.render.includes("function renderPlainSurface") && files.render.includes("compactItems"))) && !all.includes("renderInteractiveCliApp");
+  const transactionalPath = cliCommands.length === item.commands.length;
   const validation = item.evidence.every((path) => existsSync(path)) || item.evidence.every((path) => all.includes(path));
   const gaps = [
     ...(cliCommands.length !== item.commands.length ? [`missing CLI commands: ${item.commands.filter((command) => !cliCommands.includes(command)).join(", ")}`] : []),
-    ...(!tuiView ? ["missing TUI view evidence"] : []),
-    ...(!actionPalette ? ["missing action palette path"] : []),
+    ...(!cliSurface ? ["missing CLI surface evidence"] : []),
+    ...(!compactOutput ? ["missing compact output guard"] : []),
     ...(!transactionalPath ? ["missing transactional command execution path"] : []),
     ...(!validation ? ["missing validation evidence"] : [])
   ];
   return {
     surface: item.name,
     cliCommands: item.commands,
-    tuiView,
-    actionPalette,
+    cliSurface,
+    compactOutput,
     transactionalPath,
     validation,
     evidence: item.evidence,
@@ -102,8 +103,8 @@ function operatorRow(item: ReturnType<typeof surface>, files: Record<string, str
   };
 }
 
-function surface(name: string, commands: string[], tuiNeedles: string[], evidence: string[]) {
-  return { name, commands, tuiNeedles, evidence };
+function surface(name: string, commands: string[], surfaceNeedles: string[], evidence: string[]) {
+  return { name, commands, surfaceNeedles, evidence };
 }
 
 function commandIncludes(content: string, command: string): boolean {
@@ -115,15 +116,15 @@ function commandIncludes(content: string, command: string): boolean {
 
 function renderMarkdown(report: OperatorOsReport): string {
   const rows = report.rows
-    .map((row) => `| ${row.surface} | ${row.passed ? "yes" : "no"} | ${row.tuiView ? "yes" : "no"} | ${row.actionPalette ? "yes" : "no"} | ${row.transactionalPath ? "yes" : "no"} | ${row.gaps.length ? row.gaps.join("; ") : "none"} |`)
+    .map((row) => `| ${row.surface} | ${row.passed ? "yes" : "no"} | ${row.cliSurface ? "yes" : "no"} | ${row.compactOutput ? "yes" : "no"} | ${row.transactionalPath ? "yes" : "no"} | ${row.gaps.length ? row.gaps.join("; ") : "none"} |`)
     .join("\n");
   return `# Terminal Operator OS Maturity
 
 Generated at ${report.generatedAt}.
 
-This artifact checks that the terminal surface covers the product workflows through command-backed TUI actions, validation and non-browser operator paths.
+This artifact checks that the terminal surface covers the product workflows through stable command-backed output, validation and non-browser operator paths.
 
-| Surface | Passed | TUI view | Action palette | Transactional path | Gaps |
+| Surface | Passed | CLI surface | Compact output | Transactional path | Gaps |
 | --- | ---: | ---: | ---: | ---: | --- |
 ${rows}
 `;

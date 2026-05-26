@@ -17,6 +17,7 @@ import { generateConnectorWebhookProof } from "../src/eval/connectorWebhooks";
 import { generateHarnessMaturity } from "../src/eval/harnessMaturity";
 import { generateOperatorOsMaturity } from "../src/eval/operatorOsMaturity";
 import { generateBenchmarkHardeningReport } from "../src/eval/benchmarkHardening";
+import { runOperatorMemoryBenchmark } from "../src/eval/operatorMemoryBenchmark";
 import { publishArenaReport } from "../src/eval/publishArena";
 
 describe("self verification benchmark loop", () => {
@@ -258,6 +259,20 @@ describe("self verification benchmark loop", () => {
     expect(benchmark.passed).toBe(true);
     expect(benchmark.dataset.sha256).toHaveLength(64);
     expect(benchmark.realRepoTrack.repoCount).toBeGreaterThanOrEqual(5);
+  });
+
+  it("runs the operator memory dream benchmark and blocks unsupported market claims", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-operator-memory-"));
+    const report = await runOperatorMemoryBenchmark({
+      out: join(dir, "operator-memory-benchmark.json"),
+      markdown: join(dir, "operator-memory-benchmark.md")
+    });
+    expect(report.passed).toBe(true);
+    expect(report.summary.localBaselineSuperiority).toBe(true);
+    expect(report.summary.cognibrainScore).toBeGreaterThan(report.summary.bestBaselineScore);
+    expect(report.summary.marketSuperiorityClaimAllowed).toBe(false);
+    expect(report.summary.marketSuperiorityBlockers.length).toBeGreaterThan(0);
+    expect(readFileSync(join(dir, "operator-memory-benchmark.md"), "utf8")).toContain("Operator Memory Dream Benchmark");
   });
 
   it("publishes a marketing scorecard with bars and per-scenario details", () => {

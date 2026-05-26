@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -13,7 +13,7 @@ const slowCliTimeout = 30_000;
 describe("cognibrain CLI", () => {
   it("prints the one-command surface", () => {
     const output = execFileSync(process.execPath, [cli, "help"], { cwd: root, encoding: "utf8" });
-    expect(output).toContain("cognibrain\n      Open the React/Ink CLI home");
+    expect(output).toContain("cognibrain\n      Print the compact operator CLI home");
     expect(output).toContain("cognibrain tui|ui|home");
     expect(output).toContain("cognibrain setup");
     expect(output).toContain("cognibrain doctor");
@@ -22,7 +22,7 @@ describe("cognibrain CLI", () => {
     expect(output).toContain("cognibrain proof|truth");
     expect(output).toContain("cognibrain service");
     expect(output).toContain("cognibrain memory search");
-    expect(output).toContain("React/Ink guided");
+    expect(output).toContain("Guided self-hosted install");
     expect(output).toContain("azure-devops");
     expect(output).toContain("cognibrain adapter list");
     expect(output).toContain("cognibrain skill install|status|doctor|path");
@@ -76,17 +76,16 @@ describe("cognibrain CLI", () => {
       const memories = execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories"], { cwd: dir, env, encoding: "utf8" });
       const connections = execFileSync(process.execPath, [cli, "--runtime-root", dir, "connections"], { cwd: dir, env, encoding: "utf8" });
 
-      expect(home).toContain("COGNIBRAIN");
-      expect(home).toContain("WORKBENCHES");
-      expect(home).toContain("One-command control plane");
-      expect(home).toContain("ACTION PALETTE");
-      expect(home).toContain("Snapshot mode");
+      expect(home).toContain("cognibrain");
+      expect(home).toContain("Memories");
+      expect(home).toContain("Connections");
+      expect(home).toContain("Commands");
       expect(memories).toContain("cognibrain memories");
       expect(memories).toContain("primary product surface");
       expect(connections).toContain("cognibrain connections");
       expect(connections).toContain("github");
       expect(status.package.name).toBe("@cognilabz/cognibrain");
-      expect(tuiJson.surface).toBe("interactive-ink-cli");
+      expect(tuiJson.surface).toBe("operator-cli");
       expect(homeJson.service.manager).toBeTruthy();
       expect(homeJson.commands).toContain("cognibrain service plan");
       expect(homeJson.commands).toContain("cognibrain proof");
@@ -99,10 +98,10 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 
-  it("renders graphical Ink workbenches for the product surfaces", () => {
-    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-ink-"));
+  it("renders compact stable operator surfaces without animated control frames", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-operator-"));
     try {
-      const env = { ...process.env, COGNIBRAIN_FORCE_INK: "true", MEMORY_AUTO_DREAM: "false" };
+      const env = { ...process.env, COGNIBRAIN_FORCE_INK: "true", MEMORY_AUTO_DREAM: "false", COLUMNS: "52" };
       const surfaces = [
         { args: ["config", "show"], title: "cognibrain config" },
         { args: ["connector", "list"], title: "cognibrain connectors" },
@@ -114,26 +113,14 @@ describe("cognibrain CLI", () => {
       ];
       for (const surface of surfaces) {
         const output = execFileSync(process.execPath, [cli, "--runtime-root", dir, ...surface.args], { cwd: dir, env, encoding: "utf8" });
-        expect(output).toContain("╭");
-        expect(output).toContain("╰");
+        expect(output).not.toContain("╭");
+        expect(output).not.toContain("╰");
         expect(output).toContain(surface.title);
+        expect(Math.max(...output.split(/\r?\n/).map((line) => line.length))).toBeLessThanOrEqual(100);
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  }, slowCliTimeout);
-
-  it("guards executable Ink action palette commands", () => {
-    const moduleUrl = pathToFileURL(join(root, "src", "cli", "inkApp.mjs")).href;
-    const output = execFileSync(process.execPath, ["--input-type=module", "-e", `
-      import { actionNeedsConfirmation, actionNeedsInput } from ${JSON.stringify(moduleUrl)};
-      console.log(JSON.stringify({
-        placeholder: actionNeedsInput("cognibrain memories search <query>"),
-        safe: actionNeedsConfirmation("cognibrain doctor --fix"),
-        destructive: actionNeedsConfirmation("cognibrain service stop")
-      }));
-    `], { cwd: root, encoding: "utf8" });
-    expect(JSON.parse(output)).toEqual({ placeholder: true, safe: false, destructive: true });
   }, slowCliTimeout);
 
   it("manages setup config, connector config, adapter config, and skill status through CLI commands", () => {
@@ -162,7 +149,7 @@ describe("cognibrain CLI", () => {
       const connectorDoctor = execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "doctor", "sentry"], { cwd: dir, env, encoding: "utf8" });
 
       expect(connectorList).toContain("sentry");
-      expect(connectorList).toContain("posthog");
+      expect(connectorList).toContain("native drivers: 19");
       expect(adapterList).toContain("storage-sqlite");
       expect(adapterList).toContain("mcp-remote");
       expect(config.setupState.profile).toBe("solo-dev");

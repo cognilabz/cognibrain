@@ -31,6 +31,7 @@ export class RetrievalEngine {
       if (!options.includeArchived && memory.archivedAt) return false;
       if (memory.beliefState === "retracted") return false;
       if (memory.beliefState === "superseded" && !options.includeArchived) return false;
+      if (memory.beliefState === "contradicted" && !options.includeArchived) return false;
       if (options.agentId && memory.agentId && memory.agentId !== options.agentId) return false;
       if (!scopeMatches(memory, options)) return false;
       if (!consentAllows(memory, options, now)) return false;

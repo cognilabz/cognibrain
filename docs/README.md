@@ -14,9 +14,9 @@ Cognibrain is a self-hosted engineering memory layer for coding agents. The CLI 
 
 ## Product Snapshot
 
-![Cognibrain CLI home](assets/cli-home.svg)
-
 Cognibrain stores durable engineering memory and returns cited context before the next agent action. It is built for repo rules, review corrections, commands, connector events, timelines, graph links, evidence packs and release proof.
+
+The operator CLI is stable text output by design. It is meant to work in small terminals, CI logs and remote shells without animated TUI rendering.
 
 ## Claim Boundary
 

@@ -22,10 +22,18 @@ const files = {
   vendorLive: readJson("artifacts/vendor-live-smoke.json", { liveRequested: false, writebackEnabled: false, providers: [] }),
   postgresLive: readJson("artifacts/postgres-live.json", { acceptance: {} }),
   releaseCheck: read("scripts/release/release-check.mjs"),
-  cli: read("bin/cognibrain.mjs"),
+  cli: readMany(["bin/cognibrain.mjs", "bin/lib/render.mjs"]),
   server: read("src/api/server.ts"),
+  serverHelpers: read("src/api/server/helpers.ts"),
   service: read("src/api/service.ts"),
-  persistence: read("src/api/persistence.ts"),
+  persistence: readMany([
+    "src/api/persistence.ts",
+    "src/api/persistence/local.ts",
+    "src/api/persistence/sqlite.ts",
+    "src/api/persistence/compatible.ts",
+    "src/api/persistence/remote.ts",
+    "src/api/persistence/factory.ts"
+  ]),
   readme: read("README.md"),
   docsHome: read("docs/README.md"),
   install: read("docs/install.md"),
@@ -66,8 +74,9 @@ const vendorLiveAttempted = vendorLiveProviders.filter((provider) => provider &&
 const storageIsSnapshotFirst = files.persistence.includes("insert into cognibrain_snapshots") && files.persistence.includes("truncate table cognibrain_context_packs");
 const dbPrimaryStorage = !storageIsSnapshotFirst && files.persistence.includes("DB-primary repository") && files.persistence.includes("memory.created") && files.persistence.includes("memory.updated") && files.persistence.includes("memory.deleted");
 const postgresVerifierPassed = files.postgresLive?.acceptance?.startsWithPostgresBackend === true;
-const oidcVerifierPresent = /\bjwks\b|\bopenid-client\b|\bjose\b|verifyJwt|verifyOidc|issuer.+audience/i.test(files.server);
-const apiKeyAuthPresent = files.server.includes("MEMORY_API_KEYS") && files.server.includes("Bearer");
+const serverAuthCode = `${files.server}\n${files.serverHelpers}`;
+const oidcVerifierPresent = /\bjwks\b|\bopenid-client\b|\bjose\b|verifyJwt|verifyOidc|issuer.+audience/i.test(serverAuthCode);
+const apiKeyAuthPresent = serverAuthCode.includes("MEMORY_API_KEYS") && serverAuthCode.includes("Bearer");
 const defaultAllowPolicy = files.service.includes('const allowed = decisive ? decisive.effect === "allow" : true');
 const corsWildcard = files.server.includes('Access-Control-Allow-Origin", "*"');
 const requestRateLimitPresent = /rateLimit|rate limit|429|too_many_requests/i.test(files.server);
@@ -81,7 +90,6 @@ const productionReadiness = productionReadinessReport();
 mkdirSync(join(root, "artifacts"), { recursive: true });
 writeFileSync(join(root, "artifacts", "production-readiness.json"), `${JSON.stringify(productionReadiness, null, 2)}\n`);
 
-const screenshotAssets = ["cli-home.svg", "cli-connections.svg", "cli-service.svg", "cli-config.svg", "cli-sdk.svg"].filter((file) => existsSync(join(root, "docs", "assets", file)));
 const packageFiles = new Set(Array.isArray(files.packageJson.files) ? files.packageJson.files : []);
 
 const checks = [
@@ -192,9 +200,9 @@ const checks = [
     generated: generatedHarnessRows.length,
     goldenPaths: harnessGoldenPaths.length
   }),
-  check("cli-ink-primary", "The installable CLI has Ink/React dependencies, CLI render paths and checked screenshot assets.", Boolean(files.packageJson.dependencies?.ink) && files.cli.includes("await import(\"ink\")") && files.cli.includes("case \"proof\"") && screenshotAssets.length >= 5, "fail", {
+  check("cli-operator-primary", "The installable CLI uses stable compact text surfaces without the removed Ink TUI dependency.", !files.packageJson.dependencies?.ink && !existsSync(join(root, "src", "cli", "inkApp.mjs")) && files.cli.includes("function renderPlainSurface") && files.cli.includes("clipText"), "fail", {
     source: "bin/cognibrain.mjs",
-    screenshots: screenshotAssets.length
+    removed: ["animated terminal UI dependency", "src/cli/inkApp.mjs", "generated CLI screenshots"]
   }),
   check("operator-os-proof", "The terminal operator OS maturity artifact covers memory, connectors, runtime, config, benchmarks, policy, retention, logs and docs.", files.operatorOs.passed === true && Array.isArray(files.operatorOs.rows) && files.operatorOs.rows.length >= 10, "fail", {
     artifact: "artifacts/operator-os-maturity.json",
@@ -283,7 +291,7 @@ const report = {
     webhookVerifiedConnectors: webhookVerifiedRows.length,
     generatedHarnesses: generatedHarnessRows.length,
     harnessGoldenPaths: harnessGoldenPaths.length,
-    cliScreenshots: screenshotAssets.length,
+    operatorCliStable: checks.find((item) => item.id === "cli-operator-primary")?.passed === true,
     dockerOptional: checks.find((item) => item.id === "docker-optional")?.passed === true,
     selfHostedCandidate: productionReadiness.summary.selfHostedCandidate,
     productionCertified: productionReadiness.summary.productionCertified,
@@ -307,7 +315,7 @@ const report = {
     ["connectors.webhookVerified", webhookVerifiedRows.length, "artifacts/connector-webhooks.json"],
     ["harness.generated", generatedHarnessRows.length, "artifacts/harness-maturity.json"],
     ["harness.goldenPaths", harnessGoldenPaths.length, "artifacts/harness-maturity.json"],
-    ["cli.inkScreenshots", screenshotAssets.length, "docs/assets/cli-*.svg"],
+    ["cli.surface", "stable-operator-cli", "bin/cognibrain.mjs"],
     ["production.selfHostedCandidate", productionReadiness.summary.selfHostedCandidate, "artifacts/production-readiness.json"],
     ["production.certified", productionReadiness.summary.productionCertified, "artifacts/production-readiness.json"],
     ["storage.mode", dbPrimaryStorage ? "db-primary" : storageIsSnapshotFirst ? "snapshot-first" : "unknown", "src/api/persistence.ts"],
@@ -369,7 +377,7 @@ function findPositiveClaims(content, patterns) {
 
 function productionReadinessReport() {
   const rows = [
-    readinessRow("CLI/TUI", "Ink CLI and operator OS maturity artifact implemented", "status/proof/config/policy/retention commands", "Primary operator workbench", "n/a", "tests/cli.test.ts, tests/evaluation.test.ts", "docs/assets/cli-*.svg, artifacts/operator-os-maturity.json", "self-hosted operator candidate", "Command-backed terminal paths are covered; browser dashboard remains optional."),
+    readinessRow("CLI", "Stable operator CLI and operator OS maturity artifact implemented", "status/proof/config/policy/retention commands", "Primary operator workbench", "n/a", "tests/cli.test.ts, tests/evaluation.test.ts", "bin/cognibrain.mjs, artifacts/operator-os-maturity.json", "self-hosted operator candidate", "Command-backed terminal paths are covered; browser dashboard remains optional."),
     readinessRow("Memory API and MCP", "Service, HTTP API, MCP server and SDK clients exist", "broad route surface with route-level RBAC", "memory/proof/status commands", "memory_context_pack, coding context, action guard, patch evidence", "tests/api.test.ts, tests/core.test.ts", "docs/reference.md", "local/team/enterprise-auth candidate", "JWT/OIDC verifier is optional and must be configured per deployment."),
     readinessRow("Storage", dbPrimaryStorage ? "DB-primary repository with granular row upserts" : "DB-primary repository not detected", "storage reports and Postgres verifier", "connection adapters", "n/a", "tests/core.test.ts, src/eval/postgresLive.ts", "artifacts/postgres-live.json", dbPrimaryStorage ? "production storage candidate" : "production gap", "Snapshots are backup/compaction artifacts, not the primary write path."),
     readinessRow("Security/Auth", oidcVerifierPresent ? "API keys plus optional JWT/OIDC verifier, actor scopes and RBAC" : "No JWT/OIDC verifier detected", "/health open, other routes protected by configured auth", "doctor/status", "agent tools inherit the API boundary", "tests/api.test.ts", "src/api/server.ts", oidcVerifierPresent ? "enterprise auth candidate" : "production gap", "Deployments still own issuer/audience/key configuration and TLS."),
@@ -424,6 +432,10 @@ function read(path) {
   const fullPath = join(root, path);
   if (!existsSync(fullPath)) return "";
   return readFileSync(fullPath, "utf8");
+}
+
+function readMany(paths) {
+  return paths.map((path) => read(path)).join("\n\n");
 }
 
 function readJson(path, fallback) {

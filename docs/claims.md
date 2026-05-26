@@ -4,7 +4,7 @@ Public claims must stay tied to a command, source file or generated local report
 
 | Claim ID | Claim | Evidence gate | Evidence | Boundary |
 | --- | --- | --- | --- | --- |
-| CB-CLI-INK | The CLI is the primary operator surface. | `npm test -- tests/cli.test.ts`, `npm run docs:cli-screenshots` | `bin/cognibrain.mjs`, `docs/assets/cli-*.svg` | JSON mode remains for scripts. |
+| CB-CLI | The CLI is the primary operator surface. | `npm test -- tests/cli.test.ts`, `npm run audit:structure` | `bin/cognibrain.mjs`, `tests/cli.test.ts` | JSON mode remains for scripts; no animated TUI is claimed. |
 | CB-MCP | MCP is the preferred agent integration surface. | `npm test`, `npm run mcp` | `src/connectors/mcpServer.ts`, `src/connectors/mcpHandlers.ts` | CLI is fallback/operator path. |
 | CB-SDK-HTTP | SDK/HTTP supports custom product integrations. | `npm test`, `/openapi.json` | `sdk/typescript/client.ts`, `sdk/python/README.md`, `src/api/server.ts` | Not the default path for MCP-capable agents. |
 | CB-SELF-HOSTED | Cognibrain is self-hostable from npm or checkout. | `npm run verify:selfhosted:claims`, `npm run release:check` | `bootstrap.sh`, `bin/cognibrain.mjs` | Target deployments must rerun gates with their own storage and secrets. |

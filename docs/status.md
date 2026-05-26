@@ -4,7 +4,7 @@ This matrix is the current truth boundary for Cognibrain. It separates implement
 
 | Feature | Current state | Verification | Claim boundary |
 | --- | --- | --- | --- |
-| CLI | Ink CLI is the operator surface for setup, status, service, config, connectors and proof. | `npm test`, `npm run docs:cli-screenshots` | Dashboard remains optional. |
+| CLI | Stable operator CLI covers setup, status, service, config, connectors and proof without animated TUI rendering. | `npm test`, `npm run audit:structure` | Dashboard remains optional. |
 | MCP | MCP server exposes context, coding context, action guard, durable writes, patch evidence and maintenance. | `npm test`, `npm run mcp` | MCP is the primary agent path. |
 | SDK/HTTP | HTTP API and typed clients support custom integrations and non-MCP runtimes. | `npm test`, `/openapi.json` | SDK/HTTP is not the recommended primary agent path when MCP exists. |
 | Storage | DB-primary row persistence with granular memory writes, SQL rows and append-only events. | `npm test`, `npm run verify:postgres` | Snapshots are retained only as backup/compaction artifacts. |

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T07:06:09.837Z",
+  "generatedAt": "2026-05-26T08:42:44.947Z",
   "mode": "native-competitor-run",
   "count": 30,
   "installations": {
@@ -30,7 +30,7 @@
         "ok": true,
         "status": 0,
         "stdoutTail": "",
-        "stderrTail": "Using Python 3.13.13 environment at: .cognibrain/native-runners/competitors-venv\nAudited 5 packages in 44ms\n"
+        "stderrTail": "Using Python 3.13.13 environment at: .cognibrain/native-runners/competitors-venv\nAudited 5 packages in 70ms\n"
       }
     },
     "mem0": {
@@ -106,7 +106,7 @@
       "install": {
         "ok": true,
         "status": 0,
-        "stdoutTail": "bun install v1.2.17 (282dda62)\n\nChecked 285 installs across 277 packages (no changes) [91.00ms]\n",
+        "stdoutTail": "bun install v1.2.17 (282dda62)\n\nChecked 285 installs across 277 packages (no changes) [109.00ms]\n",
         "stderrTail": "\n$ command -v gbrain >/dev/null 2>&1 && gbrain apply-migrations --yes --non-interactive || echo '[gbrain] postinstall skipped. If installed via bun install -g github:...: run `gbrain doctor` and `gbrain apply-migrations --yes` manually. See https://github.com/garrytan/gbrain/issues/218' 1>&2\n[gbrain] postinstall skipped. If installed via bun install -g github:...: run `gbrain doctor` and `gbrain apply-migrations --yes` manually. See https://github.com/garrytan/gbrain/issues/218\n"
       },
       "liveRunnable": true
@@ -115,7 +115,7 @@
   "arena": {
     "ok": true,
     "status": 0,
-    "stdoutTail": "       \"correctionCarryover\": false,\n            \"repeatedMistakeAvoided\": false,\n            \"procedureRecall\": false,\n            \"patchCorrectness\": false,\n            \"evidenceCompleteness\": false,\n            \"wrongMemorySuppression\": false\n          },\n          \"score\": 0,\n          \"evidence\": {\n            \"adapter\": \"gbrain\",\n            \"proofLevel\": \"same-run-cli\",\n            \"commandEnv\": \"MEMORY_ARENA_GBRAIN_COMMAND\",\n            \"runner\": \"external-json-command\",\n            \"latencyMs\": 1411,\n            \"capabilityGaps\": [\n              \"GBrain search/capture does not expose Cognibrain's typed pre-tool action guard\",\n              \"GBrain does not emit Cognibrain Patch Evidence Trail objects for commands/files\"\n            ],\n            \"evidence\": {\n              \"runner\": \"gbrain-cli\",\n              \"proofLevel\": \"same-run-cli\",\n              \"repo\": \"/Users/michaelhubeny/homespace/memory/.cognibrain/vendor/gbrain\",\n              \"home\": \"/Users/michaelhubeny/homespace/memory/.cognibrain/native-runners/gbrain-home\",\n              \"slug\": \"cognicode/cognicode-030/correction\",\n              \"capture\": {\n                \"slug\": \"cognicode/cognicode-030/correction\",\n                \"status\": \"skipped\",\n                \"chunks\": 0,\n                \"content_hash\": \"d10284b22c4e6f6a3e26bbfc50a53ae6d5eb592ebc5dab85691c620b292260e0\",\n                \"written\": false,\n                \"source_kind\": \"capture-cli\",\n                \"captured_at\": \"2026-05-26T07:06:08.434Z\"\n              },\n              \"searchTail\": \"No results.\\n\\n[1.0000] cognicode/cognicode-006/correction -- # CogniCode scenario: cognicode-006\\n\\nCogniCode scenario: cognicode-006\\nRepository: legacy-billing-ap\\n\\n[1.0000] cognicode/cognicode-006/correction -- # CogniCode scenario: cognicode-006\\n\\nCogniCode scenario: cognicode-006\\nRepository: legacy-billing-ap\\n\",\n              \"getTail\": \"\"\n            }\n          }\n        }\n      ],\n      \"runner\": {\n        \"commandEnv\": \"MEMORY_ARENA_GBRAIN_COMMAND\"\n      }\n    }\n  ],\n  \"leaderboard\": [\n    {\n      \"system\": \"Cognibrain\",\n      \"score\": 0.9722,\n      \"proofLevel\": \"same-run-full\",\n      \"repeatedMistakeRate\": 0,\n      \"gaps\": 0\n    },\n    {\n      \"system\": \"LangMem\",\n      \"score\": 0.6667,\n      \"proofLevel\": \"same-run-native\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 6\n    },\n    {\n      \"system\": \"Mem0\",\n      \"score\": 0.6667,\n      \"proofLevel\": \"same-run-native\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 7\n    },\n    {\n      \"system\": \"GBrain\",\n      \"score\": 0.1556,\n      \"proofLevel\": \"same-run-cli\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 5\n    },\n    {\n      \"system\": \"Graphiti/Zep\",\n      \"score\": 0,\n      \"proofLevel\": \"credential-blocked\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 4\n    },\n    {\n      \"system\": \"Cognee\",\n      \"score\": 0,\n      \"proofLevel\": \"credential-blocked\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 4\n    }\n  ],\n  \"winner\": \"Cognibrain\",\n  \"passed\": true\n}\n",
+    "stdoutTail": "   \"correctionCarryover\": false,\n            \"repeatedMistakeAvoided\": false,\n            \"procedureRecall\": false,\n            \"patchCorrectness\": false,\n            \"evidenceCompleteness\": false,\n            \"wrongMemorySuppression\": false\n          },\n          \"score\": 0,\n          \"evidence\": {\n            \"adapter\": \"gbrain\",\n            \"proofLevel\": \"same-run-cli\",\n            \"commandEnv\": \"MEMORY_ARENA_GBRAIN_COMMAND\",\n            \"runner\": \"external-json-command\",\n            \"latencyMs\": 1509,\n            \"capabilityGaps\": [\n              \"GBrain search/capture does not expose Cognibrain's typed pre-tool action guard\",\n              \"GBrain does not emit Cognibrain Patch Evidence Trail objects for commands/files\"\n            ],\n            \"evidence\": {\n              \"runner\": \"gbrain-cli\",\n              \"proofLevel\": \"same-run-cli\",\n              \"repo\": \"/Users/michaelhubeny/homespace/memory/.cognibrain/vendor/gbrain\",\n              \"home\": \"/Users/michaelhubeny/homespace/memory/.cognibrain/native-runners/gbrain-home\",\n              \"slug\": \"cognicode/cognicode-030/correction\",\n              \"capture\": {\n                \"slug\": \"cognicode/cognicode-030/correction\",\n                \"status\": \"skipped\",\n                \"chunks\": 0,\n                \"content_hash\": \"d10284b22c4e6f6a3e26bbfc50a53ae6d5eb592ebc5dab85691c620b292260e0\",\n                \"written\": false,\n                \"source_kind\": \"capture-cli\",\n                \"captured_at\": \"2026-05-26T08:42:43.447Z\"\n              },\n              \"searchTail\": \"No results.\\n\\n[1.0000] cognicode/cognicode-006/correction -- # CogniCode scenario: cognicode-006\\n\\nCogniCode scenario: cognicode-006\\nRepository: legacy-billing-ap\\n\\n[1.0000] cognicode/cognicode-006/correction -- # CogniCode scenario: cognicode-006\\n\\nCogniCode scenario: cognicode-006\\nRepository: legacy-billing-ap\\n\",\n              \"getTail\": \"\"\n            }\n          }\n        }\n      ],\n      \"runner\": {\n        \"commandEnv\": \"MEMORY_ARENA_GBRAIN_COMMAND\"\n      }\n    }\n  ],\n  \"leaderboard\": [\n    {\n      \"system\": \"Cognibrain\",\n      \"score\": 0.9722,\n      \"proofLevel\": \"same-run-full\",\n      \"repeatedMistakeRate\": 0,\n      \"gaps\": 0\n    },\n    {\n      \"system\": \"Graphiti/Zep\",\n      \"score\": 0.6667,\n      \"proofLevel\": \"same-run-native\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 6\n    },\n    {\n      \"system\": \"Cognee\",\n      \"score\": 0.6667,\n      \"proofLevel\": \"same-run-native\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 6\n    },\n    {\n      \"system\": \"LangMem\",\n      \"score\": 0.6667,\n      \"proofLevel\": \"same-run-native\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 6\n    },\n    {\n      \"system\": \"Mem0\",\n      \"score\": 0.6667,\n      \"proofLevel\": \"same-run-native\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 7\n    },\n    {\n      \"system\": \"GBrain\",\n      \"score\": 0.1556,\n      \"proofLevel\": \"same-run-cli\",\n      \"repeatedMistakeRate\": 1,\n      \"gaps\": 5\n    }\n  ],\n  \"winner\": \"Cognibrain\",\n  \"passed\": true\n}\n",
     "stderrTail": ""
   },
   "published": {
@@ -149,9 +149,9 @@
     {
       "system": "graphiti",
       "displayName": "Graphiti/Zep",
-      "proofLevel": "credential-blocked",
-      "adapterMode": "blocked-command",
-      "score": 0,
+      "proofLevel": "same-run-native",
+      "adapterMode": "native-command",
+      "score": 0.6667,
       "repeatedMistakeRate": 1,
       "scenarioCount": 30,
       "runner": {
@@ -161,9 +161,9 @@
     {
       "system": "cognee",
       "displayName": "Cognee",
-      "proofLevel": "credential-blocked",
-      "adapterMode": "blocked-command",
-      "score": 0,
+      "proofLevel": "same-run-native",
+      "adapterMode": "native-command",
+      "score": 0.6667,
       "repeatedMistakeRate": 1,
       "scenarioCount": 30,
       "runner": {
@@ -195,27 +195,6 @@
       }
     }
   ],
-  "realCompetitorRuns": 3,
-  "blocked": [
-    {
-      "system": "graphiti",
-      "displayName": "Graphiti/Zep",
-      "gaps": [
-        "external runner configured by MEMORY_ARENA_GRAPHITI_COMMAND; capability gaps come from runner output when provided",
-        "no first-class patch evidence trail",
-        "no pre-tool forbidden-action gate",
-        "OPENAI_API_KEY or GRAPHITI_OPENAI_API_KEY is missing; Graphiti extraction/search cannot be executed honestly"
-      ]
-    },
-    {
-      "system": "cognee",
-      "displayName": "Cognee",
-      "gaps": [
-        "external runner configured by MEMORY_ARENA_COGNEE_COMMAND; capability gaps come from runner output when provided",
-        "knowledge pipeline focus, not pre-tool action prevention",
-        "no command outcome evidence trail",
-        "OPENAI_API_KEY/LLM_API_KEY is missing; Cognee remember/recall cannot be executed honestly"
-      ]
-    }
-  ]
+  "realCompetitorRuns": 5,
+  "blocked": []
 }

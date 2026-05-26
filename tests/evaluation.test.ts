@@ -9,6 +9,7 @@ import { runMarketGate } from "../src/eval/marketGate";
 import { runBeamBenchmark } from "../src/eval/beam";
 import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
 import { runCogniCodeBench } from "../src/eval/cognicodeBench";
+import { generateConnectorMaturity } from "../src/eval/connectorMaturity";
 
 describe("self verification benchmark loop", () => {
   it("beats local baselines and satisfies the synthetic token-efficiency gate", () => {
@@ -154,6 +155,29 @@ describe("self verification benchmark loop", () => {
     expect(report.directMarketComparison.passed).toBe(true);
     expect(report.directMarketComparison.comparisons[0].questions[0]).toMatchObject({ id: "fixture-q1", matched: true });
     expect(report.benchmarks.find((item) => item.dataset === "LongMemEval-S")?.questions[0].id).toBe("fixture-q1");
+  });
+
+  it("generates connector proof levels and quality scores from checked artifacts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-maturity-"));
+    const report = generateConnectorMaturity({
+      out: join(dir, "connector-maturity.json"),
+      markdown: join(dir, "connector-maturity.md")
+    });
+    expect(report.passed).toBe(true);
+    expect(report.proofLevels).toEqual([
+      "manifest-only",
+      "cli-config",
+      "driver-code",
+      "hermetic-tested",
+      "live-smoke-ready",
+      "tenant-verified",
+      "production-certified"
+    ]);
+    expect(report.summary.total).toBeGreaterThanOrEqual(19);
+    expect(report.summary.liveSmokeReady).toBeGreaterThanOrEqual(19);
+    expect(report.summary.tenantVerified).toBe(0);
+    expect(report.rows.find((row) => row.provider === "jira")?.proofLevel).toBe("live-smoke-ready");
+    expect(report.rows.every((row) => row.qualityScore > 0)).toBe(true);
   });
 
   it("treats perfect benchmark ties as saturated without allowing lower ties", () => {

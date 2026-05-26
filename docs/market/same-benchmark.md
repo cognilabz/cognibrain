@@ -36,11 +36,11 @@ It checks:
 
 `same-run-api-shape` means the row is a local compatibility model. It is honest, but it is not a real vendor run.
 
-Mem0 and LangMem are now checked through real same-run-native package runners. Mem0 uses `mem0ai` with local Qdrant/FastEmbed and `infer=false`; LangMem uses `create_manage_memory_tool` and `create_search_memory_tool` with LangGraph `InMemoryStore`.
+Mem0, Graphiti/Zep, Cognee and LangMem are now checked through real same-run-native package runners. Mem0 uses `mem0ai` with local Qdrant/FastEmbed and `infer=false`; Graphiti/Zep uses `graphiti-core` with local Kuzu plus operator-supplied LLM credentials; Cognee uses the real `remember/recall` API with operator-supplied LLM credentials; LangMem uses `create_manage_memory_tool` and `create_search_memory_tool` with LangGraph `InMemoryStore`.
 
 GBrain is checked as a real same-run-cli competitor row. The runner clones GBrain, initializes a local PGLite brain with no embedding key, captures each CogniCode correction, searches, opens the returned page, and reports the resulting checks.
 
-Graphiti/Zep and Cognee are credential-blocked in the checked artifact unless LLM/vendor credentials are supplied. That is intentional: no API-shape score is substituted when the real package path cannot execute.
+If Graphiti/Zep or Cognee are run without required LLM credentials, their rows stay credential-blocked. That is intentional: no API-shape score is substituted when the real package path cannot execute.
 
 Use these environment variables to raise a competitor row to a stronger proof level:
 

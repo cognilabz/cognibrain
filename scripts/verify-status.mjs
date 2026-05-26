@@ -44,7 +44,7 @@ const checks = [
     has(files.readme, "Stop fixing the same agent mistake twice"),
     has(files.readme, "Boundary: competitor rows are only as strong as their proof level"),
     has(files.claims, "does not currently claim Managed SaaS uptime"),
-    has(files.benchmarks, "Graphiti/Zep and Cognee are credential-blocked unless LLM/vendor credentials are supplied"),
+    has(files.benchmarks, "Graphiti/Zep and Cognee require operator-supplied LLM credentials for the native run"),
     has(files.landscape, "real-customer-field"),
     has(files.sameBenchmark, "Recall is not enough"),
     has(files.integrations, "Connector Maturity Matrix"),

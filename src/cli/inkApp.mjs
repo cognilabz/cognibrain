@@ -1,3 +1,6 @@
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
 const palette = {
   brand: "cyan",
   memory: "green",
@@ -70,12 +73,13 @@ export async function renderInteractiveCliApp(payload, options = {}) {
       h(Box, { marginTop: 1, flexDirection: "column" },
         h(Text, { color: "gray" }, "Keys"),
         h(Text, { color: "gray" }, "up/down, 1-9"),
-        h(Text, { color: "gray" }, "r refresh, q quit")
+        h(Text, { color: "gray" }, "enter run action"),
+        h(Text, { color: "gray" }, "esc clear, q quit")
       )
     );
   }
 
-  function MainPanel({ view, selectedAction, setSelectedAction }) {
+  function MainPanel({ view, selectedAction, execution }) {
     const actions = view.actions ?? [];
     return h(
       Box,
@@ -105,7 +109,8 @@ export async function renderInteractiveCliApp(payload, options = {}) {
               h(Text, { color: active ? view.accent : "white", bold: active }, `${active ? ">" : " "} ${action.label}`),
               h(Text, { color: "gray" }, short(action.command, 30))
             );
-          })
+          }),
+          h(ActionOutput, { execution, accent: view.accent })
         )
       )
     );
@@ -132,13 +137,25 @@ export async function renderInteractiveCliApp(payload, options = {}) {
 
   function Footer({ view }) {
     const hint = interactive
-      ? "Use the keyboard to switch workbenches. Commands stay available for automation."
+      ? "Enter executes the selected action. Destructive service actions ask for confirmation first."
       : "Snapshot mode. Run in a real terminal for keyboard navigation.";
     return h(
       Box,
       { marginTop: 1, justifyContent: "space-between" },
       h(Text, { color: "gray" }, hint),
       h(Text, { color: view.accent }, view.primaryCommand)
+      );
+  }
+
+  function ActionOutput({ execution, accent }) {
+    if (!execution) return null;
+    const statusColor = execution.status === "failed" ? "red" : execution.status === "running" ? "yellow" : execution.status === "confirm" ? "yellow" : "green";
+    return h(
+      Box,
+      { marginTop: 1, flexDirection: "column" },
+      h(Text, { color: "gray", bold: true }, "OUTPUT"),
+      h(Text, { color: statusColor }, `${execution.status}: ${short(execution.command, 32)}`),
+      ...execution.lines.slice(-8).map((line, index) => h(Text, { key: `${execution.command}-${index}`, color: index === 0 ? accent : "gray" }, short(line, 34)))
     );
   }
 
@@ -146,25 +163,82 @@ export async function renderInteractiveCliApp(payload, options = {}) {
     const app = useApp();
     const [selected, setSelected] = React.useState(0);
     const [selectedAction, setSelectedAction] = React.useState(0);
+    const [execution, setExecution] = React.useState(null);
+    const [pendingConfirm, setPendingConfirm] = React.useState(null);
     const view = views[selected] ?? views[0];
+    const runSelectedAction = React.useCallback(() => {
+      const action = view.actions?.[selectedAction];
+      if (!action) return;
+      if (actionNeedsInput(action.command)) {
+        setExecution({
+          status: "blocked",
+          command: action.command,
+          lines: ["Fill the placeholder in this command first.", action.command]
+        });
+        return;
+      }
+      if (actionNeedsConfirmation(action.command) && pendingConfirm !== action.command) {
+        setPendingConfirm(action.command);
+        setExecution({
+          status: "confirm",
+          command: action.command,
+          lines: ["Press enter again to execute this action.", "Press escape to cancel."]
+        });
+        return;
+      }
+      setPendingConfirm(null);
+      setExecution({ status: "running", command: action.command, lines: [`$ ${action.command}`] });
+      runActionCommand(action.command)
+        .then((result) => {
+          setExecution({
+            status: result.exitCode === 0 ? "done" : "failed",
+            command: action.command,
+            lines: [`$ ${action.command}`, ...result.lines]
+          });
+        })
+        .catch((error) => {
+          setExecution({
+            status: "failed",
+            command: action.command,
+            lines: [error instanceof Error ? error.message : String(error)]
+          });
+        });
+    }, [pendingConfirm, selectedAction, view]);
     useInput((input, key) => {
       if (input === "q") app.exit();
       if (input === "r") app.exit();
+      if (key.escape) {
+        setExecution(null);
+        setPendingConfirm(null);
+      }
+      if (key.return) {
+        runSelectedAction();
+        return;
+      }
       if (key.upArrow || input === "k") {
         setSelected((current) => (current - 1 + views.length) % views.length);
         setSelectedAction(0);
+        setPendingConfirm(null);
       }
       if (key.downArrow || input === "j") {
         setSelected((current) => (current + 1) % views.length);
         setSelectedAction(0);
+        setPendingConfirm(null);
       }
-      if (key.leftArrow) setSelectedAction((current) => Math.max(0, current - 1));
-      if (key.rightArrow || key.tab) setSelectedAction((current) => Math.min((view.actions?.length ?? 1) - 1, current + 1));
+      if (key.leftArrow) {
+        setSelectedAction((current) => Math.max(0, current - 1));
+        setPendingConfirm(null);
+      }
+      if (key.rightArrow || key.tab) {
+        setSelectedAction((current) => Math.min((view.actions?.length ?? 1) - 1, current + 1));
+        setPendingConfirm(null);
+      }
       if (/^[1-9]$/.test(input)) {
         const next = Number(input) - 1;
         if (views[next]) {
           setSelected(next);
           setSelectedAction(0);
+          setPendingConfirm(null);
         }
       }
     }, { isActive: interactive });
@@ -173,7 +247,7 @@ export async function renderInteractiveCliApp(payload, options = {}) {
       Box,
       { flexDirection: "column", paddingX: 1 },
       h(Header, { view }),
-      h(Box, { flexDirection: "row" }, h(Sidebar, { selected, setSelected }), h(MainPanel, { view, selectedAction, setSelectedAction })),
+      h(Box, { flexDirection: "row" }, h(Sidebar, { selected, setSelected }), h(MainPanel, { view, selectedAction, execution })),
       h(Footer, { view })
     );
   }
@@ -459,4 +533,72 @@ function short(value, length) {
 
 function shortId(value) {
   return String(value ?? "memory").slice(0, 8);
+}
+
+export function actionNeedsInput(command) {
+  return /<[^>]+>/.test(String(command ?? ""));
+}
+
+export function actionNeedsConfirmation(command) {
+  return /\b(service\s+(install|uninstall|remove|enable|disable|start|stop|restart)|connector\s+remove|adapter\s+remove|clean)\b/.test(String(command ?? ""));
+}
+
+export async function runActionCommand(command) {
+  const parts = splitCommand(command);
+  if (!parts.length) return { exitCode: 0, lines: [] };
+  const [bin, ...args] = parts;
+  const cliPath = fileURLToPath(new URL("../../bin/cognibrain.mjs", import.meta.url));
+  const childCommand = bin === "cognibrain" ? process.execPath : bin;
+  const childArgs = bin === "cognibrain" ? [cliPath, ...args] : args;
+  const output = [];
+  return await new Promise((resolve) => {
+    const child = spawn(childCommand, childArgs, {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        CI: "true",
+        COGNIBRAIN_FORCE_INK: "false",
+        COGNIBRAIN_CLI_SNAPSHOT_MS: "20"
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    child.stdout.on("data", (chunk) => collectOutput(output, chunk));
+    child.stderr.on("data", (chunk) => collectOutput(output, chunk));
+    child.on("error", (error) => resolve({ exitCode: 1, lines: [error.message] }));
+    child.on("close", (code) => resolve({ exitCode: code ?? 0, lines: output.length ? output.slice(-20) : ["completed without output"] }));
+  });
+}
+
+function collectOutput(output, chunk) {
+  for (const line of String(chunk).split(/\r?\n/).filter(Boolean)) {
+    output.push(line);
+  }
+  if (output.length > 80) output.splice(0, output.length - 80);
+}
+
+function splitCommand(command) {
+  const parts = [];
+  let current = "";
+  let quote = "";
+  for (const char of String(command ?? "")) {
+    if (quote) {
+      if (char === quote) quote = "";
+      else current += char;
+      continue;
+    }
+    if (char === "\"" || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (current) {
+        parts.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += char;
+  }
+  if (current) parts.push(current);
+  return parts;
 }

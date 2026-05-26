@@ -2,6 +2,15 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
+type ConnectorProofLevel =
+  | "manifest-only"
+  | "cli-config"
+  | "driver-code"
+  | "hermetic-tested"
+  | "live-smoke-ready"
+  | "tenant-verified"
+  | "production-certified";
+
 interface ConnectorCatalogItem {
   provider: string;
   connectorId: string;
@@ -23,25 +32,56 @@ interface ConnectorShow {
   };
 }
 
+interface VendorApiSpecRow {
+  provider: string;
+  passed: boolean;
+  endpoints?: Array<{ purpose?: string; matched?: boolean }>;
+  capabilities?: {
+    listOrPoll?: boolean;
+    writeback?: boolean;
+    authorization?: boolean;
+  };
+}
+
 interface MaturityRow {
   provider: string;
   connectorId: string;
   category: string;
   status: string;
-  proofLevel: "listed" | "manifest" | "driver" | "hermetic-driver" | "vendor-smoke" | "production-certified";
+  proofLevel: ConnectorProofLevel;
+  qualityScore: number;
   maturity: {
     listed: boolean;
     manifest: boolean;
+    cliDefinition: boolean;
+    requiredEnv: boolean;
     driver: boolean;
-    fixture: boolean;
+    listImplemented: boolean;
+    pollImplemented: boolean;
+    writebackImplemented: boolean;
+    hermeticFixture: boolean;
     apiSpec: boolean;
+    liveSmokeSupport: boolean;
+    tenantVerified: boolean;
+    tuiSetup: boolean;
+    docs: boolean;
+    productionCertified: boolean;
+    fixture: boolean;
     liveSmoke: boolean;
     oauthOrSetupWizard: boolean;
     pollOrList: boolean;
     webhook: boolean;
     writeback: boolean;
-    docs: boolean;
-    productionCertified: boolean;
+  };
+  quality: {
+    eventExtraction: boolean;
+    sourceRefCompleteness: boolean;
+    memoryTypeClassification: boolean;
+    scopeMapping: boolean;
+    sensitiveDataHandling: boolean;
+    duplicateSuppression: boolean;
+    updateRevalidation: boolean;
+    writebackDryRun: boolean;
   };
   evidence: {
     docs: string;
@@ -58,6 +98,7 @@ interface MaturityReport {
   schemaVersion: "1.0";
   generatedAt: string;
   source: "connector-registry";
+  proofLevels: ConnectorProofLevel[];
   artifacts: string[];
   rows: MaturityRow[];
   summary: {
@@ -65,10 +106,22 @@ interface MaturityReport {
     hermeticDrivers: number;
     apiSpecVerified: number;
     liveSmokeReady: number;
+    tenantVerified: number;
     productionCertified: number;
+    averageQualityScore: number;
   };
   passed: boolean;
 }
+
+const proofLevels: ConnectorProofLevel[] = [
+  "manifest-only",
+  "cli-config",
+  "driver-code",
+  "hermetic-tested",
+  "live-smoke-ready",
+  "tenant-verified",
+  "production-certified"
+];
 
 const providerCategory: Record<string, string> = {
   github: "code",
@@ -92,27 +145,41 @@ const providerCategory: Record<string, string> = {
   posthog: "operations-product"
 };
 
+const updateRevalidationProviders = new Set(["jira", "confluence", "notion", "linear", "gitlab", "azure-devops", "asana", "clickup", "sentry", "datadog", "pagerduty", "posthog"]);
+
 export function generateConnectorMaturity(options: { out?: string; markdown?: string } = {}): MaturityReport {
   const catalog = cliJson<ConnectorCatalogItem[]>(["connections", "connectors", "list", "--json"]);
   const shows = new Map(catalog.map((item) => [item.provider, cliJson<ConnectorShow>(["connector", "show", item.provider, "--json"])]));
   const vendorContract = readJson("artifacts/vendor-connectors-live.json", { passed: false, calls: [] }) as { passed?: boolean; calls?: Array<{ provider?: string; method?: string }> };
-  const apiSpecs = readJson("artifacts/vendor-api-specs.json", { passed: false, rows: [] }) as { passed?: boolean; rows?: Array<{ provider: string; passed: boolean; capabilities?: { listOrPoll?: boolean; writeback?: boolean } }> };
+  const apiSpecs = readJson("artifacts/vendor-api-specs.json", { passed: false, rows: [] }) as { passed?: boolean; rows?: VendorApiSpecRow[] };
   const liveSmoke = readJson("artifacts/vendor-live-smoke.json", { providers: [] }) as { providers?: Array<{ provider: string; configured: boolean; skipped: boolean; checks?: Record<string, boolean> }> };
   const rows = catalog.map((item) => maturityRow(item, shows.get(item.provider), vendorContract, apiSpecs, liveSmoke));
   const report: MaturityReport = {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
     source: "connector-registry",
+    proofLevels,
     artifacts: ["artifacts/vendor-connectors-live.json", "artifacts/vendor-api-specs.json", "artifacts/vendor-live-smoke.json", "artifacts/connectors-live.json"],
     rows,
     summary: {
       total: rows.length,
-      hermeticDrivers: rows.filter((row) => row.proofLevel === "hermetic-driver" || row.proofLevel === "vendor-smoke" || row.proofLevel === "production-certified").length,
+      hermeticDrivers: rows.filter((row) => row.maturity.hermeticFixture && row.maturity.apiSpec).length,
       apiSpecVerified: rows.filter((row) => row.maturity.apiSpec).length,
-      liveSmokeReady: rows.filter((row) => row.maturity.liveSmoke).length,
-      productionCertified: rows.filter((row) => row.maturity.productionCertified).length
+      liveSmokeReady: rows.filter((row) => row.proofLevel === "live-smoke-ready" || row.proofLevel === "tenant-verified" || row.proofLevel === "production-certified").length,
+      tenantVerified: rows.filter((row) => row.maturity.tenantVerified).length,
+      productionCertified: rows.filter((row) => row.maturity.productionCertified).length,
+      averageQualityScore: roundedAverage(rows.map((row) => row.qualityScore))
     },
-    passed: rows.length >= 19 && rows.every((row) => row.maturity.listed && row.maturity.manifest && row.maturity.docs && row.maturity.apiSpec && row.gaps.includes("production-certified proof not claimed"))
+    passed: rows.length >= 19 && rows.every((row) =>
+      row.maturity.listed &&
+      row.maturity.manifest &&
+      row.maturity.cliDefinition &&
+      row.maturity.requiredEnv &&
+      row.maturity.docs &&
+      row.maturity.apiSpec &&
+      row.maturity.liveSmokeSupport &&
+      row.gaps.includes("production-certified proof not claimed")
+    )
   };
   if (options.out) {
     mkdirSync(dirname(options.out), { recursive: true });
@@ -129,7 +196,7 @@ function maturityRow(
   item: ConnectorCatalogItem,
   show: ConnectorShow | undefined,
   vendorContract: { passed?: boolean; calls?: Array<{ provider?: string; method?: string }> },
-  apiSpecs: { passed?: boolean; rows?: Array<{ provider: string; passed: boolean; capabilities?: { listOrPoll?: boolean; writeback?: boolean } }> },
+  apiSpecs: { passed?: boolean; rows?: VendorApiSpecRow[] },
   liveSmoke: { providers?: Array<{ provider: string; configured: boolean; skipped: boolean; checks?: Record<string, boolean> }> }
 ): MaturityRow {
   const calls = vendorContract.calls?.filter((call) => call.provider === item.provider) ?? [];
@@ -137,26 +204,40 @@ function maturityRow(
   const live = liveSmoke.providers?.find((provider) => provider.provider === item.provider);
   const hasWrite = calls.some((call) => ["POST", "PATCH", "PUT"].includes(String(call.method ?? "").toUpperCase()));
   const hasRead = calls.some((call) => ["GET", "POST"].includes(String(call.method ?? "").toUpperCase()));
+  const endpointPurpose = (purpose: string) => Boolean(apiSpec?.endpoints?.some((endpoint) => endpoint.purpose === purpose && endpoint.matched));
   const docsPath = item.docs.split("#")[0];
   const maturity = {
     listed: true,
     manifest: Boolean(item.connectorId),
+    cliDefinition: Boolean(show?.definition.connectorId && show.definition.connectorId === item.connectorId),
+    requiredEnv: Boolean(show?.definition.requiredEnv?.length),
     driver: item.status === "vendor-driver",
-    fixture: Boolean(vendorContract.passed && calls.length > 0),
+    listImplemented: endpointPurpose("list") || Boolean(apiSpec?.capabilities?.listOrPoll ?? hasRead),
+    pollImplemented: endpointPurpose("poll") || Boolean(apiSpec?.capabilities?.listOrPoll ?? hasRead),
+    writebackImplemented: endpointPurpose("writeback") || Boolean(apiSpec?.capabilities?.writeback ?? hasWrite),
+    hermeticFixture: Boolean(vendorContract.passed && calls.length > 0),
     apiSpec: Boolean(apiSpec?.passed),
-    liveSmoke: Boolean(live?.configured && !live.skipped),
-    oauthOrSetupWizard: Boolean(show?.definition.fields?.length && item.addCommand),
-    pollOrList: Boolean(apiSpec?.capabilities?.listOrPoll ?? hasRead),
-    webhook: false,
-    writeback: Boolean(apiSpec?.capabilities?.writeback ?? hasWrite),
+    liveSmokeSupport: Boolean(live && "liveSmokeOptedIn" in (live.checks ?? {})),
+    tenantVerified: Boolean(live?.configured && !live.skipped && Object.values(live.checks ?? {}).every(Boolean)),
+    tuiSetup: Boolean(show?.definition.fields?.length && item.addCommand),
     docs: existsSync(docsPath),
-    productionCertified: false
+    productionCertified: false,
+    fixture: Boolean(vendorContract.passed && calls.length > 0),
+    liveSmoke: Boolean(live?.configured && !live.skipped && Object.values(live.checks ?? {}).every(Boolean)),
+    oauthOrSetupWizard: Boolean(show?.definition.fields?.length && item.addCommand),
+    pollOrList: endpointPurpose("list") || endpointPurpose("poll") || Boolean(apiSpec?.capabilities?.listOrPoll ?? hasRead),
+    webhook: false,
+    writeback: endpointPurpose("writeback") || Boolean(apiSpec?.capabilities?.writeback ?? hasWrite)
   };
-  const proofLevel = maturity.productionCertified ? "production-certified" : maturity.liveSmoke ? "vendor-smoke" : maturity.fixture ? "hermetic-driver" : maturity.driver ? "driver" : maturity.manifest ? "manifest" : "listed";
+  const quality = connectorQuality(item.provider, maturity, live);
+  const qualityScore = roundedAverage(Object.values(quality).map((value) => value ? 1 : 0));
+  const proofLevel = connectorProofLevel(maturity);
   const gaps = [
     ...(!maturity.apiSpec ? ["vendor API/spec contract not verified"] : []),
-    ...(!maturity.liveSmoke ? ["tenant live-smoke not run in checked artifact"] : []),
+    ...(!maturity.liveSmokeSupport ? ["live-smoke harness not available"] : []),
+    ...(!maturity.tenantVerified ? ["tenant live-smoke not run in checked artifact"] : []),
     ...(!maturity.webhook ? ["webhook delivery not claimed for native vendor row"] : []),
+    ...(!quality.updateRevalidation ? ["update/revalidation quality gate not complete"] : []),
     "production-certified proof not claimed"
   ];
   return {
@@ -165,7 +246,9 @@ function maturityRow(
     category: providerCategory[item.provider] ?? "custom",
     status: item.status,
     proofLevel,
+    qualityScore,
     maturity,
+    quality,
     evidence: {
       docs: item.docs,
       addCommand: item.addCommand,
@@ -178,33 +261,71 @@ function maturityRow(
   };
 }
 
+function connectorProofLevel(maturity: MaturityRow["maturity"]): ConnectorProofLevel {
+  if (maturity.productionCertified) return "production-certified";
+  if (maturity.tenantVerified) return "tenant-verified";
+  if (maturity.driver && maturity.hermeticFixture && maturity.apiSpec && maturity.liveSmokeSupport) return "live-smoke-ready";
+  if (maturity.driver && maturity.hermeticFixture && maturity.apiSpec) return "hermetic-tested";
+  if (maturity.driver) return "driver-code";
+  if (maturity.manifest && maturity.cliDefinition && maturity.tuiSetup) return "cli-config";
+  return "manifest-only";
+}
+
+function connectorQuality(
+  provider: string,
+  maturity: MaturityRow["maturity"],
+  live?: { provider: string; configured: boolean; skipped: boolean; checks?: Record<string, boolean> }
+): MaturityRow["quality"] {
+  return {
+    eventExtraction: maturity.hermeticFixture && maturity.pollImplemented,
+    sourceRefCompleteness: maturity.hermeticFixture && maturity.apiSpec,
+    memoryTypeClassification: maturity.hermeticFixture && ["code", "chat", "planning-docs", "google-workspace", "work-tracking", "operations-product"].includes(providerCategory[provider] ?? ""),
+    scopeMapping: maturity.requiredEnv && maturity.tuiSetup,
+    sensitiveDataHandling: live?.checks?.noPlainTokenRetained === true || live?.skipped === true,
+    duplicateSuppression: maturity.hermeticFixture,
+    updateRevalidation: updateRevalidationProviders.has(provider) ? maturity.pollImplemented && maturity.apiSpec : maturity.pollImplemented,
+    writebackDryRun: maturity.writebackImplemented && maturity.liveSmokeSupport
+  };
+}
+
 function renderMarkdown(report: MaturityReport): string {
   const rows = report.rows
-    .map((row) => `| ${row.provider} | ${row.category} | ${row.proofLevel} | ${mark(row.maturity.driver)} | ${mark(row.maturity.fixture)} | ${mark(row.maturity.apiSpec)} | ${mark(row.maturity.liveSmoke)} | ${mark(row.maturity.oauthOrSetupWizard)} | ${mark(row.maturity.pollOrList)} | ${mark(row.maturity.writeback)} | ${mark(row.maturity.productionCertified)} |`)
+    .map((row) => `| ${row.provider} | ${row.category} | ${row.proofLevel} | ${score(row.qualityScore)} | ${mark(row.maturity.driver)} | ${mark(row.maturity.hermeticFixture)} | ${mark(row.maturity.apiSpec)} | ${mark(row.maturity.liveSmokeSupport)} | ${mark(row.maturity.tenantVerified)} | ${mark(row.maturity.tuiSetup)} | ${mark(row.maturity.listImplemented)} | ${mark(row.maturity.pollImplemented)} | ${mark(row.maturity.writebackImplemented)} | ${mark(row.maturity.productionCertified)} |`)
     .join("\n");
   return `# Connector Maturity Matrix
 
 Generated from the CLI connector registry and verification artifacts at ${report.generatedAt}.
 
-Native connector means there is a first-party connector manifest and driver path. It does not mean customer production certification unless the production-certified column is true.
+Proof levels are ordered as: ${report.proofLevels.map((level) => `\`${level}\``).join(" -> ")}.
 
-Current checked connector state: ${report.summary.hermeticDrivers} hermetic drivers, ${report.summary.apiSpecVerified} API/spec-verified drivers, ${report.summary.liveSmokeReady} tenant live smokes, ${report.summary.productionCertified} production certifications. Live-system proof requires tenant credentials plus \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`.
+Native connector means there is a first-party connector manifest and driver path. It does not mean customer production certification unless the production-certified column is true. Marketing can make strong live-system claims only for \`tenant-verified\` or \`production-certified\` rows.
 
-| Connector | Category | Proof level | Driver | Fixture | API/spec | Live smoke | Setup wizard | Poll/list | Writeback | Production-certified |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+Current checked connector state: ${report.summary.hermeticDrivers} hermetic drivers, ${report.summary.apiSpecVerified} API/spec-verified drivers, ${report.summary.liveSmokeReady} live-smoke-ready drivers, ${report.summary.tenantVerified} tenant-verified live smokes, ${report.summary.productionCertified} production certifications, average quality score ${score(report.summary.averageQualityScore)}. Live-system proof requires tenant credentials plus \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`.
+
+| Connector | Category | Proof level | Quality | Driver | Fixture | API/spec | Live-smoke ready | Tenant verified | TUI setup | List | Poll | Writeback | Production-certified |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${rows}
 
 Evidence:
 
 - \`artifacts/vendor-connectors-live.json\` proves hermetic driver/list/poll/writeback paths.
 - \`artifacts/vendor-api-specs.json\` checks method, path shape, auth scheme and writeback calls against codified vendor API contracts.
-- \`artifacts/vendor-live-smoke.json\` records whether tenant credentials were configured and live smoke was opted in.
+- \`artifacts/vendor-live-smoke.json\` records whether tenant credentials were configured, whether live smoke was opted in, and whether token material was retained.
 - \`npm run connectors:maturity\` regenerates this page and \`artifacts/connector-maturity.json\`.
 `;
 }
 
+function roundedAverage(values: number[]): number {
+  if (!values.length) return 0;
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 100) / 100;
+}
+
 function mark(value: boolean): string {
   return value ? "yes" : "no";
+}
+
+function score(value: number): string {
+  return `${Math.round(value * 100)}%`;
 }
 
 function cliJson<T>(args: string[]): T {

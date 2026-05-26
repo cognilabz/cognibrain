@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -14,6 +14,7 @@ describe("cognibrain CLI", () => {
   it("prints the one-command surface", () => {
     const output = execFileSync(process.execPath, [cli, "help"], { cwd: root, encoding: "utf8" });
     expect(output).toContain("cognibrain\n      Open the React/Ink CLI home");
+    expect(output).toContain("cognibrain tui|ui|home");
     expect(output).toContain("cognibrain setup");
     expect(output).toContain("cognibrain doctor");
     expect(output).toContain("cognibrain memories");
@@ -68,6 +69,7 @@ describe("cognibrain CLI", () => {
 
       const home = execFileSync(process.execPath, [cli, "--runtime-root", dir], { cwd: dir, env, encoding: "utf8" });
       const homeJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "--json"], { cwd: dir, env, encoding: "utf8" }));
+      const tuiJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "tui", "--json"], { cwd: dir, env, encoding: "utf8" }));
       const status = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "status", "--json"], { cwd: dir, env, encoding: "utf8" }));
       const memoriesJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories", "--json"], { cwd: dir, env, encoding: "utf8" }));
       const connectionsJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "connections", "--json"], { cwd: dir, env, encoding: "utf8" }));
@@ -84,6 +86,7 @@ describe("cognibrain CLI", () => {
       expect(connections).toContain("cognibrain connections");
       expect(connections).toContain("github");
       expect(status.package.name).toBe("@cognilabz/cognibrain");
+      expect(tuiJson.surface).toBe("interactive-ink-cli");
       expect(homeJson.service.manager).toBeTruthy();
       expect(homeJson.commands).toContain("cognibrain service plan");
       expect(homeJson.commands).toContain("cognibrain proof");
@@ -118,6 +121,19 @@ describe("cognibrain CLI", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  }, slowCliTimeout);
+
+  it("guards executable Ink action palette commands", () => {
+    const moduleUrl = pathToFileURL(join(root, "src", "cli", "inkApp.mjs")).href;
+    const output = execFileSync(process.execPath, ["--input-type=module", "-e", `
+      import { actionNeedsConfirmation, actionNeedsInput } from ${JSON.stringify(moduleUrl)};
+      console.log(JSON.stringify({
+        placeholder: actionNeedsInput("cognibrain memories search <query>"),
+        safe: actionNeedsConfirmation("cognibrain doctor --fix"),
+        destructive: actionNeedsConfirmation("cognibrain service stop")
+      }));
+    `], { cwd: root, encoding: "utf8" });
+    expect(JSON.parse(output)).toEqual({ placeholder: true, safe: false, destructive: true });
   }, slowCliTimeout);
 
   it("manages setup config, connector config, adapter config, and skill status through CLI commands", () => {

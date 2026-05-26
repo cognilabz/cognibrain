@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T04:45:52.273Z",
+  "generatedAt": "2026-05-26T08:38:44.051Z",
   "project": "cognibrain",
   "privacy": {
     "anonymized": true,
@@ -241,23 +241,23 @@
           },
           {
             "system": "Mem0",
-            "proofLevel": "same-run-api-shape"
+            "proofLevel": "same-run-native"
           },
           {
             "system": "Graphiti/Zep",
-            "proofLevel": "same-run-api-shape"
+            "proofLevel": "credential-blocked"
           },
           {
             "system": "Cognee",
-            "proofLevel": "same-run-api-shape"
+            "proofLevel": "credential-blocked"
           },
           {
             "system": "LangMem",
-            "proofLevel": "same-run-api-shape"
+            "proofLevel": "same-run-native"
           },
           {
             "system": "GBrain",
-            "proofLevel": "same-run-api-shape"
+            "proofLevel": "same-run-cli"
           }
         ],
         "adapterContract": [

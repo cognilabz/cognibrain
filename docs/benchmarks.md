@@ -24,13 +24,13 @@ Current local result, 30 deterministic engineering-memory scenarios:
 | System | Score | Proof level | Repeated mistake rate | Gaps |
 | --- | ---: | --- | ---: | ---: |
 | Cognibrain | 0.9722 | same-run-full | 0 | 0 |
+| Graphiti/Zep | 0.6667 | same-run-native | 1 | 6 |
+| Cognee | 0.6667 | same-run-native | 1 | 6 |
 | LangMem | 0.6667 | same-run-native | 1 | 6 |
 | Mem0 | 0.6667 | same-run-native | 1 | 7 |
 | GBrain | 0.1556 | same-run-cli | 1 | 5 |
-| Graphiti/Zep | 0.0000 | credential-blocked | 1 | 4 |
-| Cognee | 0.0000 | credential-blocked | 1 | 4 |
 
-Boundary: competitor rows are only as strong as their proof level. Cognibrain's row uses the full local implementation. Mem0 and LangMem are now checked through real same-run-native package runners. GBrain is checked as a real same-run-cli competitor row through `gbrain capture/search/get` from a cloned GBrain repo. Graphiti/Zep and Cognee are credential-blocked unless LLM/vendor credentials are supplied; no API-shape score is shown for them in the checked artifact.
+Boundary: competitor rows are only as strong as their proof level. Cognibrain's row uses the full local implementation. Mem0, Graphiti/Zep, Cognee and LangMem are checked through real same-run-native package runners. GBrain is checked as a real same-run-cli competitor row through `gbrain capture/search/get` from a cloned GBrain repo. Mem0 uses the OSS/local path unless a Mem0 cloud key is supplied; Graphiti/Zep and Cognee require operator-supplied LLM credentials for the native run. No API-shape score is shown for the checked artifact.
 
 Arena v2 can raise a competitor row when an external runner or artifact is configured:
 
@@ -49,7 +49,7 @@ Native competitor run:
 npm run benchmark:competitors:native
 ```
 
-This installs/checks `mem0ai==2.0.2`, `graphiti-core[kuzu]==0.29.1`, `langmem==0.0.30`, `cognee==1.1.0`, `fastembed==0.7.3`, `@mem0/cli@0.2.7` and `gbrain@0.41.14.0`. With the current environment, Mem0 and LangMem produced same-run-native rows, GBrain produced a same-run-cli row, and Graphiti/Zep plus Cognee were credential-blocked because no LLM/vendor keys were configured.
+This installs/checks `mem0ai==2.0.2`, `graphiti-core[kuzu]==0.29.1`, `langmem==0.0.30`, `cognee==1.1.0`, `fastembed==0.7.3`, `@mem0/cli@0.2.7` and `gbrain@0.41.14.0`. With the current environment, Mem0, Graphiti/Zep, Cognee and LangMem produced same-run-native rows, and GBrain produced a same-run-cli row. Graphiti/Zep and Cognee used operator-supplied LLM credentials; without those credentials their rows stay credential-blocked instead of falling back to API-shape.
 
 Run the code-first truth gate when you want to see whether the checked artifact is still only API-shape or has real competitor runners:
 
@@ -73,6 +73,36 @@ artifacts/cognicodebench/run.json
 ```
 
 The current checked artifact passes 100 deterministic synthetic coding-agent scenarios. Each scenario tests whether a correction, review note, command failure or repo rule carries into the next patch decision.
+
+## Public Market Benchmarks
+
+Command:
+
+```bash
+npm run benchmark:certified
+```
+
+Artifacts:
+
+```text
+artifacts/locomo-report.json
+artifacts/longmemeval-report.json
+artifacts/beam-report.json
+artifacts/beam-500k-report.json
+artifacts/answer-generation.json
+artifacts/market-gate.json
+```
+
+Latest checked public benchmark gate:
+
+| Dataset | Metric | Cognibrain | Best local baseline | Margin |
+| --- | --- | ---: | ---: | ---: |
+| LoCoMo | evidence recall@20 | 0.7415 | 0.6387 | +0.1029 |
+| LongMemEval-S | answer-session recall@20 | 0.9960 | 0.9900 | +0.0060 |
+| BEAM 100K | retrieval nugget score@20 | 0.9650 | 0.8200 | +0.1450 |
+| BEAM 500K | retrieval nugget score@20 | 0.9771 | 0.7914 | +0.1857 |
+
+`artifacts/market-gate.json` passed with proof level `certified-public-benchmark-baseline-superiority`. These are official/public dataset runs against local baselines, not direct hosted-vendor certifications.
 
 ## Next-Generation Retrieval Suites
 

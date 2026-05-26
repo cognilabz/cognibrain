@@ -1,19 +1,20 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T07:06:17.843Z",
+  "generatedAt": "2026-05-26T08:45:28.865Z",
   "mode": "code_truth_audit",
   "passed": true,
-  "planComplete": false,
+  "planComplete": true,
   "summary": {
     "checks": 12,
-    "passed": 11,
+    "passed": 12,
     "failures": 0,
-    "openGaps": 1,
-    "realCompetitorRuns": 3,
+    "openGaps": 0,
+    "realCompetitorRuns": 5,
     "apiShapeCompetitors": 0,
-    "blockedCompetitors": 2,
+    "blockedCompetitors": 0,
     "nativeConnectorRows": 19,
     "hermeticDrivers": 19,
+    "liveSmokeReadyConnectors": 19,
     "apiSpecVerifiedConnectors": 19,
     "tenantLiveSmokes": 0,
     "productionCertifiedConnectors": 0,
@@ -28,7 +29,7 @@
     ],
     [
       "arena.competitors.realRuns",
-      3,
+      5,
       "artifacts/arena/run.json"
     ],
     [
@@ -38,11 +39,16 @@
     ],
     [
       "arena.competitors.credentialBlocked",
-      2,
+      0,
       "artifacts/arena/run.json"
     ],
     [
       "connectors.hermeticDrivers",
+      19,
+      "artifacts/connector-maturity.json"
+    ],
+    [
+      "connectors.liveSmokeReady",
       19,
       "artifacts/connector-maturity.json"
     ],
@@ -92,6 +98,8 @@
         "artifact": "artifacts/arena/run.json",
         "realCompetitorRuns": [
           "Mem0:same-run-native",
+          "Graphiti/Zep:same-run-native",
+          "Cognee:same-run-native",
           "LangMem:same-run-native",
           "GBrain:same-run-cli"
         ],
@@ -145,19 +153,20 @@
     },
     {
       "id": "connector-live-smoke",
-      "message": "Checked artifacts contain no tenant live-smoke certification unless credentials were supplied and attempted.",
-      "passed": false,
-      "severity": "gap",
+      "message": "Checked artifacts expose live-smoke-ready drivers while avoiding tenant certification claims without tenant credentials.",
+      "passed": true,
+      "severity": "fail",
       "evidence": {
         "artifact": "artifacts/vendor-live-smoke.json",
         "liveRequested": false,
         "attempted": [],
-        "liveSmokeReady": 0
+        "liveSmokeReady": 19,
+        "tenantVerified": 0
       }
     },
     {
       "id": "connector-docs-boundary",
-      "message": "Connector docs state the checked artifact level: hermetic drivers, API/spec verification, no tenant live-smoke, no production certification.",
+      "message": "Connector docs state the checked artifact level: live-smoke-ready drivers, API/spec verification, no tenant live-smoke, no production certification.",
       "passed": true,
       "severity": "fail",
       "evidence": {
@@ -216,16 +225,5 @@
       }
     }
   ],
-  "openGaps": [
-    {
-      "id": "connector-live-smoke",
-      "message": "Checked artifacts contain no tenant live-smoke certification unless credentials were supplied and attempted.",
-      "evidence": {
-        "artifact": "artifacts/vendor-live-smoke.json",
-        "liveRequested": false,
-        "attempted": [],
-        "liveSmokeReady": 0
-      }
-    }
-  ]
+  "openGaps": []
 }

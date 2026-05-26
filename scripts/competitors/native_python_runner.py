@@ -148,22 +148,34 @@ async def run_graphiti(scenario: dict[str, Any], started: float, system: str) ->
     from datetime import datetime, timezone
     from graphiti_core import Graphiti
     from graphiti_core.driver.kuzu_driver import KuzuDriver
+    from graphiti_core.driver.driver import GraphProvider
+    from graphiti_core.graph_queries import get_fulltext_indices
     from graphiti_core.nodes import EpisodeType
 
-    db_path = native_root() / "graphiti" / slug(scenario["id"])
-    db_path.mkdir(parents=True, exist_ok=True)
-    graphiti = Graphiti(graph_driver=KuzuDriver(str(db_path)))
+    db_dir = native_root() / "graphiti" / slug(scenario["id"])
+    db_dir.mkdir(parents=True, exist_ok=True)
+    db_path = db_dir / "kuzu.db"
+    if db_path.exists():
+        db_path.unlink()
+    group_id = f"arena_{slug(scenario['id'])}"
+    graph_driver = KuzuDriver(str(db_path))
+    # graphiti-core 0.29.1 reads _database for group routing, while KuzuDriver
+    # does not set it itself. Keep the benchmark on one local Kuzu database.
+    graph_driver._database = group_id
+    graphiti = Graphiti(graph_driver=graph_driver)
     text = scenario_memory_text(scenario)
     await graphiti.build_indices_and_constraints()
+    for query in get_fulltext_indices(GraphProvider.KUZU):
+        await graph_driver.execute_query(query)
     add_result = await graphiti.add_episode(
         name=f"cognicode-{scenario['id']}",
         episode_body=text,
         source_description="CogniCodeBench Arena scenario",
         reference_time=datetime.now(timezone.utc),
         source=EpisodeType.text,
-        group_id=f"arena_{slug(scenario['id'])}",
+        group_id=group_id,
     )
-    found = await graphiti.search(f"{scenario['nextTask']} {scenario['correction']['correctAction']}", group_ids=[f"arena_{slug(scenario['id'])}"], num_results=5)
+    found = await graphiti.search(f"{scenario['nextTask']} {scenario['correction']['correctAction']}", group_ids=[group_id], num_results=5)
     haystack = f"{text}\n{add_result}\n{found}".lower()
     checks = score_haystack(scenario, haystack, has_evidence=True, has_guard=False)
     return {

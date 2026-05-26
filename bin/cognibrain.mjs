@@ -17,6 +17,7 @@ const commandArgs = args[0]?.startsWith("--") ? args : args.slice(1);
 switch (command) {
   case undefined:
   case "ui":
+  case "tui":
   case "home":
     await cliHome(commandArgs);
     break;
@@ -388,7 +389,7 @@ async function doctor(doctorArgs) {
     add("dream maintenance", maintenance.enabled === true, JSON.stringify(maintenance));
   }
 
-  if (publish) {
+    if (publish) {
     const pack = runCapture("npm", ["pack", "--dry-run"]);
     add("npm pack dry-run", pack.status === 0, pack.status === 0 ? "ok" : pack.stderr.trim());
     const packOutput = `${pack.stdout}\n${pack.stderr}`;
@@ -432,6 +433,8 @@ async function doctor(doctorArgs) {
       "docs/claims.md"
     ].filter((path) => existsSync(join(root, path)));
     add("production docs", productionDocs.length === 5, productionDocs.length === 5 ? "docs/operations.md and docs/claims.md" : "missing production docs");
+    const connectorProof = connectorProofHealth();
+    add("connector proof levels", connectorProof.ok, connectorProof.detail, connectorProof.level);
   }
 
   const result = {
@@ -1456,8 +1459,9 @@ function productTruthData(refreshError) {
       realCompetitorRuns: systems.filter((system) => system.system !== "cognibrain" && ["same-run-native", "same-run-cloud-api", "same-run-cli", "vendor-signed", "real-customer-field"].includes(system.proofLevel)).length,
       apiShapeCompetitors: systems.filter((system) => system.system !== "cognibrain" && system.proofLevel === "same-run-api-shape").length,
       nativeConnectorRows: maturityRows.length,
-      hermeticDrivers: maturityRows.filter((row) => row.proofLevel === "hermetic-driver").length,
-      tenantLiveSmokes: maturityRows.filter((row) => row.maturity?.liveSmoke).length,
+      hermeticDrivers: maturityRows.filter((row) => row.maturity?.hermeticFixture && row.maturity?.apiSpec).length,
+      liveSmokeReadyConnectors: maturityRows.filter((row) => ["live-smoke-ready", "tenant-verified", "production-certified"].includes(row.proofLevel)).length,
+      tenantLiveSmokes: maturityRows.filter((row) => row.maturity?.tenantVerified || row.maturity?.liveSmoke).length,
       productionCertifiedConnectors: maturityRows.filter((row) => row.maturity?.productionCertified).length,
       cliScreenshots: 0,
       dockerOptional: undefined
@@ -2836,6 +2840,29 @@ function harnessGeneratedHealth() {
   return { ok: missing.length === 0, detail: missing.length ? `run cognibrain setup --all-harnesses; missing ${missing.map((path) => path.replace(`${launchCwd}/`, "")).join(", ")}` : "Codex, Claude, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI configs present" };
 }
 
+function connectorProofHealth() {
+  const maturity = readJson(join(root, "artifacts", "connector-maturity.json"), { rows: [] });
+  const rows = Array.isArray(maturity.rows) ? maturity.rows : [];
+  const minimum = process.env.MEMORY_CONNECTOR_MIN_PROOF_LEVEL ?? "live-smoke-ready";
+  const below = rows.filter((row) => !connectorProofAtLeast(row?.proofLevel, minimum));
+  const tenantVerified = rows.filter((row) => row?.maturity?.tenantVerified === true).length;
+  if (!rows.length) return { ok: true, level: "warn", detail: "connector maturity artifact missing; run npm run connectors:maturity" };
+  return {
+    ok: below.length === 0,
+    level: below.length === 0 ? "ok" : "warn",
+    detail: below.length === 0
+      ? `${rows.length} connector rows meet ${minimum}; ${tenantVerified} tenant-verified`
+      : `${below.length}/${rows.length} connector rows below ${minimum}: ${below.slice(0, 5).map((row) => `${row.provider}:${row.proofLevel}`).join(", ")}`
+  };
+}
+
+function connectorProofAtLeast(actual, minimum) {
+  const order = ["manifest-only", "cli-config", "driver-code", "hermetic-tested", "live-smoke-ready", "tenant-verified", "production-certified"];
+  const actualIndex = order.indexOf(actual);
+  const minimumIndex = order.indexOf(minimum);
+  return actualIndex >= 0 && minimumIndex >= 0 && actualIndex >= minimumIndex;
+}
+
 function stdioServerConfig() {
   return {
     command: process.execPath,
@@ -3476,6 +3503,8 @@ function usage(exitCode) {
 Usage:
   cognibrain
       Open the React/Ink CLI home with runtime, memories, connections, config, and next actions
+  cognibrain tui|ui|home
+      Explicitly open the terminal UI entrypoint; --json remains script-safe
   cognibrain [--runtime-root <path>] <command>
   cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dashboard] [--no-start] [--no-doctor] [--no-skill]
       React/Ink guided self-hosted install that writes setup state, native connector configs, harness config, starts the API, and runs doctor

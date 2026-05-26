@@ -1,17 +1,17 @@
 # Latest Benchmark Arena
 
-Generated from `artifacts/arena/run.json` at 2026-05-26T07:06:18.335Z.
+Generated from `artifacts/arena/run.json` at 2026-05-26T08:42:54.980Z.
 
 Recall is not enough. The next code change has to prove the memory worked.
 
 | System | Score | Proof level | Repeated mistake rate | Gaps |
 | --- | ---: | --- | ---: | ---: |
 | Cognibrain | 0.9722 | same-run-full | 0.0000 | 0 |
+| Graphiti/Zep | 0.6667 | same-run-native | 1.0000 | 6 |
+| Cognee | 0.6667 | same-run-native | 1.0000 | 6 |
 | LangMem | 0.6667 | same-run-native | 1.0000 | 6 |
 | Mem0 | 0.6667 | same-run-native | 1.0000 | 7 |
 | GBrain | 0.1556 | same-run-cli | 1.0000 | 5 |
-| Graphiti/Zep | 0.0000 | credential-blocked | 1.0000 | 4 |
-| Cognee | 0.0000 | credential-blocked | 1.0000 | 4 |
 
 Boundary: competitor rows are only as strong as their proof level. `same-run-api-shape` is a local compatibility model. `credential-blocked` means the real runner exists but could not execute without required credentials or services. `same-run-native`, `same-run-cloud-api` and `same-run-cli` require configured external runners.
 

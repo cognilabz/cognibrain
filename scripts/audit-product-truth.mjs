@@ -33,9 +33,10 @@ const cognibrainArena = arenaSystems.find((system) => system.system === "cognibr
 
 const maturityRows = Array.isArray(files.maturity.rows) ? files.maturity.rows : [];
 const apiSpecRows = Array.isArray(files.vendorApiSpecs.rows) ? files.vendorApiSpecs.rows : [];
-const liveSmokeRows = maturityRows.filter((row) => row?.maturity?.liveSmoke === true);
+const liveSmokeRows = maturityRows.filter((row) => row?.maturity?.tenantVerified === true || row?.maturity?.liveSmoke === true);
 const productionCertifiedRows = maturityRows.filter((row) => row?.maturity?.productionCertified === true);
-const hermeticRows = maturityRows.filter((row) => row?.proofLevel === "hermetic-driver" || row?.proofLevel === "vendor-smoke" || row?.proofLevel === "production-certified");
+const hermeticRows = maturityRows.filter((row) => row?.maturity?.hermeticFixture === true && row?.maturity?.apiSpec === true);
+const liveSmokeReadyRows = maturityRows.filter((row) => ["live-smoke-ready", "tenant-verified", "production-certified"].includes(row?.proofLevel));
 const apiSpecVerifiedRows = maturityRows.filter((row) => row?.maturity?.apiSpec === true);
 const vendorLiveProviders = Array.isArray(files.vendorLive.providers) ? files.vendorLive.providers : [];
 const vendorLiveAttempted = vendorLiveProviders.filter((provider) => provider && provider.skipped === false);
@@ -58,9 +59,9 @@ const checks = [
     unsupported: unsupportedCompetitorLevels.map((system) => `${system.displayName ?? system.system}:${system.proofLevel}`)
   }),
   check("benchmark-docs-boundary", "Benchmark docs explicitly separate real native/CLI rows from credential-blocked rows.", docsContainAll([
-    "Mem0 and LangMem are now checked through real same-run-native package runners",
+    "Mem0, Graphiti/Zep, Cognee and LangMem are checked through real same-run-native package runners",
     "GBrain is checked as a real same-run-cli competitor row",
-    "Graphiti/Zep and Cognee are credential-blocked unless LLM/vendor credentials are supplied"
+    "Graphiti/Zep and Cognee require operator-supplied LLM credentials for the native run"
   ]), "fail", {
     docs: ["README.md", "docs/benchmarks.md", "docs/claims.md", "docs/market/same-benchmark.md"]
   }),
@@ -74,16 +75,18 @@ const checks = [
     total: apiSpecRows.length,
     apiSpecVerified: apiSpecVerifiedRows.length
   }),
-  check("connector-live-smoke", "Checked artifacts contain no tenant live-smoke certification unless credentials were supplied and attempted.", liveSmokeRows.length > 0, "gap", {
+  check("connector-live-smoke", "Checked artifacts expose live-smoke-ready drivers while avoiding tenant certification claims without tenant credentials.", liveSmokeReadyRows.length >= 19 && liveSmokeRows.length === 0 && vendorLiveAttempted.length === 0, "fail", {
     artifact: "artifacts/vendor-live-smoke.json",
     liveRequested: Boolean(files.vendorLive.liveRequested),
     attempted: vendorLiveAttempted.map((provider) => provider.provider),
-    liveSmokeReady: liveSmokeRows.length
+    liveSmokeReady: liveSmokeReadyRows.length,
+    tenantVerified: liveSmokeRows.length
   }),
-  check("connector-docs-boundary", "Connector docs state the checked artifact level: hermetic drivers, API/spec verification, no tenant live-smoke, no production certification.", docsContainAll([
+  check("connector-docs-boundary", "Connector docs state the checked artifact level: live-smoke-ready drivers, API/spec verification, no tenant live-smoke, no production certification.", docsContainAll([
     "Current checked connector state:",
     "19 API/spec-verified drivers",
-    "0 tenant live smokes",
+    "19 live-smoke-ready drivers",
+    "0 tenant-verified live smokes",
     "0 production certifications"
   ]), "fail", {
     docs: ["README.md", "docs/integrations.md", "docs/integrations/connector-maturity.md", "docs/claims.md"]
@@ -130,6 +133,7 @@ const report = {
     blockedCompetitors: blockedCompetitors.length,
     nativeConnectorRows: maturityRows.length,
     hermeticDrivers: hermeticRows.length,
+    liveSmokeReadyConnectors: liveSmokeReadyRows.length,
     apiSpecVerifiedConnectors: apiSpecVerifiedRows.length,
     tenantLiveSmokes: liveSmokeRows.length,
     productionCertifiedConnectors: productionCertifiedRows.length,
@@ -142,6 +146,7 @@ const report = {
     ["arena.competitors.apiShape", apiShapeCompetitors.length, "artifacts/arena/run.json"],
     ["arena.competitors.credentialBlocked", blockedCompetitors.length, "artifacts/arena/run.json"],
     ["connectors.hermeticDrivers", hermeticRows.length, "artifacts/connector-maturity.json"],
+    ["connectors.liveSmokeReady", liveSmokeReadyRows.length, "artifacts/connector-maturity.json"],
     ["connectors.apiSpecVerified", apiSpecVerifiedRows.length, "artifacts/vendor-api-specs.json"],
     ["connectors.tenantLiveSmokes", liveSmokeRows.length, "artifacts/vendor-live-smoke.json"],
     ["connectors.productionCertified", productionCertifiedRows.length, "artifacts/connector-maturity.json"],

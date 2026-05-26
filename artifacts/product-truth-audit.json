@@ -1,23 +1,26 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T09:08:14.107Z",
+  "generatedAt": "2026-05-26T11:10:49.459Z",
   "mode": "code_truth_audit",
   "passed": true,
   "planComplete": true,
   "summary": {
-    "checks": 12,
-    "passed": 12,
+    "checks": 14,
+    "passed": 14,
     "failures": 0,
     "openGaps": 0,
-    "realCompetitorRuns": 3,
-    "apiShapeCompetitors": 0,
-    "blockedCompetitors": 2,
+    "realCompetitorRuns": 1,
+    "apiShapeCompetitors": 5,
+    "blockedCompetitors": 0,
     "nativeConnectorRows": 19,
     "hermeticDrivers": 19,
     "liveSmokeReadyConnectors": 19,
     "apiSpecVerifiedConnectors": 19,
     "tenantLiveSmokes": 0,
     "productionCertifiedConnectors": 0,
+    "webhookVerifiedConnectors": 10,
+    "generatedHarnesses": 16,
+    "harnessGoldenPaths": 16,
     "cliScreenshots": 5,
     "dockerOptional": true
   },
@@ -29,17 +32,17 @@
     ],
     [
       "arena.competitors.realRuns",
-      3,
+      1,
       "artifacts/arena/run.json"
     ],
     [
       "arena.competitors.apiShape",
-      0,
+      5,
       "artifacts/arena/run.json"
     ],
     [
       "arena.competitors.credentialBlocked",
-      2,
+      0,
       "artifacts/arena/run.json"
     ],
     [
@@ -66,6 +69,21 @@
       "connectors.productionCertified",
       0,
       "artifacts/connector-maturity.json"
+    ],
+    [
+      "connectors.webhookVerified",
+      10,
+      "artifacts/connector-webhooks.json"
+    ],
+    [
+      "harness.generated",
+      16,
+      "artifacts/harness-maturity.json"
+    ],
+    [
+      "harness.goldenPaths",
+      16,
+      "artifacts/harness-maturity.json"
     ],
     [
       "cli.inkScreenshots",
@@ -97,11 +115,15 @@
       "evidence": {
         "artifact": "artifacts/arena/run.json",
         "realCompetitorRuns": [
-          "Mem0:same-run-native",
-          "LangMem:same-run-native",
-          "GBrain:same-run-cli"
+          "LangMem:same-run-native"
         ],
-        "apiShapeCompetitors": []
+        "apiShapeCompetitors": [
+          "Mem0",
+          "Graphiti/Zep",
+          "Zep",
+          "Cognee",
+          "GBrain"
+        ]
       }
     },
     {
@@ -115,7 +137,7 @@
     },
     {
       "id": "benchmark-docs-boundary",
-      "message": "Benchmark docs explicitly separate real native/CLI rows from credential-blocked rows.",
+      "message": "Benchmark docs explicitly separate full local proof from API-shape, native, cloud, CLI and vendor-certified rows.",
       "passed": true,
       "severity": "fail",
       "evidence": {
@@ -163,6 +185,27 @@
       }
     },
     {
+      "id": "connector-webhooks",
+      "message": "Priority webhook-capable connectors have hermetic signature, replay, normalization, sourceRef and review-queue proof.",
+      "passed": true,
+      "severity": "fail",
+      "evidence": {
+        "artifact": "artifacts/connector-webhooks.json",
+        "webhookVerified": [
+          "github",
+          "slack",
+          "jira",
+          "confluence",
+          "notion",
+          "linear",
+          "gitlab",
+          "teams",
+          "sentry",
+          "pagerduty"
+        ]
+      }
+    },
+    {
       "id": "connector-docs-boundary",
       "message": "Connector docs state the checked artifact level: live-smoke-ready drivers, API/spec verification, no tenant live-smoke, no production certification.",
       "passed": true,
@@ -174,6 +217,18 @@
           "docs/integrations/connector-maturity.md",
           "docs/claims.md"
         ]
+      }
+    },
+    {
+      "id": "harness-maturity-proof",
+      "message": "Harness maturity artifact separates generated packages, native hooks and simulator proof for common and external-agent modes.",
+      "passed": true,
+      "severity": "fail",
+      "evidence": {
+        "artifact": "artifacts/harness-maturity.json",
+        "total": 16,
+        "generated": 16,
+        "goldenPaths": 16
       }
     },
     {
@@ -204,6 +259,8 @@
         "packageFiles": [
           "artifacts/arena/run.json",
           "artifacts/connector-maturity.json",
+          "artifacts/connector-webhooks.json",
+          "artifacts/harness-maturity.json",
           "artifacts/product-truth-audit.json",
           "artifacts/vendor-live-smoke.json"
         ]

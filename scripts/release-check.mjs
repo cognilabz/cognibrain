@@ -16,6 +16,7 @@ const steps = [
   ["Postgres verifier", "npm", ["run", "verify:postgres"]],
   ["connector compatibility", "npm", ["run", "verify:compatibility"]],
   ["connector maturity", "npm", ["run", "connectors:maturity"]],
+  ["harness maturity", "npm", ["run", "harness:maturity"]],
   ["product truth audit", "npm", ["run", "audit:truth"]],
   ["public benchmark publish", "npm", ["run", "leaderboard:publish"]],
   ["local runtime start", process.execPath, ["bin/cognibrain.mjs", "start"]],

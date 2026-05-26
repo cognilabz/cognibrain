@@ -7,8 +7,10 @@
     "healthCommand": "node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor --publish"
   },
   "integration": {
-    "beforeTask": "fetch a cognibrain evidence context pack for the crew task",
+    "beforeTask": "fetch a cognibrain coding context pack for the crew task",
+    "beforeTool": "check the planned tool action with /code/action-guard",
     "afterTool": "send tool outcome telemetry through /connectors/telemetry",
+    "afterPatch": "write a patch evidence trail through /patch-evidence",
     "feedback": "record accepted, rejected, partially useful, or harmful context packs"
   }
 }

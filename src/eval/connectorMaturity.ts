@@ -108,6 +108,7 @@ interface MaturityReport {
     liveSmokeReady: number;
     tenantVerified: number;
     productionCertified: number;
+    webhookVerified: number;
     averageQualityScore: number;
   };
   passed: boolean;
@@ -146,6 +147,7 @@ const providerCategory: Record<string, string> = {
 };
 
 const updateRevalidationProviders = new Set(["jira", "confluence", "notion", "linear", "gitlab", "azure-devops", "asana", "clickup", "sentry", "datadog", "pagerduty", "posthog"]);
+const webhookSupportedProviders = new Set(["github", "jira", "confluence", "notion", "linear", "gitlab", "slack", "teams", "sentry", "pagerduty"]);
 
 export function generateConnectorMaturity(options: { out?: string; markdown?: string } = {}): MaturityReport {
   const catalog = cliJson<ConnectorCatalogItem[]>(["connections", "connectors", "list", "--json"]);
@@ -153,13 +155,14 @@ export function generateConnectorMaturity(options: { out?: string; markdown?: st
   const vendorContract = readJson("artifacts/vendor-connectors-live.json", { passed: false, calls: [] }) as { passed?: boolean; calls?: Array<{ provider?: string; method?: string }> };
   const apiSpecs = readJson("artifacts/vendor-api-specs.json", { passed: false, rows: [] }) as { passed?: boolean; rows?: VendorApiSpecRow[] };
   const liveSmoke = readJson("artifacts/vendor-live-smoke.json", { providers: [] }) as { providers?: Array<{ provider: string; configured: boolean; skipped: boolean; checks?: Record<string, boolean> }> };
-  const rows = catalog.map((item) => maturityRow(item, shows.get(item.provider), vendorContract, apiSpecs, liveSmoke));
+  const webhookProof = readJson("artifacts/connector-webhooks.json", { rows: [] }) as { rows?: Array<{ provider?: string; passed?: boolean; checks?: Record<string, boolean> }> };
+  const rows = catalog.map((item) => maturityRow(item, shows.get(item.provider), vendorContract, apiSpecs, liveSmoke, webhookProof));
   const report: MaturityReport = {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
     source: "connector-registry",
     proofLevels,
-    artifacts: ["artifacts/vendor-connectors-live.json", "artifacts/vendor-api-specs.json", "artifacts/vendor-live-smoke.json", "artifacts/connectors-live.json"],
+    artifacts: ["artifacts/vendor-connectors-live.json", "artifacts/vendor-api-specs.json", "artifacts/vendor-live-smoke.json", "artifacts/connector-webhooks.json", "artifacts/connectors-live.json"],
     rows,
     summary: {
       total: rows.length,
@@ -168,6 +171,7 @@ export function generateConnectorMaturity(options: { out?: string; markdown?: st
       liveSmokeReady: rows.filter((row) => row.proofLevel === "live-smoke-ready" || row.proofLevel === "tenant-verified" || row.proofLevel === "production-certified").length,
       tenantVerified: rows.filter((row) => row.maturity.tenantVerified).length,
       productionCertified: rows.filter((row) => row.maturity.productionCertified).length,
+      webhookVerified: rows.filter((row) => row.maturity.webhook).length,
       averageQualityScore: roundedAverage(rows.map((row) => row.qualityScore))
     },
     passed: rows.length >= 19 && rows.every((row) =>
@@ -178,6 +182,7 @@ export function generateConnectorMaturity(options: { out?: string; markdown?: st
       row.maturity.docs &&
       row.maturity.apiSpec &&
       row.maturity.liveSmokeSupport &&
+      (row.maturity.webhook || !webhookSupportedProviders.has(row.provider)) &&
       row.gaps.includes("production-certified proof not claimed")
     )
   };
@@ -197,11 +202,13 @@ function maturityRow(
   show: ConnectorShow | undefined,
   vendorContract: { passed?: boolean; calls?: Array<{ provider?: string; method?: string }> },
   apiSpecs: { passed?: boolean; rows?: VendorApiSpecRow[] },
-  liveSmoke: { providers?: Array<{ provider: string; configured: boolean; skipped: boolean; checks?: Record<string, boolean> }> }
+  liveSmoke: { providers?: Array<{ provider: string; configured: boolean; skipped: boolean; checks?: Record<string, boolean> }> },
+  webhookProof: { rows?: Array<{ provider?: string; passed?: boolean; checks?: Record<string, boolean> }> }
 ): MaturityRow {
   const calls = vendorContract.calls?.filter((call) => call.provider === item.provider) ?? [];
   const apiSpec = apiSpecs.rows?.find((row) => row.provider === item.provider);
   const live = liveSmoke.providers?.find((provider) => provider.provider === item.provider);
+  const webhook = webhookProof.rows?.find((row) => row.provider === item.provider);
   const hasWrite = calls.some((call) => ["POST", "PATCH", "PUT"].includes(String(call.method ?? "").toUpperCase()));
   const hasRead = calls.some((call) => ["GET", "POST"].includes(String(call.method ?? "").toUpperCase()));
   const endpointPurpose = (purpose: string) => Boolean(apiSpec?.endpoints?.some((endpoint) => endpoint.purpose === purpose && endpoint.matched));
@@ -226,7 +233,7 @@ function maturityRow(
     liveSmoke: Boolean(live?.configured && !live.skipped && Object.values(live.checks ?? {}).every(Boolean)),
     oauthOrSetupWizard: Boolean(show?.definition.fields?.length && item.addCommand),
     pollOrList: endpointPurpose("list") || endpointPurpose("poll") || Boolean(apiSpec?.capabilities?.listOrPoll ?? hasRead),
-    webhook: false,
+    webhook: Boolean(webhook?.passed && Object.values(webhook.checks ?? {}).every(Boolean)),
     writeback: endpointPurpose("writeback") || Boolean(apiSpec?.capabilities?.writeback ?? hasWrite)
   };
   const quality = connectorQuality(item.provider, maturity, live);
@@ -236,7 +243,7 @@ function maturityRow(
     ...(!maturity.apiSpec ? ["vendor API/spec contract not verified"] : []),
     ...(!maturity.liveSmokeSupport ? ["live-smoke harness not available"] : []),
     ...(!maturity.tenantVerified ? ["tenant live-smoke not run in checked artifact"] : []),
-    ...(!maturity.webhook ? ["webhook delivery not claimed for native vendor row"] : []),
+    ...(webhookSupportedProviders.has(item.provider) && !maturity.webhook ? ["webhook delivery not claimed for native vendor row"] : []),
     ...(!quality.updateRevalidation ? ["update/revalidation quality gate not complete"] : []),
     "production-certified proof not claimed"
   ];
@@ -255,7 +262,7 @@ function maturityRow(
       fixtureArtifact: "artifacts/vendor-connectors-live.json",
       apiSpecArtifact: "artifacts/vendor-api-specs.json",
       liveSmokeArtifact: "artifacts/vendor-live-smoke.json",
-      verification: "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+      verification: "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
     },
     gaps
   };
@@ -290,7 +297,7 @@ function connectorQuality(
 
 function renderMarkdown(report: MaturityReport): string {
   const rows = report.rows
-    .map((row) => `| ${row.provider} | ${row.category} | ${row.proofLevel} | ${score(row.qualityScore)} | ${mark(row.maturity.driver)} | ${mark(row.maturity.hermeticFixture)} | ${mark(row.maturity.apiSpec)} | ${mark(row.maturity.liveSmokeSupport)} | ${mark(row.maturity.tenantVerified)} | ${mark(row.maturity.tuiSetup)} | ${mark(row.maturity.listImplemented)} | ${mark(row.maturity.pollImplemented)} | ${mark(row.maturity.writebackImplemented)} | ${mark(row.maturity.productionCertified)} |`)
+    .map((row) => `| ${row.provider} | ${row.category} | ${row.proofLevel} | ${score(row.qualityScore)} | ${mark(row.maturity.driver)} | ${mark(row.maturity.hermeticFixture)} | ${mark(row.maturity.apiSpec)} | ${mark(row.maturity.liveSmokeSupport)} | ${mark(row.maturity.webhook)} | ${mark(row.maturity.tenantVerified)} | ${mark(row.maturity.tuiSetup)} | ${mark(row.maturity.listImplemented)} | ${mark(row.maturity.pollImplemented)} | ${mark(row.maturity.writebackImplemented)} | ${mark(row.maturity.productionCertified)} |`)
     .join("\n");
   return `# Connector Maturity Matrix
 
@@ -300,10 +307,10 @@ Proof levels are ordered as: ${report.proofLevels.map((level) => `\`${level}\``)
 
 Native connector means there is a first-party connector manifest and driver path. It does not mean customer production certification unless the production-certified column is true. Marketing can make strong live-system claims only for \`tenant-verified\` or \`production-certified\` rows.
 
-Current checked connector state: ${report.summary.hermeticDrivers} hermetic drivers, ${report.summary.apiSpecVerified} API/spec-verified drivers, ${report.summary.liveSmokeReady} live-smoke-ready drivers, ${report.summary.tenantVerified} tenant-verified live smokes, ${report.summary.productionCertified} production certifications, average quality score ${score(report.summary.averageQualityScore)}. Live-system proof requires tenant credentials plus \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`.
+Current checked connector state: ${report.summary.hermeticDrivers} hermetic drivers, ${report.summary.apiSpecVerified} API/spec-verified drivers, ${report.summary.liveSmokeReady} live-smoke-ready drivers, ${report.summary.webhookVerified} webhook-verified priority drivers, ${report.summary.tenantVerified} tenant-verified live smokes, ${report.summary.productionCertified} production certifications, average quality score ${score(report.summary.averageQualityScore)}. Live-system proof requires tenant credentials plus \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`.
 
-| Connector | Category | Proof level | Quality | Driver | Fixture | API/spec | Live-smoke ready | Tenant verified | TUI setup | List | Poll | Writeback | Production-certified |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Connector | Category | Proof level | Quality | Driver | Fixture | API/spec | Live-smoke ready | Webhook | Tenant verified | TUI setup | List | Poll | Writeback | Production-certified |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${rows}
 
 Evidence:
@@ -311,6 +318,7 @@ Evidence:
 - \`artifacts/vendor-connectors-live.json\` proves hermetic driver/list/poll/writeback paths.
 - \`artifacts/vendor-api-specs.json\` checks method, path shape, auth scheme and writeback calls against codified vendor API contracts.
 - \`artifacts/vendor-live-smoke.json\` records whether tenant credentials were configured, whether live smoke was opted in, and whether token material was retained.
+- \`artifacts/connector-webhooks.json\` proves signature validation, replay protection, normalization, source refs and review queues for priority webhook-capable connectors.
 - \`npm run connectors:maturity\` regenerates this page and \`artifacts/connector-maturity.json\`.
 `;
 }

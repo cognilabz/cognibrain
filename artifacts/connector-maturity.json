@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T09:07:42.928Z",
+  "generatedAt": "2026-05-26T11:10:48.876Z",
   "source": "connector-registry",
   "proofLevels": [
     "manifest-only",
@@ -15,6 +15,7 @@
     "artifacts/vendor-connectors-live.json",
     "artifacts/vendor-api-specs.json",
     "artifacts/vendor-live-smoke.json",
+    "artifacts/connector-webhooks.json",
     "artifacts/connectors-live.json"
   ],
   "rows": [
@@ -45,7 +46,7 @@
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
-        "webhook": false,
+        "webhook": true,
         "writeback": true
       },
       "quality": {
@@ -64,11 +65,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -99,7 +99,7 @@
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
-        "webhook": false,
+        "webhook": true,
         "writeback": true
       },
       "quality": {
@@ -118,11 +118,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -172,11 +171,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -207,7 +205,7 @@
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
-        "webhook": false,
+        "webhook": true,
         "writeback": true
       },
       "quality": {
@@ -226,11 +224,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -261,7 +258,7 @@
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
-        "webhook": false,
+        "webhook": true,
         "writeback": true
       },
       "quality": {
@@ -280,11 +277,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -315,7 +311,7 @@
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
-        "webhook": false,
+        "webhook": true,
         "writeback": true
       },
       "quality": {
@@ -334,11 +330,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -369,7 +364,7 @@
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
-        "webhook": false,
+        "webhook": true,
         "writeback": true
       },
       "quality": {
@@ -388,11 +383,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -423,7 +417,7 @@
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
-        "webhook": false,
+        "webhook": true,
         "writeback": true
       },
       "quality": {
@@ -442,11 +436,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -496,11 +489,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -531,7 +523,7 @@
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
-        "webhook": false,
+        "webhook": true,
         "writeback": true
       },
       "quality": {
@@ -550,11 +542,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -604,11 +595,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -658,11 +648,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -712,11 +701,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -766,11 +754,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -820,11 +807,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -855,7 +841,7 @@
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
-        "webhook": false,
+        "webhook": true,
         "writeback": true
       },
       "quality": {
@@ -874,11 +860,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -928,11 +913,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -963,7 +947,7 @@
         "liveSmoke": false,
         "oauthOrSetupWizard": true,
         "pollOrList": true,
-        "webhook": false,
+        "webhook": true,
         "writeback": true
       },
       "quality": {
@@ -982,11 +966,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     },
@@ -1036,11 +1019,10 @@
         "fixtureArtifact": "artifacts/vendor-connectors-live.json",
         "apiSpecArtifact": "artifacts/vendor-api-specs.json",
         "liveSmokeArtifact": "artifacts/vendor-live-smoke.json",
-        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live"
+        "verification": "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
       },
       "gaps": [
         "tenant live-smoke not run in checked artifact",
-        "webhook delivery not claimed for native vendor row",
         "production-certified proof not claimed"
       ]
     }
@@ -1052,6 +1034,7 @@
     "liveSmokeReady": 19,
     "tenantVerified": 0,
     "productionCertified": 0,
+    "webhookVerified": 10,
     "averageQualityScore": 1
   },
   "passed": true

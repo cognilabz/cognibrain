@@ -10,6 +10,8 @@ import { runBeamBenchmark } from "../src/eval/beam";
 import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
 import { runCogniCodeBench } from "../src/eval/cognicodeBench";
 import { generateConnectorMaturity } from "../src/eval/connectorMaturity";
+import { generateConnectorWebhookProof } from "../src/eval/connectorWebhooks";
+import { generateHarnessMaturity } from "../src/eval/harnessMaturity";
 import { publishArenaReport } from "../src/eval/publishArena";
 
 describe("self verification benchmark loop", () => {
@@ -176,9 +178,36 @@ describe("self verification benchmark loop", () => {
     ]);
     expect(report.summary.total).toBeGreaterThanOrEqual(19);
     expect(report.summary.liveSmokeReady).toBeGreaterThanOrEqual(19);
+    expect(report.summary.webhookVerified).toBeGreaterThanOrEqual(10);
     expect(report.summary.tenantVerified).toBe(0);
     expect(report.rows.find((row) => row.provider === "jira")?.proofLevel).toBe("live-smoke-ready");
+    expect(report.rows.find((row) => row.provider === "github")?.maturity.webhook).toBe(true);
     expect(report.rows.every((row) => row.qualityScore > 0)).toBe(true);
+  });
+
+  it("proves priority connector webhook signature, replay, normalization, and review queue paths", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-webhooks-"));
+    const report = generateConnectorWebhookProof({ out: join(dir, "connector-webhooks.json") });
+    expect(report.passed).toBe(true);
+    expect(report.summary.total).toBeGreaterThanOrEqual(10);
+    expect(report.rows.every((row) => row.checks.signatureValidation && row.checks.replayProtection)).toBe(true);
+    expect(report.rows.every((row) => row.checks.eventNormalization && row.checks.reviewQueue && row.checks.sourceRef)).toBe(true);
+  });
+
+  it("generates a harness maturity matrix with golden-path proof", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-maturity-"));
+    const report = generateHarnessMaturity({
+      out: join(dir, "harness-maturity.json"),
+      markdown: join(dir, "harness-maturity.md")
+    });
+    expect(report.passed).toBe(true);
+    expect(report.summary.total).toBeGreaterThanOrEqual(16);
+    expect(report.summary.generated).toBeGreaterThanOrEqual(16);
+    expect(report.rows.find((row) => row.harness === "windsurf")?.maturity.configGenerated).toBe(true);
+    expect(report.rows.find((row) => row.harness === "continue")?.maturity.mcp).toBe(true);
+    expect(report.rows.find((row) => row.harness === "devin-style")?.maturity.configGenerated).toBe(true);
+    expect(report.goldenPaths.every((path) => path.passed)).toBe(true);
+    expect(readFileSync(join(dir, "harness-maturity.md"), "utf8")).toContain("Harness Maturity Matrix");
   });
 
   it("publishes a marketing scorecard with bars and per-scenario details", () => {
@@ -375,6 +404,10 @@ describe("self verification benchmark loop", () => {
     expect(report.scenarios.every((scenario) => scenario.passed)).toBe(true);
     expect(report.metrics.correctionCarryoverRate).toBe(1);
     expect(report.metrics.repeatedMistakeRate).toBe(0);
+    expect(report.scenarioFactory.availableRepoTemplates).toBeGreaterThanOrEqual(100);
+    expect(report.scenarioFactory.availableCorrectionTypes).toBeGreaterThanOrEqual(20);
+    expect(report.metrics.sourceRefCorrectness).toBe(1);
+    expect(report.metrics.granularPatchCorrectness).toBe(1);
     expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.no_memory.score);
     expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.procedure_only.score);
     expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.temporal_only.score);
@@ -396,5 +429,6 @@ describe("self verification benchmark loop", () => {
     expect(report.scenarioCount).toBe(10);
     expect(report.generation.scenariosWritten).toBe(true);
     expect(report.scenarios).toHaveLength(0);
+    expect(report.difficultyDistribution.easy + report.difficultyDistribution.medium + report.difficultyDistribution.hard + report.difficultyDistribution.evil).toBe(10);
   });
 });

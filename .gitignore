@@ -23,7 +23,8 @@ venv/
 *.sqlite3
 .memory-harness.json
 .cognibrain/
-artifacts/
+artifacts/*
+!artifacts/harness-maturity.json
 public/leaderboard/
 data/benchmarks/locomo/*.json
 data/benchmarks/longmemeval/*.json
@@ -44,3 +45,16 @@ AGENTS.md
 /langgraph-cognibrain.ts
 /crewai.cognibrain.json
 /crewai_cognibrain.py
+.aider.conf.yml
+.aider/cognibrain.md
+.amp/cognibrain.md
+.clinerules/cognibrain.md
+.continue/config.json
+.continue/rules/cognibrain.md
+.devin/cognibrain.json
+.devin/cognibrain.md
+.goose/cognibrain.md
+.goose/config.yaml
+.roo/mcp.json
+.windsurf/mcp.json
+.windsurf/rules/cognibrain.md

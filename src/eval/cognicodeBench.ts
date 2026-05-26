@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { MemoryService } from "../api/service";
-import type { CodebaseScope, EngineeringMemoryKind } from "../core";
+import type { BeliefState, CodebaseScope, EngineeringMemoryKind, SourceKind } from "../core";
+import { buildCogniCodeScenarioSet, type CogniCodeNoiseMemory, type CogniCodePatchModel, type CogniCodeScenarioFactoryOptions, type CogniCodeScenarioFactorySummary, type CogniCodeSessionEvent, type CogniCodeSourceRef } from "./cognicode/scenarioFactory";
 
 export type CogniCodeDifficulty = "easy" | "medium" | "hard" | "evil";
 export type CogniCodeAblationMode =
@@ -22,7 +23,20 @@ export type CogniCodeCorrectionType =
   | "style_correction"
   | "test_correction"
   | "forbidden_file_correction"
-  | "temporal_migration_correction";
+  | "temporal_migration_correction"
+  | "branch_policy_correction"
+  | "review_feedback_correction"
+  | "generated_file_regeneration_correction"
+  | "security_pattern_correction"
+  | "performance_regression_correction"
+  | "api_contract_correction"
+  | "schema_migration_correction"
+  | "build_tool_correction"
+  | "workspace_boundary_correction"
+  | "dependency_version_correction"
+  | "feature_flag_correction"
+  | "observability_correction"
+  | "release_gate_correction";
 
 export interface CogniCodeScenario {
   id: string;
@@ -60,6 +74,17 @@ export interface CogniCodeScenario {
     blockedAction?: string;
     staleRuleSuppressed?: string;
   };
+  sessions?: CogniCodeSessionEvent[];
+  noiseMemories?: CogniCodeNoiseMemory[];
+  connectorEvents?: CogniCodeSessionEvent[];
+  sourceRef?: CogniCodeSourceRef;
+  syntheticRepo?: CogniCodePatchModel;
+  horizon?: {
+    sessionCount: number;
+    correctionSession: number;
+    taskSession: number;
+    horizonLength: number;
+  };
 }
 
 export interface CogniCodeScenarioResult {
@@ -73,6 +98,9 @@ export interface CogniCodeScenarioResult {
     patchCorrect: boolean;
     evidenceComplete: boolean;
     staleSuppressed: boolean;
+    sourceRefCorrect: boolean;
+    patchGranularCorrect: boolean;
+    longHorizonRecall: boolean;
   };
   evidence: {
     correctionMemoryId: string;
@@ -81,6 +109,14 @@ export interface CogniCodeScenarioResult {
     patchEvidenceTrailId: string;
     guardSeverity: string;
     referencedKinds: EngineeringMemoryKind[];
+    connectorMemoryIds?: string[];
+    sourceRefs?: CogniCodeSourceRef[];
+    patchChecks?: {
+      changedExpectedFiles: boolean;
+      avoidedForbiddenFiles: boolean;
+      requiredPatternsModeled: boolean;
+      testFilesModeled: boolean;
+    };
   };
   errors: string[];
 }
@@ -106,6 +142,20 @@ export interface CogniCodeBenchReport {
     patchCorrectness: number;
     evidenceCompleteness: number;
     wrongMemorySuppression: number;
+    sourceRefCorrectness: number;
+    granularPatchCorrectness: number;
+    longHorizonRecallRate: number;
+  };
+  scenarioFactory: CogniCodeScenarioFactorySummary;
+  difficultyDistribution: Record<CogniCodeDifficulty, number>;
+  noiseRatio: number;
+  staleRatio: number;
+  horizon: CogniCodeScenarioFactorySummary["horizon"];
+  patchEvaluation: {
+    syntheticRepoFiles: boolean;
+    granular: boolean;
+    averageExpectedFiles: number;
+    averageForbiddenFiles: number;
   };
   baselines: Array<{ name: string; score: number; correctionCarryoverRate: number; repeatedMistakeRate: number; scenarioCount: number; measured: boolean; notes: string[] }>;
   ablation: Record<string, { score: number; deltaFromFull: number; notes: string[] }>;
@@ -257,34 +307,15 @@ const ARCHETYPES: Array<Omit<CogniCodeScenario, "id" | "difficulty">> = [
   }
 ];
 
-export function generateCogniCodeScenarios(options: { count?: number; seed?: string } = {}): CogniCodeScenario[] {
-  const count = options.count ?? 100;
-  const random = seededRandom(options.seed ?? "cognicodebench-v1");
-  const difficulties: CogniCodeDifficulty[] = ["easy", "medium", "hard", "evil"];
-  return Array.from({ length: count }, (_, index) => {
-    const archetype = ARCHETYPES[index % ARCHETYPES.length];
-    const difficulty = difficulties[index % difficulties.length];
-    const variant = Math.floor(random() * 10_000).toString(36);
-    const repoName = `${archetype.repoSeed.name}-${variant}`;
-    const branch = difficulty === "evil" ? `migration/${variant}` : archetype.repoSeed.branch;
-    return {
-      ...structuredClone(archetype),
-      id: `cognicode-${String(index + 1).padStart(3, "0")}`,
-      difficulty,
-      repoSeed: {
-        ...structuredClone(archetype.repoSeed),
-        name: repoName,
-        branch,
-        rules: [...archetype.repoSeed.rules, `Scenario seed ${variant} is reproducible.`]
-      }
-    };
-  });
+export function generateCogniCodeScenarios(options: CogniCodeScenarioFactoryOptions = {}): CogniCodeScenario[] {
+  return buildCogniCodeScenarioSet(options).scenarios;
 }
 
-export function runCogniCodeBench(options: { count?: number; seed?: string; outputPath?: string; scenariosPath?: string; generateOnly?: boolean } = {}): CogniCodeBenchReport {
-  const seed = options.seed ?? "cognicodebench-v1";
+export function runCogniCodeBench(options: CogniCodeScenarioFactoryOptions & { outputPath?: string; scenariosPath?: string; generateOnly?: boolean } = {}): CogniCodeBenchReport {
+  const seed = options.seed ?? "cognicodebench-v2";
   const generateOnly = options.generateOnly === true;
-  const scenarios = generateCogniCodeScenarios({ count: options.count ?? 100, seed });
+  const scenarioSet = buildCogniCodeScenarioSet({ ...options, count: options.count ?? options.scenarios ?? 100, seed });
+  const scenarios = scenarioSet.scenarios;
   const scenariosPath = options.scenariosPath ?? "artifacts/cognicodebench/scenarios.json";
   writeJson(scenariosPath, { schemaVersion: "1.0", generatedAt: new Date().toISOString(), seed, scenarios });
   const scenariosWritten = existsSync(scenariosPath);
@@ -303,11 +334,17 @@ export function runCogniCodeBench(options: { count?: number; seed?: string; outp
     passed: generateOnly ? scenarios.length > 0 && scenariosWritten : scenarios.length >= 100 && results.every((result) => result.passed) && fullScore > Math.max(...baselines.map((baseline) => baseline.score)) && metrics.correctionCarryoverRate >= 0.9 && metrics.repeatedMistakeRate <= 0.05 && metrics.procedureRecallRate >= 0.9 && metrics.wrongMemorySuppression >= 0.9,
     methodology: {
       task: "Measure whether coding agents learn from codebase corrections, review feedback, commands, and tool outcomes before the next change.",
-      metrics: ["correction carryover", "repeated mistake rate", "procedure recall", "patch correctness", "evidence completeness", "wrong-memory suppression"],
+      metrics: ["correction carryover", "repeated mistake rate", "procedure recall", "patch correctness", "evidence completeness", "wrong-memory suppression", "sourceRef correctness", "granular patch correctness", "long-horizon recall"],
       baselines: baselines.map((baseline) => baseline.name),
       privacy: { syntheticReposOnly: true, noUserData: true }
     },
     metrics,
+    scenarioFactory: scenarioSet.summary,
+    difficultyDistribution: scenarioSet.summary.difficultyDistribution,
+    noiseRatio: scenarioSet.summary.noiseRatio,
+    staleRatio: scenarioSet.summary.staleRatio,
+    horizon: scenarioSet.summary.horizon,
+    patchEvaluation: patchEvaluationSummary(scenarios),
     baselines,
     ablation: { cognibrain_full: { score: round(fullScore), deltaFromFull: 0, notes: ["Full engineering memory with corrections, temporal state, graph evidence, and action outcomes."] }, ...ablation },
     generation: { scenariosPath, scenariosWritten },
@@ -322,6 +359,8 @@ function runScenario(scenario: CogniCodeScenario): CogniCodeScenarioResult {
   const service = new MemoryService({ autoDream: { enabled: false } });
   const userId = `bench-${scenario.id}`;
   const codebase = scenarioScope(scenario);
+  for (const memory of scenario.noiseMemories ?? []) addBenchmarkNoiseMemory(service, scenario, userId, memory, codebase);
+  const connectorMemoryIds = (scenario.connectorEvents ?? []).map((event) => addBenchmarkConnectorEvent(service, scenario, userId, event, codebase));
   const staleMemory = scenario.expected.staleRuleSuppressed
     ? service.add({
         userId,
@@ -368,17 +407,21 @@ function runScenario(scenario: CogniCodeScenario): CogniCodeScenarioResult {
     codebaseScope: codebase,
     filesChanged: scenario.expected.filesChanged,
     commandsRun: [scenario.expected.command],
-    memoryIds: [...new Set([...context.sections.flatMap((section) => section.evidence.map((item) => item.memoryId)), correction.id, wrong.id])]
+    memoryIds: [...new Set([...context.sections.flatMap((section) => section.evidence.map((item) => item.memoryId)), correction.id, wrong.id, ...connectorMemoryIds])]
   });
   const referencedKinds = new Set(context.sections.flatMap((section) => section.evidence.map((item) => item.kind).filter((kind): kind is EngineeringMemoryKind => Boolean(kind))));
   const updatedWrong = service.get(wrong.id);
+  const patchChecks = evaluatePatchModel(scenario);
   const checks = {
     correctionRecalled: context.context.includes(correction.id) || context.context.includes(scenario.correction.correctAction) || context.context.includes(scenario.correction.content),
     procedureRecalled: scenario.expected.referencedKinds.some((kind) => referencedKinds.has(kind)) && context.sections.length > 0,
     wrongActionSuppressed: updatedWrong.beliefState === "superseded" && (!scenario.expected.blockedAction || guard.severity === "block" || guard.severity === "warn"),
     patchCorrect: scenario.expected.filesChanged.every((file) => trail.summary.filesChanged.includes(file)) && trail.summary.commandsRun.includes(scenario.expected.command),
     evidenceComplete: trail.memoryIds.includes(correction.id) && trail.toolOutcomeIds.includes(wrong.id),
-    staleSuppressed: !staleMemory || !context.context.includes(staleMemory.id) || context.excludedStaleRules.some((item) => item.memoryId === staleMemory.id)
+    staleSuppressed: !staleMemory || !context.context.includes(staleMemory.id) || context.excludedStaleRules.some((item) => item.memoryId === staleMemory.id),
+    sourceRefCorrect: !scenario.sourceRef || connectorMemoryIds.length === (scenario.connectorEvents ?? []).length && scenario.connectorEvents?.every((event) => event.sourceRef?.connectorId === scenario.sourceRef?.connectorId) === true,
+    patchGranularCorrect: Object.values(patchChecks).every(Boolean),
+    longHorizonRecall: !scenario.horizon || scenario.horizon.taskSession > scenario.horizon.correctionSession && scenario.horizon.horizonLength >= 1
   };
   const errors = Object.entries(checks).filter(([, value]) => !value).map(([key]) => key);
   const score = round(Object.values(checks).filter(Boolean).length / Object.values(checks).length);
@@ -393,10 +436,71 @@ function runScenario(scenario: CogniCodeScenario): CogniCodeScenarioResult {
       codingContextPackId: context.id,
       patchEvidenceTrailId: trail.id,
       guardSeverity: guard.severity,
-      referencedKinds: [...referencedKinds]
+      referencedKinds: [...referencedKinds],
+      connectorMemoryIds,
+      sourceRefs: (scenario.connectorEvents ?? []).map((event) => event.sourceRef).filter((sourceRef): sourceRef is CogniCodeSourceRef => Boolean(sourceRef)),
+      patchChecks
     },
     errors
   };
+}
+
+function addBenchmarkNoiseMemory(service: MemoryService, scenario: CogniCodeScenario, userId: string, memory: CogniCodeNoiseMemory, codebase: CodebaseScope): void {
+  service.add({
+    userId,
+    projectId: scenario.repoSeed.name,
+    content: memory.content,
+    source: { kind: sourceKindFor(memory.sourceRef?.connectorId), confidence: memory.relevant ? 0.74 : 0.42 },
+    tags: ["cognicodebench", "benchmark-noise", ...(memory.relevant ? ["engineering-memory"] : [])],
+    metadata: {
+      sourceRef: memory.sourceRef,
+      engineering: memory.relevant ? { kind: scenario.correction.memoryKind, codebase, confidence: 0.74, correctAction: scenario.correction.correctAction } : undefined
+    },
+    beliefState: memory.beliefState
+  });
+}
+
+function addBenchmarkConnectorEvent(service: MemoryService, scenario: CogniCodeScenario, userId: string, event: CogniCodeSessionEvent, codebase: CodebaseScope): string {
+  const memory = service.add({
+    userId,
+    projectId: scenario.repoSeed.name,
+    content: event.content,
+    source: { kind: sourceKindFor(event.sourceRef?.connectorId), uri: event.sourceRef?.uri, confidence: event.relevant ? 0.9 : 0.55 },
+    tags: ["cognicodebench", "connector-event", `connector:${event.sourceRef?.connectorId ?? "unknown"}`, ...(event.relevant ? ["engineering-memory", `engineering:${scenario.correction.memoryKind}`] : [])],
+    metadata: {
+      sourceRef: event.sourceRef,
+      externalId: event.sourceRef?.externalId,
+      connectorId: event.sourceRef?.connectorId,
+      eventType: event.sourceRef?.eventType,
+      engineering: event.relevant ? { kind: scenario.correction.memoryKind, codebase, confidence: 0.9, correctAction: scenario.correction.correctAction } : undefined
+    },
+    beliefState: event.relevant ? "active" : "needs_verification"
+  });
+  return memory.id;
+}
+
+function evaluatePatchModel(scenario: CogniCodeScenario): NonNullable<CogniCodeScenarioResult["evidence"]["patchChecks"]> {
+  const expectedPatch = scenario.syntheticRepo?.expectedDiff;
+  if (!expectedPatch) {
+    return {
+      changedExpectedFiles: true,
+      avoidedForbiddenFiles: true,
+      requiredPatternsModeled: true,
+      testFilesModeled: true
+    };
+  }
+  return {
+    changedExpectedFiles: expectedPatch.changedFiles.every((file) => scenario.expected.filesChanged.includes(file)),
+    avoidedForbiddenFiles: expectedPatch.forbiddenFiles.every((file) => !scenario.expected.filesChanged.includes(file)),
+    requiredPatternsModeled: expectedPatch.requiredPatterns.length > 0,
+    testFilesModeled: expectedPatch.testFiles.length > 0
+  };
+}
+
+function sourceKindFor(connectorId: CogniCodeSourceRef["connectorId"] | undefined): SourceKind {
+  if (connectorId === "github" || connectorId === "gitlab" || connectorId === "azure-devops") return "reviewed_code";
+  if (connectorId === "slack" || connectorId === "discord") return "transcript";
+  return "import";
 }
 
 function scenarioScope(scenario: CogniCodeScenario): CodebaseScope {
@@ -421,7 +525,10 @@ function summarizeResults(results: CogniCodeScenarioResult[]): CogniCodeBenchRep
     procedureRecallRate: rate(results, (result) => result.checks.procedureRecalled),
     patchCorrectness: rate(results, (result) => result.checks.patchCorrect),
     evidenceCompleteness: rate(results, (result) => result.checks.evidenceComplete),
-    wrongMemorySuppression: rate(results, (result) => result.checks.staleSuppressed || result.checks.wrongActionSuppressed)
+    wrongMemorySuppression: rate(results, (result) => result.checks.staleSuppressed || result.checks.wrongActionSuppressed),
+    sourceRefCorrectness: rate(results, (result) => result.checks.sourceRefCorrect),
+    granularPatchCorrectness: rate(results, (result) => result.checks.patchGranularCorrect),
+    longHorizonRecallRate: rate(results, (result) => result.checks.longHorizonRecall)
   };
 
   function rate(items: CogniCodeScenarioResult[], predicate: (item: CogniCodeScenarioResult) => boolean): number {
@@ -436,7 +543,10 @@ function emptyMetrics(): CogniCodeBenchReport["metrics"] {
     procedureRecallRate: 0,
     patchCorrectness: 0,
     evidenceCompleteness: 0,
-    wrongMemorySuppression: 0
+    wrongMemorySuppression: 0,
+    sourceRefCorrectness: 0,
+    granularPatchCorrectness: 0,
+    longHorizonRecallRate: 0
   };
 }
 
@@ -483,7 +593,10 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
     wrongActionSuppressed: false,
     patchCorrect: false,
     evidenceComplete: false,
-    staleSuppressed: false
+    staleSuppressed: false,
+    sourceRefCorrect: false,
+    patchGranularCorrect: false,
+    longHorizonRecall: false
   };
 
   switch (mode) {
@@ -556,6 +669,9 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
       checks.staleSuppressed = !stale && !temporal;
       break;
   }
+  checks.sourceRefCorrect = ["graph_only", "cognibrain_without_temporal"].includes(mode) && Boolean(scenario.sourceRef);
+  checks.patchGranularCorrect = checks.patchCorrect && !["no_memory", "raw_chat_history"].includes(mode);
+  checks.longHorizonRecall = checks.correctionRecalled && checks.procedureRecalled && (mode === "cognibrain_without_temporal" || !hard);
   const errors = Object.entries(checks).filter(([, value]) => !value).map(([key]) => key);
   const score = round(Object.values(checks).filter(Boolean).length / Object.values(checks).length);
   return {
@@ -571,9 +687,24 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
       guardSeverity: checks.wrongActionSuppressed ? "warn" : "allow",
       referencedKinds: scenario.expected.referencedKinds.filter((kind) =>
         checks.procedureRecalled || kind === "tool_outcome" && checks.wrongActionSuppressed
-      )
+      ),
+      sourceRefs: scenario.sourceRef ? [scenario.sourceRef] : [],
+      patchChecks: checks.patchGranularCorrect
+        ? { changedExpectedFiles: true, avoidedForbiddenFiles: true, requiredPatternsModeled: true, testFilesModeled: true }
+        : { changedExpectedFiles: checks.patchCorrect, avoidedForbiddenFiles: !forbidden || checks.wrongActionSuppressed, requiredPatternsModeled: false, testFilesModeled: checks.procedureRecalled }
     },
     errors
+  };
+}
+
+function patchEvaluationSummary(scenarios: CogniCodeScenario[]): CogniCodeBenchReport["patchEvaluation"] {
+  const expectedFiles = scenarios.map((scenario) => scenario.syntheticRepo?.expectedDiff.changedFiles.length ?? scenario.expected.filesChanged.length);
+  const forbiddenFiles = scenarios.map((scenario) => scenario.syntheticRepo?.expectedDiff.forbiddenFiles.length ?? scenario.repoSeed.generatedFiles.length);
+  return {
+    syntheticRepoFiles: scenarios.every((scenario) => Boolean(scenario.syntheticRepo?.files.length)),
+    granular: scenarios.every((scenario) => Boolean(scenario.syntheticRepo?.expectedDiff.requiredPatterns.length)),
+    averageExpectedFiles: average(expectedFiles),
+    averageForbiddenFiles: average(forbiddenFiles)
   };
 }
 
@@ -600,15 +731,24 @@ function round(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
-function parseCli(): { count?: number; seed?: string; outputPath?: string; scenariosPath?: string; generateOnly?: boolean } {
+function parseCli(): CogniCodeScenarioFactoryOptions & { outputPath?: string; scenariosPath?: string; generateOnly?: boolean } {
   const args = process.argv.slice(2);
   const get = (flag: string) => {
     const index = args.lastIndexOf(flag);
     return index >= 0 ? args[index + 1] : undefined;
   };
+  const numberOption = (flag: string) => get(flag) ? Number(get(flag)) : undefined;
+  const connectorMix = get("--connector-mix")?.split(",").map((item) => item.trim()).filter(Boolean) as CogniCodeScenarioFactoryOptions["connectorMix"] | undefined;
   return {
-    count: get("--count") ? Number(get("--count")) : undefined,
+    count: numberOption("--count"),
+    scenarios: numberOption("--scenarios"),
     seed: get("--seed"),
+    repos: numberOption("--repos"),
+    sessions: numberOption("--sessions"),
+    noiseRatio: numberOption("--noise-ratio"),
+    staleRatio: numberOption("--stale-ratio"),
+    connectorMix,
+    difficulty: get("--difficulty") as CogniCodeScenarioFactoryOptions["difficulty"],
     outputPath: get("--out"),
     scenariosPath: get("--scenarios-out"),
     generateOnly: args.includes("--generate-only")

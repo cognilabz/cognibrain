@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T09:08:14.110Z",
+  "generatedAt": "2026-05-26T11:14:40.426Z",
   "summary": {
-    "total": 11,
-    "passed": 11,
+    "total": 13,
+    "passed": 13,
     "failed": 0
   },
   "markdownDocs": [
@@ -15,10 +15,12 @@
     "docs/install.md",
     "docs/integrations.md",
     "docs/integrations/connector-maturity.md",
+    "docs/integrations/harness-maturity.md",
     "docs/market/compare.md",
     "docs/market/same-benchmark.md",
     "docs/operations.md",
     "docs/reference.md",
+    "docs/roadmap/benchmark-harness-connector-plan.md",
     "docs/roadmap/terminal-memory-os-plan.md"
   ],
   "checks": [
@@ -53,7 +55,17 @@
       "failed": []
     },
     {
+      "name": "benchmark harness connector plan coverage is documented",
+      "passed": true,
+      "failed": []
+    },
+    {
       "name": "connectors, adapters and SDK are discoverable",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "communication contract is explicit and current",
       "passed": true,
       "failed": []
     },

@@ -362,7 +362,7 @@ const benchmarkArenaProof = [
   ["Mem0", "same-run-api-shape"],
   ["Graphiti/Zep", "same-run-api-shape"],
   ["Cognee", "same-run-api-shape"],
-  ["LangMem", "same-run-api-shape"],
+  ["LangMem", "same-run-native"],
   ["GBrain", "same-run-api-shape"],
   ["public table", "public/benchmark-arena"]
 ];

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T09:07:41.282Z",
+  "generatedAt": "2026-05-26T11:10:46.870Z",
   "checks": {
     "connectorAuthSecretHash": true,
     "connectorRevoke": true,
@@ -51,7 +51,14 @@
     "opencode",
     "openclaw",
     "langgraph",
-    "crewai"
+    "crewai",
+    "windsurf",
+    "continue",
+    "aider",
+    "roo-cline",
+    "goose",
+    "sourcegraph-amp",
+    "devin-style"
   ],
   "harnessRuns": [
     {
@@ -65,8 +72,8 @@
         "userCorrectionCaptured": true,
         "patchEvidenceTrail": true
       },
-      "codingContextPackId": "code_ctx_1ngdn08",
-      "patchEvidenceTrailId": "patch_ev_1bxd3pc",
+      "codingContextPackId": "code_ctx_1lf2s7c",
+      "patchEvidenceTrailId": "patch_ev_1hyq33j",
       "passed": true
     }
   ],

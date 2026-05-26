@@ -1,0 +1,716 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-05-26T11:11:02.989Z",
+  "source": "harness-package",
+  "artifacts": [
+    "artifacts/harness-maturity.json",
+    "docs/integrations/harness-maturity.md",
+    "artifacts/connectors-live.json"
+  ],
+  "rows": [
+    {
+      "harness": "codex",
+      "name": "OpenAI Codex CLI",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": true,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          "$CODEX_HOME/config.toml"
+        ],
+        "rulesPaths": [
+          "AGENTS.md",
+          "$CODEX_HOME/skills/cognibrain/SKILL.md"
+        ],
+        "goldenPath": "patch_ev_19t57ew"
+      },
+      "gaps": []
+    },
+    {
+      "harness": "claude",
+      "name": "Claude Code",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": true,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".mcp.json"
+        ],
+        "rulesPaths": [
+          ".claude/settings.json"
+        ],
+        "goldenPath": "patch_ev_15y86e"
+      },
+      "gaps": []
+    },
+    {
+      "harness": "copilot",
+      "name": "GitHub Copilot",
+      "status": "generated-partial",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": false,
+        "preLlmContextHook": false,
+        "preToolGuard": false,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".github/copilot-instructions.md"
+        ],
+        "rulesPaths": [
+          ".github/instructions/cognibrain.instructions.md"
+        ],
+        "goldenPath": "patch_ev_2h8h6w"
+      },
+      "gaps": [
+        "MCP-native hook not claimed",
+        "pre-tool action guard not natively hooked"
+      ]
+    },
+    {
+      "harness": "cursor",
+      "name": "Cursor",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": true,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".cursor/mcp.json"
+        ],
+        "rulesPaths": [
+          ".cursor/rules/open-memory.mdc"
+        ],
+        "goldenPath": "patch_ev_1m5u1g3"
+      },
+      "gaps": []
+    },
+    {
+      "harness": "vscode",
+      "name": "VS Code MCP",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": false,
+        "mcp": true,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".vscode/mcp.json"
+        ],
+        "rulesPaths": [],
+        "goldenPath": "patch_ev_okgywc"
+      },
+      "gaps": [
+        "skill/rules package not generated"
+      ]
+    },
+    {
+      "harness": "opencode",
+      "name": "OpenCode",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": true,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".opencode/mcp.json"
+        ],
+        "rulesPaths": [
+          ".opencode/cognibrain.md"
+        ],
+        "goldenPath": "patch_ev_1syzvuo"
+      },
+      "gaps": []
+    },
+    {
+      "harness": "openclaw",
+      "name": "OpenClaw",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": true,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".openclaw/mcp.json"
+        ],
+        "rulesPaths": [
+          ".openclaw/cognibrain.md"
+        ],
+        "goldenPath": "patch_ev_1ckmhhv"
+      },
+      "gaps": []
+    },
+    {
+      "harness": "langgraph",
+      "name": "LangGraph",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": false,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          "langgraph.cognibrain.json"
+        ],
+        "rulesPaths": [
+          "langgraph-cognibrain.ts"
+        ],
+        "goldenPath": "patch_ev_o3bsmm"
+      },
+      "gaps": [
+        "MCP-native hook not claimed"
+      ]
+    },
+    {
+      "harness": "crewai",
+      "name": "CrewAI",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": false,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          "crewai.cognibrain.json"
+        ],
+        "rulesPaths": [
+          "crewai_cognibrain.py"
+        ],
+        "goldenPath": "patch_ev_epdf2z"
+      },
+      "gaps": [
+        "MCP-native hook not claimed"
+      ]
+    },
+    {
+      "harness": "windsurf",
+      "name": "Windsurf",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": true,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".windsurf/mcp.json"
+        ],
+        "rulesPaths": [
+          ".windsurf/rules/cognibrain.md"
+        ],
+        "goldenPath": "patch_ev_1po6g43"
+      },
+      "gaps": []
+    },
+    {
+      "harness": "continue",
+      "name": "Continue.dev",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": true,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".continue/config.json"
+        ],
+        "rulesPaths": [
+          ".continue/rules/cognibrain.md"
+        ],
+        "goldenPath": "patch_ev_15yp7t9"
+      },
+      "gaps": []
+    },
+    {
+      "harness": "aider",
+      "name": "Aider",
+      "status": "generated-partial",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": false,
+        "preLlmContextHook": true,
+        "preToolGuard": false,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".aider.conf.yml"
+        ],
+        "rulesPaths": [
+          ".aider/cognibrain.md"
+        ],
+        "goldenPath": "patch_ev_9vddnb"
+      },
+      "gaps": [
+        "MCP-native hook not claimed",
+        "pre-tool action guard not natively hooked",
+        "Aider uses file-based instructions plus CLI feedback commands rather than MCP-native hooks."
+      ]
+    },
+    {
+      "harness": "roo-cline",
+      "name": "Roo Code / Cline",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": true,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".roo/mcp.json"
+        ],
+        "rulesPaths": [
+          ".clinerules/cognibrain.md"
+        ],
+        "goldenPath": "patch_ev_ubo4yt"
+      },
+      "gaps": []
+    },
+    {
+      "harness": "goose",
+      "name": "Goose",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": true,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".goose/config.yaml"
+        ],
+        "rulesPaths": [
+          ".goose/cognibrain.md"
+        ],
+        "goldenPath": "patch_ev_ub9g1o"
+      },
+      "gaps": []
+    },
+    {
+      "harness": "sourcegraph-amp",
+      "name": "Sourcegraph Amp",
+      "status": "instruction-only",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": false,
+        "preLlmContextHook": false,
+        "preToolGuard": false,
+        "postToolTelemetry": false,
+        "correctionCapture": false,
+        "patchEvidenceTrail": false,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".amp/cognibrain.md"
+        ],
+        "rulesPaths": [
+          ".amp/cognibrain.md"
+        ],
+        "goldenPath": "patch_ev_3vk71j"
+      },
+      "gaps": [
+        "MCP-native hook not claimed",
+        "pre-tool action guard not natively hooked",
+        "Instruction handoff is generated; a native pre-tool hook is not claimed."
+      ]
+    },
+    {
+      "harness": "devin-style",
+      "name": "Devin-style external agent mode",
+      "status": "generated-e2e-proven",
+      "maturity": {
+        "configGenerated": true,
+        "skillOrRules": true,
+        "mcp": false,
+        "preLlmContextHook": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true,
+        "installWizard": true,
+        "doctor": true,
+        "e2eDemo": true
+      },
+      "evidence": {
+        "manifest": ".cognibrain-harness-package.json (generated in temp setup workspace)",
+        "configPaths": [
+          ".devin/cognibrain.json"
+        ],
+        "rulesPaths": [
+          ".devin/cognibrain.md"
+        ],
+        "goldenPath": "patch_ev_1mzptk7"
+      },
+      "gaps": [
+        "MCP-native hook not claimed",
+        "Generic external-agent contract is generated; a vendor-native Devin hook is not claimed."
+      ]
+    }
+  ],
+  "goldenPaths": [
+    {
+      "harness": "codex",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_ynb9e4",
+      "patchEvidenceTrailId": "patch_ev_19t57ew",
+      "passed": true
+    },
+    {
+      "harness": "claude",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_1dnnz45",
+      "patchEvidenceTrailId": "patch_ev_15y86e",
+      "passed": true
+    },
+    {
+      "harness": "copilot",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_14sxqs1",
+      "patchEvidenceTrailId": "patch_ev_2h8h6w",
+      "passed": true
+    },
+    {
+      "harness": "cursor",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_p69y5x",
+      "patchEvidenceTrailId": "patch_ev_1m5u1g3",
+      "passed": true
+    },
+    {
+      "harness": "vscode",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_64rhlk",
+      "patchEvidenceTrailId": "patch_ev_okgywc",
+      "passed": true
+    },
+    {
+      "harness": "opencode",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_9wxijx",
+      "patchEvidenceTrailId": "patch_ev_1syzvuo",
+      "passed": true
+    },
+    {
+      "harness": "openclaw",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_18djyk1",
+      "patchEvidenceTrailId": "patch_ev_1ckmhhv",
+      "passed": true
+    },
+    {
+      "harness": "langgraph",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_p5yamp",
+      "patchEvidenceTrailId": "patch_ev_o3bsmm",
+      "passed": true
+    },
+    {
+      "harness": "crewai",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_50znps",
+      "patchEvidenceTrailId": "patch_ev_epdf2z",
+      "passed": true
+    },
+    {
+      "harness": "windsurf",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_y3siei",
+      "patchEvidenceTrailId": "patch_ev_1po6g43",
+      "passed": true
+    },
+    {
+      "harness": "continue",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_1yekwcx",
+      "patchEvidenceTrailId": "patch_ev_15yp7t9",
+      "passed": true
+    },
+    {
+      "harness": "aider",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_xea5v1",
+      "patchEvidenceTrailId": "patch_ev_9vddnb",
+      "passed": true
+    },
+    {
+      "harness": "roo-cline",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_8xjc3n",
+      "patchEvidenceTrailId": "patch_ev_ubo4yt",
+      "passed": true
+    },
+    {
+      "harness": "goose",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_htuz8c",
+      "patchEvidenceTrailId": "patch_ev_ub9g1o",
+      "passed": true
+    },
+    {
+      "harness": "sourcegraph-amp",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_1i9tpqb",
+      "patchEvidenceTrailId": "patch_ev_3vk71j",
+      "passed": true
+    },
+    {
+      "harness": "devin-style",
+      "checks": {
+        "installToContext": true,
+        "preToolGuard": true,
+        "postToolTelemetry": true,
+        "correctionCapture": true,
+        "patchEvidenceTrail": true
+      },
+      "codingContextPackId": "code_ctx_1671cwa",
+      "patchEvidenceTrailId": "patch_ev_1mzptk7",
+      "passed": true
+    }
+  ],
+  "summary": {
+    "total": 16,
+    "generated": 16,
+    "planned": 0,
+    "mcpTargets": 10,
+    "e2eDemos": 16,
+    "preToolGuardTargets": 13,
+    "correctionCaptureTargets": 15,
+    "evidenceTrailTargets": 15
+  },
+  "passed": true
+}

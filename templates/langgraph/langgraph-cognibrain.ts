@@ -1,9 +1,10 @@
-type CognibrainContextPack = {
+type CognibrainCodingContextPack = {
   context: string;
-  evidence: Array<{ memoryId: string; reason: string; trust: number }>;
+  sections?: Array<{ id: string; title: string; evidence: Array<{ memoryId: string; reason?: string; trust?: number }> }>;
+  evidence?: Array<{ memoryId: string; reason: string; trust: number }>;
 };
 
-export async function cognibrainContextPack(input: {
+export async function cognibrainCodingContextPack(input: {
   apiUrl?: string;
   userId: string;
   query: string;
@@ -11,8 +12,8 @@ export async function cognibrainContextPack(input: {
   projectId?: string;
   orgId?: string;
   tokenBudget?: number;
-}): Promise<CognibrainContextPack> {
-  const response = await fetch(`${input.apiUrl ?? "http://localhost:8787"}/evidence-pack`, {
+}): Promise<CognibrainCodingContextPack> {
+  const response = await fetch(`${input.apiUrl ?? "http://localhost:8787"}/coding-context-pack`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -24,8 +25,36 @@ export async function cognibrainContextPack(input: {
       tokenBudget: input.tokenBudget ?? 1200
     })
   });
-  if (!response.ok) throw new Error(`cognibrain evidence pack failed: ${response.status}`);
-  return response.json() as Promise<CognibrainContextPack>;
+  if (!response.ok) throw new Error(`cognibrain coding context pack failed: ${response.status}`);
+  return response.json() as Promise<CognibrainCodingContextPack>;
+}
+
+export const cognibrainContextPack = cognibrainCodingContextPack;
+
+export async function guardLangGraphAction(input: {
+  apiUrl?: string;
+  userId: string;
+  action: string;
+  agentId?: string;
+  sessionId?: string;
+  projectId?: string;
+  orgId?: string;
+}) {
+  const response = await fetch(`${input.apiUrl ?? "http://localhost:8787"}/code/action-guard`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      userId: input.userId,
+      action: input.action,
+      appId: "langgraph",
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      projectId: input.projectId,
+      orgId: input.orgId
+    })
+  });
+  if (!response.ok) throw new Error(`cognibrain action guard failed: ${response.status}`);
+  return response.json();
 }
 
 export async function recordLangGraphToolOutcome(input: {
@@ -51,5 +80,33 @@ export async function recordLangGraphToolOutcome(input: {
     })
   });
   if (!response.ok) throw new Error(`cognibrain telemetry failed: ${response.status}`);
+  return response.json();
+}
+
+export async function recordLangGraphPatchEvidence(input: {
+  apiUrl?: string;
+  userId: string;
+  task: string;
+  filesChanged?: string[];
+  commandsRun?: string[];
+  memoryIds?: string[];
+  projectId?: string;
+  orgId?: string;
+}) {
+  const response = await fetch(`${input.apiUrl ?? "http://localhost:8787"}/patch-evidence`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      userId: input.userId,
+      task: input.task,
+      appId: "langgraph",
+      filesChanged: input.filesChanged,
+      commandsRun: input.commandsRun,
+      memoryIds: input.memoryIds,
+      projectId: input.projectId,
+      orgId: input.orgId
+    })
+  });
+  if (!response.ok) throw new Error(`cognibrain patch evidence failed: ${response.status}`);
   return response.json();
 }

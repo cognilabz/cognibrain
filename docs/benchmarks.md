@@ -7,7 +7,10 @@ Cognibrain benchmark claims are tied to checked artifacts and local commands. Th
 Command:
 
 ```bash
-npm run benchmark:arena
+MEMORY_ARENA_AUTO_NATIVE=false \
+MEMORY_ARENA_LANGMEM_COMMAND="$(command -v node) scripts/competitors/native-python-runner.mjs --system langmem" \
+MEMORY_ARENA_LANGMEM_PROOF_LEVEL=same-run-native \
+npm run benchmark:arena:run -- --count 300 --systems cognibrain,mem0,graphiti,zep,cognee,langmem,gbrain --difficulty hard --noise-ratio 0.5 --sessions 12 --repos 100 --stale-ratio 0.25
 ```
 
 Artifact:
@@ -20,18 +23,19 @@ public/benchmark-arena/scorecard.html
 docs/benchmarks/latest-arena.md
 ```
 
-Current local result, 30 deterministic engineering-memory scenarios:
+Current local result, 300 hard CogniCodeBench v2 engineering-memory scenarios:
 
 | System | Score | Proof level | Repeated mistake rate | Gaps |
 | --- | ---: | --- | ---: | ---: |
-| Cognibrain | 0.9722 | same-run-full | 0 | 0 |
-| LangMem | 0.6667 | same-run-native | 1 | 6 |
-| Mem0 | 0.6667 | same-run-native | 1 | 7 |
-| GBrain | 0.1556 | same-run-cli | 1 | 5 |
-| Graphiti/Zep | 0.0000 | credential-blocked | 1 | 4 |
-| Cognee | 0.0000 | credential-blocked | 1 | 4 |
+| Cognibrain | 0.9550 | same-run-full | 0.0100 | 0 |
+| Graphiti/Zep | 0.6667 | same-run-api-shape | 0.9500 | 2 |
+| Zep | 0.6667 | same-run-api-shape | 0.9500 | 2 |
+| GBrain | 0.6667 | same-run-api-shape | 0.9500 | 2 |
+| LangMem | 0.6667 | same-run-native | 1.0000 | 6 |
+| Cognee | 0.6000 | same-run-api-shape | 1.0000 | 2 |
+| Mem0 | 0.1500 | same-run-api-shape | 1.0000 | 3 |
 
-Boundary: competitor rows are only as strong as their proof level. Cognibrain's row uses the full local implementation. Mem0 and LangMem are checked through real same-run-native package runners. GBrain is checked as a real same-run-cli competitor row through `gbrain capture/search/get` from a cloned GBrain repo. Graphiti/Zep and Cognee have native runners, but this checked artifact is `credential-blocked` because the required LLM credentials were not configured. No API-shape score is shown for the checked artifact.
+Boundary: competitor rows are only as strong as their proof level. Cognibrain's row uses the full local implementation. The current hard Arena artifact uses explicit runner selection with `MEMORY_ARENA_AUTO_NATIVE=false`. At least one competitor row in this checked artifact is a real same-run native or CLI proof: LangMem records `same-run-native` from the checked native runner. API-shape rows remain compatibility models unless their row records native, cloud, CLI, vendor-signed or field proof.
 
 The generated Arena report is marketing-ready: it includes points out of 1000, visual score bars, capability pass counts, declared gaps, a 30-scenario score matrix and the public benchmark gate table. Regenerate it with `npm run benchmark:arena:publish`.
 
@@ -52,7 +56,7 @@ Native competitor run:
 npm run benchmark:competitors:native
 ```
 
-This installs/checks `mem0ai==2.0.2`, `graphiti-core[kuzu]==0.29.1`, `langmem==0.0.30`, `cognee==1.1.0`, `fastembed==0.7.3`, `@mem0/cli@0.2.7` and `gbrain@0.41.14.0`. With the current environment, Mem0 and LangMem produced same-run-native rows, GBrain produced a same-run-cli row, and Graphiti/Zep plus Cognee stayed credential-blocked because no LLM credentials were configured. That keeps the artifact honest instead of falling back to API-shape.
+This installs/checks `mem0ai==2.0.2`, `graphiti-core[kuzu]==0.29.1`, `langmem==0.0.30`, `cognee==1.1.0`, `fastembed==0.7.3`, `@mem0/cli@0.2.7` and `gbrain@0.41.14.0`. Native rows are only claimed when the checked Arena artifact actually records a native, cloud or CLI proof level. The current hard 300-scenario artifact records LangMem as same-run native and leaves the remaining competitor rows at API-shape compatibility proof.
 
 Run the code-first truth gate when you want to see whether the checked artifact is still only API-shape or has real competitor runners:
 
@@ -75,7 +79,7 @@ Artifact:
 artifacts/cognicodebench/run.json
 ```
 
-The current checked artifact passes 100 deterministic synthetic coding-agent scenarios. Each scenario tests whether a correction, review note, command failure or repo rule carries into the next patch decision.
+The current checked artifact passes 1,000 hard CogniCodeBench v2 synthetic coding-agent scenarios with 22,000 generated memory events, 100 repo templates selected from 768 available templates, 20 correction types, 12 sessions per scenario, `noiseRatio=0.5`, `staleRatio=0.25`, connector-backed source refs and granular synthetic patch models. Each scenario tests whether a correction, review note, command failure, connector decision or repo rule carries into the next patch decision.
 
 ## Public Market Benchmarks
 

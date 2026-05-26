@@ -161,9 +161,11 @@ describe("cognibrain HTTP API contract", () => {
     expect(spec.paths["/openapi.json"].get.operationId).toBe("getOpenapi.json");
     expect(spec.paths["/retention/review"].get.operationId).toBe("getRetentionReview");
     expect(spec.paths["/memories"].post.operationId).toBe("postMemories");
+    expect(spec.paths["/coding-context-pack"].post.operationId).toBe("postCodingContextPack");
     expect(spec.paths["/audit/chain"].get.responses?.["200"]).toBeDefined();
     expect(spec.components.schemas.MemoryInput).toBeDefined();
     expect(spec.components.schemas.EvidencePack).toBeDefined();
+    expect(spec.components.schemas.CodingContextPack).toBeDefined();
     expect(spec.components.securitySchemes.ApiKeyAuth).toBeDefined();
 
     const alias = await fetch(`${baseUrl}/v1/openapi.json`);

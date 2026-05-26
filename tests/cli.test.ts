@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -157,6 +157,7 @@ describe("cognibrain CLI", () => {
       const adapterList = execFileSync(process.execPath, [cli, "--runtime-root", dir, "adapter", "list"], { cwd: dir, env, encoding: "utf8" });
       const config = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "config", "show", "--json"], { cwd: dir, env, encoding: "utf8" }));
       const skill = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "skill", "status", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      const connectorWizard = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "wizard", "jira", "--set", "project=CB", "--json"], { cwd: dir, env, encoding: "utf8" }));
       const adapterDoctor = execFileSync(process.execPath, [cli, "--runtime-root", dir, "adapter", "doctor", "storage-sqlite"], { cwd: dir, env, encoding: "utf8" });
       const connectorDoctor = execFileSync(process.execPath, [cli, "--runtime-root", dir, "connector", "doctor", "sentry"], { cwd: dir, env, encoding: "utf8" });
 
@@ -169,6 +170,9 @@ describe("cognibrain CLI", () => {
       expect(config.adapters.some((item: { adapter: string }) => item.adapter === "storage-sqlite")).toBe(true);
       expect(skill.installed).toBe(false);
       expect(skill.path).toContain(codexHome);
+      expect(connectorWizard.preview.dryRun).toBe(true);
+      expect(connectorWizard.preview.diff.some((line: string) => line.includes("official-jira"))).toBe(true);
+      expect(connectorWizard.validation.credentialPolicy).toContain("never store credential values");
       expect(adapterDoctor).toContain("storage-sqlite");
       expect(connectorDoctor).toContain("sentry");
       const sentryConfig = readFileSync(join(dir, ".cognibrain", "connectors", "sentry.json"), "utf8");
@@ -347,6 +351,19 @@ describe("cognibrain CLI", () => {
         join(dir, "langgraph-cognibrain.ts"),
         join(dir, "crewai.cognibrain.json"),
         join(dir, "crewai_cognibrain.py"),
+        join(dir, ".windsurf", "mcp.json"),
+        join(dir, ".windsurf", "rules", "cognibrain.md"),
+        join(dir, ".continue", "config.json"),
+        join(dir, ".continue", "rules", "cognibrain.md"),
+        join(dir, ".aider.conf.yml"),
+        join(dir, ".aider", "cognibrain.md"),
+        join(dir, ".roo", "mcp.json"),
+        join(dir, ".clinerules", "cognibrain.md"),
+        join(dir, ".goose", "config.yaml"),
+        join(dir, ".goose", "cognibrain.md"),
+        join(dir, ".amp", "cognibrain.md"),
+        join(dir, ".devin", "cognibrain.json"),
+        join(dir, ".devin", "cognibrain.md"),
         join(dir, ".cognibrain-harness-package.json")
       ];
       for (const path of expected) expect(existsSync(path), path).toBe(true);
@@ -358,14 +375,55 @@ describe("cognibrain CLI", () => {
       expect(readFileSync(join(dir, ".openclaw", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "openclaw", "cognibrain.md"), "utf8"));
       expect(readFileSync(join(dir, "langgraph-cognibrain.ts"), "utf8")).toBe(readFileSync(join(root, "templates", "langgraph", "langgraph-cognibrain.ts"), "utf8"));
       expect(readFileSync(join(dir, "crewai_cognibrain.py"), "utf8")).toBe(readFileSync(join(root, "templates", "crewai", "crewai_cognibrain.py"), "utf8"));
+      expect(readFileSync(join(dir, "langgraph-cognibrain.ts"), "utf8")).toContain("/coding-context-pack");
+      expect(readFileSync(join(dir, "langgraph-cognibrain.ts"), "utf8")).toContain("/code/action-guard");
+      expect(readFileSync(join(dir, "langgraph-cognibrain.ts"), "utf8")).toContain("/patch-evidence");
+      expect(readFileSync(join(dir, "crewai_cognibrain.py"), "utf8")).toContain("/coding-context-pack");
+      expect(readFileSync(join(dir, "crewai_cognibrain.py"), "utf8")).toContain("/code/action-guard");
+      expect(readFileSync(join(dir, "crewai_cognibrain.py"), "utf8")).toContain("/patch-evidence");
+      expect(readFileSync(join(dir, ".windsurf", "rules", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "windsurf", "cognibrain.md"), "utf8"));
+      expect(readFileSync(join(dir, ".continue", "rules", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "continue", "cognibrain.md"), "utf8"));
+      expect(readFileSync(join(dir, ".aider", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "aider", "cognibrain.md"), "utf8"));
+      expect(readFileSync(join(dir, ".clinerules", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "roo-cline", "cognibrain.md"), "utf8"));
+      expect(readFileSync(join(dir, ".goose", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "goose", "cognibrain.md"), "utf8"));
+      expect(readFileSync(join(dir, ".amp", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "sourcegraph-amp", "cognibrain.md"), "utf8"));
+      expect(readFileSync(join(dir, ".devin", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "devin-style", "cognibrain.md"), "utf8"));
       const claude = readFileSync(join(dir, ".claude", "settings.json"), "utf8");
       expect(claude).toContain(root);
       expect(claude).not.toContain("/ABSOLUTE/PATH/TO/cognibrain");
       const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8"));
-      expect(Object.keys(manifest.harnesses)).toEqual(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai"]);
+      expect(Object.keys(manifest.harnesses)).toEqual(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp", "devin-style"]);
       expect(manifest.harnesses.copilot.feedback).toContain("accepted_change");
       expect(manifest.harnesses.langgraph.feedback).toContain("tool outcome telemetry");
       expect(manifest.harnesses.crewai.feedback).toContain("tool outcome telemetry");
+      expect(manifest.harnesses.windsurf.feedback).toContain("memory_context_pack");
+      expect(manifest.harnesses["roo-cline"].feedback).toContain("correction capture");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("writes reviewable sidecars when refreshing existing cognibrain harness instructions", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-refresh-"));
+    const codexHome = join(dir, ".codex");
+    try {
+      writeFileSync(join(dir, "AGENTS.md"), "# cognibrain\n\nOld cognibrain instructions.\n");
+      execFileSync(process.execPath, [cli, "config", "codex"], {
+        cwd: dir,
+        env: { ...process.env, CODEX_HOME: codexHome, MEMORY_AUTO_DREAM: "false" },
+        encoding: "utf8"
+      });
+
+      expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("Old cognibrain instructions");
+      expect(readFileSync(join(dir, "AGENTS.md.cognibrain"), "utf8")).toContain("memory_coding_context_pack");
+      execFileSync(process.execPath, [cli, "config", "codex", "--refresh"], {
+        cwd: dir,
+        env: { ...process.env, CODEX_HOME: codexHome, MEMORY_AUTO_DREAM: "false" },
+        encoding: "utf8"
+      });
+      expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("memory_coding_context_pack");
+      const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8"));
+      expect(manifest.harnesses.codex).toBeDefined();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -392,8 +450,8 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 
-  it("offers package-style installers for OpenCode, OpenClaw, LangGraph, and CrewAI", () => {
-    for (const target of ["opencode", "openclaw", "langgraph", "crewai"]) {
+  it("offers package-style installers for OpenCode, OpenClaw, LangGraph, CrewAI, and common coding harnesses", () => {
+    for (const target of ["opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp", "devin-style"]) {
       const dir = mkdtempSync(join(tmpdir(), `cognibrain-connect-${target}-`));
       const codexHome = join(dir, ".codex");
       try {

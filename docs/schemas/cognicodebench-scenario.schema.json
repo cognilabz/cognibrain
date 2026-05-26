@@ -10,7 +10,28 @@
     "difficulty": { "type": "string", "enum": ["easy", "medium", "hard", "evil"] },
     "correctionType": {
       "type": "string",
-      "enum": ["command_correction", "library_correction", "architecture_correction", "style_correction", "test_correction", "forbidden_file_correction", "temporal_migration_correction"]
+      "enum": [
+        "command_correction",
+        "library_correction",
+        "architecture_correction",
+        "style_correction",
+        "test_correction",
+        "forbidden_file_correction",
+        "temporal_migration_correction",
+        "branch_policy_correction",
+        "review_feedback_correction",
+        "generated_file_regeneration_correction",
+        "security_pattern_correction",
+        "performance_regression_correction",
+        "api_contract_correction",
+        "schema_migration_correction",
+        "build_tool_correction",
+        "workspace_boundary_correction",
+        "dependency_version_correction",
+        "feature_flag_correction",
+        "observability_correction",
+        "release_gate_correction"
+      ]
     },
     "repoSeed": {
       "type": "object",
@@ -80,6 +101,96 @@
         },
         "blockedAction": { "type": "string" },
         "staleRuleSuppressed": { "type": "string" }
+      }
+    },
+    "sourceRef": { "$ref": "#/$defs/sourceRef" },
+    "sessions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sessionEvent" }
+    },
+    "connectorEvents": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sessionEvent" }
+    },
+    "noiseMemories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["content", "relevant"],
+        "additionalProperties": false,
+        "properties": {
+          "content": { "type": "string" },
+          "beliefState": { "type": "string", "enum": ["active", "stale", "superseded", "contradicted", "needs_verification"] },
+          "sourceRef": { "$ref": "#/$defs/sourceRef" },
+          "relevant": { "type": "boolean" }
+        }
+      }
+    },
+    "syntheticRepo": {
+      "type": "object",
+      "required": ["files", "expectedDiff"],
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "content"],
+            "additionalProperties": false,
+            "properties": {
+              "path": { "type": "string" },
+              "content": { "type": "string" },
+              "generated": { "type": "boolean" }
+            }
+          }
+        },
+        "expectedDiff": {
+          "type": "object",
+          "required": ["changedFiles", "forbiddenFiles", "requiredPatterns", "testFiles"],
+          "additionalProperties": false,
+          "properties": {
+            "changedFiles": { "type": "array", "items": { "type": "string" } },
+            "forbiddenFiles": { "type": "array", "items": { "type": "string" } },
+            "requiredPatterns": { "type": "array", "items": { "type": "string" } },
+            "testFiles": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "horizon": {
+      "type": "object",
+      "required": ["sessionCount", "correctionSession", "taskSession", "horizonLength"],
+      "additionalProperties": false,
+      "properties": {
+        "sessionCount": { "type": "number" },
+        "correctionSession": { "type": "number" },
+        "taskSession": { "type": "number" },
+        "horizonLength": { "type": "number" }
+      }
+    }
+  },
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "required": ["connectorId", "externalId", "uri", "eventType"],
+      "additionalProperties": false,
+      "properties": {
+        "connectorId": { "type": "string", "enum": ["github", "gitlab", "azure-devops", "jira", "confluence", "notion", "linear", "slack", "discord"] },
+        "externalId": { "type": "string" },
+        "uri": { "type": "string" },
+        "eventType": { "type": "string" }
+      }
+    },
+    "sessionEvent": {
+      "type": "object",
+      "required": ["index", "kind", "content", "relevant"],
+      "additionalProperties": false,
+      "properties": {
+        "index": { "type": "number" },
+        "kind": { "type": "string", "enum": ["task", "wrong_action", "correction", "tool_outcome", "connector_event", "noise", "stale_memory"] },
+        "content": { "type": "string" },
+        "relevant": { "type": "boolean" },
+        "sourceRef": { "$ref": "#/$defs/sourceRef" }
       }
     }
   }

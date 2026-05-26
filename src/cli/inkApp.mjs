@@ -320,10 +320,54 @@ function buildViews(payload) {
         section("Capabilities", [
           item("Add corrections, repo rules, tool outcomes and release evidence."),
           item("Open coding context packs, evidence packs, why-used reports, graph and timeline views."),
+          item("Review connector candidates with inspect/confirm/retract commands before promoting memory."),
           item("Run dream maintenance from the terminal after large imports or releases.")
+        ]),
+        section("Review Queue", (memories.reviewQueue?.items?.length ? memories.reviewQueue.items : []).slice(0, 5).map((candidate) => item(`${shortId(candidate.id)} ${candidate.connectorId ?? "memory"} pending`, "yellow", "-")).concat(memories.reviewQueue?.items?.length ? [] : [item("No pending memory candidates.", "green", "-")]))
+      ],
+      actions: actions(["cognibrain memories list", "cognibrain memory list --limit 10", "cognibrain memory dream", "cognibrain memory maintenance"])
+    },
+    {
+      id: "memory-management",
+      label: "Memory Ops",
+      icon: "Review",
+      title: "Memory management",
+      subtitle: "Checked lifecycle commands for add, search, inspect, confirm, retract, evidence, graph and dream.",
+      accent: palette.memory,
+      primaryCommand: "cognibrain memories --json",
+      metrics: [
+        metric("Flows", memories.managementFlows?.length ?? 0, palette.memory),
+        metric("Pending", memories.reviewQueue?.pending ?? 0, (memories.reviewQueue?.pending ?? 0) ? palette.warn : palette.ok),
+        metric("Recent", memories.recent?.length ?? 0, palette.text)
+      ],
+      sections: [
+        section("Lifecycle Flows", compact(memories.managementFlows ?? [], (flow) => item(`${flow.label}: ${flow.command}`, "white", "-"), 8)),
+        section("Pending Candidates", (memories.reviewQueue?.items?.length ? memories.reviewQueue.items : []).slice(0, 6).map((candidate) => item(`${shortId(candidate.id)} ${candidate.command}`, "yellow", "-")).concat(memories.reviewQueue?.items?.length ? [] : [item("No pending review items in the current store.", "green", "-")]))
+      ],
+      actions: actions(["cognibrain memories --json", "cognibrain memory list --limit 10", "cognibrain memory maintenance", "cognibrain memory dream"])
+    },
+    {
+      id: "connector-wizard",
+      label: "Setup Wizard",
+      icon: "Wizard",
+      title: "Connector setup wizard",
+      subtitle: "Preview credential-safe connector config, required fields, diff, health check and review queue commands.",
+      accent: palette.connector,
+      primaryCommand: "cognibrain connector wizard github",
+      metrics: [
+        metric("Providers", connectors.length, palette.connector),
+        metric("Configured", configuredConnectors.length, configuredConnectors.length ? palette.ok : palette.warn),
+        metric("Doctor", connectorDoctor.ok ? "ready" : "check", connectorDoctor.ok ? palette.ok : palette.warn)
+      ],
+      sections: [
+        section("Wizard Targets", compact(connectors, (connector) => item(`${connector.provider}: ${connector.wizardCommand ?? `cognibrain connector wizard ${connector.provider}`}`, connector.configured ? "green" : "white", "-"), 8)),
+        section("Preview Contract", [
+          item("Shows required env vars, non-secret defaults, safe JSON diff and write command."),
+          item("Secrets remain env refs; no credential values are written into preview output."),
+          item("Review queue command links connector candidates back to memory inspection.")
         ])
       ],
-      actions: actions(["cognibrain memories search <query>", "cognibrain memory code-correction <text>", "cognibrain memory why-used <id>", "cognibrain memory dream"])
+      actions: actions(["cognibrain connector wizard github", "cognibrain connector wizard jira", "cognibrain connector wizard notion", "cognibrain connector doctor"])
     },
     {
       id: "connections",
@@ -346,7 +390,7 @@ function buildViews(payload) {
           item(`${adapterDoctor.checks?.length ?? 0} adapter checks available from this screen.`)
         ])
       ],
-      actions: actions(["cognibrain connections add jira", "cognibrain connections add notion", "cognibrain connections doctor", "cognibrain connector list"])
+      actions: actions(["cognibrain connector wizard jira", "cognibrain connector wizard notion", "cognibrain connections doctor", "cognibrain connector list"])
     },
     {
       id: "connectors",
@@ -369,7 +413,7 @@ function buildViews(payload) {
           item("Live-smoke remains credential-gated and is never claimed unless an artifact proves it.", "yellow")
         ])
       ],
-      actions: actions(["cognibrain connector show jira", "cognibrain connector doctor jira", "npm run verify:vendor-api-specs", "npm run connectors:maturity"])
+      actions: actions(["cognibrain connector show jira", "cognibrain connector wizard jira", "npm run verify:vendor-api-specs", "npm run connectors:maturity"])
     },
     {
       id: "adapters",

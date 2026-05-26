@@ -4797,7 +4797,7 @@ function openApiOperation(path: string, method: string, security: Array<Record<s
 
 function requestSchemaFor(path: string): string {
   if (path === "/memories" || path === "/ingest/media") return "MemoryInput";
-  if (path === "/search" || path === "/route" || path === "/evidence-pack") return "SearchRequest";
+  if (path === "/search" || path === "/route" || path === "/evidence-pack" || path === "/coding-context-pack") return "SearchRequest";
   if (path === "/policy/evaluate") return "PolicyEvaluateRequest";
   if (path === "/policy/rules") return "MemoryPolicyRule";
   if (path === "/connectors/register") return "ConnectorManifest";
@@ -4810,6 +4810,7 @@ function requestSchemaFor(path: string): string {
 function responseSchemaFor(path: string, method: string): string {
   if (path === "/memories" && method === "GET") return "MemoryList";
   if (path === "/memories" || path.startsWith("/memories/{id}")) return "Memory";
+  if (path === "/coding-context-pack" || path.startsWith("/coding-context-packs")) return "CodingContextPack";
   if (path.includes("evidence") || path.includes("context-packs")) return "EvidencePack";
   if (path === "/audit/chain") return "AuditChain";
   if (path === "/audit") return "AuditEventList";
@@ -4916,6 +4917,7 @@ function openApiSchemas(): Record<string, Record<string, unknown>> {
       }
     },
     EvidencePack: { type: "object", required: ["schemaVersion", "id", "query", "context", "results", "hash"], additionalProperties: true },
+    CodingContextPack: { type: "object", required: ["schemaVersion", "id", "query", "context", "sections"], additionalProperties: true },
     AuditEvent: { type: "object", required: ["id", "type", "timestamp"], additionalProperties: true },
     AuditEventList: { type: "array", items: { "$ref": "#/components/schemas/AuditEvent" } },
     AuditChain: { type: "object", required: ["schemaVersion", "eventCount", "valid", "events", "replay"], additionalProperties: true },

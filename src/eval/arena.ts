@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { MemoryService } from "../api/service";
 import type { CogniCodeScenario } from "./cognicodeBench";
-import { generateCogniCodeScenarios } from "./cognicodeBench";
+import { buildCogniCodeScenarioSet, type CogniCodeScenarioFactoryOptions, type CogniCodeScenarioFactorySummary } from "./cognicode/scenarioFactory";
 
 type MemorySystemId = "cognibrain" | "mem0" | "graphiti" | "zep" | "cognee" | "langmem" | "gbrain";
 type ProofLevel =
@@ -126,13 +126,15 @@ interface ArenaReport {
     proofLevels: Record<ProofLevel, string>;
   };
   systems: ArenaSystemResult[];
+  scenarioFactory: CogniCodeScenarioFactorySummary;
   leaderboard: Array<{ system: string; score: number; proofLevel: ProofLevel; repeatedMistakeRate: number; gaps: number }>;
   winner: string;
   passed: boolean;
 }
 
-export async function runBenchmarkArena(options: { systems?: string[]; benchmark?: string; out?: string; count?: number } = {}): Promise<ArenaReport> {
-  const scenarios = loadScenarios(options.count ?? 30);
+export async function runBenchmarkArena(options: { systems?: string[]; benchmark?: string; out?: string } & CogniCodeScenarioFactoryOptions = {}): Promise<ArenaReport> {
+  const scenarioSet = loadScenarios(options);
+  const scenarios = scenarioSet.scenarios;
   const requested = normalizeSystems(options.systems ?? ["cognibrain", "mem0", "graphiti", "cognee", "langmem", "gbrain"]);
   const adapters = requested.map(createAdapter);
   const systems: ArenaSystemResult[] = [];
@@ -183,6 +185,7 @@ export async function runBenchmarkArena(options: { systems?: string[]; benchmark
       }
     },
     systems,
+    scenarioFactory: scenarioSet.summary,
     leaderboard,
     winner: leaderboard[0]?.system ?? "",
     passed: systems.length >= 5 && systems.every((system) => system.scenarioCount === scenarios.length) && systems.some((system) => system.system === "cognibrain" && system.proofLevel === "same-run-full" && system.score >= 0.95)
@@ -194,13 +197,19 @@ export async function runBenchmarkArena(options: { systems?: string[]; benchmark
   return report;
 }
 
-function loadScenarios(count: number): CogniCodeScenario[] {
+function loadScenarios(options: CogniCodeScenarioFactoryOptions): { scenarios: CogniCodeScenario[]; summary: CogniCodeScenarioFactorySummary } {
+  const count = options.count ?? options.scenarios ?? 30;
+  const hasHardOptions = Boolean(options.difficulty || options.noiseRatio !== undefined || options.staleRatio !== undefined || options.sessions || options.repos || options.connectorMix?.length);
   const artifactPath = "artifacts/cognicodebench/scenarios.json";
-  if (existsSync(artifactPath)) {
-    const parsed = JSON.parse(readFileSync(artifactPath, "utf8")) as CogniCodeScenario[];
-    if (Array.isArray(parsed) && parsed.length) return parsed.slice(0, count);
+  if (!hasHardOptions && existsSync(artifactPath)) {
+    const parsed = JSON.parse(readFileSync(artifactPath, "utf8")) as CogniCodeScenario[] | { scenarios?: CogniCodeScenario[] };
+    const scenarios = Array.isArray(parsed) ? parsed : parsed.scenarios;
+    if (Array.isArray(scenarios) && scenarios.length) {
+      const scenarioSet = buildCogniCodeScenarioSet({ count, seed: "cognicodebench-v2" });
+      return { scenarios: scenarios.slice(0, count), summary: { ...scenarioSet.summary, requestedScenarios: Math.min(count, scenarios.length) } };
+    }
   }
-  return generateCogniCodeScenarios({ count }).slice(0, count);
+  return buildCogniCodeScenarioSet({ ...options, count });
 }
 
 function createAdapter(id: MemorySystemId): BenchmarkSystemAdapter {
@@ -700,18 +709,32 @@ function normalizeSystems(systems: string[]): MemorySystemId[] {
     .filter((item): item is MemorySystemId => ["cognibrain", "mem0", "graphiti", "zep", "cognee", "langmem", "gbrain"].includes(item));
 }
 
-function cliOptions(argv: string[]): { systems?: string[]; benchmark?: string; out?: string; count?: number } {
+function cliOptions(argv: string[]): { systems?: string[]; benchmark?: string; out?: string } & CogniCodeScenarioFactoryOptions {
+  const connectorMix = optionValue(argv, "--connector-mix")?.split(",").map((item) => item.trim()).filter(Boolean) as CogniCodeScenarioFactoryOptions["connectorMix"] | undefined;
   return {
     systems: optionValues(argv, "--systems"),
     benchmark: optionValue(argv, "--benchmark") ?? "cognicode",
     out: optionValue(argv, "--out") ?? "artifacts/arena/run.json",
-    count: Number(optionValue(argv, "--count") ?? "30")
+    count: Number(optionValue(argv, "--count") ?? "30"),
+    scenarios: numberOption(argv, "--scenarios"),
+    seed: optionValue(argv, "--seed"),
+    repos: numberOption(argv, "--repos"),
+    sessions: numberOption(argv, "--sessions"),
+    noiseRatio: numberOption(argv, "--noise-ratio"),
+    staleRatio: numberOption(argv, "--stale-ratio"),
+    connectorMix,
+    difficulty: optionValue(argv, "--difficulty") as CogniCodeScenarioFactoryOptions["difficulty"]
   };
 }
 
 function optionValue(argv: string[], name: string): string | undefined {
-  const index = argv.indexOf(name);
+  const index = argv.lastIndexOf(name);
   return index >= 0 ? argv[index + 1] : undefined;
+}
+
+function numberOption(argv: string[], name: string): number | undefined {
+  const value = optionValue(argv, name);
+  return value === undefined ? undefined : Number(value);
 }
 
 function optionValues(argv: string[], name: string): string[] | undefined {

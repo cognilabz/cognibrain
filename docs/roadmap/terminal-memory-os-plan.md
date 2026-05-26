@@ -9,9 +9,10 @@ The P0 accuracy loop is implemented and checked:
 - connector docs now match the 19 native vendor drivers in `src/connectors/vendorConnectors.ts`,
 - `npm run connectors:maturity` generates `artifacts/connector-maturity.json` and `docs/integrations/connector-maturity.md`,
 - connector proof levels are explicit: `manifest-only`, `cli-config`, `driver-code`, `hermetic-tested`, `live-smoke-ready`, `tenant-verified`, `production-certified`,
-- current checked connector state is 19 hermetic drivers, 19 API/spec-verified drivers, 19 live-smoke-ready drivers, 0 tenant-verified live smokes and 0 production certifications,
+- current checked connector state is 19 hermetic drivers, 19 API/spec-verified drivers, 19 live-smoke-ready drivers, 10 webhook-verified priority drivers, 0 tenant-verified live smokes and 0 production certifications,
 - Ink is a real dependency and `cognibrain tui`, `cognibrain ui`, `cognibrain home` are stable entrypoints,
-- the Ink action palette executes static commands with an output panel, blocks placeholder commands and requires confirmation for service or destructive actions.
+- the Ink action palette executes static commands with an output panel, blocks placeholder commands and requires confirmation for service or destructive actions,
+- the connector setup wizard and Memory Ops workbench expose credential-safe previews, validation, review queue, inspect, confirm, retract, evidence, graph and dream commands.
 
 Live tenant proof and production certification remain open until operator credentials and customer-environment evidence exist. Marketing and docs can make strong live-system claims only for `tenant-verified` or `production-certified` connector rows.
 
@@ -29,11 +30,11 @@ Live tenant proof and production certification remain open until operator creden
 | Harden GitLab and Azure DevOps connectors for MR/PR review feedback and CI outcomes | [#374](https://github.com/cognilabz/cognibrain/issues/374) | Open | Drivers and live-smoke-ready harnesses exist; CI outcome mapping and tenant proof remain. |
 | Make Ink TUI a real dependency and stable entrypoint | [#375](https://github.com/cognilabz/cognibrain/issues/375) | Closed | `package.json` includes `ink`; help exposes `cognibrain tui\|ui\|home`; JSON mode remains script-safe. |
 | Implement executable TUI action palette | [#376](https://github.com/cognilabz/cognibrain/issues/376) | Closed | `src/cli/inkApp.mjs` executes selected static actions and tests guard placeholder and confirmation behavior. |
-| Build full Memory Management TUI | [#377](https://github.com/cognilabz/cognibrain/issues/377) | Open | Workbench and CLI commands exist; full form-based edit, archive, pin and review flows remain. |
-| Build Connector Setup Wizard in TUI | [#378](https://github.com/cognilabz/cognibrain/issues/378) | Open | CLI connector add flow exists; interactive validation, preview, policy and enable flow remain. |
+| Build full Memory Management TUI | [#377](https://github.com/cognilabz/cognibrain/issues/377) | Implemented foundation | Memory Ops workbench exposes add, search, inspect, confirm, retract, evidence, graph and dream command surfaces; richer form editing can still be a future refinement. |
+| Build Connector Setup Wizard in TUI | [#378](https://github.com/cognilabz/cognibrain/issues/378) | Implemented foundation | `connector wizard` / `connector preview` provide validation, credential-safe diff, write command and review queue command; TUI surfaces wizard targets and actions. |
 | Build Runtime/Service/Config TUI | [#379](https://github.com/cognilabz/cognibrain/issues/379) | Open | Service/config workbenches exist; full in-TUI config editing and lifecycle control remain. |
 | Build Benchmark Arena TUI | [#380](https://github.com/cognilabz/cognibrain/issues/380) | Open | Reports workbench links benchmark commands; background jobs, progress and compare views remain. |
-| Add connector event review queue in TUI | [#381](https://github.com/cognilabz/cognibrain/issues/381) | Open | Connector events are supported by API/CLI surfaces; approval/reject/edit review queue remains. |
+| Add connector event review queue in TUI | [#381](https://github.com/cognilabz/cognibrain/issues/381) | Implemented foundation | Dashboard data exposes pending connector-candidate review items plus inspect, confirm and retract commands; richer edit flows can build on this model. |
 | Add connector quality benchmark and score | [#382](https://github.com/cognilabz/cognibrain/issues/382) | Open | Connector rows now expose `qualityScore`; standalone quality benchmark gates remain. |
 | Create cross-system Engineering Memory demo: Jira + Confluence + GitHub + Slack/Notion | [#383](https://github.com/cognilabz/cognibrain/issues/383) | Open | Individual connector proof exists; synthetic multi-system demo and live-mode orchestration remain. |
 
@@ -57,4 +58,3 @@ npm run build
 npm run release:check
 npm run verify:nextgen
 ```
-

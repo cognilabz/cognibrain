@@ -8,7 +8,7 @@ Cognibrain can run as a local agent memory layer, a connector-backed memory hub,
 
 Native drivers are implemented for the systems below. Driver status is not the same as production certification; see the generated [Connector Maturity Matrix](integrations/connector-maturity.md) for fixture, live-smoke, writeback and certification status.
 
-Current checked connector state: 19 hermetic drivers, 19 API/spec-verified drivers, 19 live-smoke-ready drivers, 0 tenant-verified live smokes and 0 production certifications. That means the code has first-party driver paths, fixture proof, API-contract checks for method/path/auth/writeback shape and live-smoke harness support. This checkout has not proven a customer tenant for Jira, Confluence, Notion, Linear or the other vendors.
+Current checked connector state: 19 hermetic drivers, 19 API/spec-verified drivers, 19 live-smoke-ready drivers, 10 webhook-verified priority drivers, 0 tenant-verified live smokes and 0 production certifications. That means the code has first-party driver paths, fixture proof, API-contract checks for method/path/auth/writeback shape, priority webhook signature/replay/normalization proof and live-smoke harness support. This checkout has not proven a customer tenant for Jira, Confluence, Notion, Linear or the other vendors.
 
 | Category | Connectors |
 | --- | --- |
@@ -67,14 +67,29 @@ The scaffold includes:
 
 ## Agent Harnesses
 
+Agent harness communication is layered:
+
+| Surface | When to use it |
+| --- | --- |
+| MCP | Default for agents that can call tools directly: context, coding context, action guard, memory writes, corrections, patch evidence and maintenance. |
+| CLI | Operator and fallback path: install configs, start/status, run `memories coding-context`, record actions and inspect proof. |
+| SDK/HTTP | Runtime integrations and non-MCP helpers such as LangGraph, CrewAI and custom source-system adapters. |
+
+For coding work, use `memory_context_pack` as the portable MCP baseline and `memory_coding_context_pack` where the host exposes it. Run `memory_action_guard` before shell or file operations with durable side effects. Non-MCP helpers should call `/coding-context-pack`, `/code/action-guard`, `/actions`, `/code/corrections` and `/patch-evidence` through the SDK or HTTP API.
+
 ```bash
 npx cognibrain config codex
 npx cognibrain config all
+npx cognibrain config all --refresh
+npx cognibrain-connect continue --no-start
+npm run harness:maturity
 npx cognibrain skill install
 npx cognibrain mcp
 ```
 
-Supported harness outputs cover Codex, Claude Code, GitHub Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI.
+Supported harness outputs cover Codex, Claude Code, GitHub Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph, CrewAI, Windsurf, Continue.dev, Aider, Roo Code/Cline, Goose, Sourcegraph Amp and a Devin-style external-agent mode. The generated [Harness Maturity Matrix](integrations/harness-maturity.md) separates config generation, rules, MCP hooks, pre-tool guards, telemetry, correction capture, evidence trails and E2E simulator proof. Devin-style external agent mode is generated through the external-agent JSON-command contract; a vendor-native Devin hook is not claimed.
+
+Current checked harness state: 16 generated harness packages, 10 MCP-capable targets, 13 pre-tool guard targets, 15 correction-capture targets, 15 patch-evidence targets and 16 golden-path demos.
 
 ## Verification
 
@@ -85,6 +100,7 @@ npm run verify:vendor-api-specs
 npm run verify:vendor-live
 npm run verify:compatibility
 npm run connectors:maturity
+npm run harness:maturity
 ```
 
 Real live-system proof is opt-in:
@@ -103,6 +119,9 @@ artifacts/connectors-live.json
 artifacts/vendor-connectors-live.json
 artifacts/vendor-api-specs.json
 artifacts/vendor-live-smoke.json
+artifacts/connector-webhooks.json
 artifacts/connector-maturity.json
 docs/integrations/connector-maturity.md
+artifacts/harness-maturity.json
+docs/integrations/harness-maturity.md
 ```

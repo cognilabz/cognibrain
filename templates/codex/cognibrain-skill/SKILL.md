@@ -22,7 +22,7 @@ node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs status
 node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs stop
 ```
 
-The daemon starts the HTTP API and dashboard together. It writes state and logs under the current project at `.cognibrain/`, or under `COGNIBRAIN_RUNTIME_ROOT` when that variable is set.
+The daemon starts the local HTTP API. Add `--dashboard` only when a browser dashboard is needed. It writes state and logs under the current project at `.cognibrain/`, or under `COGNIBRAIN_RUNTIME_ROOT` when that variable is set.
 
 Run `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor` when setup or runtime behavior looks stale.
 
@@ -30,8 +30,10 @@ Run `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor` when setup or runtime b
 
 1. Prefer MCP tools when available.
 2. Call `memory_context_pack` before multi-step coding, repo archaeology, debugging loops, benchmark work, or user-preference-sensitive edits.
-3. Treat returned memories as evidence, not authority.
-4. Verify drift-prone facts against current files, benchmark artifacts, or source systems before acting on them.
+3. Use `memory_coding_context_pack` instead when the host exposes it and the work is code-specific.
+4. Treat returned memories as evidence, not authority.
+5. Verify drift-prone facts against current files, benchmark artifacts, or source systems before acting on them.
+6. Call `memory_action_guard` before shell commands or file edits with durable side effects when the tool is available.
 
 CLI fallback:
 
@@ -51,6 +53,8 @@ Store only durable, useful facts:
 - repeated failure modes with fixes.
 
 Use `memory_add` with provenance, confidence, tags, and metadata when possible. Never store secrets, credentials, private keys, raw sensitive transcripts, or one-off scratch observations.
+
+For non-trivial patches, call `memory_patch_evidence` with files changed, commands run, and the memory ids used.
 
 CLI fallback:
 

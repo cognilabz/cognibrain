@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T08:56:40.484Z",
+  "generatedAt": "2026-05-26T11:07:48.218Z",
   "project": "cognibrain",
   "privacy": {
     "anonymized": true,
@@ -57,7 +57,7 @@
       "suite": "retrieval-calibration",
       "category": "retrieval",
       "metric": "suite_score",
-      "score": 0.9398860533333333,
+      "score": 0.9398860533328159,
       "artifact": "artifacts/nextgen-benchmarks.json",
       "proof": "local-deterministic",
       "methodology": {
@@ -162,7 +162,7 @@
       "suite": "nextgen:retrieval-calibration",
       "category": "answer_generation",
       "metric": "answer_generation_quality",
-      "score": 0.9398860533333333,
+      "score": 0.9398860533328159,
       "artifact": "artifacts/answer-generation.json",
       "proof": "local-deterministic",
       "methodology": {
@@ -207,7 +207,7 @@
       "proof": "local-deterministic",
       "methodology": {
         "dataset": "synthetic-codebase-scenarios",
-        "scenarios": 100,
+        "scenarios": 1000,
         "baselines": [
           "no_memory",
           "raw_chat_history",
@@ -229,7 +229,7 @@
       "suite": "benchmark-arena",
       "category": "engineering_memory",
       "metric": "same_scenario_score",
-      "score": 0.9722,
+      "score": 0.955,
       "artifact": "artifacts/arena/run.json",
       "proof": "local-deterministic",
       "methodology": {
@@ -241,15 +241,19 @@
           },
           {
             "system": "Mem0",
-            "proofLevel": "same-run-native"
+            "proofLevel": "same-run-api-shape"
           },
           {
             "system": "Graphiti/Zep",
-            "proofLevel": "credential-blocked"
+            "proofLevel": "same-run-api-shape"
+          },
+          {
+            "system": "Zep",
+            "proofLevel": "same-run-api-shape"
           },
           {
             "system": "Cognee",
-            "proofLevel": "credential-blocked"
+            "proofLevel": "same-run-api-shape"
           },
           {
             "system": "LangMem",
@@ -257,7 +261,7 @@
           },
           {
             "system": "GBrain",
-            "proofLevel": "same-run-cli"
+            "proofLevel": "same-run-api-shape"
           }
         ],
         "adapterContract": [

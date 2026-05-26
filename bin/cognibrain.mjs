@@ -133,6 +133,13 @@ async function setup(setupArgs) {
     if (flags.has("--openclaw")) writeHarnessConfig("openclaw");
     if (flags.has("--langgraph")) writeHarnessConfig("langgraph");
     if (flags.has("--crewai")) writeHarnessConfig("crewai");
+    if (flags.has("--windsurf")) writeHarnessConfig("windsurf");
+    if (flags.has("--continue")) writeHarnessConfig("continue");
+    if (flags.has("--aider")) writeHarnessConfig("aider");
+    if (flags.has("--roo-cline")) writeHarnessConfig("roo-cline");
+    if (flags.has("--goose")) writeHarnessConfig("goose");
+    if (flags.has("--sourcegraph-amp")) writeHarnessConfig("sourcegraph-amp");
+    if (flags.has("--devin-style")) writeHarnessConfig("devin-style");
   }
 
   if (!flags.has("--no-start")) runNodeChecked("scripts/start-local.mjs", ["--daemon", ...(flags.has("--dashboard") ? ["--dashboard"] : [])]);
@@ -397,6 +404,8 @@ async function doctor(doctorArgs) {
       "artifacts/arena/run.json",
       "artifacts/arena/native-competitors.json",
       "artifacts/connector-maturity.json",
+      "artifacts/connector-webhooks.json",
+      "artifacts/harness-maturity.json",
       "artifacts/product-truth-audit.json",
       "artifacts/vendor-api-specs.json",
       "artifacts/vendor-live-smoke.json"
@@ -600,6 +609,15 @@ async function connectorCommand(commandArgs) {
     if (!result.ok) process.exit(1);
     return;
   }
+  if (subcommand === "wizard" || subcommand === "preview") {
+    const provider = commandArgs[1] ?? "github";
+    if (!provider || !connectorDefinitions()[provider]) connectorUsage(1);
+    const settings = connectorSettingsFromArgs(provider, commandArgs);
+    const result = connectorWizard(provider, { settings });
+    if (commandArgs.includes("--json")) printJson(result);
+    else await renderCliSurface("connector-wizard", result, { title: `${provider} connector wizard` });
+    return;
+  }
   if (subcommand === "remove") {
     const provider = commandArgs[1];
     if (!provider || !connectorDefinitions()[provider]) connectorUsage(1);
@@ -729,7 +747,7 @@ function inferDeploymentMode(url) {
 
 function shouldRouteSetupToWizard(setupArgs) {
   const flags = new Set(setupArgs);
-  const hasLegacySetupFlag = ["--self-hosted", "--codex", "--claude", "--copilot", "--cursor", "--vscode", "--opencode", "--openclaw", "--langgraph", "--crewai", "--all-harnesses"].some((flag) => flags.has(flag));
+  const hasLegacySetupFlag = ["--self-hosted", "--codex", "--claude", "--copilot", "--cursor", "--vscode", "--opencode", "--openclaw", "--langgraph", "--crewai", "--windsurf", "--continue", "--aider", "--roo-cline", "--goose", "--sourcegraph-amp", "--devin-style", "--all-harnesses"].some((flag) => flags.has(flag));
   return !hasLegacySetupFlag && (setupArgs.length === 0 || flags.has("--yes") || setupArgs.includes("--profile") || canPrompt(setupArgs));
 }
 
@@ -851,7 +869,7 @@ function yesNo(value) {
 
 function setupFlagsForHarnesses(harnesses) {
   if (harnesses.includes("all")) return ["--all-harnesses"];
-  const supported = new Set(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai"]);
+  const supported = new Set(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp", "devin-style"]);
   const selected = harnesses.filter((harness) => supported.has(harness));
   return selected.length ? selected.map((harness) => `--${harness}`) : ["--codex", "--cursor"];
 }
@@ -887,7 +905,7 @@ function profileDefinition(name) {
       label: "self-hosted team workspace",
       mode: "self_hosted",
       setupFlags: ["--all-harnesses"],
-      harnesses: ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai"],
+      harnesses: ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp", "devin-style"],
       storage: "local-json-or-postgres",
       auth: "reverse-proxy-or-oidc",
       goalChoice: "3",
@@ -1321,7 +1339,7 @@ function adapterDefinitions() {
 }
 
 function harnessTargets() {
-  return ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai"];
+  return ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp", "devin-style"];
 }
 
 function codexSkillPath() {
@@ -1837,11 +1855,35 @@ async function memoryDashboardData(memoryArgs = []) {
   const health = captureMemoryJson(["health"]);
   const maintenance = captureMemoryJson(["maintenance"]);
   const recent = captureMemoryJson(["list", "--limit", String(limit)]);
+  const reviewCandidates = Array.isArray(recent)
+    ? recent.filter((memory) => memory?.beliefState === "needs_verification" || memory?.metadata?.reviewQueue?.status === "pending")
+    : [];
   return {
     userId: process.env.MEMORY_USER_ID ?? process.env.USER ?? "local",
     health,
     maintenance,
     recent: Array.isArray(recent) ? recent : [],
+    reviewQueue: {
+      pending: reviewCandidates.length,
+      items: reviewCandidates.slice(0, 8).map((memory) => ({
+        id: memory.id,
+        content: memory.content,
+        connectorId: memory.metadata?.reviewQueue?.connectorId ?? memory.metadata?.connectorId,
+        command: `cognibrain memory inspect ${memory.id}`,
+        approveCommand: `cognibrain memory confirm ${memory.id}`,
+        retractCommand: `cognibrain memory retract ${memory.id} "not durable"`
+      }))
+    },
+    managementFlows: [
+      { label: "add", command: "cognibrain memories add <text>", checkedBy: "src/cli/memctl.ts add" },
+      { label: "search", command: "cognibrain memories search <query>", checkedBy: "src/cli/memctl.ts search" },
+      { label: "inspect", command: "cognibrain memory inspect <id>", checkedBy: "src/cli/memctl.ts inspect" },
+      { label: "confirm", command: "cognibrain memory confirm <id>", checkedBy: "src/cli/memctl.ts confirm" },
+      { label: "retract", command: "cognibrain memory retract <id> <reason>", checkedBy: "src/cli/memctl.ts retract" },
+      { label: "evidence", command: "cognibrain memory evidence-pack <query>", checkedBy: "src/cli/memctl.ts evidence-pack" },
+      { label: "graph", command: "cognibrain memory graph <query>", checkedBy: "src/cli/memctl.ts graph" },
+      { label: "dream", command: "cognibrain memory dream", checkedBy: "src/cli/memctl.ts dream" }
+    ],
     commands: [
       "cognibrain memories add <text>",
       "cognibrain memories search <query>",
@@ -1854,7 +1896,8 @@ async function memoryDashboardData(memoryArgs = []) {
       "inspect/add/archive/delete/confirm/retract memories through memory subcommands",
       "recall/context/evidence through search, coding-context, evidence-pack and why-used",
       "graph/timeline/dream/marketplace through graph, timeline, dream and marketplace subcommands",
-      "connector sync/writeback/health through connections plus memory connector-* subcommands"
+      "connector sync/writeback/health through connections plus memory connector-* subcommands",
+      "review queue surfaces connector candidates with inspect/confirm/retract commands"
     ]
   };
 }
@@ -1917,8 +1960,8 @@ function configurationDoctor() {
   const paths = configPaths();
   const checks = [
     { name: "setup state", ok: existsSync(paths.setupState), path: paths.setupState, fix: "cognibrain init --profile solo-dev --yes" },
-    { name: "connector directory", ok: existsSync(paths.connectors), path: paths.connectors, fix: "cognibrain connections add github --set repo=owner/repo" },
-    { name: "adapter directory", ok: existsSync(paths.adapters), path: paths.adapters, fix: "cognibrain connections add storage-sqlite" },
+    { name: "connector directory", ok: true, level: existsSync(paths.connectors) ? "ok" : "warn", path: paths.connectors, fix: "optional; run cognibrain connections add github --set repo=owner/repo" },
+    { name: "adapter directory", ok: true, level: existsSync(paths.adapters) ? "ok" : "warn", path: paths.adapters, fix: "optional; run cognibrain connections add storage-sqlite" },
     { name: "harness manifest", ok: existsSync(paths.harnessManifest), path: paths.harnessManifest, fix: "cognibrain config all" },
     { name: "Codex skill", ok: existsSync(paths.codexSkill), path: paths.codexSkill, fix: "cognibrain skill install" }
   ];
@@ -1969,7 +2012,8 @@ function connectorCatalog() {
     status: definition.status,
     docs: definition.docs,
     configured: existsSync(connectorConfigPath(provider)),
-    addCommand: `cognibrain connections add ${provider}`
+    addCommand: `cognibrain connections add ${provider}`,
+    wizardCommand: `cognibrain connector wizard ${provider}`
   }));
 }
 
@@ -1987,6 +2031,9 @@ function connectorShow(provider) {
 
 function connectorDoctor(provider) {
   const targets = provider ? [provider] : Object.keys(connectorDefinitions()).filter((name) => existsSync(connectorConfigPath(name)));
+  if (!provider && targets.length === 0) {
+    return { ok: true, level: "warn", checks: [], note: "no connector configs found; native connectors are optional until configured with credentials or env refs" };
+  }
   const checks = targets.map((name) => {
     const definition = connectorDefinitions()[name];
     const path = connectorConfigPath(name);
@@ -2010,6 +2057,75 @@ function connectorDoctor(provider) {
     };
   });
   return { ok: checks.length > 0 && checks.every((check) => check.ok), checks };
+}
+
+function connectorWizard(provider, options = {}) {
+  const definition = connectorDefinitions()[provider];
+  const preview = writeConnectorConfig(provider, { dryRun: true, settings: options.settings ?? {}, wizard: true });
+  const existing = readJson(preview.path, null);
+  const diff = safeJsonDiff(existing, preview.config);
+  return {
+    schemaVersion: "1.0",
+    provider,
+    connectorId: definition.connectorId,
+    title: `${provider} connector setup wizard`,
+    path: preview.path,
+    configured: preview.configured,
+    fields: (definition.fields ?? []).map((field) => ({
+      name: field.name,
+      label: field.label,
+      secret: Boolean(field.secret),
+      env: field.env,
+      current: field.secret ? `env:${field.env}` : preview.config.settings[field.name] ?? field.default ?? null,
+      required: definition.requiredEnv.includes(field.env)
+    })),
+    validation: {
+      missingEnv: preview.missing,
+      missingSettings: preview.config.missingSettings,
+      credentialPolicy: preview.config.storagePolicy,
+      doctorCommand: `cognibrain connector doctor ${provider}`,
+      liveSmokeCommand: "MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live"
+    },
+    preview: {
+      dryRun: true,
+      existing: Boolean(existing),
+      diff,
+      writeCommand: `cognibrain connector add ${provider}${connectorSetFlags(preview.config.settings).join("")}`,
+      healthCommand: preview.config.healthCommand
+    },
+    reviewQueue: {
+      command: `cognibrain memory connector-sync-records ${definition.connectorId}`,
+      previewTags: ["memory-candidate", "review-required", provider]
+    },
+    nextSteps: preview.config.nextSteps
+  };
+}
+
+function connectorSetFlags(settings) {
+  return Object.entries(settings ?? {})
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => ` --set ${key}=${String(value).replace(/\s+/g, " ")}`);
+}
+
+function safeJsonDiff(before, after) {
+  const beforeText = before ? JSON.stringify(redactConnectorConfig(before), null, 2).split(/\r?\n/) : [];
+  const afterText = JSON.stringify(redactConnectorConfig(after), null, 2).split(/\r?\n/);
+  if (!beforeText.length) return afterText.map((line) => `+ ${line}`);
+  const beforeSet = new Set(beforeText);
+  const afterSet = new Set(afterText);
+  return [
+    ...beforeText.filter((line) => !afterSet.has(line)).map((line) => `- ${line}`),
+    ...afterText.filter((line) => !beforeSet.has(line)).map((line) => `+ ${line}`)
+  ];
+}
+
+function redactConnectorConfig(value) {
+  if (!value || typeof value !== "object") return value;
+  const clone = JSON.parse(JSON.stringify(value));
+  for (const [key, item] of Object.entries(clone.settings ?? {})) {
+    if (/token|secret|key|email/i.test(key)) clone.settings[key] = String(item).startsWith("MEMORY_") ? item : "redacted";
+  }
+  return clone;
 }
 
 function printConnectorCatalog(items) {
@@ -2069,6 +2185,9 @@ function adapterShow(adapter) {
 
 function adapterDoctor(adapter) {
   const targets = adapter ? [adapter] : Object.keys(adapterDefinitions()).filter((name) => existsSync(adapterConfigPath(name)));
+  if (!adapter && targets.length === 0) {
+    return { ok: true, level: "warn", checks: [], note: "no adapter configs found; adapters are optional until configured" };
+  }
   const checks = targets.map((name) => {
     const definition = adapterDefinitions()[name];
     const path = adapterConfigPath(name);
@@ -2549,6 +2668,13 @@ function writeHarnessConfig(target) {
       writeOpenClawConfig();
       writeLangGraphConfig();
       writeCrewAIConfig();
+      writeWindsurfConfig();
+      writeContinueConfig();
+      writeAiderConfig();
+      writeRooClineConfig();
+      writeGooseConfig();
+      writeSourcegraphAmpConfig();
+      writeDevinStyleConfig();
       writeHarnessPackageManifest();
       break;
     case "codex":
@@ -2578,8 +2704,29 @@ function writeHarnessConfig(target) {
     case "crewai":
       writeCrewAIConfig();
       break;
+    case "windsurf":
+      writeWindsurfConfig();
+      break;
+    case "continue":
+      writeContinueConfig();
+      break;
+    case "aider":
+      writeAiderConfig();
+      break;
+    case "roo-cline":
+      writeRooClineConfig();
+      break;
+    case "goose":
+      writeGooseConfig();
+      break;
+    case "sourcegraph-amp":
+      writeSourcegraphAmpConfig();
+      break;
+    case "devin-style":
+      writeDevinStyleConfig();
+      break;
     default:
-      console.error("Usage: cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>");
+      console.error("Usage: cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|sourcegraph-amp|devin-style>");
       process.exit(1);
   }
 }
@@ -2677,6 +2824,59 @@ function writeCrewAIConfig() {
   writeHarnessPackageManifest();
 }
 
+function writeWindsurfConfig() {
+  const path = join(launchCwd, ".windsurf", "mcp.json");
+  const json = readJson(path, { mcpServers: {} });
+  json.mcpServers ??= {};
+  json.mcpServers.cognibrain = stdioServerConfig();
+  writeJson(path, json);
+  writeTemplateFile(join(launchCwd, ".windsurf", "rules", "cognibrain.md"), "templates/windsurf/cognibrain.md");
+  writeHarnessPackageManifest();
+}
+
+function writeContinueConfig() {
+  const path = join(launchCwd, ".continue", "config.json");
+  const json = readJson(path, { mcpServers: {} });
+  json.mcpServers ??= {};
+  json.mcpServers.cognibrain = stdioServerConfig();
+  writeJson(path, json);
+  writeTemplateFile(join(launchCwd, ".continue", "rules", "cognibrain.md"), "templates/continue/cognibrain.md");
+  writeHarnessPackageManifest();
+}
+
+function writeAiderConfig() {
+  writeTextFile(join(launchCwd, ".aider.conf.yml"), generatedAiderConfig());
+  writeTemplateFile(join(launchCwd, ".aider", "cognibrain.md"), "templates/aider/cognibrain.md");
+  writeHarnessPackageManifest();
+}
+
+function writeRooClineConfig() {
+  const path = join(launchCwd, ".roo", "mcp.json");
+  const json = readJson(path, { mcpServers: {} });
+  json.mcpServers ??= {};
+  json.mcpServers.cognibrain = stdioServerConfig();
+  writeJson(path, json);
+  writeTemplateFile(join(launchCwd, ".clinerules", "cognibrain.md"), "templates/roo-cline/cognibrain.md");
+  writeHarnessPackageManifest();
+}
+
+function writeGooseConfig() {
+  writeTextFile(join(launchCwd, ".goose", "config.yaml"), generatedGooseConfig());
+  writeTemplateFile(join(launchCwd, ".goose", "cognibrain.md"), "templates/goose/cognibrain.md");
+  writeHarnessPackageManifest();
+}
+
+function writeSourcegraphAmpConfig() {
+  writeTemplateFile(join(launchCwd, ".amp", "cognibrain.md"), "templates/sourcegraph-amp/cognibrain.md");
+  writeHarnessPackageManifest();
+}
+
+function writeDevinStyleConfig() {
+  writeJson(join(launchCwd, ".devin", "cognibrain.json"), generatedExternalAgentContract("devin-style"));
+  writeTemplateFile(join(launchCwd, ".devin", "cognibrain.md"), "templates/devin-style/cognibrain.md");
+  writeHarnessPackageManifest();
+}
+
 function writeTemplateFile(targetPath, templatePath) {
   const content = readFileSync(join(root, templatePath), "utf8")
     .replaceAll("/ABSOLUTE/PATH/TO/cognibrain", root)
@@ -2688,8 +2888,20 @@ function writeTextFile(targetPath, content) {
   const normalized = content.endsWith("\n") ? content : `${content}\n`;
   if (existsSync(targetPath)) {
     const current = readFileSync(targetPath, "utf8");
-    if (current === normalized || current.includes("cognibrain")) {
-      console.log(`cognibrain harness file already present: ${targetPath}`);
+    if (current === normalized) {
+      console.log(`cognibrain harness file already current: ${targetPath}`);
+      return;
+    }
+    if (current.includes("cognibrain") && shouldRefreshHarnessFiles()) {
+      writeFileSync(targetPath, normalized);
+      console.log(`Refreshed cognibrain harness file: ${targetPath}`);
+      return;
+    }
+    if (current.includes("cognibrain")) {
+      const sidecar = `${targetPath}.cognibrain`;
+      mkdirSync(dirname(sidecar), { recursive: true });
+      writeFileSync(sidecar, normalized);
+      console.log(`Wrote reviewable cognibrain harness update: ${sidecar}`);
       return;
     }
     const sidecar = `${targetPath}.cognibrain`;
@@ -2701,6 +2913,10 @@ function writeTextFile(targetPath, content) {
   mkdirSync(dirname(targetPath), { recursive: true });
   writeFileSync(targetPath, normalized);
   console.log(`Wrote harness file: ${targetPath}`);
+}
+
+function shouldRefreshHarnessFiles() {
+  return rawArgs.includes("--refresh") || rawArgs.includes("--force");
 }
 
 function writeGeneratedFile(targetPath, content) {
@@ -2731,7 +2947,9 @@ applyTo: "**/*"
 
 Use the local cognibrain runtime for durable project memory. Start it with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} start\`.
 
-Before multi-step coding or debugging, query memory through MCP when available. After durable discoveries, record source-backed facts with \`memory_add\` or \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory add "<fact>"\`.
+Before multi-step coding or debugging, query memory through MCP when available. Use \`memory_context_pack\` as the portable baseline, \`memory_coding_context_pack\` when exposed for code-specific context, and \`memory_action_guard\` before shell commands or file edits with durable side effects.
+
+After durable discoveries, record source-backed facts with \`memory_add\` or \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory add "<fact>"\`. Finish non-trivial patches with \`memory_patch_evidence\` or \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory patch-evidence "<task>"\`.
 
 Use feedback adapters through the CLI:
 
@@ -2739,6 +2957,48 @@ Use feedback adapters through the CLI:
 - rejected suggestion: \`MEMORY_CONNECTOR_FEEDBACK_KIND=rejected_suggestion node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory feedback-injection "<query>" rejected\`
 - failing test: \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory add "A harness suggestion caused a failing test: <summary>"\`
 `;
+}
+
+function generatedAiderConfig() {
+  return `read:
+  - .aider/cognibrain.md
+`;
+}
+
+function generatedGooseConfig() {
+  return `extensions:
+  cognibrain:
+    type: stdio
+    command: ${JSON.stringify(process.execPath)}
+    args:
+      - ${JSON.stringify(join(root, "bin", "cognibrain.mjs"))}
+      - "--runtime-root"
+      - ${JSON.stringify(launchCwd)}
+      - "mcp"
+`;
+}
+
+function generatedExternalAgentContract(target) {
+  const cli = join(root, "bin", "cognibrain.mjs");
+  return {
+    schemaVersion: "1.0",
+    target,
+    runtimeRoot: launchCwd,
+    protocol: "json-command",
+    commands: {
+      contextPack: `${process.execPath} ${cli} --runtime-root ${launchCwd} memory coding-context "$TASK"`,
+      preToolGuard: `${process.execPath} ${cli} --runtime-root ${launchCwd} memory action-guard "$COMMAND"`,
+      recordAction: `${process.execPath} ${cli} --runtime-root ${launchCwd} memory action "$COMMAND"`,
+      recordCorrection: `${process.execPath} ${cli} --runtime-root ${launchCwd} memory code-correction "$CORRECTION"`,
+      patchEvidence: `${process.execPath} ${cli} --runtime-root ${launchCwd} memory patch-evidence "$TASK"`
+    },
+    safety: {
+      secrets: "do not store secret values; pass env var names or redacted refs only",
+      destructiveActions: "call preToolGuard before shell/file operations with durable side effects",
+      evidence: "record command, files, test outcome and sourceRefs after tool use"
+    },
+    generatedAt: new Date().toISOString()
+  };
 }
 
 function writeHarnessPackageManifest() {
@@ -2792,6 +3052,40 @@ function writeHarnessPackageManifest() {
         config: join(launchCwd, "crewai.cognibrain.json"),
         helper: join(launchCwd, "crewai_cognibrain.py"),
         feedback: ["task memory prefetch", "tool outcome telemetry"]
+      },
+      windsurf: {
+        mcpConfig: join(launchCwd, ".windsurf", "mcp.json"),
+        rules: join(launchCwd, ".windsurf", "rules", "cognibrain.md"),
+        feedback: ["memory_context_pack", "connector-telemetry", "memory_dream"]
+      },
+      continue: {
+        mcpConfig: join(launchCwd, ".continue", "config.json"),
+        rules: join(launchCwd, ".continue", "rules", "cognibrain.md"),
+        feedback: ["memory_context_pack", "accepted_change", "rejected_suggestion"]
+      },
+      aider: {
+        config: join(launchCwd, ".aider.conf.yml"),
+        instructions: join(launchCwd, ".aider", "cognibrain.md"),
+        feedback: ["pre-command memory search", "test outcome telemetry"]
+      },
+      "roo-cline": {
+        mcpConfig: join(launchCwd, ".roo", "mcp.json"),
+        rules: join(launchCwd, ".clinerules", "cognibrain.md"),
+        feedback: ["memory_context_pack", "tool outcome telemetry", "correction capture"]
+      },
+      goose: {
+        config: join(launchCwd, ".goose", "config.yaml"),
+        instructions: join(launchCwd, ".goose", "cognibrain.md"),
+        feedback: ["memory_context_pack", "tool outcome telemetry"]
+      },
+      "sourcegraph-amp": {
+        instructions: join(launchCwd, ".amp", "cognibrain.md"),
+        feedback: ["context recall instructions", "evidence trail handoff"]
+      },
+      "devin-style": {
+        config: join(launchCwd, ".devin", "cognibrain.json"),
+        instructions: join(launchCwd, ".devin", "cognibrain.md"),
+        feedback: ["json-command context pack", "pre-tool action guard", "patch evidence handoff"]
       }
     }
   });
@@ -2810,7 +3104,14 @@ function harnessTemplateHealth() {
     "templates/langgraph/langgraph.cognibrain.json",
     "templates/langgraph/langgraph-cognibrain.ts",
     "templates/crewai/crewai.cognibrain.json",
-    "templates/crewai/crewai_cognibrain.py"
+    "templates/crewai/crewai_cognibrain.py",
+    "templates/windsurf/cognibrain.md",
+    "templates/continue/cognibrain.md",
+    "templates/aider/cognibrain.md",
+    "templates/roo-cline/cognibrain.md",
+    "templates/goose/cognibrain.md",
+    "templates/sourcegraph-amp/cognibrain.md",
+    "templates/devin-style/cognibrain.md"
   ];
   const missing = templates.filter((template) => !existsSync(join(root, template)));
   return { ok: missing.length === 0, detail: missing.length ? `missing ${missing.join(", ")}` : `${templates.length} templates available` };
@@ -2834,10 +3135,23 @@ function harnessGeneratedHealth() {
     join(launchCwd, "langgraph-cognibrain.ts"),
     join(launchCwd, "crewai.cognibrain.json"),
     join(launchCwd, "crewai_cognibrain.py"),
+    join(launchCwd, ".windsurf", "mcp.json"),
+    join(launchCwd, ".windsurf", "rules", "cognibrain.md"),
+    join(launchCwd, ".continue", "config.json"),
+    join(launchCwd, ".continue", "rules", "cognibrain.md"),
+    join(launchCwd, ".aider.conf.yml"),
+    join(launchCwd, ".aider", "cognibrain.md"),
+    join(launchCwd, ".roo", "mcp.json"),
+    join(launchCwd, ".clinerules", "cognibrain.md"),
+    join(launchCwd, ".goose", "config.yaml"),
+    join(launchCwd, ".goose", "cognibrain.md"),
+    join(launchCwd, ".amp", "cognibrain.md"),
+    join(launchCwd, ".devin", "cognibrain.json"),
+    join(launchCwd, ".devin", "cognibrain.md"),
     join(launchCwd, ".cognibrain-harness-package.json")
   ];
   const missing = expected.filter((path) => !existsSync(path));
-  return { ok: missing.length === 0, detail: missing.length ? `run cognibrain setup --all-harnesses; missing ${missing.map((path) => path.replace(`${launchCwd}/`, "")).join(", ")}` : "Codex, Claude, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph and CrewAI configs present" };
+  return { ok: missing.length === 0, detail: missing.length ? `run cognibrain setup --all-harnesses; missing ${missing.map((path) => path.replace(`${launchCwd}/`, "")).join(", ")}` : "Codex, Claude, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph, CrewAI, Windsurf, Continue, Aider, Roo/Cline, Goose, Sourcegraph Amp and Devin-style configs present" };
 }
 
 function connectorProofHealth() {
@@ -3510,7 +3824,7 @@ Usage:
       React/Ink guided self-hosted install that writes setup state, native connector configs, harness config, starts the API, and runs doctor
   cognibrain setup [--profile local|team|production|benchmark] [--yes]
       Starts the same guided wizard; legacy flags below still work for scripted installs
-  cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--all-harnesses]
+  cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--windsurf] [--continue] [--aider] [--roo-cline] [--goose] [--sourcegraph-amp] [--devin-style] [--all-harnesses]
       Scripted install path for CI and package smoke tests
   cognibrain doctor [--publish] [--fix] [--no-start]
       Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
@@ -3534,8 +3848,8 @@ Usage:
       Configure native vendor drivers, adapters, or SDK-backed sources from one connection surface
   cognibrain config list|show|paths|doctor
       Inspect setup state, harness packages, connector configs, adapter configs, and skill paths
-  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>
-      Write MCP config for supported harnesses; "config write <target>" works too
+  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|sourcegraph-amp|devin-style> [--refresh]
+      Write MCP config for supported harnesses; use --refresh to replace existing cognibrain-owned instruction files
   cognibrain connector list|show <provider>|doctor [provider]|remove <provider>
       Inspect and maintain source-system connector configs
   cognibrain connector add <provider> [--dry-run] [--set key=value]
@@ -3630,8 +3944,8 @@ function configUsage(exitCode) {
   cognibrain config show [--json]
   cognibrain config paths [--json]
   cognibrain config doctor [--json]
-  cognibrain config write <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>
-  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai>`);
+  cognibrain config write <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|sourcegraph-amp|devin-style> [--refresh]
+  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|sourcegraph-amp|devin-style> [--refresh]`);
   process.exit(exitCode);
 }
 

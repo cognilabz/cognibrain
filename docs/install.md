@@ -10,7 +10,7 @@ npx cognibrain init
 npx cognibrain doctor --fix
 ```
 
-Running only `npx cognibrain` or explicitly `npx cognibrain tui` opens the full graphical CLI app. Use the sidebar to move between Home, Memories, Connections, Connectors, Adapters, Config, Service, Reports, SDK and Doctor. In a real TTY, Enter executes the selected static action, placeholder commands are guarded, and service or destructive actions ask for confirmation. The command forms stay available for scripts, but day-to-day operation can happen from the interactive surface.
+Running only `npx cognibrain` or explicitly `npx cognibrain tui` opens the full graphical CLI app. Use the sidebar to move between Home, Memories, Memory Ops, Connections, Connector Setup Wizard, Connectors, Adapters, Config, Service, Reports, SDK and Doctor. In a real TTY, Enter executes the selected static action, placeholder commands are guarded, and service or destructive actions ask for confirmation. The command forms stay available for scripts, but day-to-day operation can happen from the interactive surface.
 
 Docker is optional for people who want container packaging later. The CLI is the required control plane for setup, status, service automation, connectors, adapters, SDK scaffolding and proof checks.
 
@@ -33,6 +33,7 @@ npx cognibrain status
 npx cognibrain tui --json
 npx cognibrain memories
 npx cognibrain connections
+npx cognibrain connector wizard jira --set project=ENG --json
 npx cognibrain config show
 npx cognibrain skill status
 npx cognibrain doctor --fix

@@ -27,7 +27,21 @@ const aliases = new Map([
   ["open-claw", "openclaw"],
   ["langgraph", "langgraph"],
   ["crew-ai", "crewai"],
-  ["crewai", "crewai"]
+  ["crewai", "crewai"],
+  ["windsurf", "windsurf"],
+  ["continue", "continue"],
+  ["continue-dev", "continue"],
+  ["aider", "aider"],
+  ["roo", "roo-cline"],
+  ["roo-code", "roo-cline"],
+  ["cline", "roo-cline"],
+  ["roo-cline", "roo-cline"],
+  ["goose", "goose"],
+  ["sourcegraph-amp", "sourcegraph-amp"],
+  ["amp", "sourcegraph-amp"],
+  ["devin", "devin-style"],
+  ["devin-style", "devin-style"],
+  ["external-agent", "devin-style"]
 ]);
 
 if (rawArgs.includes("--help") || rawArgs.includes("-h") || rawArgs.includes("help")) usage(0);
@@ -95,17 +109,20 @@ function usage(exitCode) {
   console.log(`cognibrain-connect
 
 Usage:
-  npx cognibrain-connect <codex|claude-code|cursor|github-copilot|vscode|opencode|openclaw|langgraph|crewai|all> [--runtime-root <path>] [--no-start] [--no-doctor]
+  npx cognibrain-connect <codex|claude-code|cursor|github-copilot|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|sourcegraph-amp|devin-style|all> [--runtime-root <path>] [--no-start] [--no-doctor] [--refresh]
 
 Examples:
   npx cognibrain-connect claude-code
   npx cognibrain-connect codex --no-start
   npx cognibrain-connect langgraph --no-start
+  npx cognibrain-connect continue --no-start
   npx cognibrain-connect all --runtime-root ${join(homedir(), "project")}
 
 The command installs the packaged skill/config for the selected harness, writes a reviewable
 .cognibrain-harness-package.json with feedback adapters, starts the local API/dashboard unless
 --no-start is passed, then runs the cognibrain doctor unless --no-doctor is passed.
+Existing cognibrain instruction files are left in place by default; pass --refresh to replace
+them with the package's current template.
 `);
   process.exit(exitCode);
 }

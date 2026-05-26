@@ -229,7 +229,7 @@ function verifyHarnessPackages(): { passed: boolean; harnesses: string[] } {
     if (result.status !== 0) return { passed: false, harnesses: [] };
     const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8")) as { harnesses?: Record<string, unknown> };
     const harnesses = Object.keys(manifest.harnesses ?? {});
-    return { passed: ["codex", "claude", "copilot", "cursor", "vscode"].every((name) => harnesses.includes(name)), harnesses };
+    return { passed: ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp"].every((name) => harnesses.includes(name)), harnesses };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

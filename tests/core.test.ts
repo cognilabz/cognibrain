@@ -1830,6 +1830,9 @@ describe("TypeScript memory core", () => {
     expect(openapi.paths["/openapi.json"].get).toBeDefined();
     expect(openapi.paths["/retention/review"].get).toBeDefined();
     expect(openapi.paths["/memories/{id}/archive"].post).toMatchObject({ operationId: "postMemoriesIdArchive" });
+    const codingContextPath = openapi.paths["/coding-context-pack"] as { post: { responses: Record<string, unknown> } };
+    const codingContextResponse = codingContextPath.post.responses["200"] as { content: { "application/json": { schema: { $ref: string } } } };
+    expect(codingContextResponse.content["application/json"].schema.$ref).toBe("#/components/schemas/CodingContextPack");
     expect(openapi.paths["/audit/chain"].get).toBeDefined();
     expect(openapi.components.schemas.MemoryInput.required).toEqual(["userId", "content"]);
     expect(openapi.components.schemas.AuditChain.required).toContain("replay");

@@ -275,6 +275,32 @@ describe("self verification benchmark loop", () => {
     expect(readFileSync(join(dir, "operator-memory-benchmark.md"), "utf8")).toContain("Operator Memory Dream Benchmark");
   });
 
+  it("accepts same-run native operator-memory competitor measurements without allowing unsupported market claims", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-operator-memory-native-"));
+    const providerPath = join(dir, "native-provider.mjs");
+    writeFileSync(
+      providerPath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const failed = payload.scenario.kind === "connector_failure"; console.log(JSON.stringify({ proofLevel: "same-run-native", adapterMode: "native-command", checks: { currentTruthSelected: true, staleTruthSuppressed: failed, sourceRefRevalidated: false, connectorRefreshAccounted: false, beliefRevisionApplied: false, failureContained: failed }, capabilityGaps: ["fixture native runner has no source-aware dream"], latencyMs: 1, evidence: { scenarioId: payload.scenario.id } })); });`
+    );
+    const previous = process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND;
+    try {
+      process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND = `${process.execPath} ${providerPath}`;
+      const report = await runOperatorMemoryBenchmark({
+        out: join(dir, "operator-memory-native.json"),
+        markdown: join(dir, "operator-memory-native.md"),
+        systems: ["cognibrain-dream", "mem0-native"]
+      });
+      const mem0 = report.systems.find((system) => system.system === "mem0-native");
+      expect(mem0?.proofLevel).toBe("same-run-native");
+      expect(mem0?.runner?.commandEnv).toBe("MEMORY_OPERATOR_MEMORY_MEM0_COMMAND");
+      expect(report.summary.cognibrainScore).toBeGreaterThan(mem0?.score ?? 0);
+      expect(report.summary.marketSuperiorityClaimAllowed).toBe(false);
+      expect(report.summary.marketSuperiorityBlockers.some((item) => item.includes("Graphiti"))).toBe(true);
+    } finally {
+      process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND = previous;
+    }
+  });
+
   it("publishes a marketing scorecard with bars and per-scenario details", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-arena-publish-"));
     const inputPath = join(dir, "arena.json");

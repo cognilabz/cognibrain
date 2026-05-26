@@ -77,6 +77,7 @@
     "operator:maturity": "tsx src/eval/operatorOsMaturity.ts --out artifacts/operator-os-maturity.json --markdown artifacts/docs/operator-os.md",
     "benchmark:hardening": "tsx src/eval/benchmarkHardening.ts --out artifacts/benchmark-hardening.json --markdown artifacts/docs/benchmark-hardening.md",
     "benchmark:operator-memory": "tsx src/eval/operatorMemoryBenchmark.ts --out artifacts/operator-memory-benchmark.json --markdown artifacts/docs/operator-memory-benchmark.md",
+    "benchmark:operator-memory:native": "node scripts/benchmark/operator-memory-native-competitors.mjs --out artifacts/operator-memory-native-competitors.json --markdown artifacts/docs/operator-memory-native-competitors.md",
     "benchmark:certified": "tsx src/eval/certified.ts",
     "leaderboard:publish": "npm run leaderboard && tsx src/eval/publishLeaderboard.ts --input artifacts/leaderboard.json --out artifacts/public/leaderboard && npm run benchmark:arena:publish",
     "verify:status": "node scripts/release/verify-status.mjs",

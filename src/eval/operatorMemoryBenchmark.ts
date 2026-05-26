@@ -1,10 +1,21 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { MemoryService } from "../api/service";
 import type { ConnectorManifest, MemoryExtractionEvent } from "../core";
 
 type ScenarioKind = "source_update" | "user_correction" | "connector_failure";
-type SystemId = "cognibrain-dream" | "retrieval-only" | "connector-import-only" | "reflect-only" | "recency-only";
+type SystemId =
+  | "cognibrain-dream"
+  | "retrieval-only"
+  | "connector-import-only"
+  | "reflect-only"
+  | "recency-only"
+  | "mem0-native"
+  | "langmem-native"
+  | "graphiti-native"
+  | "cognee-native";
+type ProofLevel = "same-run-full" | "local-baseline" | "same-run-native" | "same-run-cloud-api" | "credential-blocked";
 
 interface OperatorMemoryScenario {
   id: string;
@@ -36,13 +47,15 @@ interface ScenarioResult {
   kind: ScenarioKind;
   score: number;
   checks: ScenarioChecks;
+  capabilityGaps?: string[];
   evidence: Record<string, unknown>;
 }
 
 interface SystemResult {
   system: SystemId;
   displayName: string;
-  proofLevel: "same-run-full" | "local-baseline";
+  proofLevel: ProofLevel;
+  adapterMode: "full-local" | "local-baseline" | "native-command" | "cloud-command" | "blocked-command";
   score: number;
   metrics: {
     currentTruthAccuracy: number;
@@ -53,6 +66,8 @@ interface SystemResult {
     failureContainmentRate: number;
   };
   scenarios: ScenarioResult[];
+  capabilityGaps: string[];
+  runner?: { commandEnv: string; command?: string };
 }
 
 interface OperatorMemoryBenchmarkReport {
@@ -82,10 +97,11 @@ interface OperatorMemoryBenchmarkReport {
 }
 
 const SYSTEMS: SystemId[] = ["cognibrain-dream", "retrieval-only", "connector-import-only", "reflect-only", "recency-only"];
+const NATIVE_SYSTEMS: SystemId[] = ["mem0-native", "langmem-native", "graphiti-native", "cognee-native"];
 
 export async function runOperatorMemoryBenchmark(options: { out?: string; markdown?: string; systems?: SystemId[] } = {}): Promise<OperatorMemoryBenchmarkReport> {
   const scenarios = operatorMemoryScenarios();
-  const systems = [];
+  const systems: SystemResult[] = [];
   for (const system of options.systems ?? SYSTEMS) {
     systems.push(await runSystem(system, scenarios));
   }
@@ -93,12 +109,24 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
     .map((system) => ({ system: system.displayName, score: system.score, proofLevel: system.proofLevel }))
     .sort((a, b) => b.score - a.score || a.system.localeCompare(b.system));
   const cognibrain = systems.find((system) => system.system === "cognibrain-dream");
-  const bestBaseline = Math.max(...systems.filter((system) => system.system !== "cognibrain-dream").map((system) => system.score));
+  const competitors = systems.filter((system) => system.system !== "cognibrain-dream");
+  const bestBaseline = Math.max(0, ...competitors.map((system) => system.score));
+  const realCompetitors = competitors.filter((system) => ["same-run-native", "same-run-cloud-api"].includes(system.proofLevel));
+  const requiredNative = ["mem0-native", "langmem-native", "graphiti-native"] as const;
+  const missingNative = requiredNative.filter((system) => !systems.some((result) => result.system === system && ["same-run-native", "same-run-cloud-api"].includes(result.proofLevel)));
   const marketSuperiorityBlockers = [
-    "No same-run native Mem0/Zep/Graphiti/LangMem artifacts were supplied for this benchmark contract.",
-    "No live GitHub/Jira/Confluence/Notion credentialed tenant run was supplied.",
-    "No vendor-signed or independently reproduced artifact was supplied."
+    ...missingNative.map((system) => `${displayName(system)} same-run native/cloud artifact is missing or credential-blocked.`),
+    ...(process.env.MEMORY_OPERATOR_MEMORY_LIVE_CONNECTOR_PROOF === "true" ? [] : ["No live GitHub/Jira/Confluence/Notion credentialed tenant run was supplied."]),
+    ...(process.env.MEMORY_OPERATOR_MEMORY_INDEPENDENT_PROOF === "true" ? [] : ["No vendor-signed or independently reproduced artifact was supplied."])
   ];
+  const marketSuperiorityClaimAllowed = Boolean(
+    cognibrain &&
+    realCompetitors.length >= 3 &&
+    missingNative.length === 0 &&
+    cognibrain.score > Math.max(...realCompetitors.map((system) => system.score)) &&
+    cognibrain.score >= 0.95 &&
+    marketSuperiorityBlockers.length === 0
+  );
   const report: OperatorMemoryBenchmarkReport = {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
@@ -130,8 +158,8 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
       bestBaselineScore: bestBaseline,
       margin: (cognibrain?.score ?? 0) - bestBaseline,
       localBaselineSuperiority: Boolean(cognibrain && cognibrain.score > bestBaseline && cognibrain.score >= 0.95),
-      marketSuperiorityClaimAllowed: false,
-      marketSuperiorityBlockers
+      marketSuperiorityClaimAllowed,
+      marketSuperiorityBlockers: marketSuperiorityClaimAllowed ? [] : marketSuperiorityBlockers
     },
     passed: Boolean(cognibrain && cognibrain.score > bestBaseline && cognibrain.score >= 0.95)
   };
@@ -147,6 +175,7 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
 }
 
 async function runSystem(system: SystemId, scenarios: OperatorMemoryScenario[]): Promise<SystemResult> {
+  if (isNativeSystem(system)) return runNativeSystem(system, scenarios);
   const results = [];
   for (const scenario of scenarios) {
     results.push(system === "cognibrain-dream" ? await runCognibrainScenario(scenario) : runBaselineScenario(system, scenario));
@@ -156,6 +185,7 @@ async function runSystem(system: SystemId, scenarios: OperatorMemoryScenario[]):
     system,
     displayName: displayName(system),
     proofLevel: system === "cognibrain-dream" ? "same-run-full" : "local-baseline",
+    adapterMode: system === "cognibrain-dream" ? "full-local" : "local-baseline",
     score,
     metrics: {
       currentTruthAccuracy: rate(results, "currentTruthSelected"),
@@ -165,8 +195,84 @@ async function runSystem(system: SystemId, scenarios: OperatorMemoryScenario[]):
       beliefRevisionRate: rate(results, "beliefRevisionApplied"),
       failureContainmentRate: rate(results, "failureContained")
     },
-    scenarios: results
+    scenarios: results,
+    capabilityGaps: capabilityGaps(system)
   };
+}
+
+function runNativeSystem(system: SystemId, scenarios: OperatorMemoryScenario[]): SystemResult {
+  const command = nativeCommand(system);
+  const results = scenarios.map((scenario) => runNativeScenario(system, scenario, command.command));
+  const proofLevel = nativeProofLevel(results);
+  const score = proofLevel === "credential-blocked" ? 0 : average(results.map((result) => result.score));
+  return {
+    system,
+    displayName: displayName(system),
+    proofLevel,
+    adapterMode: proofLevel === "credential-blocked" ? "blocked-command" : proofLevel === "same-run-cloud-api" ? "cloud-command" : "native-command",
+    score,
+    metrics: {
+      currentTruthAccuracy: rate(results, "currentTruthSelected"),
+      staleSuppressionRate: rate(results, "staleTruthSuppressed"),
+      sourceRevalidationRate: rate(results, "sourceRefRevalidated"),
+      connectorRefreshAccountingRate: rate(results, "connectorRefreshAccounted"),
+      beliefRevisionRate: rate(results, "beliefRevisionApplied"),
+      failureContainmentRate: rate(results, "failureContained")
+    },
+    scenarios: results,
+    capabilityGaps: unique(results.flatMap((result) => result.capabilityGaps ?? [])),
+    runner: { commandEnv: command.envName, command: command.command }
+  };
+}
+
+function runNativeScenario(system: SystemId, scenario: OperatorMemoryScenario, command: string): ScenarioResult {
+  if (!command) return blockedNativeScenario(system, scenario, "native command is not configured");
+  const started = Date.now();
+  const payload = JSON.stringify({ schemaVersion: "1.0", benchmark: "OperatorMemoryDreamBenchmark", system, scenario });
+  const result = spawnSync(command, {
+    cwd: process.cwd(),
+    input: payload,
+    encoding: "utf8",
+    shell: true,
+    timeout: Number(process.env.MEMORY_OPERATOR_MEMORY_RUNNER_TIMEOUT_MS ?? 120_000),
+    maxBuffer: 20 * 1024 * 1024
+  });
+  if (result.status !== 0 || !result.stdout.trim()) {
+    return blockedNativeScenario(system, scenario, `${displayName(system)} runner failed before producing JSON`, {
+      status: result.status ?? 1,
+      stderrTail: tail(result.stderr),
+      stdoutTail: tail(result.stdout),
+      error: result.error?.message,
+      latencyMs: Date.now() - started
+    });
+  }
+  try {
+    const parsed = JSON.parse(result.stdout.trim());
+    const checks = normalizeChecks(parsed.checks);
+    return {
+      scenarioId: scenario.id,
+      title: scenario.title,
+      kind: scenario.kind,
+      checks,
+      score: parsed.proofLevel === "credential-blocked" ? 0 : scoreChecks(checks),
+      capabilityGaps: Array.isArray(parsed.capabilityGaps) ? parsed.capabilityGaps.map(String) : capabilityGaps(system),
+      evidence: {
+        system,
+        proofLevel: parsed.proofLevel ?? "same-run-native",
+        adapterMode: parsed.adapterMode ?? "native-command",
+        latencyMs: parsed.latencyMs,
+        runner: command,
+        nativeEvidence: parsed.evidence
+      }
+    };
+  } catch (error) {
+    return blockedNativeScenario(system, scenario, `${displayName(system)} runner returned invalid JSON`, {
+      error: error instanceof Error ? error.message : String(error),
+      stdoutTail: tail(result.stdout),
+      stderrTail: tail(result.stderr),
+      latencyMs: Date.now() - started
+    });
+  }
 }
 
 async function runCognibrainScenario(scenario: OperatorMemoryScenario): Promise<ScenarioResult> {
@@ -278,6 +384,59 @@ function evaluateServiceScenario(system: SystemId, scenario: OperatorMemoryScena
   };
 }
 
+function blockedNativeScenario(system: SystemId, scenario: OperatorMemoryScenario, reason: string, evidence: Record<string, unknown> = {}): ScenarioResult {
+  const checks = normalizeChecks({});
+  return {
+    scenarioId: scenario.id,
+    title: scenario.title,
+    kind: scenario.kind,
+    checks,
+    score: 0,
+    capabilityGaps: [reason],
+    evidence: {
+      system,
+      proofLevel: "credential-blocked",
+      adapterMode: "blocked-command",
+      blocked: true,
+      reason,
+      ...evidence
+    }
+  };
+}
+
+function normalizeChecks(value: unknown): ScenarioChecks {
+  const checks = value && typeof value === "object" ? value as Partial<Record<keyof ScenarioChecks, unknown>> : {};
+  return {
+    currentTruthSelected: Boolean(checks.currentTruthSelected),
+    staleTruthSuppressed: Boolean(checks.staleTruthSuppressed),
+    sourceRefRevalidated: Boolean(checks.sourceRefRevalidated),
+    connectorRefreshAccounted: Boolean(checks.connectorRefreshAccounted),
+    beliefRevisionApplied: Boolean(checks.beliefRevisionApplied),
+    failureContained: Boolean(checks.failureContained)
+  };
+}
+
+function nativeProofLevel(results: ScenarioResult[]): ProofLevel {
+  const proofLevels = results.map((result) => result.evidence.proofLevel).filter(Boolean).map(String);
+  if (proofLevels.some((proof) => proof === "same-run-cloud-api")) return "same-run-cloud-api";
+  if (proofLevels.some((proof) => proof === "same-run-native")) return "same-run-native";
+  return "credential-blocked";
+}
+
+function nativeCommand(system: SystemId): { envName: string; command: string } {
+  const key = system.replace("-native", "").toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  const envName = `MEMORY_OPERATOR_MEMORY_${key}_COMMAND`;
+  const configured = process.env[envName];
+  if (configured) return { envName, command: configured };
+  const script = join(process.cwd(), "scripts", "benchmark", "competitors", "operator-memory-native-python-runner.mjs");
+  if (!existsSync(script)) return { envName, command: "" };
+  return { envName, command: `${process.execPath} ${JSON.stringify(script)} --system ${system.replace("-native", "")}` };
+}
+
+function isNativeSystem(system: SystemId): boolean {
+  return NATIVE_SYSTEMS.includes(system);
+}
+
 function registerScenarioConnector(service: MemoryService, scenario: OperatorMemoryScenario): void {
   if (!scenario.connectorId) return;
   service.registerConnectorManifest({
@@ -384,13 +543,31 @@ function displayName(system: SystemId): string {
     "retrieval-only": "Retrieval only baseline",
     "connector-import-only": "Connector import without belief revision",
     "reflect-only": "Local reflect without source refresh",
-    "recency-only": "Recency-only memory baseline"
+    "recency-only": "Recency-only memory baseline",
+    "mem0-native": "Mem0 native",
+    "langmem-native": "LangMem native",
+    "graphiti-native": "Graphiti/Zep native",
+    "cognee-native": "Cognee native"
+  }[system];
+}
+
+function capabilityGaps(system: SystemId): string[] {
+  return {
+    "cognibrain-dream": [],
+    "retrieval-only": ["no connector refresh", "no sourceRef revalidation", "no belief revision", "no stale suppression"],
+    "connector-import-only": ["imports connector updates but does not classify superseded beliefs", "no connector failure containment"],
+    "reflect-only": ["local reflection only; no pre-reflection source refresh", "no connector sync state proof"],
+    "recency-only": ["recency ranking can select current text but does not prove source validity", "no conflict set or belief revision"],
+    "mem0-native": ["real native memory add/search, but no Dream source refresh", "no sourceRef revalidation", "no belief-state suppression"],
+    "langmem-native": ["real native memory manage/search, but no Dream source refresh", "no sourceRef revalidation", "no belief-state suppression"],
+    "graphiti-native": ["real graph run requires LLM credentials", "no Cognibrain connector failure accounting in this adapter"],
+    "cognee-native": ["real knowledge pipeline requires LLM credentials", "no Cognibrain connector failure accounting in this adapter"]
   }[system];
 }
 
 function renderMarkdown(report: OperatorMemoryBenchmarkReport): string {
   const rows = report.systems
-    .map((system) => `| ${system.displayName} | ${points(system.score)} | ${system.proofLevel} | ${points(system.metrics.currentTruthAccuracy)} | ${points(system.metrics.staleSuppressionRate)} | ${points(system.metrics.sourceRevalidationRate)} |`)
+    .map((system) => `| ${system.displayName} | ${points(system.score)} | ${system.proofLevel} | ${system.adapterMode} | ${points(system.metrics.currentTruthAccuracy)} | ${points(system.metrics.staleSuppressionRate)} | ${points(system.metrics.sourceRevalidationRate)} |`)
     .join("\n");
   const scenarioRows = report.systems.find((system) => system.system === "cognibrain-dream")?.scenarios
     .map((scenario) => `| ${scenario.scenarioId} | ${points(scenario.score)} | ${mark(scenario.checks.currentTruthSelected)} | ${mark(scenario.checks.staleTruthSuppressed)} | ${mark(scenario.checks.connectorRefreshAccounted)} | ${mark(scenario.checks.failureContained)} |`)
@@ -401,10 +578,10 @@ Generated at ${report.generatedAt}.
 
 Claim scope: \`${report.claimScope}\`.
 
-This benchmark proves local same-scenario superiority against deterministic baselines. It does not allow a market-superiority claim until same-run third-party adapters and credentialed connector tenant artifacts are supplied.
+This benchmark proves same-scenario superiority against configured baselines and native competitors. It allows market-superiority claims only when native/cloud competitor runs, credentialed connector tenant runs and independent artifacts are all present.
 
-| System | Score | Proof | Current truth | Stale suppression | Source revalidation |
-| --- | ---: | --- | ---: | ---: | ---: |
+| System | Score | Proof | Adapter | Current truth | Stale suppression | Source revalidation |
+| --- | ---: | --- | --- | ---: | ---: | ---: |
 ${rows}
 
 | Cognibrain scenario | Score | Current truth | Stale suppressed | Connector accounted | Failure contained |
@@ -415,6 +592,9 @@ Market claim allowed: ${report.summary.marketSuperiorityClaimAllowed ? "yes" : "
 
 Blockers:
 ${report.summary.marketSuperiorityBlockers.map((item) => `- ${item}`).join("\n")}
+
+Native runner evidence:
+${report.systems.filter((system) => system.runner).map((system) => `- ${system.displayName}: \`${system.runner?.commandEnv}\`, ${system.proofLevel}`).join("\n") || "- none"}
 `;
 }
 
@@ -426,11 +606,21 @@ function mark(value: boolean): string {
   return value ? "yes" : "no";
 }
 
-function cliOptions(argv: string[]): { out?: string; markdown?: string } {
+function cliOptions(argv: string[]): { out?: string; markdown?: string; systems?: SystemId[] } {
+  const systems = optionValue(argv, "--systems")?.split(",").map((item) => item.trim()).filter(Boolean) as SystemId[] | undefined;
   return {
     out: optionValue(argv, "--out") ?? "artifacts/operator-memory-benchmark.json",
-    markdown: optionValue(argv, "--markdown") ?? "artifacts/docs/operator-memory-benchmark.md"
+    markdown: optionValue(argv, "--markdown") ?? "artifacts/docs/operator-memory-benchmark.md",
+    systems
   };
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function tail(value = "", limit = 3000): string {
+  return String(value ?? "").slice(-limit);
 }
 
 function optionValue(argv: string[], flag: string): string | undefined {

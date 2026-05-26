@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T08:45:28.865Z",
+  "generatedAt": "2026-05-26T09:08:14.107Z",
   "mode": "code_truth_audit",
   "passed": true,
   "planComplete": true,
@@ -9,9 +9,9 @@
     "passed": 12,
     "failures": 0,
     "openGaps": 0,
-    "realCompetitorRuns": 5,
+    "realCompetitorRuns": 3,
     "apiShapeCompetitors": 0,
-    "blockedCompetitors": 0,
+    "blockedCompetitors": 2,
     "nativeConnectorRows": 19,
     "hermeticDrivers": 19,
     "liveSmokeReadyConnectors": 19,
@@ -29,7 +29,7 @@
     ],
     [
       "arena.competitors.realRuns",
-      5,
+      3,
       "artifacts/arena/run.json"
     ],
     [
@@ -39,7 +39,7 @@
     ],
     [
       "arena.competitors.credentialBlocked",
-      0,
+      2,
       "artifacts/arena/run.json"
     ],
     [
@@ -98,8 +98,6 @@
         "artifact": "artifacts/arena/run.json",
         "realCompetitorRuns": [
           "Mem0:same-run-native",
-          "Graphiti/Zep:same-run-native",
-          "Cognee:same-run-native",
           "LangMem:same-run-native",
           "GBrain:same-run-cli"
         ],

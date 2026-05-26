@@ -6,6 +6,7 @@ This is the compact command and API reference for the self-hosted product.
 
 ```bash
 cognibrain
+cognibrain tui|ui|home [--json]
 cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes]
 cognibrain status [--json]
 cognibrain memories [--json]
@@ -25,6 +26,8 @@ cognibrain skill install|status|doctor|path
 cognibrain doctor [--fix] [--publish]
 cognibrain mcp
 ```
+
+The graphical CLI action palette executes selected static actions with Enter in a TTY. Commands that still contain placeholders such as `<query>` are blocked until the user runs the filled command directly, and service or destructive actions require confirmation.
 
 ## Proof Commands
 

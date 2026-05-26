@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T08:45:28.862Z",
+  "generatedAt": "2026-05-26T09:08:14.110Z",
   "summary": {
-    "total": 10,
-    "passed": 10,
+    "total": 11,
+    "passed": 11,
     "failed": 0
   },
   "markdownDocs": [
@@ -18,7 +18,8 @@
     "docs/market/compare.md",
     "docs/market/same-benchmark.md",
     "docs/operations.md",
-    "docs/reference.md"
+    "docs/reference.md",
+    "docs/roadmap/terminal-memory-os-plan.md"
   ],
   "checks": [
     {
@@ -43,6 +44,11 @@
     },
     {
       "name": "install and service docs cover self-hosting",
+      "passed": true,
+      "failed": []
+    },
+    {
+      "name": "terminal memory os plan coverage is documented",
       "passed": true,
       "failed": []
     },

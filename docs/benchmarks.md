@@ -16,6 +16,7 @@ Artifact:
 artifacts/arena/run.json
 public/benchmark-arena/results.json
 public/benchmark-arena/index.html
+public/benchmark-arena/scorecard.html
 docs/benchmarks/latest-arena.md
 ```
 
@@ -24,13 +25,15 @@ Current local result, 30 deterministic engineering-memory scenarios:
 | System | Score | Proof level | Repeated mistake rate | Gaps |
 | --- | ---: | --- | ---: | ---: |
 | Cognibrain | 0.9722 | same-run-full | 0 | 0 |
-| Graphiti/Zep | 0.6667 | same-run-native | 1 | 6 |
-| Cognee | 0.6667 | same-run-native | 1 | 6 |
 | LangMem | 0.6667 | same-run-native | 1 | 6 |
 | Mem0 | 0.6667 | same-run-native | 1 | 7 |
 | GBrain | 0.1556 | same-run-cli | 1 | 5 |
+| Graphiti/Zep | 0.0000 | credential-blocked | 1 | 4 |
+| Cognee | 0.0000 | credential-blocked | 1 | 4 |
 
-Boundary: competitor rows are only as strong as their proof level. Cognibrain's row uses the full local implementation. Mem0, Graphiti/Zep, Cognee and LangMem are checked through real same-run-native package runners. GBrain is checked as a real same-run-cli competitor row through `gbrain capture/search/get` from a cloned GBrain repo. Mem0 uses the OSS/local path unless a Mem0 cloud key is supplied; Graphiti/Zep and Cognee require operator-supplied LLM credentials for the native run. No API-shape score is shown for the checked artifact.
+Boundary: competitor rows are only as strong as their proof level. Cognibrain's row uses the full local implementation. Mem0 and LangMem are checked through real same-run-native package runners. GBrain is checked as a real same-run-cli competitor row through `gbrain capture/search/get` from a cloned GBrain repo. Graphiti/Zep and Cognee have native runners, but this checked artifact is `credential-blocked` because the required LLM credentials were not configured. No API-shape score is shown for the checked artifact.
+
+The generated Arena report is marketing-ready: it includes points out of 1000, visual score bars, capability pass counts, declared gaps, a 30-scenario score matrix and the public benchmark gate table. Regenerate it with `npm run benchmark:arena:publish`.
 
 Arena v2 can raise a competitor row when an external runner or artifact is configured:
 
@@ -49,7 +52,7 @@ Native competitor run:
 npm run benchmark:competitors:native
 ```
 
-This installs/checks `mem0ai==2.0.2`, `graphiti-core[kuzu]==0.29.1`, `langmem==0.0.30`, `cognee==1.1.0`, `fastembed==0.7.3`, `@mem0/cli@0.2.7` and `gbrain@0.41.14.0`. With the current environment, Mem0, Graphiti/Zep, Cognee and LangMem produced same-run-native rows, and GBrain produced a same-run-cli row. Graphiti/Zep and Cognee used operator-supplied LLM credentials; without those credentials their rows stay credential-blocked instead of falling back to API-shape.
+This installs/checks `mem0ai==2.0.2`, `graphiti-core[kuzu]==0.29.1`, `langmem==0.0.30`, `cognee==1.1.0`, `fastembed==0.7.3`, `@mem0/cli@0.2.7` and `gbrain@0.41.14.0`. With the current environment, Mem0 and LangMem produced same-run-native rows, GBrain produced a same-run-cli row, and Graphiti/Zep plus Cognee stayed credential-blocked because no LLM credentials were configured. That keeps the artifact honest instead of falling back to API-shape.
 
 Run the code-first truth gate when you want to see whether the checked artifact is still only API-shape or has real competitor runners:
 

@@ -10,6 +10,7 @@ Cognibrain is a self-hosted Engineering Memory OS for coding agents. The CLI is 
 - [Benchmark landscape](benchmarks/landscape.md)
 - [Connectors, adapters and SDK](integrations.md)
 - [Connector maturity matrix](integrations/connector-maturity.md)
+- [Terminal Memory OS plan coverage](roadmap/terminal-memory-os-plan.md)
 - [Operations and production boundary](operations.md)
 - [CLI, API and SDK reference](reference.md)
 - [Claims and evidence map](claims.md)
@@ -38,4 +39,6 @@ Cognibrain stores durable engineering memory and returns cited context before th
 
 Cognibrain is documented as a local-first, self-hosted production candidate after target-environment gates pass. Managed SaaS uptime, billing, hosted support, autoscaling and deployment-specific SSO readiness are not claimed by this repository.
 
-Current checked boundaries: Mem0, Graphiti/Zep, Cognee and LangMem have real same-run-native package artifacts, and GBrain has a real same-run-cli artifact. Connector rows are hermetic, API/spec-verified and live-smoke-ready, but not tenant-verified or production-certified. Docker is optional while the CLI remains the control plane.
+Current checked boundaries: Mem0 and LangMem have real same-run-native package artifacts, GBrain has a real same-run-cli artifact, and Graphiti/Zep plus Cognee are credential-blocked without the required LLM credentials. Connector rows are hermetic, API/spec-verified and live-smoke-ready, but not tenant-verified or production-certified. Docker is optional while the CLI remains the control plane.
+
+The current connector and TUI plan is tracked in [Terminal Memory OS plan coverage](roadmap/terminal-memory-os-plan.md), including issue ownership and closed/open status for every workpackage from `plan.md`.

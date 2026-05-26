@@ -1,6 +1,6 @@
 # Connector Maturity Matrix
 
-Generated from the CLI connector registry and verification artifacts at 2026-05-26T08:42:53.074Z.
+Generated from the CLI connector registry and verification artifacts at 2026-05-26T09:07:42.928Z.
 
 Proof levels are ordered as: `manifest-only` -> `cli-config` -> `driver-code` -> `hermetic-tested` -> `live-smoke-ready` -> `tenant-verified` -> `production-certified`.
 

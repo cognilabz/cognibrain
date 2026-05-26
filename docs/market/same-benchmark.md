@@ -6,7 +6,7 @@ Recall is not enough. The next code change has to prove the memory worked.
 
 ## Latest Table
 
-The generated report lives at [latest-arena.md](../benchmarks/latest-arena.md) and [public/benchmark-arena](../../public/benchmark-arena/index.html).
+The generated report lives at [latest-arena.md](../benchmarks/latest-arena.md), [public/benchmark-arena](../../public/benchmark-arena/index.html) and `public/benchmark-arena/scorecard.html`. It includes points, visual bars, capability pass counts, declared gaps, public benchmark gate results and the per-scenario score matrix.
 
 Every comparison starts with the table:
 
@@ -36,7 +36,7 @@ It checks:
 
 `same-run-api-shape` means the row is a local compatibility model. It is honest, but it is not a real vendor run.
 
-Mem0, Graphiti/Zep, Cognee and LangMem are now checked through real same-run-native package runners. Mem0 uses `mem0ai` with local Qdrant/FastEmbed and `infer=false`; Graphiti/Zep uses `graphiti-core` with local Kuzu plus operator-supplied LLM credentials; Cognee uses the real `remember/recall` API with operator-supplied LLM credentials; LangMem uses `create_manage_memory_tool` and `create_search_memory_tool` with LangGraph `InMemoryStore`.
+Mem0 and LangMem are now checked through real same-run-native package runners. Mem0 uses `mem0ai` with local Qdrant/FastEmbed and `infer=false`; LangMem uses `create_manage_memory_tool` and `create_search_memory_tool` with LangGraph `InMemoryStore`. Graphiti/Zep and Cognee have native runners, but their current checked rows are credential-blocked unless operator-supplied LLM credentials are configured.
 
 GBrain is checked as a real same-run-cli competitor row. The runner clones GBrain, initializes a local PGLite brain with no embedding key, captures each CogniCode correction, searches, opens the returned page, and reports the resulting checks.
 

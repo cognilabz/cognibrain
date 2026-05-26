@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T08:36:19.490Z",
+  "generatedAt": "2026-05-26T09:05:29.317Z",
   "benchmark": "CogniCodeBench",
   "mode": "benchmark",
   "seed": "cognicodebench-v1",
@@ -548,10 +548,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "a47ad412-c332-493f-8bf3-8052f8dcc341",
-        "wrongActionMemoryId": "93e375a9-5881-4dcb-b4a0-9b8063375bb3",
-        "codingContextPackId": "code_ctx_28656x",
-        "patchEvidenceTrailId": "patch_ev_3biakl",
+        "correctionMemoryId": "ec18fec1-31f7-4201-afbc-3d86f063a6fb",
+        "wrongActionMemoryId": "c21f3ffb-fb3e-426f-83e2-3acfe4a525b5",
+        "codingContextPackId": "code_ctx_1suxexg",
+        "patchEvidenceTrailId": "patch_ev_1gt8ba",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -572,10 +572,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "e0a561bb-6115-4b85-9077-67b1cc15da21",
-        "wrongActionMemoryId": "e938069c-66e2-47ae-a34c-1f1581be54ad",
-        "codingContextPackId": "code_ctx_1yxc6wy",
-        "patchEvidenceTrailId": "patch_ev_ybqedu",
+        "correctionMemoryId": "cc85dd5a-f1b3-4309-a291-7bc313cd464b",
+        "wrongActionMemoryId": "fcd79b0e-68a8-497d-b284-8bafbe3b1833",
+        "codingContextPackId": "code_ctx_7cj6u9",
+        "patchEvidenceTrailId": "patch_ev_sxgqvb",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -596,10 +596,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "33c312b9-363c-48d7-a40d-0e744d15c934",
-        "wrongActionMemoryId": "e52a8b38-d1dc-4f5c-aad2-bcba26b6e852",
-        "codingContextPackId": "code_ctx_12zq66q",
-        "patchEvidenceTrailId": "patch_ev_2qrhvz",
+        "correctionMemoryId": "a587fe97-3576-4665-8104-d7980f21a36f",
+        "wrongActionMemoryId": "6d9cc361-7a3b-4536-9097-67462a95216c",
+        "codingContextPackId": "code_ctx_ppanp5",
+        "patchEvidenceTrailId": "patch_ev_btmp6a",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -620,10 +620,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "4bcda5e2-892b-4169-b5cf-441ef125d9ef",
-        "wrongActionMemoryId": "d08a3548-e9f8-4e77-8cdd-800530597fc4",
-        "codingContextPackId": "code_ctx_1thz53f",
-        "patchEvidenceTrailId": "patch_ev_rf78x",
+        "correctionMemoryId": "d2b549f4-063c-4f93-a992-0740260b1b4d",
+        "wrongActionMemoryId": "967ec2ea-bd26-4fee-9450-98ea60779078",
+        "codingContextPackId": "code_ctx_1tet4c2",
+        "patchEvidenceTrailId": "patch_ev_1nep3pd",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -644,10 +644,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "132260d9-53b4-43c1-8da5-6745d7a3035a",
-        "wrongActionMemoryId": "34e91c11-5c9c-4973-8659-4d1161aaff54",
-        "codingContextPackId": "code_ctx_1uz2snj",
-        "patchEvidenceTrailId": "patch_ev_1ax1j2o",
+        "correctionMemoryId": "7f52d744-1e9a-4e1d-97b3-fc59b80b198a",
+        "wrongActionMemoryId": "efd1174d-8603-452e-a09c-7267e9d701d8",
+        "codingContextPackId": "code_ctx_zxw2gg",
+        "patchEvidenceTrailId": "patch_ev_1ocbfi6",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -668,10 +668,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "1dce9503-cc6b-44b2-8108-34e4006447de",
-        "wrongActionMemoryId": "962c51c6-5ad8-4584-aaf7-fdf20ad68f77",
-        "codingContextPackId": "code_ctx_11xrkma",
-        "patchEvidenceTrailId": "patch_ev_kfcc6",
+        "correctionMemoryId": "91f34b2b-8383-4379-b653-45f3becb7751",
+        "wrongActionMemoryId": "bd17b1b0-58c9-4162-bbd5-9666aae87a57",
+        "codingContextPackId": "code_ctx_r8oggo",
+        "patchEvidenceTrailId": "patch_ev_gx46fv",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -692,10 +692,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "bdbf2355-8250-45ac-8678-ea3a456d2b8c",
-        "wrongActionMemoryId": "171769f8-0b3c-4ea3-b2d6-9b7e75b9bbbb",
-        "codingContextPackId": "code_ctx_1gqnooc",
-        "patchEvidenceTrailId": "patch_ev_g0usuc",
+        "correctionMemoryId": "b6cbe0d9-0260-44f6-a3af-08581c48fd21",
+        "wrongActionMemoryId": "70cba98e-033f-4d5a-8070-78a80db1178d",
+        "codingContextPackId": "code_ctx_mn4sni",
+        "patchEvidenceTrailId": "patch_ev_19puhqr",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -716,10 +716,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "1566a2d8-b21c-4393-89ac-51df79365a41",
-        "wrongActionMemoryId": "e35afc6d-3d26-4d15-a5ef-08eb8ab1b123",
-        "codingContextPackId": "code_ctx_q1j177",
-        "patchEvidenceTrailId": "patch_ev_16x74l3",
+        "correctionMemoryId": "0afbfac2-4915-4e80-b123-cafd5f328350",
+        "wrongActionMemoryId": "b19ff963-a3c6-4f3f-a6be-aa43b9b8243f",
+        "codingContextPackId": "code_ctx_w2nb1q",
+        "patchEvidenceTrailId": "patch_ev_4plg66",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -740,10 +740,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "fdef1236-4d60-4e0b-a2de-4b6c2894a122",
-        "wrongActionMemoryId": "8075903e-0e2d-4b81-84e3-478711d8e34a",
-        "codingContextPackId": "code_ctx_17yqtls",
-        "patchEvidenceTrailId": "patch_ev_165m8a1",
+        "correctionMemoryId": "8be1e805-f2f2-428f-b06f-24d60e0e7654",
+        "wrongActionMemoryId": "02f76c3f-3695-45df-b155-4ca1c724c28c",
+        "codingContextPackId": "code_ctx_90gqzx",
+        "patchEvidenceTrailId": "patch_ev_1krxe5e",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -764,10 +764,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "c958d999-4146-4baf-a42b-16e0a91c4550",
-        "wrongActionMemoryId": "6a9a8e29-8a87-4ced-8ac4-6fd2a885924e",
-        "codingContextPackId": "code_ctx_ijhxk",
-        "patchEvidenceTrailId": "patch_ev_dokwlg",
+        "correctionMemoryId": "b173dfd7-7d19-4432-ac62-b958873d84b8",
+        "wrongActionMemoryId": "e392313a-26fb-4cfd-9e41-437a4089a2dd",
+        "codingContextPackId": "code_ctx_95wd5v",
+        "patchEvidenceTrailId": "patch_ev_1w52e9i",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -788,10 +788,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "ffadd318-4682-46a9-887f-4c01e6ff5b09",
-        "wrongActionMemoryId": "301a9e58-9f4a-4ffd-b2e5-7d16132f5e67",
-        "codingContextPackId": "code_ctx_ajfk5s",
-        "patchEvidenceTrailId": "patch_ev_5hwoop",
+        "correctionMemoryId": "62c21a82-8c1a-4561-b4dc-0e7b2012370a",
+        "wrongActionMemoryId": "e7fb95a3-f727-4c25-a2c6-5b42c6d95431",
+        "codingContextPackId": "code_ctx_np9p2x",
+        "patchEvidenceTrailId": "patch_ev_57xcds",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -812,10 +812,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "df14773e-08bf-4529-ab6a-3dc29226bda1",
-        "wrongActionMemoryId": "c369707c-6621-44e3-af60-1dcdee20204e",
-        "codingContextPackId": "code_ctx_152u59p",
-        "patchEvidenceTrailId": "patch_ev_1dmcmun",
+        "correctionMemoryId": "3830669a-57c8-46f6-a8a0-7ca7f405066b",
+        "wrongActionMemoryId": "addbcd28-e132-491a-987c-3017183b5879",
+        "codingContextPackId": "code_ctx_30q5kz",
+        "patchEvidenceTrailId": "patch_ev_15n1r0f",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -836,10 +836,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "4e0fd528-c8df-480d-bf0e-033a555817ba",
-        "wrongActionMemoryId": "b6e24935-5b16-4ad4-8875-15dcced8f782",
-        "codingContextPackId": "code_ctx_qhgm7g",
-        "patchEvidenceTrailId": "patch_ev_1d9oijr",
+        "correctionMemoryId": "13192c63-3060-470c-85ae-2b46e129813f",
+        "wrongActionMemoryId": "37250af0-5408-464e-ab50-a7b4b879fae4",
+        "codingContextPackId": "code_ctx_1lv6lys",
+        "patchEvidenceTrailId": "patch_ev_zgfsv8",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -860,10 +860,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "2b6f5894-5ef6-4fb0-89c9-eb27449a288b",
-        "wrongActionMemoryId": "c5bb8da1-09da-418a-8f52-ec535da02234",
-        "codingContextPackId": "code_ctx_dlo83s",
-        "patchEvidenceTrailId": "patch_ev_172unu0",
+        "correctionMemoryId": "5fa35dcd-d552-4e7a-bff3-b3ec1befd7f3",
+        "wrongActionMemoryId": "c9f63587-1b46-49d0-a355-af9c8671849c",
+        "codingContextPackId": "code_ctx_qeqsda",
+        "patchEvidenceTrailId": "patch_ev_svdf45",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -884,10 +884,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "6e93c4e4-49c6-4931-a808-97d17362f8c8",
-        "wrongActionMemoryId": "bcf66757-79c7-45b2-9371-825fdd4809d1",
-        "codingContextPackId": "code_ctx_48npc4",
-        "patchEvidenceTrailId": "patch_ev_r1f8vn",
+        "correctionMemoryId": "56e7be53-ed7a-461d-8786-76260b4a84c3",
+        "wrongActionMemoryId": "0a055441-3841-4980-bede-a09856c728b7",
+        "codingContextPackId": "code_ctx_e5ouny",
+        "patchEvidenceTrailId": "patch_ev_199lps",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -908,10 +908,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "1c949783-259a-40db-bb73-f005ce486abc",
-        "wrongActionMemoryId": "905f49f9-d461-441b-91c7-23cad96eaa90",
-        "codingContextPackId": "code_ctx_1f826e",
-        "patchEvidenceTrailId": "patch_ev_12l4cv8",
+        "correctionMemoryId": "b1c8b7be-8d5e-4013-b606-f6565f5eaa77",
+        "wrongActionMemoryId": "a6fd11de-bfb0-463a-8924-027a06e5f9ec",
+        "codingContextPackId": "code_ctx_gw4tfw",
+        "patchEvidenceTrailId": "patch_ev_fbgcyq",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -932,10 +932,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "abfca125-678c-4709-9734-d0fbdf3e7fa0",
-        "wrongActionMemoryId": "d8dac408-a794-4fd6-99cb-ea52352ffed2",
-        "codingContextPackId": "code_ctx_162tt0v",
-        "patchEvidenceTrailId": "patch_ev_1asntff",
+        "correctionMemoryId": "15fc70b9-81e8-44a7-99af-c0036f1ee893",
+        "wrongActionMemoryId": "03139878-949d-4b6c-a944-c9d8e3f506ab",
+        "codingContextPackId": "code_ctx_1oaffw8",
+        "patchEvidenceTrailId": "patch_ev_ct0fg6",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -956,10 +956,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "0ba6dad5-1794-4d0f-981d-38bf30d148d6",
-        "wrongActionMemoryId": "104dedde-9e55-43a2-aacc-aec20545341a",
-        "codingContextPackId": "code_ctx_18q9i00",
-        "patchEvidenceTrailId": "patch_ev_1r8ih5s",
+        "correctionMemoryId": "62fe9ed0-5be1-488c-8bf5-7ef79030b4f9",
+        "wrongActionMemoryId": "fe8b388a-b037-4a04-b083-20dbff1c8512",
+        "codingContextPackId": "code_ctx_1fqdqps",
+        "patchEvidenceTrailId": "patch_ev_sgp5of",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -980,10 +980,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "f9a45745-d05c-4d4b-a847-4a88a8dcc189",
-        "wrongActionMemoryId": "4d033009-c770-4fc0-94fc-e5788a077ed3",
-        "codingContextPackId": "code_ctx_12bxzxt",
-        "patchEvidenceTrailId": "patch_ev_jzgyzb",
+        "correctionMemoryId": "b4b72982-393b-44f7-99af-bdce34cb1a7e",
+        "wrongActionMemoryId": "b1d56af1-4f3b-49aa-8126-5b66967d07f5",
+        "codingContextPackId": "code_ctx_t68ce9",
+        "patchEvidenceTrailId": "patch_ev_ffbasm",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -1004,10 +1004,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "0fcbedd2-6099-421c-9072-09add9031b86",
-        "wrongActionMemoryId": "3e80f09a-a957-4248-b37e-3a5aa515edf2",
-        "codingContextPackId": "code_ctx_1a7dp3q",
-        "patchEvidenceTrailId": "patch_ev_9iqqgl",
+        "correctionMemoryId": "b4f70d1b-8931-4eb2-ba03-9277ec26e424",
+        "wrongActionMemoryId": "7b965a86-bc4e-4d33-a2d1-683a68447ad1",
+        "codingContextPackId": "code_ctx_1f1o35h",
+        "patchEvidenceTrailId": "patch_ev_1f5agir",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -1028,10 +1028,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "83654dde-71cd-41c1-8194-9d397f66d838",
-        "wrongActionMemoryId": "7ec05b60-7312-4beb-bc58-a60e14a470ce",
-        "codingContextPackId": "code_ctx_1ebod32",
-        "patchEvidenceTrailId": "patch_ev_14t8ia4",
+        "correctionMemoryId": "8aa3fa05-adbd-4757-8c96-71d2646de3be",
+        "wrongActionMemoryId": "e676e921-aac4-47d8-b166-cc12e9fecb30",
+        "codingContextPackId": "code_ctx_v897d3",
+        "patchEvidenceTrailId": "patch_ev_k9nj41",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -1052,10 +1052,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "fe5fd63b-3546-4605-bb6f-96f48e80775f",
-        "wrongActionMemoryId": "de6df279-0057-4be1-b078-d3f00891ed54",
-        "codingContextPackId": "code_ctx_q3t6ng",
-        "patchEvidenceTrailId": "patch_ev_ssyjoz",
+        "correctionMemoryId": "2f421a7b-3cbe-4d74-adac-079a81f35b3a",
+        "wrongActionMemoryId": "ce0f4ecc-68eb-4cca-baf4-8aa81f8a2aa9",
+        "codingContextPackId": "code_ctx_1noj46e",
+        "patchEvidenceTrailId": "patch_ev_13e8186",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -1076,10 +1076,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "4a5c84d1-8a0b-4403-a781-ba1394b603a9",
-        "wrongActionMemoryId": "186f98c6-e47e-43a4-91d9-ecb11c511149",
-        "codingContextPackId": "code_ctx_26r0h3",
-        "patchEvidenceTrailId": "patch_ev_v84hcz",
+        "correctionMemoryId": "2610c1b9-2dd0-4da8-982f-9ea79bfe9f65",
+        "wrongActionMemoryId": "ceada58c-c437-4d69-8153-84a451a88ec3",
+        "codingContextPackId": "code_ctx_16yn1k6",
+        "patchEvidenceTrailId": "patch_ev_rxiffc",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -1100,10 +1100,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "7f687420-3954-42e8-a22a-6e7d65762c88",
-        "wrongActionMemoryId": "b183f941-9940-46da-8492-10b4a307d626",
-        "codingContextPackId": "code_ctx_17e5xmt",
-        "patchEvidenceTrailId": "patch_ev_ov5gqm",
+        "correctionMemoryId": "fcdf65dc-38ac-4cd3-a6aa-60f605d76918",
+        "wrongActionMemoryId": "ea900c14-517f-4654-8611-26acc102aaad",
+        "codingContextPackId": "code_ctx_15qz19f",
+        "patchEvidenceTrailId": "patch_ev_1qx31a4",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -1124,10 +1124,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "337e923d-b58c-4b79-b164-3bc7e8f27404",
-        "wrongActionMemoryId": "67b8ff81-9dd8-444d-9fa8-899698ce00c2",
-        "codingContextPackId": "code_ctx_1dgb09r",
-        "patchEvidenceTrailId": "patch_ev_17jrf3z",
+        "correctionMemoryId": "750b27eb-a936-4112-ac00-f58617f3426a",
+        "wrongActionMemoryId": "d78b29c1-84f9-48d3-a931-a85dccae7a98",
+        "codingContextPackId": "code_ctx_1jk46hh",
+        "patchEvidenceTrailId": "patch_ev_uzhuaz",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -1148,10 +1148,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "0f13a91e-10b5-4168-8c68-a5cf38111726",
-        "wrongActionMemoryId": "2fb12100-a170-4100-ae0d-758505561566",
-        "codingContextPackId": "code_ctx_1dicjww",
-        "patchEvidenceTrailId": "patch_ev_ta5iq3",
+        "correctionMemoryId": "6c760aed-cef4-4206-9cad-b2c35e54c4a2",
+        "wrongActionMemoryId": "4d64286f-96ad-4300-b40b-cafcb2370c6c",
+        "codingContextPackId": "code_ctx_d4e5ft",
+        "patchEvidenceTrailId": "patch_ev_kfux8w",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -1172,10 +1172,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "02e36924-f271-4751-94a2-b16a9ce8a60a",
-        "wrongActionMemoryId": "296ac6a5-47cc-4277-a114-943fe160a704",
-        "codingContextPackId": "code_ctx_919scn",
-        "patchEvidenceTrailId": "patch_ev_1df4k9j",
+        "correctionMemoryId": "30bbb2d8-3e89-410a-b5de-c70e1902bd20",
+        "wrongActionMemoryId": "c110c4d4-1436-4e96-a192-a35c5bc447df",
+        "codingContextPackId": "code_ctx_v7azf4",
+        "patchEvidenceTrailId": "patch_ev_feufsa",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -1196,10 +1196,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "8de89cc3-59d8-434c-afcb-9c6e6108ba43",
-        "wrongActionMemoryId": "1b02e682-9a12-4f51-bc0c-f5674053c62e",
-        "codingContextPackId": "code_ctx_12qx5ku",
-        "patchEvidenceTrailId": "patch_ev_urmgiz",
+        "correctionMemoryId": "bb7a282c-d9f6-47a4-97dc-056565498dfe",
+        "wrongActionMemoryId": "db9fde48-1983-40b1-8694-5cdfc997a365",
+        "codingContextPackId": "code_ctx_1vo004j",
+        "patchEvidenceTrailId": "patch_ev_8akddj",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -1220,10 +1220,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "f12e76b2-c2b6-44b3-9200-1a69bf88d981",
-        "wrongActionMemoryId": "4da7cce5-94a6-4824-8436-430539741bd8",
-        "codingContextPackId": "code_ctx_1ya3aqv",
-        "patchEvidenceTrailId": "patch_ev_8a7stu",
+        "correctionMemoryId": "efc604ea-b636-4b11-8a04-6a54d292fd91",
+        "wrongActionMemoryId": "914149de-a62b-4530-b12b-98a0d429aa9b",
+        "codingContextPackId": "code_ctx_84mbu1",
+        "patchEvidenceTrailId": "patch_ev_26b0jw",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -1244,10 +1244,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "2c0c4f20-8abf-4eb2-aa52-5d59f5a0b335",
-        "wrongActionMemoryId": "a71c6207-e474-4c8a-9196-186fd9e7490a",
-        "codingContextPackId": "code_ctx_k4eror",
-        "patchEvidenceTrailId": "patch_ev_1owm59b",
+        "correctionMemoryId": "e423ab2b-0714-4474-9ca3-c03beb814968",
+        "wrongActionMemoryId": "949e25e9-e07d-4a99-b44d-bd8989dc81a4",
+        "codingContextPackId": "code_ctx_3ymzwz",
+        "patchEvidenceTrailId": "patch_ev_u10ko9",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -1268,10 +1268,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "1aeb2c70-0e26-4d8a-8c92-e5f87e6f462a",
-        "wrongActionMemoryId": "06b25747-bfb2-4e7b-910f-e28308d3fa44",
-        "codingContextPackId": "code_ctx_w0e9wt",
-        "patchEvidenceTrailId": "patch_ev_17c9pdg",
+        "correctionMemoryId": "0e49b83a-0f54-4268-b29a-01720467f127",
+        "wrongActionMemoryId": "1e6656b7-265b-4196-a8f6-6e6a600acf72",
+        "codingContextPackId": "code_ctx_1f3kcpk",
+        "patchEvidenceTrailId": "patch_ev_xpa4qy",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -1292,10 +1292,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "ab9b9672-6467-4c13-8161-290a5c5bd96f",
-        "wrongActionMemoryId": "e216457a-b775-48cf-8090-7f941e2769f5",
-        "codingContextPackId": "code_ctx_1j61dl6",
-        "patchEvidenceTrailId": "patch_ev_ls4wkg",
+        "correctionMemoryId": "84ee0012-fe92-47d1-9bbc-ae2f069dba26",
+        "wrongActionMemoryId": "d1b03498-bf54-42b8-9de4-96287b827d6e",
+        "codingContextPackId": "code_ctx_19hlfhk",
+        "patchEvidenceTrailId": "patch_ev_160ecny",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -1316,10 +1316,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "f28b3eba-9a2e-4fe2-b7b5-35ee1d531534",
-        "wrongActionMemoryId": "f54e13e9-c1e4-4dc0-aafe-8cd9b2bc0065",
-        "codingContextPackId": "code_ctx_1brxkjk",
-        "patchEvidenceTrailId": "patch_ev_1es8gas",
+        "correctionMemoryId": "84ef534e-e816-4d14-98f4-64ca661f29f2",
+        "wrongActionMemoryId": "48c18426-30b2-4cab-af58-8fe4aac57e4f",
+        "codingContextPackId": "code_ctx_1xq9nqf",
+        "patchEvidenceTrailId": "patch_ev_imeefo",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -1340,10 +1340,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "32a93c76-2c85-4908-930c-9922592d3d4c",
-        "wrongActionMemoryId": "76ea6ef8-7ccd-44a1-91d0-5d30c431afe2",
-        "codingContextPackId": "code_ctx_uaqcoo",
-        "patchEvidenceTrailId": "patch_ev_182zab2",
+        "correctionMemoryId": "ce24562f-5875-44a0-9926-00048528af4c",
+        "wrongActionMemoryId": "36cec80f-9485-4f47-a4b8-b7d50a434fe7",
+        "codingContextPackId": "code_ctx_1ttkdb0",
+        "patchEvidenceTrailId": "patch_ev_43asuu",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -1364,10 +1364,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "b7e77bae-68fb-4647-a02d-471fc422a5af",
-        "wrongActionMemoryId": "b98cdfce-6cc3-4a67-8e35-fcd42fc9abfa",
-        "codingContextPackId": "code_ctx_1ekes58",
-        "patchEvidenceTrailId": "patch_ev_zrxcqi",
+        "correctionMemoryId": "e9e890f5-34a7-4535-81fb-ae4563caf95d",
+        "wrongActionMemoryId": "d6b0d2b4-5c13-467e-8654-814f8798fbf1",
+        "codingContextPackId": "code_ctx_1ed29d",
+        "patchEvidenceTrailId": "patch_ev_1ekoury",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -1388,10 +1388,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "7eb94158-45e5-4ec6-97a6-5f6ce87c3a81",
-        "wrongActionMemoryId": "9292e181-d466-4748-a77b-37853478cf91",
-        "codingContextPackId": "code_ctx_1evbspb",
-        "patchEvidenceTrailId": "patch_ev_1st1az0",
+        "correctionMemoryId": "bb17ab77-9a75-4bbc-8d0e-12ca9c892038",
+        "wrongActionMemoryId": "6d306fdc-16f6-44a5-95d8-3698b5b416d6",
+        "codingContextPackId": "code_ctx_13xhw3t",
+        "patchEvidenceTrailId": "patch_ev_104vc0h",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -1412,10 +1412,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "da3090c4-a528-4dd8-afde-725fa7229ed4",
-        "wrongActionMemoryId": "8cbfee5f-40af-41c5-8d5a-3fd371b1e258",
-        "codingContextPackId": "code_ctx_1g4q99j",
-        "patchEvidenceTrailId": "patch_ev_1aq6j1q",
+        "correctionMemoryId": "cc8f9094-378c-4304-b101-9fc59459c082",
+        "wrongActionMemoryId": "cc4445ea-15a1-4aff-ac7f-34f91a36cbe7",
+        "codingContextPackId": "code_ctx_1de9rwj",
+        "patchEvidenceTrailId": "patch_ev_163z65p",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -1436,10 +1436,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "be19c024-753a-4f40-9486-6a1db9af286b",
-        "wrongActionMemoryId": "9b2107b6-efe1-4918-bb1e-89264872b165",
-        "codingContextPackId": "code_ctx_1gg56ne",
-        "patchEvidenceTrailId": "patch_ev_34t0um",
+        "correctionMemoryId": "f8707830-9504-4d1d-ad53-37231ce62499",
+        "wrongActionMemoryId": "637950bd-676a-49e0-8468-322f52644914",
+        "codingContextPackId": "code_ctx_8c8p65",
+        "patchEvidenceTrailId": "patch_ev_enxkbe",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -1460,10 +1460,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "9abe19a3-1fdf-40bd-8e88-e09095df64fb",
-        "wrongActionMemoryId": "6601a294-7a2e-42ce-ac6b-6dac0c1e082f",
-        "codingContextPackId": "code_ctx_1m0fms3",
-        "patchEvidenceTrailId": "patch_ev_r5x3ue",
+        "correctionMemoryId": "bc63b50c-e6d4-4604-a886-a4036622a187",
+        "wrongActionMemoryId": "d86ab771-cdbf-41a4-ba3b-0129995cf611",
+        "codingContextPackId": "code_ctx_23ymkj",
+        "patchEvidenceTrailId": "patch_ev_6bbx9y",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -1484,10 +1484,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "e89f5bda-db20-41f9-a79e-b1fa77967427",
-        "wrongActionMemoryId": "836a9bc9-cd08-44e1-81d3-3936f014adf1",
-        "codingContextPackId": "code_ctx_1m5m2gb",
-        "patchEvidenceTrailId": "patch_ev_2ahof6",
+        "correctionMemoryId": "cfb6f0a7-7f6e-4805-9abc-f91adbf14232",
+        "wrongActionMemoryId": "d97ee194-fa95-4adb-986e-ffa1a061b050",
+        "codingContextPackId": "code_ctx_1m5uvrn",
+        "patchEvidenceTrailId": "patch_ev_tz1u12",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -1508,10 +1508,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "64078594-f6cf-4615-9475-8b55b6de7e22",
-        "wrongActionMemoryId": "2a34aa0d-3527-4d24-a882-29e490f1051c",
-        "codingContextPackId": "code_ctx_wxwol2",
-        "patchEvidenceTrailId": "patch_ev_101fa7",
+        "correctionMemoryId": "41edcf79-a7e8-4141-ac0d-843520c863fd",
+        "wrongActionMemoryId": "a7b5a4c5-4adf-427d-98a0-515d3a5bf361",
+        "codingContextPackId": "code_ctx_pw4tns",
+        "patchEvidenceTrailId": "patch_ev_1i8b1y0",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -1532,10 +1532,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "0955d03d-0be7-4f68-9999-3e55c0d3ce0d",
-        "wrongActionMemoryId": "7b89b10c-55df-4047-96e5-ff507eef0f8f",
-        "codingContextPackId": "code_ctx_1udv63j",
-        "patchEvidenceTrailId": "patch_ev_1x7jag3",
+        "correctionMemoryId": "fda33315-e90a-4070-851f-2cf02a009d94",
+        "wrongActionMemoryId": "42def362-3017-4f31-98fc-3c88d3512c4b",
+        "codingContextPackId": "code_ctx_4tq679",
+        "patchEvidenceTrailId": "patch_ev_n5tr7g",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -1556,10 +1556,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "fbc78b2e-4a91-4983-ac9f-d45e1a9c7f7e",
-        "wrongActionMemoryId": "18f1bebf-bf9e-46d3-b120-756773f18aab",
-        "codingContextPackId": "code_ctx_rz6yxf",
-        "patchEvidenceTrailId": "patch_ev_ihg6gh",
+        "correctionMemoryId": "b9057efe-47ae-450c-893f-6d134c855026",
+        "wrongActionMemoryId": "9523db91-0b74-43c0-b07d-48bfa61cc25a",
+        "codingContextPackId": "code_ctx_o2f6im",
+        "patchEvidenceTrailId": "patch_ev_a4o54u",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -1580,10 +1580,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "ce1b40d3-c309-46ee-b8ba-9d137b48071d",
-        "wrongActionMemoryId": "b5254d4b-1b88-4cd6-87b5-5611543d987c",
-        "codingContextPackId": "code_ctx_150gsoh",
-        "patchEvidenceTrailId": "patch_ev_adhfdo",
+        "correctionMemoryId": "aa79b519-7f73-457c-aa98-77a6c8376810",
+        "wrongActionMemoryId": "4b34f87b-397e-46be-8caa-3b44eec3abbe",
+        "codingContextPackId": "code_ctx_tm5gjo",
+        "patchEvidenceTrailId": "patch_ev_1skd2bu",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -1604,10 +1604,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "482bdf79-64a1-4ce1-a1af-11ab5088496b",
-        "wrongActionMemoryId": "68575a03-e88c-463c-a9a5-748ae4b9b9de",
-        "codingContextPackId": "code_ctx_1wb2eb6",
-        "patchEvidenceTrailId": "patch_ev_1hbhcrj",
+        "correctionMemoryId": "5921fd35-0b9d-4e56-a756-9e6daa006125",
+        "wrongActionMemoryId": "4b12b383-2ce6-4c2c-b331-f144007e88d0",
+        "codingContextPackId": "code_ctx_19fcdmu",
+        "patchEvidenceTrailId": "patch_ev_17lty4r",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -1628,10 +1628,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "10da0ec0-716f-42b3-82b7-c9fbaef92d20",
-        "wrongActionMemoryId": "f7261249-2a75-4088-9d70-2e078012aef5",
-        "codingContextPackId": "code_ctx_1y3ap5i",
-        "patchEvidenceTrailId": "patch_ev_1yle5wm",
+        "correctionMemoryId": "64aa8dd2-b974-4e08-84c3-8181dadabc92",
+        "wrongActionMemoryId": "460a9679-047f-4fa4-9070-8b7be3f26138",
+        "codingContextPackId": "code_ctx_1hpfevb",
+        "patchEvidenceTrailId": "patch_ev_bkbct3",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -1652,10 +1652,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "7551e484-e231-4204-95fe-8c4103883b0b",
-        "wrongActionMemoryId": "ce8e552f-b58d-4583-a362-09bb50b846a0",
-        "codingContextPackId": "code_ctx_1sxdrkn",
-        "patchEvidenceTrailId": "patch_ev_1lhpge",
+        "correctionMemoryId": "d4016c60-f5fa-45b9-845f-08c803313390",
+        "wrongActionMemoryId": "4dea17d5-bc45-4f75-ba89-0bd9eaa8b9ba",
+        "codingContextPackId": "code_ctx_hfx63q",
+        "patchEvidenceTrailId": "patch_ev_1uoqj09",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -1676,10 +1676,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "98a26ffb-0b6e-4cac-9141-91f9a2d1e604",
-        "wrongActionMemoryId": "08511617-aa6a-4315-8a73-150e063fe22a",
-        "codingContextPackId": "code_ctx_1p4fgng",
-        "patchEvidenceTrailId": "patch_ev_eb71l4",
+        "correctionMemoryId": "1e21225b-51b6-4ce4-b1a2-84c68b1c9a33",
+        "wrongActionMemoryId": "fba867df-07e3-4bd4-bad8-b794557b2341",
+        "codingContextPackId": "code_ctx_kai1wj",
+        "patchEvidenceTrailId": "patch_ev_1pjc1h9",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -1700,10 +1700,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "91e8ffab-da39-4fc2-af69-9ffae19276e6",
-        "wrongActionMemoryId": "cb38b92c-fb61-4a4e-8847-b4caf7bd5cb5",
-        "codingContextPackId": "code_ctx_nsnsvu",
-        "patchEvidenceTrailId": "patch_ev_1kkil5v",
+        "correctionMemoryId": "4cb020e2-02c6-4812-abb8-8f03f7d3fc7b",
+        "wrongActionMemoryId": "e0badc0b-8a4e-4c98-bf96-d0870bef1b0f",
+        "codingContextPackId": "code_ctx_7pfkic",
+        "patchEvidenceTrailId": "patch_ev_1f53899",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -1724,10 +1724,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "6b08d6bd-01b5-4aae-b9e5-14b897f296f0",
-        "wrongActionMemoryId": "9386f805-3ab5-43e4-adbd-9753e53b5a1f",
-        "codingContextPackId": "code_ctx_s7se7r",
-        "patchEvidenceTrailId": "patch_ev_66unu6",
+        "correctionMemoryId": "d1162246-7dfa-4795-bd6d-adc3bb1cf802",
+        "wrongActionMemoryId": "b542b726-7600-4bb3-829e-9c3cd121c33f",
+        "codingContextPackId": "code_ctx_1bjk02p",
+        "patchEvidenceTrailId": "patch_ev_1v80rkg",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -1748,10 +1748,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "8f2d0e16-c504-49b3-be15-aff82bc62d1b",
-        "wrongActionMemoryId": "3046189e-8c6f-454b-bac4-930814947375",
-        "codingContextPackId": "code_ctx_3s1qzt",
-        "patchEvidenceTrailId": "patch_ev_1eerbiw",
+        "correctionMemoryId": "a8c6a0fb-98d7-43da-8dc0-e5234d4312ec",
+        "wrongActionMemoryId": "c905f13a-c7e7-40f4-bf11-d7dac1866abd",
+        "codingContextPackId": "code_ctx_s0ylcw",
+        "patchEvidenceTrailId": "patch_ev_v26178",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -1772,10 +1772,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "1c5121a4-7aeb-44d3-b75c-df0d7f54ad09",
-        "wrongActionMemoryId": "844a4538-f175-450d-ac91-c97e92309ec0",
-        "codingContextPackId": "code_ctx_n1jci4",
-        "patchEvidenceTrailId": "patch_ev_zlpbt9",
+        "correctionMemoryId": "747f76b4-c149-4096-97af-482703a6b29d",
+        "wrongActionMemoryId": "b9613da9-3eaf-4920-aadc-a9ae5603126e",
+        "codingContextPackId": "code_ctx_1hmsok9",
+        "patchEvidenceTrailId": "patch_ev_15g3izi",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -1796,10 +1796,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "445fb0d3-2577-4424-88f3-3699ea4627b4",
-        "wrongActionMemoryId": "d4cc9535-002c-421a-9f03-7ab682ba86c6",
-        "codingContextPackId": "code_ctx_8k799p",
-        "patchEvidenceTrailId": "patch_ev_18dr9tg",
+        "correctionMemoryId": "a0aa6d01-3efe-41af-bb68-10b72863f401",
+        "wrongActionMemoryId": "b12145ff-09ba-4f88-bb5f-2165ba097876",
+        "codingContextPackId": "code_ctx_16k3u3x",
+        "patchEvidenceTrailId": "patch_ev_zaa30a",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -1820,10 +1820,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "ed39f9d7-54be-4542-a491-b90491a4241c",
-        "wrongActionMemoryId": "8a2735bc-5e6d-42ef-a532-6be8bd2207d6",
-        "codingContextPackId": "code_ctx_1o0dlmz",
-        "patchEvidenceTrailId": "patch_ev_yugv7c",
+        "correctionMemoryId": "b493daca-55ce-4229-9fae-a106dcf20bb1",
+        "wrongActionMemoryId": "ae691db4-2aaf-40ca-9781-91b310fe600c",
+        "codingContextPackId": "code_ctx_1n21okr",
+        "patchEvidenceTrailId": "patch_ev_2icbv2",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -1844,10 +1844,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "a88ec881-54aa-4362-a2c0-75ca32764192",
-        "wrongActionMemoryId": "20ef79d5-f318-4624-b2da-e962f8849112",
-        "codingContextPackId": "code_ctx_1qiffc8",
-        "patchEvidenceTrailId": "patch_ev_1c1j6o9",
+        "correctionMemoryId": "bdd947f4-c0a2-42e7-b1e7-408083904e5d",
+        "wrongActionMemoryId": "bfc7a9a1-c8e8-4e5f-a3a7-f6d9dc832cf4",
+        "codingContextPackId": "code_ctx_1v80z9k",
+        "patchEvidenceTrailId": "patch_ev_15fv7hm",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -1868,10 +1868,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "5cf24974-a71a-4ff4-b7ba-1bb38703c5a0",
-        "wrongActionMemoryId": "b1110cbf-5368-4f50-9e61-8b21d4dfc999",
-        "codingContextPackId": "code_ctx_fhs6ai",
-        "patchEvidenceTrailId": "patch_ev_4q2e01",
+        "correctionMemoryId": "aed38deb-8616-4c57-b473-ca88c9be929c",
+        "wrongActionMemoryId": "204691f8-52cd-438a-9f46-e7954c0af641",
+        "codingContextPackId": "code_ctx_qso0nk",
+        "patchEvidenceTrailId": "patch_ev_16gwygh",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -1892,10 +1892,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "1deac871-8388-487e-aadb-584ac0d10db4",
-        "wrongActionMemoryId": "3b9c7a54-e24e-4bf6-9e5e-a4f53ad4b269",
-        "codingContextPackId": "code_ctx_i1ayrh",
-        "patchEvidenceTrailId": "patch_ev_1omrpwo",
+        "correctionMemoryId": "f2d07c31-dfc9-46ce-ba9e-7112595ab86d",
+        "wrongActionMemoryId": "b2d0ab98-9cf3-4bed-a82d-10116c45617b",
+        "codingContextPackId": "code_ctx_ip02y",
+        "patchEvidenceTrailId": "patch_ev_14vce8g",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -1916,10 +1916,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "ee96e178-1726-4d38-8819-8197d07d7acb",
-        "wrongActionMemoryId": "0ed11f78-7a38-4407-86ae-e6392bfddc9b",
-        "codingContextPackId": "code_ctx_1tw6joi",
-        "patchEvidenceTrailId": "patch_ev_dxsqjd",
+        "correctionMemoryId": "d0d6f196-31e5-4d9b-a30b-a9bd07108b91",
+        "wrongActionMemoryId": "709d2213-91ed-422b-9bc4-731149ea1b29",
+        "codingContextPackId": "code_ctx_t3gecz",
+        "patchEvidenceTrailId": "patch_ev_iscotl",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -1940,10 +1940,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "aef2d836-64d3-469e-ad03-4b96cf9503cf",
-        "wrongActionMemoryId": "9c1b15d3-a1cc-4b98-925b-048686c344fb",
-        "codingContextPackId": "code_ctx_hua68b",
-        "patchEvidenceTrailId": "patch_ev_be2csk",
+        "correctionMemoryId": "f9bc93b3-0fc8-48bd-b8c5-7a70471415cb",
+        "wrongActionMemoryId": "3f8f9773-db11-4fe9-98a1-5f2cfe6907f4",
+        "codingContextPackId": "code_ctx_1d9lzfh",
+        "patchEvidenceTrailId": "patch_ev_1uwld3w",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -1964,10 +1964,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "934e2fd7-da55-4bb0-885c-9e612c1670ef",
-        "wrongActionMemoryId": "2f585cff-2b89-414d-b04e-d036e0bbd296",
-        "codingContextPackId": "code_ctx_1qwep5s",
-        "patchEvidenceTrailId": "patch_ev_apm8n6",
+        "correctionMemoryId": "f77743c5-9e95-447c-ab00-b07d578576f1",
+        "wrongActionMemoryId": "25281ad4-64bb-4b99-9bd8-6f493333d46f",
+        "codingContextPackId": "code_ctx_1wyrr4p",
+        "patchEvidenceTrailId": "patch_ev_126glc3",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -1988,10 +1988,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "ed5e02f7-488a-4092-9ccb-324f8cf4ae3f",
-        "wrongActionMemoryId": "c8740dab-6b47-45fc-87a5-af7f4aee2503",
-        "codingContextPackId": "code_ctx_1lfsjgh",
-        "patchEvidenceTrailId": "patch_ev_49gga2",
+        "correctionMemoryId": "772e4107-7236-469e-ba2c-839ebff0450b",
+        "wrongActionMemoryId": "05f1a1cc-f87e-48ad-9f14-3b0cb7ebdb91",
+        "codingContextPackId": "code_ctx_11bd7l3",
+        "patchEvidenceTrailId": "patch_ev_b8h5ge",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -2012,10 +2012,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "e94dbb67-b24c-4fa4-b674-8b409b8d63dd",
-        "wrongActionMemoryId": "3aea3461-f70c-4069-bcf6-2cf1dd3fff43",
-        "codingContextPackId": "code_ctx_1ixz0e8",
-        "patchEvidenceTrailId": "patch_ev_mbqj06",
+        "correctionMemoryId": "c35975f5-1bb6-4fbb-83b7-368b7a489b58",
+        "wrongActionMemoryId": "810df4ed-d286-4ef6-ab2a-13464fe483c2",
+        "codingContextPackId": "code_ctx_1d8oru5",
+        "patchEvidenceTrailId": "patch_ev_1khrnij",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -2036,10 +2036,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "1e1dc3d7-aeac-44ee-a7f4-e2fa7953b7f0",
-        "wrongActionMemoryId": "2264d6a6-5903-4cef-b5ab-59b63fa02757",
-        "codingContextPackId": "code_ctx_oy4yz2",
-        "patchEvidenceTrailId": "patch_ev_40atqb",
+        "correctionMemoryId": "9e5d14f1-d68a-4ab0-b584-01939c8b6724",
+        "wrongActionMemoryId": "d65e6f89-df95-49a5-957e-c705444046d8",
+        "codingContextPackId": "code_ctx_vm5rnu",
+        "patchEvidenceTrailId": "patch_ev_rkint2",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -2060,10 +2060,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "b441fa09-af38-43ca-af4c-5211cb353267",
-        "wrongActionMemoryId": "4559b594-5e12-4375-bd43-6b2b32515de4",
-        "codingContextPackId": "code_ctx_15pwf1i",
-        "patchEvidenceTrailId": "patch_ev_wcamji",
+        "correctionMemoryId": "da34c892-1e78-48ed-b8d1-7e24476437e8",
+        "wrongActionMemoryId": "ca259058-9aa8-4363-924c-389dc48f40d7",
+        "codingContextPackId": "code_ctx_7hk35m",
+        "patchEvidenceTrailId": "patch_ev_10khhbu",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -2084,10 +2084,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "40d87d5b-7da1-45ad-a031-7e901329e05b",
-        "wrongActionMemoryId": "70d0be94-74a7-43fe-b9a2-e300e9b65835",
-        "codingContextPackId": "code_ctx_11r4ok1",
-        "patchEvidenceTrailId": "patch_ev_13z5f7l",
+        "correctionMemoryId": "967a98ec-6f32-47bb-916f-e648365e8f05",
+        "wrongActionMemoryId": "c34c36d5-678b-48da-be4f-de8681444832",
+        "codingContextPackId": "code_ctx_mjja9w",
+        "patchEvidenceTrailId": "patch_ev_1m4ypl4",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -2108,10 +2108,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "bf0040a7-ef6d-4a9f-8099-61990fb73015",
-        "wrongActionMemoryId": "78b7ce7b-bddf-49f3-aff0-b4cc7f25c1c4",
-        "codingContextPackId": "code_ctx_1renz95",
-        "patchEvidenceTrailId": "patch_ev_z14uvo",
+        "correctionMemoryId": "8b373e62-bba1-411a-bc77-b3d607c64f45",
+        "wrongActionMemoryId": "003d7d2b-751e-4039-b285-291c63a4625a",
+        "codingContextPackId": "code_ctx_8yqllv",
+        "patchEvidenceTrailId": "patch_ev_11ktish",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -2132,10 +2132,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "462873df-96bc-42b4-9747-685527ac0cf9",
-        "wrongActionMemoryId": "918580a7-5d76-44fe-b19a-1a9081cc58a3",
-        "codingContextPackId": "code_ctx_aa9jdk",
-        "patchEvidenceTrailId": "patch_ev_sf3960",
+        "correctionMemoryId": "f0eab547-5189-485d-881e-7af274edc2f1",
+        "wrongActionMemoryId": "1f88a09d-ee12-44ff-95f2-217f0d584b84",
+        "codingContextPackId": "code_ctx_d36rj2",
+        "patchEvidenceTrailId": "patch_ev_17o2fct",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -2156,10 +2156,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "48f81189-bd02-46f7-9b1b-bc6f7dfd62f1",
-        "wrongActionMemoryId": "cddba91c-40b7-4d20-aed4-7a69fd262dd3",
-        "codingContextPackId": "code_ctx_uu4tt5",
-        "patchEvidenceTrailId": "patch_ev_vajo2n",
+        "correctionMemoryId": "565eeca7-d6d4-4571-a152-d787c6ba7a82",
+        "wrongActionMemoryId": "e9fdb909-35a0-4f91-a8a1-01918d2c1a60",
+        "codingContextPackId": "code_ctx_1emuljx",
+        "patchEvidenceTrailId": "patch_ev_1ohhmgj",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -2180,10 +2180,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "01860264-2154-4ae0-8c6d-005cb6d077e9",
-        "wrongActionMemoryId": "7cb138b8-ab5d-40ec-b32d-815b4776a536",
-        "codingContextPackId": "code_ctx_116xjxq",
-        "patchEvidenceTrailId": "patch_ev_1mah5ab",
+        "correctionMemoryId": "fed8a664-be92-4935-a4eb-d9c75e1df1a4",
+        "wrongActionMemoryId": "0af87867-38c7-4722-be8e-58fc61675bc0",
+        "codingContextPackId": "code_ctx_1wsuyym",
+        "patchEvidenceTrailId": "patch_ev_1o2cllv",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -2204,10 +2204,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "5f696f2a-6edc-418a-add5-7f0e18fdcdae",
-        "wrongActionMemoryId": "20a9f1a4-4c98-4e17-8d0d-5bba7916a582",
-        "codingContextPackId": "code_ctx_czbfjj",
-        "patchEvidenceTrailId": "patch_ev_ah7xpx",
+        "correctionMemoryId": "ec067ef2-5360-4919-8d1a-29ab0a0eb734",
+        "wrongActionMemoryId": "02c045c2-fe4c-4943-927d-c8a75ba4a989",
+        "codingContextPackId": "code_ctx_1qm4v00",
+        "patchEvidenceTrailId": "patch_ev_1yfxq92",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -2228,10 +2228,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "71125057-fea1-47b1-993b-c261fb1cb0ba",
-        "wrongActionMemoryId": "c84d5782-e0b3-4826-9143-a617c2cd2262",
-        "codingContextPackId": "code_ctx_ydwws6",
-        "patchEvidenceTrailId": "patch_ev_779o4j",
+        "correctionMemoryId": "1d858ed4-d50e-4cbb-812a-d4bb8393abb1",
+        "wrongActionMemoryId": "4669e4bd-752c-4d89-a923-8ebb9f5fbd54",
+        "codingContextPackId": "code_ctx_1caqxpl",
+        "patchEvidenceTrailId": "patch_ev_hfy1bx",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -2252,10 +2252,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "9cf02f30-a791-4b94-8eaa-f0c59068f156",
-        "wrongActionMemoryId": "5622ee42-e1fc-409a-b1a9-c21df20e88ab",
-        "codingContextPackId": "code_ctx_u2wbki",
-        "patchEvidenceTrailId": "patch_ev_q2f7ln",
+        "correctionMemoryId": "800b9dc6-9815-4629-a427-e3a34cbae8d5",
+        "wrongActionMemoryId": "3c618f1f-ae23-4f9e-929d-f7fe17528634",
+        "codingContextPackId": "code_ctx_1p6pov9",
+        "patchEvidenceTrailId": "patch_ev_1htd4q3",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -2276,10 +2276,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "62bd9a75-4f45-45b5-9cba-21541aa471ec",
-        "wrongActionMemoryId": "77e7de78-fd5c-4d9c-bc64-84a25f4a0a40",
-        "codingContextPackId": "code_ctx_1bjmuzv",
-        "patchEvidenceTrailId": "patch_ev_1bskmmz",
+        "correctionMemoryId": "6a3e9002-b0da-4a47-a323-a9d383ac62ce",
+        "wrongActionMemoryId": "432e7428-853c-437c-97bb-0463bd6c04a3",
+        "codingContextPackId": "code_ctx_olrsjh",
+        "patchEvidenceTrailId": "patch_ev_1hu8uoc",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -2300,10 +2300,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "9631ac99-15de-429d-b88f-a60f267ec420",
-        "wrongActionMemoryId": "8521a2a8-a1bc-4cf8-b299-792b93d6d845",
-        "codingContextPackId": "code_ctx_15bxl5e",
-        "patchEvidenceTrailId": "patch_ev_e3hipb",
+        "correctionMemoryId": "918cb4a5-eed8-458f-a9cc-eb3d07b45197",
+        "wrongActionMemoryId": "daeb7207-46c7-4d72-8cdf-5114e552049d",
+        "codingContextPackId": "code_ctx_1k4c5c5",
+        "patchEvidenceTrailId": "patch_ev_7kydmf",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -2324,10 +2324,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "693bd5a1-9298-4e6f-8f65-246a9d9decac",
-        "wrongActionMemoryId": "65b78778-760d-4eee-9880-f0a32cbdd997",
-        "codingContextPackId": "code_ctx_1e5ugse",
-        "patchEvidenceTrailId": "patch_ev_160j3yd",
+        "correctionMemoryId": "a15d44f8-c44f-47ef-92ce-ae861072ed26",
+        "wrongActionMemoryId": "fefc6af4-2ed0-4937-82ca-398616856168",
+        "codingContextPackId": "code_ctx_2rtzhz",
+        "patchEvidenceTrailId": "patch_ev_1mbv40q",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -2348,10 +2348,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "86ed603c-6e82-4144-8088-f14e59c3dd6f",
-        "wrongActionMemoryId": "dc56052f-2363-4f02-b3ec-5c326d4f7da1",
-        "codingContextPackId": "code_ctx_160q2uh",
-        "patchEvidenceTrailId": "patch_ev_i495nn",
+        "correctionMemoryId": "54b0509f-0a25-4a49-b3d5-749bf7f87f50",
+        "wrongActionMemoryId": "62288e63-87cc-4f7a-ad74-fcea1ccf5e7c",
+        "codingContextPackId": "code_ctx_skiyak",
+        "patchEvidenceTrailId": "patch_ev_g4n1n3",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -2372,10 +2372,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "2055d969-f053-4ee5-a621-cd771fa21b8a",
-        "wrongActionMemoryId": "6f28bd71-4fcc-4ea4-9582-eb2185e7ffed",
-        "codingContextPackId": "code_ctx_1tolft9",
-        "patchEvidenceTrailId": "patch_ev_4jxv35",
+        "correctionMemoryId": "9c5df694-d02a-470e-b500-ebbed9101c12",
+        "wrongActionMemoryId": "9eae57eb-a34f-4d11-a64e-f800d7f579d3",
+        "codingContextPackId": "code_ctx_1bqvktu",
+        "patchEvidenceTrailId": "patch_ev_8j9vd2",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -2396,10 +2396,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "8efc4cff-b374-40eb-bcb1-cf9e5e51d562",
-        "wrongActionMemoryId": "719a040a-be49-49a5-bbf8-ee0fb6b561f3",
-        "codingContextPackId": "code_ctx_2neg32",
-        "patchEvidenceTrailId": "patch_ev_6ojjat",
+        "correctionMemoryId": "9cd853eb-3cc4-433d-b0a2-b4e2ce70de1f",
+        "wrongActionMemoryId": "d2d1ba53-7e27-40ad-a061-f2333871aae0",
+        "codingContextPackId": "code_ctx_wvu9w5",
+        "patchEvidenceTrailId": "patch_ev_1vp07ux",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -2420,10 +2420,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "eae0f706-2374-469e-abe9-f8c852cdcaca",
-        "wrongActionMemoryId": "76a0e6b1-f1be-4f30-920e-577d1e8b443d",
-        "codingContextPackId": "code_ctx_1h4wpyq",
-        "patchEvidenceTrailId": "patch_ev_13fw3sm",
+        "correctionMemoryId": "dbb1fd4f-84e1-4e9e-8913-a42064093125",
+        "wrongActionMemoryId": "2cf2fa81-bb10-4cd9-ae2c-bd1f16343346",
+        "codingContextPackId": "code_ctx_2p7g4c",
+        "patchEvidenceTrailId": "patch_ev_1carm4x",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -2444,10 +2444,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "0a499ac6-d156-4fa4-bba7-f12efc4cc974",
-        "wrongActionMemoryId": "b5cb82bf-f3c8-4a1a-864b-b4a96b0c5028",
-        "codingContextPackId": "code_ctx_3z86yy",
-        "patchEvidenceTrailId": "patch_ev_1s7jt0y",
+        "correctionMemoryId": "5f190851-5973-44f1-b3ac-9c0c208aa94e",
+        "wrongActionMemoryId": "8ba77844-17c3-474f-95ea-c321dc034a79",
+        "codingContextPackId": "code_ctx_10fbgsy",
+        "patchEvidenceTrailId": "patch_ev_10r9gqq",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -2468,10 +2468,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "65d162e8-f2e7-481d-bf2c-f7f476451cb4",
-        "wrongActionMemoryId": "41067680-205c-41c0-81aa-1f8948ba39f3",
-        "codingContextPackId": "code_ctx_1uo8ljx",
-        "patchEvidenceTrailId": "patch_ev_f0qsr6",
+        "correctionMemoryId": "800d5444-bd4d-4295-8591-56aca9fb047a",
+        "wrongActionMemoryId": "b018b272-4ed8-406f-9f48-f1db8da91f01",
+        "codingContextPackId": "code_ctx_1vyy9fd",
+        "patchEvidenceTrailId": "patch_ev_1r00ru3",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -2492,10 +2492,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "0f68336f-2a5a-41a5-9c4e-e6fac82c2bdf",
-        "wrongActionMemoryId": "8a59479a-3cc2-403e-86fe-987a95c6c8c9",
-        "codingContextPackId": "code_ctx_k6r78c",
-        "patchEvidenceTrailId": "patch_ev_7ks8zn",
+        "correctionMemoryId": "3be74a5a-92b6-4681-9459-cd5c6fcc70b9",
+        "wrongActionMemoryId": "ac63961e-bbf3-4bad-acb1-ec7870ba020d",
+        "codingContextPackId": "code_ctx_ph133k",
+        "patchEvidenceTrailId": "patch_ev_371u1z",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -2516,10 +2516,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "1f97ebca-8ac6-4c24-b72f-91d446689b80",
-        "wrongActionMemoryId": "9d64a373-737d-498c-9350-b1a77651c9fa",
-        "codingContextPackId": "code_ctx_13zh47q",
-        "patchEvidenceTrailId": "patch_ev_1kftl61",
+        "correctionMemoryId": "8822d626-aa64-48ed-9154-02f602806e4a",
+        "wrongActionMemoryId": "8f3315a8-82db-4481-a9db-7d9497553ae1",
+        "codingContextPackId": "code_ctx_unlcpk",
+        "patchEvidenceTrailId": "patch_ev_ep5n7k",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -2540,10 +2540,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "d98ef4ab-4585-4a69-b916-2f3c56908014",
-        "wrongActionMemoryId": "27a5a162-0790-4d3a-b286-823ea0dde817",
-        "codingContextPackId": "code_ctx_6s0m00",
-        "patchEvidenceTrailId": "patch_ev_1hxxl6k",
+        "correctionMemoryId": "d2233e3b-f671-4cdb-8cde-26a9a39f11f1",
+        "wrongActionMemoryId": "c74f11f6-a469-48c0-8517-08bf05817ed5",
+        "codingContextPackId": "code_ctx_1ib8iqn",
+        "patchEvidenceTrailId": "patch_ev_1isoujd",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -2564,10 +2564,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "cbf600e0-f423-4083-a721-34769b923938",
-        "wrongActionMemoryId": "2a70d5d5-f348-4507-adbb-9dec5b73860b",
-        "codingContextPackId": "code_ctx_1rw32zo",
-        "patchEvidenceTrailId": "patch_ev_uc9hcc",
+        "correctionMemoryId": "7356ccc9-e489-4614-b02b-ca26659d8d6c",
+        "wrongActionMemoryId": "f486b729-0845-45f9-b4d1-330d457c927a",
+        "codingContextPackId": "code_ctx_ktx3lk",
+        "patchEvidenceTrailId": "patch_ev_714no9",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -2588,10 +2588,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "e5297465-c208-4dbb-9399-1a425ef165f0",
-        "wrongActionMemoryId": "662a60ff-f475-4fa2-a3f9-bf713a762826",
-        "codingContextPackId": "code_ctx_zuwy80",
-        "patchEvidenceTrailId": "patch_ev_mhu0ry",
+        "correctionMemoryId": "a2666538-fa4e-4bb9-b1d6-3ffb8ba89fc8",
+        "wrongActionMemoryId": "7976fd06-67ae-4e5a-ba02-040cbf2673fa",
+        "codingContextPackId": "code_ctx_1kqr956",
+        "patchEvidenceTrailId": "patch_ev_hl40fb",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -2612,10 +2612,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "50cfbaa7-9f58-40ee-beb9-03d3a3dc6da5",
-        "wrongActionMemoryId": "d1afccda-4a35-40ab-976c-00a96a8305d1",
-        "codingContextPackId": "code_ctx_1ru7nno",
-        "patchEvidenceTrailId": "patch_ev_ra2405",
+        "correctionMemoryId": "23cceb7a-ef40-4e91-a9cb-d5000e9a5f85",
+        "wrongActionMemoryId": "ae07b53e-16f8-464f-ab32-c5c88fd59d49",
+        "codingContextPackId": "code_ctx_1fqh6x2",
+        "patchEvidenceTrailId": "patch_ev_vrf685",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -2636,10 +2636,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "573c0822-77a5-4a54-8205-db5fe65f68ea",
-        "wrongActionMemoryId": "9bda6c58-f499-4d47-957b-4e401d786448",
-        "codingContextPackId": "code_ctx_7lhpdd",
-        "patchEvidenceTrailId": "patch_ev_1rhbe3s",
+        "correctionMemoryId": "50e894ce-8ea6-4a18-b0a6-3e8480037754",
+        "wrongActionMemoryId": "c2d42f53-2f82-4a8c-b0ea-d49574822221",
+        "codingContextPackId": "code_ctx_rw11t6",
+        "patchEvidenceTrailId": "patch_ev_kvlsi2",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -2660,10 +2660,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "bf4044a7-4c69-4de8-ad10-625188725f5e",
-        "wrongActionMemoryId": "ca4c462b-599f-4368-bd4a-e330060fc559",
-        "codingContextPackId": "code_ctx_gvzezm",
-        "patchEvidenceTrailId": "patch_ev_1ye4m2k",
+        "correctionMemoryId": "be84f52c-c8ba-430c-9433-860f7087d1bd",
+        "wrongActionMemoryId": "4fdb286d-8191-4379-988b-8a63a4ac51d8",
+        "codingContextPackId": "code_ctx_1am95jq",
+        "patchEvidenceTrailId": "patch_ev_yp0jlp",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -2684,10 +2684,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "ff389422-4207-41b3-8e51-9fe2d36a573e",
-        "wrongActionMemoryId": "21f28c74-f142-45ca-bf8f-59b54e18c6ac",
-        "codingContextPackId": "code_ctx_1hcltpu",
-        "patchEvidenceTrailId": "patch_ev_a7n493",
+        "correctionMemoryId": "95817556-8613-4e7c-b1ca-0622b9e7f4b6",
+        "wrongActionMemoryId": "1527a4b2-01d8-4b03-a606-9ca29750341b",
+        "codingContextPackId": "code_ctx_1va9p1k",
+        "patchEvidenceTrailId": "patch_ev_g74rcm",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -2708,10 +2708,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "7803ca26-9ee5-49c2-bc23-8f177b17f78f",
-        "wrongActionMemoryId": "2c4deb60-752b-4cd1-b8a6-c8267d448398",
-        "codingContextPackId": "code_ctx_5sb9ie",
-        "patchEvidenceTrailId": "patch_ev_kk288q",
+        "correctionMemoryId": "cbee4249-a6d2-41e6-8aa8-97860387c2d2",
+        "wrongActionMemoryId": "ed864aea-b7b3-413f-922e-ce76a345019b",
+        "codingContextPackId": "code_ctx_1uoertc",
+        "patchEvidenceTrailId": "patch_ev_ajwmrx",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -2732,10 +2732,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "35457d46-1394-4cff-98c6-6b9df2ff9fef",
-        "wrongActionMemoryId": "16df55c5-92f0-47e7-be50-a85c5e0c41ff",
-        "codingContextPackId": "code_ctx_19zrn4k",
-        "patchEvidenceTrailId": "patch_ev_1q69ls4",
+        "correctionMemoryId": "7924bd88-549d-4f26-900e-f967db203fa9",
+        "wrongActionMemoryId": "256f3a0d-71e7-4560-b00b-fc16cfacfa25",
+        "codingContextPackId": "code_ctx_1cwguc9",
+        "patchEvidenceTrailId": "patch_ev_xwcqft",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -2756,10 +2756,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "902de6f3-1e9c-4bc8-b536-4138c5999a98",
-        "wrongActionMemoryId": "3a9dfaa5-8bbb-4b41-960f-e02f47d7ddf1",
-        "codingContextPackId": "code_ctx_1i5syzf",
-        "patchEvidenceTrailId": "patch_ev_1mjodob",
+        "correctionMemoryId": "f60b0c9e-fd5e-4eea-9dfa-72392968ba88",
+        "wrongActionMemoryId": "8c9014dd-34c7-40ec-80ac-8c21a3802d7f",
+        "codingContextPackId": "code_ctx_pedoxf",
+        "patchEvidenceTrailId": "patch_ev_w7bzk6",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -2780,10 +2780,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "85f9490b-317d-4a85-8575-923db5792aa5",
-        "wrongActionMemoryId": "e55c19ca-fffc-4942-b9b6-46cf35fa44a3",
-        "codingContextPackId": "code_ctx_fw9sda",
-        "patchEvidenceTrailId": "patch_ev_tyn4ns",
+        "correctionMemoryId": "76e39f66-41ec-4dde-8db5-3935308d7dc2",
+        "wrongActionMemoryId": "caf4da6f-5b76-4e91-b73e-7b731362b9ff",
+        "codingContextPackId": "code_ctx_1pa7ne",
+        "patchEvidenceTrailId": "patch_ev_hwqzv9",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"
@@ -2804,10 +2804,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "83afe4ff-85c2-4a8f-af53-62c9228e1b8e",
-        "wrongActionMemoryId": "7324c437-5ddf-4fe9-ba8f-1c9a6a162571",
-        "codingContextPackId": "code_ctx_1u1qxlc",
-        "patchEvidenceTrailId": "patch_ev_1xibobz",
+        "correctionMemoryId": "9f858b56-7f5b-4ee3-88e8-60b0a72a220a",
+        "wrongActionMemoryId": "141ef230-88be-44b5-a7e0-bd585e6c7ef1",
+        "codingContextPackId": "code_ctx_9pi8lu",
+        "patchEvidenceTrailId": "patch_ev_tfhsyw",
         "guardSeverity": "block",
         "referencedKinds": [
           "migration_note"
@@ -2828,10 +2828,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "67e40831-9865-464c-97a9-1e052dc82b39",
-        "wrongActionMemoryId": "9415f64e-883e-4ff4-b8cd-839632237025",
-        "codingContextPackId": "code_ctx_4btiez",
-        "patchEvidenceTrailId": "patch_ev_1w85zlu",
+        "correctionMemoryId": "c546531e-02ae-4f47-97b1-71f11dfbcc0a",
+        "wrongActionMemoryId": "fa6fd368-5f06-4cc5-a361-090578e81dcd",
+        "codingContextPackId": "code_ctx_hr21sa",
+        "patchEvidenceTrailId": "patch_ev_tm614q",
         "guardSeverity": "block",
         "referencedKinds": [
           "forbidden_action"
@@ -2852,10 +2852,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "ee67d377-560e-4c0d-b74b-c203599fc82f",
-        "wrongActionMemoryId": "64df80be-04a2-4d8b-9a31-593f7580f266",
-        "codingContextPackId": "code_ctx_1klwdck",
-        "patchEvidenceTrailId": "patch_ev_1kdnnqw",
+        "correctionMemoryId": "e1b21855-a3a1-46fe-8fea-47951acbae16",
+        "wrongActionMemoryId": "1611b0d0-3e25-4adf-908b-36a98238d582",
+        "codingContextPackId": "code_ctx_mppjq5",
+        "patchEvidenceTrailId": "patch_ev_1uu61gd",
         "guardSeverity": "block",
         "referencedKinds": [
           "repo_policy"
@@ -2876,10 +2876,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "921ef953-d5dc-4065-8b1a-f3b48fa66e33",
-        "wrongActionMemoryId": "04861ebf-fea3-4030-befb-9d8f77ce7a1f",
-        "codingContextPackId": "code_ctx_17lgug8",
-        "patchEvidenceTrailId": "patch_ev_20pobk",
+        "correctionMemoryId": "2e7e1732-ec6d-40c0-8c69-2ddf53db2457",
+        "wrongActionMemoryId": "b036c2e0-f2f1-46be-aafc-b8fcd8ec9371",
+        "codingContextPackId": "code_ctx_1fgec73",
+        "patchEvidenceTrailId": "patch_ev_rg7igf",
         "guardSeverity": "block",
         "referencedKinds": [
           "architecture_decision"
@@ -2900,10 +2900,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "533af44e-2be0-4024-b317-12909712ebf1",
-        "wrongActionMemoryId": "3efa04c1-d428-4c09-9c42-2850943941d6",
-        "codingContextPackId": "code_ctx_19u5430",
-        "patchEvidenceTrailId": "patch_ev_1vvp4bi",
+        "correctionMemoryId": "edd30210-f952-4b2b-8fa2-36aa18ad1889",
+        "wrongActionMemoryId": "a6c8bf69-3799-4faf-8098-6102ddfaa423",
+        "codingContextPackId": "code_ctx_1fxny5g",
+        "patchEvidenceTrailId": "patch_ev_1x5auj8",
         "guardSeverity": "block",
         "referencedKinds": [
           "dependency_rule"
@@ -2924,10 +2924,10 @@
         "staleSuppressed": true
       },
       "evidence": {
-        "correctionMemoryId": "ae3b254d-c03d-4294-9baa-1b89d23eae9c",
-        "wrongActionMemoryId": "4afabaea-3e2b-4e18-b689-0fc98057bbae",
-        "codingContextPackId": "code_ctx_1xxbg9t",
-        "patchEvidenceTrailId": "patch_ev_86ojps",
+        "correctionMemoryId": "b585fbd3-77cb-4e4b-98be-622c311d6ed1",
+        "wrongActionMemoryId": "2c30908d-42c2-4146-8202-1e0ec6943a28",
+        "codingContextPackId": "code_ctx_141u1cf",
+        "patchEvidenceTrailId": "patch_ev_pazqyj",
         "guardSeverity": "block",
         "referencedKinds": [
           "generated_file_rule"

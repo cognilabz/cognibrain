@@ -59,9 +59,9 @@ const checks = [
     unsupported: unsupportedCompetitorLevels.map((system) => `${system.displayName ?? system.system}:${system.proofLevel}`)
   }),
   check("benchmark-docs-boundary", "Benchmark docs explicitly separate real native/CLI rows from credential-blocked rows.", docsContainAll([
-    "Mem0, Graphiti/Zep, Cognee and LangMem are checked through real same-run-native package runners",
+    "Mem0 and LangMem are checked through real same-run-native package runners",
     "GBrain is checked as a real same-run-cli competitor row",
-    "Graphiti/Zep and Cognee require operator-supplied LLM credentials for the native run"
+    "Graphiti/Zep and Cognee have native runners, but this checked artifact is `credential-blocked` because the required LLM credentials were not configured."
   ]), "fail", {
     docs: ["README.md", "docs/benchmarks.md", "docs/claims.md", "docs/market/same-benchmark.md"]
   }),

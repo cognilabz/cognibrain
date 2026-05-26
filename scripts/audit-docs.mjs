@@ -15,6 +15,7 @@ const docs = [
   "docs/benchmarks/landscape.md",
   "docs/integrations.md",
   "docs/integrations/connector-maturity.md",
+  "docs/roadmap/terminal-memory-os-plan.md",
   "docs/operations.md",
   "docs/reference.md",
   "docs/claims.md",
@@ -30,6 +31,7 @@ const files = {
   benchmarks: read("docs/benchmarks.md"),
   integrations: read("docs/integrations.md"),
   connectorMaturity: exists("docs/integrations/connector-maturity.md") ? read("docs/integrations/connector-maturity.md") : "",
+  roadmap: read("docs/roadmap/terminal-memory-os-plan.md"),
   latestArena: exists("docs/benchmarks/latest-arena.md") ? read("docs/benchmarks/latest-arena.md") : "",
   landscape: read("docs/benchmarks/landscape.md"),
   operations: read("docs/operations.md"),
@@ -60,6 +62,7 @@ const checks = [
     has(files.readme, "Same Benchmark"),
     has(files.readme, "npx cognibrain proof"),
     has(files.readme, "docs/assets/cli-home.svg"),
+    has(files.readme, "docs/roadmap/terminal-memory-os-plan.md"),
     has(files.readme, "docs/operations.md")
   ]),
   check("screenshots are real checked assets", [
@@ -80,9 +83,9 @@ const checks = [
     has(files.benchmarks, "same-run-full"),
     has(files.benchmarks, "same-run-native"),
     has(files.benchmarks, "credential-blocked"),
-    has(files.benchmarks, "Mem0, Graphiti/Zep, Cognee and LangMem are checked through real same-run-native package runners"),
+    has(files.benchmarks, "Mem0 and LangMem are checked through real same-run-native package runners"),
     has(files.benchmarks, "GBrain is checked as a real same-run-cli competitor row"),
-    has(files.benchmarks, "Graphiti/Zep and Cognee require operator-supplied LLM credentials for the native run"),
+    has(files.benchmarks, "Graphiti/Zep and Cognee have native runners, but this checked artifact is `credential-blocked` because the required LLM credentials were not configured."),
     has(files.benchmarks, "Public Market Benchmarks"),
     has(files.benchmarks, "npm run benchmark:certified"),
     has(files.benchmarks, "artifacts/market-gate.json"),
@@ -94,6 +97,7 @@ const checks = [
     exists("artifacts/arena/run.json"),
     exists("artifacts/cognicodebench/run.json"),
     exists("public/benchmark-arena/index.html"),
+    exists("public/benchmark-arena/scorecard.html"),
     exists("public/benchmark-arena/results.json")
   ]),
   check("install and service docs cover self-hosting", [
@@ -106,6 +110,22 @@ const checks = [
     has(files.install, "The CLI is the required control plane"),
     has(files.operations, "self-hosted operation first"),
     has(files.operations, "managed SaaS")
+  ]),
+  check("terminal memory os plan coverage is documented", [
+    has(files.roadmap, "Terminal Memory OS Plan Coverage"),
+    has(files.roadmap, "connector docs now match the 19 native vendor drivers"),
+    has(files.roadmap, "cognibrain tui"),
+    has(files.roadmap, "Ink action palette executes static commands"),
+    has(files.roadmap, "0 tenant-verified live smokes and 0 production certifications"),
+    has(files.roadmap, "Marketing and docs can make strong live-system claims only for `tenant-verified` or `production-certified` connector rows."),
+    Array.from({ length: 17 }, (_, index) => `#${367 + index}`).every((issue) => has(files.roadmap, issue)),
+    has(files.roadmap, "npm run connectors:maturity"),
+    has(files.roadmap, "npm run audit:docs"),
+    has(files.roadmap, "npm run verify:nextgen"),
+    has(files.install, "npx cognibrain tui"),
+    has(files.install, "Enter executes the selected static action"),
+    has(files.reference, "cognibrain tui|ui|home [--json]"),
+    has(files.reference, "placeholder")
   ]),
   check("connectors, adapters and SDK are discoverable", [
     has(files.integrations, "Native Connectors"),
@@ -130,14 +150,14 @@ const checks = [
     has(files.claims, "CB-CONNECTOR-MATURITY"),
     has(files.claims, "Explicit Non-Claims"),
     has(files.claims, "vendor-certified competitor benchmark results"),
-    has(files.claims, "Mem0, Graphiti/Zep, Cognee and LangMem are now checked through real same-run-native package runners."),
+    has(files.claims, "Mem0 and LangMem are now checked through real same-run-native package runners."),
     has(files.claims, "GBrain is checked as a real same-run-cli competitor row."),
-    has(files.claims, "Graphiti/Zep and Cognee used operator-supplied LLM credentials in the checked artifact"),
+    has(files.claims, "Graphiti/Zep and Cognee have native runners but are credential-blocked in the checked artifact when LLM credentials are absent"),
     has(files.readme, "does not claim managed SaaS uptime")
   ]),
   check("market pages are proof-first, not slogan-only", [
     has(files.sameBenchmark, "Memory comparisons are full of slogans"),
-    has(files.sameBenchmark, "Mem0, Graphiti/Zep, Cognee and LangMem are now checked through real same-run-native package runners."),
+    has(files.sameBenchmark, "Mem0 and LangMem are now checked through real same-run-native package runners."),
     has(files.sameBenchmark, "GBrain is checked as a real same-run-cli competitor row."),
     has(files.sameBenchmark, "If Graphiti/Zep or Cognee are run without required LLM credentials, their rows stay credential-blocked."),
     has(files.sameBenchmark, "The external runner reads one scenario JSON object from stdin"),

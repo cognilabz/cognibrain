@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T08:38:44.051Z",
+  "generatedAt": "2026-05-26T08:56:40.484Z",
   "project": "cognibrain",
   "privacy": {
     "anonymized": true,
@@ -280,7 +280,7 @@
   "publication": {
     "anonymized": true,
     "claimScope": "Scores describe the listed artifact and metric only; direct vendor comparisons require comparable imported artifacts.",
-    "publishedAt": "2026-05-26T08:42:54.392Z",
+    "publishedAt": "2026-05-26T09:07:43.232Z",
     "channel": "static-json"
   }
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-05-26T08:42:51.128Z",
+  "generatedAt": "2026-05-26T09:07:41.582Z",
   "mode": "contract",
   "checks": {
     "officialManifestsUseVendorEndpoints": true,
@@ -423,7 +423,7 @@
       "provider": "google-calendar",
       "method": "GET",
       "path": "/google/calendar/v3/calendars/primary/events",
-      "search": "?maxResults=20&singleEvents=true&orderBy=startTime&timeMin=2026-05-19T08%3A42%3A51.114Z",
+      "search": "?maxResults=20&singleEvents=true&orderBy=startTime&timeMin=2026-05-19T09%3A07%3A41.571Z",
       "hasAuthorization": true,
       "authorizationScheme": "Bearer",
       "contentType": "application/json",
@@ -433,7 +433,7 @@
       "provider": "google-calendar",
       "method": "GET",
       "path": "/google/calendar/v3/calendars/primary/events",
-      "search": "?maxResults=20&singleEvents=true&orderBy=startTime&timeMin=2026-05-19T08%3A42%3A51.115Z",
+      "search": "?maxResults=20&singleEvents=true&orderBy=startTime&timeMin=2026-05-19T09%3A07%3A41.571Z",
       "hasAuthorization": true,
       "authorizationScheme": "Bearer",
       "contentType": "application/json",

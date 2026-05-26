@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { runEvaluation } from "../src/eval/run";
@@ -10,6 +10,7 @@ import { runBeamBenchmark } from "../src/eval/beam";
 import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
 import { runCogniCodeBench } from "../src/eval/cognicodeBench";
 import { generateConnectorMaturity } from "../src/eval/connectorMaturity";
+import { publishArenaReport } from "../src/eval/publishArena";
 
 describe("self verification benchmark loop", () => {
   it("beats local baselines and satisfies the synthetic token-efficiency gate", () => {
@@ -178,6 +179,109 @@ describe("self verification benchmark loop", () => {
     expect(report.summary.tenantVerified).toBe(0);
     expect(report.rows.find((row) => row.provider === "jira")?.proofLevel).toBe("live-smoke-ready");
     expect(report.rows.every((row) => row.qualityScore > 0)).toBe(true);
+  });
+
+  it("publishes a marketing scorecard with bars and per-scenario details", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-arena-publish-"));
+    const inputPath = join(dir, "arena.json");
+    const marketGatePath = join(dir, "market-gate.json");
+    const outputDir = join(dir, "public");
+    const markdownPath = join(dir, "latest-arena.md");
+    const checks = {
+      correctionCarryover: true,
+      repeatedMistakeAvoided: true,
+      procedureRecall: true,
+      patchCorrectness: true,
+      evidenceCompleteness: true,
+      wrongMemorySuppression: true
+    };
+    writeFileSync(
+      inputPath,
+      JSON.stringify({
+        schemaVersion: "1.0",
+        generatedAt: "2026-05-26T00:00:00.000Z",
+        benchmark: "BenchmarkArena",
+        benchmarkInput: "cognicode",
+        adapterContract: {
+          proofLevels: {
+            "same-run-full": "Full local product run.",
+            "same-run-native": "Real native package run."
+          }
+        },
+        systems: [
+          {
+            system: "cognibrain",
+            displayName: "Cognibrain",
+            score: 1,
+            proofLevel: "same-run-full",
+            scenarioCount: 1,
+            metrics: {
+              repeatedMistakeRate: 0,
+              correctionCarryover: 1,
+              procedureRecall: 1,
+              patchCorrectness: 1,
+              evidenceCompleteness: 1,
+              wrongMemorySuppression: 1
+            },
+            capabilityGaps: [],
+            scenarios: [{ id: "scenario-1", score: 1, checks, evidence: {} }]
+          },
+          {
+            system: "mem0",
+            displayName: "Mem0",
+            score: 0.5,
+            proofLevel: "same-run-native",
+            scenarioCount: 1,
+            metrics: {
+              repeatedMistakeRate: 1,
+              correctionCarryover: 1,
+              procedureRecall: 1,
+              patchCorrectness: 0,
+              evidenceCompleteness: 0,
+              wrongMemorySuppression: 0
+            },
+            capabilityGaps: ["no typed action guard"],
+            scenarios: [{ id: "scenario-1", score: 0.5, checks: { ...checks, patchCorrectness: false, evidenceCompleteness: false, wrongMemorySuppression: false }, evidence: {} }]
+          }
+        ],
+        leaderboard: [
+          { system: "Cognibrain", score: 1, proofLevel: "same-run-full", repeatedMistakeRate: 0, gaps: 0 },
+          { system: "Mem0", score: 0.5, proofLevel: "same-run-native", repeatedMistakeRate: 1, gaps: 1 }
+        ],
+        winner: "Cognibrain",
+        passed: true
+      })
+    );
+    writeFileSync(
+      marketGatePath,
+      JSON.stringify({
+        generatedAt: "2026-05-26T00:00:00.000Z",
+        proofLevel: "certified-public-benchmark-baseline-superiority",
+        passed: true,
+        benchmarks: [
+          {
+            dataset: "LoCoMo",
+            metric: "Evidence recall@K",
+            passed: true,
+            ours: { correct: 9, total: 10, accuracy: 0.9 },
+            bestBaseline: { name: "keyword-only", correct: 7, total: 10, accuracy: 0.7 },
+            margin: 0.2,
+            questions: [{ id: "q1" }]
+          }
+        ]
+      })
+    );
+
+    publishArenaReport({ inputPath, outputDir, markdownPath, marketGatePath });
+    const markdown = readFileSync(markdownPath, "utf8");
+    const html = readFileSync(join(outputDir, "index.html"), "utf8");
+    expect(markdown).toContain("## Marketing Scorecard");
+    expect(markdown).toContain("[#########.........]");
+    expect(markdown).toContain("## Scenario Score Matrix");
+    expect(markdown).toContain("## Public Benchmark Gate");
+    expect(html).toContain("Hard Benchmark Scorecard");
+    expect(html).toContain("class=\"bar\"");
+    expect(existsSync(join(outputDir, "scorecard.html"))).toBe(true);
   });
 
   it("treats perfect benchmark ties as saturated without allowing lower ties", () => {

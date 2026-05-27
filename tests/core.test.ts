@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, InMemoryMemoryRepository, MemoryStore, ReflectionEngine, RepositoryBackedStorageAdapter, RetrievalEngine, healthReport, tokenize, extractEntities, type EngineeringMemoryKind, type MemoryClaim } from "../src/core";
@@ -22,6 +23,8 @@ import { runMarketGate } from "../src/eval/marketGate";
 import { runProductionLoadBenchmark } from "../src/eval/load";
 import { OpenAICompatibleEmbeddingProvider } from "../src/core/openaiEmbeddings";
 import { CODING_QUERY_INTENT_CASES } from "../src/eval/codingIntentCases";
+
+const nodeRequire = createRequire(import.meta.url);
 
 describe("TypeScript memory core", () => {
   it("retrieves with trust-aware multi-signal ranking", () => {
@@ -181,6 +184,30 @@ describe("TypeScript memory core", () => {
 
       expect(service.delete(created.id)).toBe(true);
       expect(new SQLiteMemoryRepository(path).list("u1").some((memory) => memory.id === created.id)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not reimport the full store during SQLite repository-backed service persistence", () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-sqlite-no-import-"));
+    try {
+      const path = join(dir, "memory.sqlite");
+      const service = new MemoryService({ repository: new SQLiteMemoryRepository(path), autoDream: { enabled: false } });
+      const created = service.add({ userId: "u1", content: "SQLite repository service persistence keeps CRUD rows primary.", source: { kind: "human", confidence: 0.96 } });
+      service.update(created.id, { content: "SQLite repository updates remain row-level without snapshot reimport events." });
+
+      const { DatabaseSync } = nodeRequire("node:sqlite") as { DatabaseSync: new (path: string) => { prepare: (sql: string) => { all: () => unknown[] }; close?: () => void } };
+      const db = new DatabaseSync(path);
+      try {
+        const rows = db.prepare("select event_type as eventType from persistence_events order by id").all() as Array<{ eventType: string }>;
+        const eventTypes = rows.map((row) => row.eventType);
+        expect(eventTypes).toEqual(expect.arrayContaining(["memory.created", "memory.updated"]));
+        expect(eventTypes).not.toContain("memory.imported");
+      } finally {
+        db.close?.();
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -1809,6 +1836,82 @@ describe("TypeScript memory core", () => {
     expect(missing.status).toBe("source_missing");
   });
 
+  it("uses live async source resolver fetch for sourceRef revalidation", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.registerSourceResolver({
+      connectorId: "github",
+      get: (sourceRef) => ({
+        sourceRef,
+        version: sourceRef.version,
+        hash: sourceRef.hash,
+        updatedAt: "2026-05-01T00:00:00.000Z"
+      }),
+      fetch: async (sourceRef) => ({
+        sourceRef: { ...sourceRef, version: "2", hash: "live-hash" },
+        version: "2",
+        hash: "live-hash",
+        updatedAt: "2026-05-04T00:00:00.000Z",
+        metadata: { fetchedLive: true }
+      })
+    });
+    const memory = service.add({
+      userId: "u1",
+      content: "GitHub PR 42 says release gate requires npm test.",
+      source: { kind: "import", confidence: 0.9 },
+      sourceRef: { connectorId: "github", externalId: "PR-42", version: "1", hash: "old-hash" }
+    });
+
+    const updated = await service.revalidateMemoryAsync(memory.id, "u1");
+    expect(updated).toMatchObject({ status: "source_updated", connectorId: "github", externalId: "PR-42", previousVersion: "1", currentVersion: "2" });
+    expect((service.get(memory.id).metadata.sourceRevalidation as { sourceRecord?: { hash?: string } }).sourceRecord?.hash).toBe("live-hash");
+  });
+
+  it("default GitHub source resolver fetches current provider state when credentials are configured", async () => {
+    const previousFetch = globalThis.fetch;
+    const previousRepo = process.env.MEMORY_GITHUB_REPO;
+    const previousToken = process.env.MEMORY_GITHUB_TOKEN;
+    const requested: string[] = [];
+    try {
+      process.env.MEMORY_GITHUB_REPO = "cognilabz/cognibrain";
+      process.env.MEMORY_GITHUB_TOKEN = "test-token";
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        requested.push(String(input));
+        return new Response(JSON.stringify([{
+          number: 42,
+          title: "Release gate now requires npm test",
+          state: "open",
+          html_url: "https://github.com/cognilabz/cognibrain/pull/42",
+          user: { login: "reviewer" },
+          updated_at: "2026-05-05T00:00:00.000Z"
+        }]), { status: 200, headers: { "content-type": "application/json" } });
+      }) as typeof fetch;
+      const service = new MemoryService({ autoDream: { enabled: false } });
+      const memory = service.add({
+        userId: "u1",
+        content: "GitHub PR 42 previously required pnpm test.",
+        source: { kind: "import", confidence: 0.82 },
+        sourceRef: {
+          connectorId: "official-github",
+          externalId: "pr-42",
+          url: "https://github.com/cognilabz/cognibrain/pull/42",
+          version: "2026-05-01T00:00:00.000Z",
+          hash: "old-hash"
+        }
+      });
+
+      const updated = await service.revalidateMemoryAsync(memory.id, "u1");
+      expect(updated).toMatchObject({ status: "source_updated", connectorId: "official-github", externalId: "pr-42" });
+      expect(requested.some((url) => url.includes("/repos/cognilabz/cognibrain/pulls"))).toBe(true);
+      expect((service.get(memory.id).metadata.sourceRevalidation as { sourceRecord?: { updatedAt?: string } }).sourceRecord?.updatedAt).toBe("2026-05-05T00:00:00.000Z");
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousRepo === undefined) delete process.env.MEMORY_GITHUB_REPO;
+      else process.env.MEMORY_GITHUB_REPO = previousRepo;
+      if (previousToken === undefined) delete process.env.MEMORY_GITHUB_TOKEN;
+      else process.env.MEMORY_GITHUB_TOKEN = previousToken;
+    }
+  });
+
   it("resolves verification queue items and records harness lifecycle dream plans", async () => {
     const service = new MemoryService({ autoDream: { enabled: false } });
     service.registerConnectorManifest({
@@ -2248,6 +2351,7 @@ describe("TypeScript memory core", () => {
 
   it("keeps the Postgres repository driver-backed with service-state tables and optional RLS", () => {
     const source = readFileSync("src/api/repositories/postgresRepository.ts", "utf8");
+    const serviceSource = readFileSync("src/api/service.ts", "utf8");
     expect(source).toContain('require("pg")');
     expect(source).not.toContain('"psql"');
     expect(source).toContain("cognibrain_repository_state");
@@ -2256,6 +2360,9 @@ describe("TypeScript memory core", () => {
     expect(source).toContain("cognibrain_dream_jobs");
     expect(source).toContain("cognibrain_connector_sync_states");
     expect(source).toContain("enable row level security");
+    expect(serviceSource).toContain('backend === "postgres-production"');
+    expect(serviceSource).toContain('backend === "postgres-async"');
+    expect(serviceSource).toContain("new PostgresMemoryRepository(process.env.MEMORY_POSTGRES_URL)");
   });
 
   it("runs Postgres repository live tests only with explicit test credentials", () => {
@@ -2308,6 +2415,25 @@ describe("TypeScript memory core", () => {
       else process.env.MEMORY_POSTGRES_URL = previousPostgresUrl;
       if (previousContactPoint === undefined) delete process.env.MEMORY_CASSANDRA_CONTACT_POINT;
       else process.env.MEMORY_CASSANDRA_CONTACT_POINT = previousContactPoint;
+    }
+  });
+
+  it("does not route DB-primary Postgres aliases through the legacy remote persistence factory", () => {
+    const previousBackend = process.env.MEMORY_STORAGE_BACKEND;
+    const previousPostgresUrl = process.env.MEMORY_POSTGRES_URL;
+    try {
+      process.env.MEMORY_POSTGRES_URL = "postgres://example.invalid/cognibrain";
+      for (const backend of ["postgres-production", "postgres-db-primary", "postgres-async", "postgres-repository"]) {
+        process.env.MEMORY_STORAGE_BACKEND = backend;
+        expect(() => createPersistenceFromEnv()).toThrow(/DB-primary MemoryRepository backend/);
+      }
+      process.env.MEMORY_STORAGE_BACKEND = "postgres-remote";
+      expect(createPersistenceFromEnv().kind).toBe("postgres-remote");
+    } finally {
+      if (previousBackend === undefined) delete process.env.MEMORY_STORAGE_BACKEND;
+      else process.env.MEMORY_STORAGE_BACKEND = previousBackend;
+      if (previousPostgresUrl === undefined) delete process.env.MEMORY_POSTGRES_URL;
+      else process.env.MEMORY_POSTGRES_URL = previousPostgresUrl;
     }
   });
 
@@ -2484,7 +2610,7 @@ describe("TypeScript memory core", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it("marks release-critical retrieval with risk-aware verification requests and releaseBlockers", () => {
     const service = new MemoryService();

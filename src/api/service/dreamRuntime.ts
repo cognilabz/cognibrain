@@ -209,6 +209,19 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
       ? await service.refreshDreamSources({ ...input, mode, trigger }, plan, fetchImpl, timeoutMs)
       : undefined;
     const report = service.runDreamCycle({ ...input, mode, trigger, connectorIds: plan.connectorIds, sourceRefresh: plan.sourceRefresh });
+    const shouldRevalidateSources = mode === "dream" && plan.budget !== "quick";
+    const liveSourceRevalidation = shouldRevalidateSources
+      ? await service.revalidateSourceRefsAsync(input.userId, {
+        connectorIds: plan.connectorIds,
+        scope: input.scope,
+        onlyDue: plan.budget === "standard",
+        limit: plan.budget === "standard" ? 100 : plan.budget === "deep" ? 500 : undefined
+      })
+      : undefined;
+    if (liveSourceRevalidation?.evaluated) {
+      report.dreamCycle.sourceRevalidation = liveSourceRevalidation;
+      report.lifecycle.actions.push(`live-revalidated ${liveSourceRevalidation.evaluated} source-backed memories`);
+    }
     if (connectorRefresh) {
       report.dreamCycle.connectorRefresh = connectorRefresh;
       if (connectorRefresh.attempted || connectorRefresh.skipped) {
@@ -226,8 +239,8 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
           skipped: connectorRefresh.skipped
         }
       });
-      service.persist();
     }
+    if (connectorRefresh || liveSourceRevalidation?.evaluated) service.persist();
     return report;
   }
 

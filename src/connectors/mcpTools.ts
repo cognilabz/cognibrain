@@ -2,8 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod/v4";
 import { createMemoryToolHandlers, jsonText } from "./mcpHandlers";
 
-export function registerMemoryMcpTools(server: McpServer, service: Parameters<typeof createMemoryToolHandlers>[0]): void {
-  const handlers = createMemoryToolHandlers(service);
+export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Parameters<typeof createMemoryToolHandlers>[0] | Record<string, any>): void {
+  const handlers = serviceOrHandlers && "contextPack" in serviceOrHandlers ? serviceOrHandlers : createMemoryToolHandlers(serviceOrHandlers as Parameters<typeof createMemoryToolHandlers>[0]);
   const engineeringKindSchema = z.enum(["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "forbidden_action", "migration_note", "test_strategy", "dependency_rule", "generated_file_rule"]);
   const codebaseScopeSchema = z.object({
     org: z.string().optional(),

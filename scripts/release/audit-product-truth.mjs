@@ -87,11 +87,14 @@ const vendorLiveProviders = Array.isArray(files.vendorLive.providers) ? files.ve
 const vendorLiveAttempted = vendorLiveProviders.filter((provider) => provider && provider.skipped === false);
 const storageIsSnapshotFirst = files.persistence.includes("insert into cognibrain_snapshots") && files.persistence.includes("truncate table cognibrain_context_packs");
 const dbPrimaryStorage = !storageIsSnapshotFirst && files.persistence.includes("DB-primary repository") && files.persistence.includes("memory.created") && files.persistence.includes("memory.updated") && files.persistence.includes("memory.deleted");
+const noFullStoreImportOnPersist = !files.service.includes("repository.import(this.store.export())") && files.service.includes("repositorySharesReadModel()");
+const dbPrimaryAliasesBypassLegacyPersistence = files.persistence.includes("DB-primary MemoryRepository backend") && !files.persistence.includes('backend === "postgres-remote" || backend === "postgres-production"') && files.coreTests.includes("does not route DB-primary Postgres aliases through the legacy remote persistence factory");
 const hardWiredServiceStore = /readonly\s+store\s*=\s*new\s+MemoryStore\s*\(/.test(files.service);
 const memoryRepositoryBoundary = files.storageAdapter.includes("export interface MemoryRepository") && files.service.includes("readonly repository: MemoryRepository") && files.service.includes("repositoryFromStorage");
 const dbRepositoryImplementations = files.repositories.includes("class SQLiteMemoryRepository") && files.repositories.includes("class PostgresMemoryRepository") && files.repositories.includes("implements MemoryRepository");
 const dreamJobWorkerControl = files.service.includes("cancelDreamJob(") && files.service.includes("retryDreamJob(") && files.dreamRoutes.includes("/dream/jobs") && files.dreamRoutes.includes("cancel") && files.dreamRoutes.includes("retry") && files.mcpTools.includes("memory_dream_job_cancel") && files.mcpTools.includes("memory_dream_job_retry") && files.coreTests.includes("cancels and retries dream jobs");
-const postgresVerifierPassed = files.postgresLive?.acceptance?.startsWithPostgresBackend === true;
+const liveSourceRevalidation = files.service.includes("revalidateSourceRefsAsync") && files.service.includes("await resolver.fetch") && files.service.includes("listExternalVendorItems") && files.dreamRoutes.includes("revalidateSourceRefsAsync") && files.coreTests.includes("uses live async source resolver fetch") && files.coreTests.includes("default GitHub source resolver fetches current provider state");
+const postgresVerifierPassed = files.postgresLive?.acceptance?.startsWithPostgresBackend === true && files.postgresLive?.storage?.active === "postgres-repository";
 const serverAuthCode = `${files.server}\n${files.serverHelpers}`;
 const oidcVerifierPresent = /\bjwks\b|\bopenid-client\b|\bjose\b|verifyJwt|verifyOidc|issuer.+audience/i.test(serverAuthCode);
 const apiKeyAuthPresent = serverAuthCode.includes("MEMORY_API_KEYS") && serverAuthCode.includes("Bearer");
@@ -100,6 +103,10 @@ const corsWildcard = files.server.includes('Access-Control-Allow-Origin", "*"');
 const requestRateLimitPresent = /rateLimit|rate limit|429|too_many_requests/i.test(files.server);
 const bodyLimitPresent = /bodyLimit|maxBody|payload too large|413/i.test(files.server);
 const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmarks, files.integrations, files.operations, files.claims, files.status, files.sameBenchmark].join("\n\n");
+const honestDbBackedBoundary = docsContainAll([
+  "DB-primary MemoryRepository",
+  "fully async event-journal-first"
+]);
 const positiveOidcClaims = oidcVerifierPresent ? [] : findPositiveClaims(docsCorpus, [
   ["oidc-jwt-rbac", /\b(?:built-in|native|first-party|supports?)\b[^\n.]{0,80}\b(?:OIDC|JWT|RBAC)\b/i]
 ]);
@@ -181,22 +188,22 @@ const checks = [
     selfHostedCandidate: productionReadiness.summary.selfHostedCandidate,
     productionCertified: productionReadiness.summary.productionCertified
   }),
-  check("storage-boundary", "Storage docs and code identify DB-primary row persistence with snapshots as backup/compaction and no hard-wired service MemoryStore.", dbPrimaryStorage && memoryRepositoryBoundary && dbRepositoryImplementations && !hardWiredServiceStore && docsContainAll([
-    "DB-primary row persistence",
-    "Snapshots are retained only as backup/compaction artifacts"
-  ]), "fail", {
+  check("storage-boundary", "Storage docs and code identify DB-primary MemoryRepository persistence honestly while row-backed runtime writes avoid full-store persist reimports.", dbPrimaryStorage && noFullStoreImportOnPersist && dbPrimaryAliasesBypassLegacyPersistence && memoryRepositoryBoundary && dbRepositoryImplementations && honestDbBackedBoundary, "fail", {
     code: "src/api/persistence.ts",
     liveVerifier: "artifacts/postgres-live.json",
     postgresVerifierPassed,
     dbPrimaryStorage,
+    noFullStoreImportOnPersist,
+    dbPrimaryAliasesBypassLegacyPersistence,
     memoryRepositoryBoundary,
     dbRepositoryImplementations,
-    hardWiredServiceStore
+    hardWiredServiceStore,
+    honestDbBackedBoundary
   }),
-  check("api-auth-boundary", "Docs and code expose API-key auth plus optional JWT/OIDC verifier, actor-bound scopes and route-level RBAC.", apiKeyAuthPresent && oidcVerifierPresent && positiveOidcClaims.length === 0 && docsContainAll([
+  check("api-auth-boundary", "Docs and code expose API-key auth plus optional JWT/OIDC verifier, actor scopes and route-level RBAC.", apiKeyAuthPresent && oidcVerifierPresent && positiveOidcClaims.length === 0 && docsContainAll([
     "JWT/OIDC verifier",
     "route-level RBAC",
-    "actor-bound scopes"
+    "actor scopes"
   ]), "fail", {
     code: "src/api/server.ts",
     oidcVerifierPresent,
@@ -213,9 +220,10 @@ const checks = [
     scannedDocs: ["README.md", "docs/README.md", "docs/install.md", "docs/integrations.md", "docs/operations.md", "docs/claims.md", "docs/status.md"],
     matches: positiveOverclaims
   }),
-  check("harness-maturity-proof", "Harness maturity artifact separates generated packages, native hooks and simulator proof for common and external-agent modes without open implementation gaps.", harnessRows.length >= 16 && generatedHarnessRows.length >= 16 && harnessGoldenPaths.length >= 16 && harnessRowsWithGaps.length === 0 && docsContainAll([
-    "MCP is the default integration path for agents",
-    "SDK/HTTP is for custom integrations"
+  check("harness-maturity-proof", "Harness maturity artifact separates generated packages, native hooks, daemon-backed CLI lifecycle and simulator proof for common and external-agent modes without open implementation gaps.", harnessRows.length >= 16 && generatedHarnessRows.length >= 16 && harnessGoldenPaths.length >= 16 && harnessRowsWithGaps.length === 0 && docsContainAll([
+    "Use MCP for MCP-native agents",
+    "cognibrain harness",
+    "SDK/HTTP for product integrations"
   ]), "fail", {
     artifact: "artifacts/harness-maturity.json",
     total: harnessRows.length,
@@ -235,9 +243,10 @@ const checks = [
     artifact: "artifacts/benchmark-hardening.json",
     scenarioCount: files.benchmarkHardening.dataset?.scenarioCount ?? 0
   }),
-  check("dream-job-worker-proof", "Dream job worker lifecycle supports persisted start, status, cancel and retry paths across service, HTTP, MCP and tests.", dreamJobWorkerControl, "fail", {
+  check("dream-job-worker-proof", "Dream job worker lifecycle supports persisted start, status, cancel, retry and live source revalidation paths across service, HTTP, MCP and tests.", dreamJobWorkerControl && liveSourceRevalidation, "fail", {
     code: ["src/api/service.ts", "src/api/server/dreamRoutes.ts", "src/connectors/mcpTools.ts", "tests/core.test.ts"],
-    dreamJobWorkerControl
+    dreamJobWorkerControl,
+    liveSourceRevalidation
   }),
   check("docker-optional", "Docker is present only as an optional deployment artifact, not the required product path.", docsContainAll([
     "Docker is optional",

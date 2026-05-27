@@ -17,10 +17,11 @@ The default command shows a stable operator CLI snapshot with runtime state, mem
 | Surface | Use it for |
 | --- | --- |
 | CLI | Setup, status, service management, connectors, config, proof and operator automation. |
-| MCP | Agent integration: context packs, coding context, action guards, corrections, patch evidence and memory maintenance. |
+| Harness CLI | Universal shell-hook integration for coding agents: context, guard, outcome, correction, patch evidence, session handoff, release prep, source revalidation, conflicts and health. |
+| MCP | Native MCP agent integration: context packs, coding context, action guards, corrections, patch evidence and memory maintenance. |
 | SDK/HTTP | Product integrations, custom connectors, dashboards and non-MCP runtimes. |
 
-MCP is the default integration path for agents. The CLI is the operator surface. SDK/HTTP is for custom integrations.
+Use MCP for MCP-native agents. Use `cognibrain harness ...` or the top-level lifecycle commands for any agent or CI runner that can call shell hooks. Use SDK/HTTP for product integrations and custom runtimes. These surfaces should point at the same local daemon when daemon mode is available.
 
 ## Quick Start
 
@@ -62,6 +63,16 @@ npx cognibrain proof
 ```
 
 For MCP-capable agents, use MCP tools first. Use the CLI memory commands as an operator path or fallback.
+
+For shell-hook capable agents and CI jobs, use the JSON-first harness lifecycle:
+
+```bash
+npx cognibrain harness context --task "prepare the release patch" --json
+npx cognibrain harness guard --action "npm test" --json
+npx cognibrain harness outcome --command "npm test" --exit-code 0 --json
+npx cognibrain harness patch-evidence --task "release patch" --json
+npx cognibrain harness health --json
+```
 
 ## Connectors
 
@@ -121,7 +132,7 @@ Benchmark claims are bounded by proof level. `same-run-full` means Cognibrain ex
 
 Cognibrain is a self-hosted production candidate, not a managed SaaS product.
 
-Implemented boundaries include DB-primary row persistence, API-key/Bearer auth, optional JWT/OIDC verifier, route-level RBAC, actor scopes and production policy mode that default-denies when no rule matches.
+Implemented boundaries include DB-primary MemoryRepository paths for SQLite/Postgres memory rows, row mirrors for service state, backup/compaction snapshots, API-key/Bearer auth, optional JWT/OIDC verifier, route-level RBAC, actor scopes and production policy mode that default-denies when no rule matches. The remaining storage hardening boundary is a fully async event-journal-first runtime across every service domain.
 
 This repository does not claim managed SaaS uptime, billing, hosted support, autoscaling, deployment-specific SSO rollout, tenant-verified connector live smokes or production-certified connector rows. See [docs/status.md](docs/status.md) and [docs/claims.md](docs/claims.md).
 

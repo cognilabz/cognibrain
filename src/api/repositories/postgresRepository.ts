@@ -589,7 +589,14 @@ const { Pool } = require("pg");
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => input += chunk);
-process.stdin.on("end", async () => {
+process.stdin.on("end", () => {
+  runRequest().catch((error) => {
+    process.stderr.write(error && error.stack ? error.stack : String(error));
+    process.exit(1);
+  });
+});
+
+async function runRequest() {
   const request = JSON.parse(input || "{}");
   const pool = new Pool({
     connectionString: request.url,
@@ -640,10 +647,7 @@ process.stdin.on("end", async () => {
     client.release();
     await pool.end();
   }
-}).catch((error) => {
-  process.stderr.write(error && error.stack ? error.stack : String(error));
-  process.exit(1);
-});
+}
 
 async function ensureSchema(client, enableRls) {
   await client.query(\`
@@ -913,7 +917,7 @@ async function tx(client, fn) {
 function iso(value) {
   return new Date(value).toISOString();
 }
-`;
+`.replace(/\\`/g, "`");
 
 function checksumSql(sql: string): string {
   return createHash("sha256").update(sql.replace(/\s+/g, " ").trim()).digest("hex");

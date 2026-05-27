@@ -59,8 +59,8 @@ const checks = [
     has(files.readme, "Stop fixing the same agent mistake twice"),
     has(files.readme, "npm i @cognilabz/cognibrain"),
     has(files.readme, "## Public Surface"),
-    has(files.readme, "MCP is the default integration path for agents"),
-    has(files.readme, "SDK/HTTP is for custom integrations"),
+    has(files.readme, "Use MCP for MCP-native agents"),
+    has(files.readme, "Use SDK/HTTP for product integrations and custom runtimes"),
     has(files.readme, "Generated proof outputs are internal build artifacts"),
     has(files.readme, "docs/status.md"),
     has(files.readme, "docs/claims.md")
@@ -86,14 +86,14 @@ const checks = [
     has(files.integrations, "MCP first for agents"),
     has(files.integrations, "CLI for humans and automation"),
     has(files.integrations, "SDK/HTTP only for app and connector integrations"),
-    has(files.reference, "For agents, use MCP first"),
+    has(files.reference, "For MCP-native agents, use MCP"),
     has(files.reference, "For operators, use the CLI"),
     has(files.reference, "For product integrations, use SDK/HTTP"),
     !has(files.reference, "| `/context-pack` |")
   ]),
   check("production boundary remains honest", [
     has(files.status, "Production Readiness Status"),
-    has(files.status, "DB-primary row persistence"),
+    has(files.status, "DB-primary MemoryRepository"),
     has(files.status, "JWT/OIDC verifier"),
     has(files.status, "route-level RBAC"),
     has(files.status, "Production policy mode default-denies"),

@@ -25,7 +25,8 @@ const MCP_PARITY = {
   handoff: "memory_handoff_prepare",
   "release-prepare": "memory_release_prepare",
   "source-revalidate": "memory_source_revalidate",
-  conflicts: "memory_conflict_sets"
+  conflicts: "memory_conflict_sets",
+  health: "memory_health"
 };
 
 const COMMAND_SCHEMAS = {
@@ -334,7 +335,7 @@ async function createAutoBackend(context) {
     await autostartDaemon(context);
     if (await daemon.refresh().isReachable()) return daemon;
   }
-  if (context.options.flags.has("require-daemon") || mode === "daemon") {
+  if (context.options.flags.has("require-daemon") || mode === "daemon" || productionHarnessMode()) {
     const error = new Error("cognibrain daemon unavailable");
     error.code = "daemon_unavailable";
     error.exitCode = EXIT_CODES.daemonUnavailable;
@@ -348,6 +349,7 @@ class DaemonBackend {
   constructor(context) {
     this.context = context;
     this.baseUrl = discoverDaemonUrl(context);
+    this.authHeaders = authHeadersFromOptions(context.options);
   }
 
   refresh() {
@@ -362,7 +364,7 @@ class DaemonBackend {
   async isReachable() {
     if (!this.baseUrl) return false;
     try {
-      const health = await httpJson("GET", `${this.baseUrl}/health`, undefined, 800);
+      const health = await httpJson("GET", `${this.baseUrl}/health`, undefined, 800, this.authHeaders);
       return Boolean(health.ok);
     } catch {
       return false;
@@ -371,7 +373,7 @@ class DaemonBackend {
 
   async call(command, payload) {
     const route = routeFor(command, payload);
-    const data = await httpJson(route.method, `${this.baseUrl}${route.path}`, route.body);
+    const data = await httpJson(route.method, `${this.baseUrl}${route.path}`, route.body, 4_000, this.authHeaders);
     return { data, backend: this.description(), warnings: [] };
   }
 }
@@ -486,11 +488,14 @@ async function autostartDaemon(context) {
   }
 }
 
-function httpJson(method, url, body, timeoutMs = 4_000) {
+function httpJson(method, url, body, timeoutMs = 4_000, extraHeaders = {}) {
   return new Promise((resolveRequest, reject) => {
     const request = http.request(url, {
       method,
-      headers: body ? { "content-type": "application/json" } : undefined
+      headers: cleanHeaders({
+        ...(body ? { "content-type": "application/json" } : {}),
+        ...extraHeaders
+      })
     }, (response) => {
       let text = "";
       response.on("data", (chunk) => {
@@ -520,6 +525,37 @@ function httpJson(method, url, body, timeoutMs = 4_000) {
   });
 }
 
+function authHeadersFromOptions(options) {
+  const authEnvName = stringOption(options, "auth-env");
+  const authEnvValue = authEnvName ? process.env[authEnvName] : undefined;
+  const bearer = stringOption(options, "bearer-token") ?? process.env.MEMORY_BEARER_TOKEN ?? bearerFromAuthEnv(authEnvName, authEnvValue);
+  const apiKey = bearer ? undefined : stringOption(options, "api-key") ?? apiKeyFromAuthEnv(authEnvName, authEnvValue) ?? process.env.MEMORY_API_KEY ?? process.env.COGNIBRAIN_API_KEY ?? process.env.COGNIBRAIN_API_TOKEN;
+  return cleanHeaders({
+    authorization: bearer ? `Bearer ${bearer}` : undefined,
+    "x-api-key": apiKey,
+    "x-actor-id": process.env.MEMORY_ACTOR_ID ?? process.env.COGNIBRAIN_ACTOR_ID
+  });
+}
+
+function bearerFromAuthEnv(name, value) {
+  if (!name || !value) return undefined;
+  return /BEARER|JWT/i.test(name) ? value : undefined;
+}
+
+function apiKeyFromAuthEnv(name, value) {
+  if (!name || !value) return undefined;
+  return /BEARER|JWT/i.test(name) ? undefined : value;
+}
+
+function cleanHeaders(headers) {
+  const entries = Object.entries(headers).filter(([, value]) => value !== undefined && value !== "");
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+function productionHarnessMode() {
+  return process.env.MEMORY_SECURITY_MODE === "production" || process.env.COGNIBRAIN_SECURITY_MODE === "production" || process.env.MEMORY_PRODUCTION_MODE === "true" || process.env.COGNIBRAIN_PRODUCTION_MODE === "true";
+}
+
 function printHarnessOutput(output, options) {
   if (options.flags.has("json")) {
     console.log(JSON.stringify(output, null, 2));
@@ -533,7 +569,7 @@ function envelope(input) {
     schemaVersion: "1.0",
     ok: input.ok,
     type: input.type,
-    id: input.id,
+    id: input.id ?? null,
     decision: input.decision,
     data: input.data,
     warnings: input.warnings,
@@ -740,6 +776,9 @@ Backend flags:
   --local-direct       Run the local fallback without the daemon.
   --require-daemon     Fail with exit code 5 if the daemon is unavailable.
   --no-autostart       Do not start the local daemon automatically.
+  --api-key <token>    Send x-api-key to an auth-enabled daemon.
+  --bearer-token <jwt> Send Authorization: Bearer to an auth-enabled daemon.
+  --auth-env <name>    Read the daemon auth token from a named env var.
 
 Stable exit codes:
   0 success/allow, 1 generic failure, 2 guard warning, 3 guard block,

@@ -27,8 +27,8 @@ async function main() {
       return defaultService.health(payload.userId);
     case "source-revalidate":
       return payload.memoryId
-        ? defaultService.revalidateMemory(payload.memoryId, payload.userId)
-        : defaultService.revalidateSourceRefs(payload.userId, { connectorIds: payload.connectorIds, limit: payload.limit });
+        ? await defaultService.revalidateMemoryAsync(payload.memoryId, payload.userId)
+        : await defaultService.revalidateSourceRefsAsync(payload.userId, { connectorIds: payload.connectorIds, limit: payload.limit });
     case "conflicts":
       return defaultService.listConflictSets(payload.status);
     default:

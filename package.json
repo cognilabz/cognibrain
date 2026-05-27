@@ -50,6 +50,7 @@
     "test:watch": "vitest",
     "release:check": "node scripts/release/release-check.mjs",
     "release:certify": "npm run internal -- certify:production",
+    "benchmark:release": "npm run internal -- benchmark:release",
     "verify": "npm run test && npm run internal -- eval && npm run build",
     "verify:ci": "npm run internal -- verify:nextgen",
     "verify:selfhosted": "npm run internal -- verify:selfhosted",

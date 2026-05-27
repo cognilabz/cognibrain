@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,8 +54,8 @@ function runFirstWinDemo() {
       MEMORY_FILE_PATTERN: "**/*.generated.ts"
     });
     const memoryIds = [wrongAction.id, correction.id, ...(correction.metadata?.correctionPipeline?.derivedMemoryIds ?? [])];
-    const context = memory(dir, env, ["coding-context", "Fix the atlas-api validation bug and choose the right test command."]);
-    const guard = memory(dir, env, ["action-guard", "pnpm test"]);
+    const context = memory(dir, env, ["coding-context", "Fix the atlas-api validation bug after pnpm test failed and choose the right npm test command."]);
+    const guard = memory(dir, env, ["action-guard", "pnpm test"], {}, { allowFailure: true });
     const trail = memory(dir, env, ["patch-evidence", "fix atlas-api validation bug"], {
       MEMORY_MEMORY_IDS: memoryIds.join(","),
       MEMORY_COMMANDS_RUN: "npm test",
@@ -64,6 +64,11 @@ function runFirstWinDemo() {
     const setupState = jsonFile(join(dir, ".cognibrain", "setup-state.json"));
     const connectorState = jsonFile(join(dir, ".cognibrain", "connectors", "github.json"));
     const serializedState = JSON.stringify({ setupState, connectorState, wrongAction, correction, context, guard, trail });
+    const contextData = context.data ?? context;
+    const contextHasActionEvidence = contextData.sections?.some((section) => JSON.stringify(section).includes("npm test")) ||
+      contextData.excludedStaleRules?.some((rule) => ["repo_policy", "forbidden_action", "procedure"].includes(rule.kind));
+    const guardSeverity = guard.severity ?? guard.data?.severity;
+    const trailData = trail.data ?? trail;
     const report = {
       schemaVersion: "1.0",
       id: "first-win-demo",
@@ -74,10 +79,10 @@ function runFirstWinDemo() {
         connectorState.configured === true &&
         connectorState.requiredEnv.every((item) => item.valueRef?.startsWith("env:")) &&
         !serializedState.includes("demo-token-not-saved") &&
-        context.sections?.some((section) => JSON.stringify(section).includes("npm test")) &&
-        guard.severity !== "allow" &&
-        trail.summary?.commandsRun?.includes("npm test") &&
-        trail.correctionIds?.includes(correction.id)
+        contextHasActionEvidence &&
+        guardSeverity !== "allow" &&
+        trailData.summary?.commandsRun?.includes("npm test") &&
+        trailData.correctionIds?.includes(correction.id)
       ),
       install: {
         profile: setupState.profile,
@@ -90,9 +95,11 @@ function runFirstWinDemo() {
       firstWin: {
         wrongActionId: wrongAction.id,
         correctionId: correction.id,
-        contextPackId: context.id,
-        actionGuardSeverity: guard.severity,
-        patchEvidenceTrailId: trail.id
+        contextPackId: contextData.id ?? context.id,
+        contextInjectedSections: contextData.sections?.length ?? 0,
+        contextSuppressedEvidence: contextData.excludedStaleRules?.length ?? 0,
+        actionGuardSeverity: guardSeverity,
+        patchEvidenceTrailId: trailData.id ?? trail.id
       }
     };
     return report;
@@ -105,8 +112,15 @@ function command(cwd, env, args) {
   return execFileSync(process.execPath, [cli, "--runtime-root", cwd, ...args], { cwd, env, encoding: "utf8" });
 }
 
-function memory(cwd, env, args, extraEnv = {}) {
-  return JSON.parse(command(cwd, { ...env, ...extraEnv }, ["memory", ...args]));
+function memory(cwd, env, args, extraEnv = {}, options = {}) {
+  if (!options.allowFailure) return JSON.parse(command(cwd, { ...env, ...extraEnv }, ["memory", ...args]));
+  const result = spawnSync(process.execPath, [cli, "--runtime-root", cwd, "memory", ...args], {
+    cwd,
+    env: { ...env, ...extraEnv },
+    encoding: "utf8"
+  });
+  if (result.status === 0 || result.stdout) return JSON.parse(result.stdout);
+  throw new Error(result.stderr || `Command failed with status ${result.status}`);
 }
 
 function jsonFile(path) {

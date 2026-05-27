@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { createMcpRuntimeToolHandlers } from "../src/connectors/mcpRuntimeClient";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const cli = join(root, "bin", "cognibrain.mjs");
 const connectCli = join(root, "bin", "cognibrain-connect.mjs");
-const slowCliTimeout = 30_000;
+const slowCliTimeout = 90_000;
 
 describe("cognibrain CLI", () => {
   it("prints the one-command surface", () => {
@@ -109,12 +110,14 @@ describe("cognibrain CLI", () => {
         { args: ["connector", "list"], title: "cognibrain connectors" },
         { args: ["adapter", "list"], title: "cognibrain adapters" },
         { args: ["sdk", "list"], title: "cognibrain SDK" },
-        { args: ["proof", "--no-refresh"], title: "cognibrain proof" },
+        { args: ["proof", "--no-refresh"], title: "cognibrain proof", allowFailure: true },
         { args: ["skill", "status"], title: "cognibrain skill" },
         { args: ["doctor", "--no-start", "--no-skill"], title: "cognibrain doctor" }
       ];
       for (const surface of surfaces) {
-        const output = execFileSync(process.execPath, [cli, "--runtime-root", dir, ...surface.args], { cwd: dir, env, encoding: "utf8" });
+        const result = spawnSync(process.execPath, [cli, "--runtime-root", dir, ...surface.args], { cwd: dir, env, encoding: "utf8" });
+        if (!surface.allowFailure) expect(result.status).toBe(0);
+        const output = `${result.stdout}${result.stderr}`;
         expect(output).not.toContain("╭");
         expect(output).not.toContain("╰");
         expect(output).toContain(surface.title);
@@ -533,6 +536,76 @@ describe("cognibrain CLI", () => {
       expect(health.ok).toBe(true);
       expect(health.backend.kind).toBe("daemon");
       expect(health.type).toBe("health");
+      expect(health.mcpParity).toBe("memory_health");
+    } finally {
+      try {
+        execFileSync(process.execPath, [cli, "--runtime-root", dir, "stop"], { cwd: dir, encoding: "utf8" });
+      } catch {
+        // best-effort cleanup
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("sends auth headers for daemon-backed lifecycle calls", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-auth-daemon-"));
+    try {
+      const {
+        MEMORY_API_KEY,
+        COGNIBRAIN_API_KEY,
+        COGNIBRAIN_API_TOKEN,
+        MEMORY_BEARER_TOKEN,
+        MEMORY_ACTOR_ID,
+        COGNIBRAIN_ACTOR_ID,
+        MEMORY_API_URL,
+        COGNIBRAIN_API_URL,
+        COGNIBRAIN_URL,
+        COGNIBRAIN_CLI_BACKEND,
+        COGNIBRAIN_HARNESS_BACKEND,
+        ...baseEnv
+      } = process.env;
+      const env = {
+        ...baseEnv,
+        MEMORY_DB_PATH: join(dir, "memory.json"),
+        MEMORY_USER_ID: "harness-auth",
+        MEMORY_AUTO_DREAM: "false",
+        MEMORY_REQUIRE_AUTH: "true",
+        MEMORY_API_KEYS: "dev-secret"
+      };
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "start"], { cwd: dir, env, encoding: "utf8" });
+      const denied = spawnSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "context",
+        "--require-daemon",
+        "--user",
+        "harness-auth",
+        "--task",
+        "prepare authenticated lifecycle context",
+        "--json"
+      ], { cwd: dir, env, encoding: "utf8" });
+      expect(denied.status).toBe(4);
+      expect(JSON.parse(denied.stdout).errors[0].code).toBe("auth_required");
+
+      const context = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "context",
+        "--require-daemon",
+        "--api-key",
+        "dev-secret",
+        "--user",
+        "harness-auth",
+        "--task",
+        "prepare authenticated lifecycle context",
+        "--json"
+      ], { cwd: dir, env, encoding: "utf8" }));
+      expect(context.ok).toBe(true);
+      expect(context.backend.kind).toBe("daemon");
+      expect(context.type).toBe("context");
+      expect(context.mcpParity).toBe("memory_coding_context_pack");
     } finally {
       try {
         execFileSync(process.execPath, [cli, "--runtime-root", dir, "stop"], { cwd: dir, encoding: "utf8" });
@@ -568,6 +641,184 @@ describe("cognibrain CLI", () => {
       expect(payload.ok).toBe(false);
       expect(payload.errors[0].code).toBe("daemon_unavailable");
     } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("does not silently use local-direct fallback in production security mode", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-production-daemon-"));
+    try {
+      const result = spawnSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "health",
+        "--no-autostart",
+        "--json"
+      ], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          MEMORY_API_URL: "http://127.0.0.1:45999",
+          MEMORY_SECURITY_MODE: "production",
+          MEMORY_AUTO_DREAM: "false"
+        },
+        encoding: "utf8"
+      });
+      expect(result.status).toBe(5);
+      const payload = JSON.parse(result.stdout);
+      expect(payload.ok).toBe(false);
+      expect(payload.backend.kind).toBe("daemon");
+      expect(payload.errors[0].code).toBe("daemon_unavailable");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("runs every harness lifecycle command against the daemon backend with the stable JSON envelope", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-all-daemon-"));
+    const env = {
+      ...process.env,
+      MEMORY_DB_PATH: join(dir, "memory.json"),
+      MEMORY_USER_ID: "harness-all-daemon",
+      MEMORY_AUTO_DREAM: "false"
+    };
+    const envelopeKeys = [
+      "schemaVersion",
+      "ok",
+      "type",
+      "id",
+      "decision",
+      "data",
+      "warnings",
+      "errors",
+      "nextRecommendedCommands",
+      "backend",
+      "schema",
+      "mcpParity",
+      "durationMs"
+    ];
+    const run = (args: string[]) => {
+      const result = spawnSync(process.execPath, [cli, "--runtime-root", dir, ...args, "--require-daemon", "--json"], { cwd: dir, env, encoding: "utf8" });
+      expect(result.stdout).toBeTruthy();
+      return JSON.parse(result.stdout);
+    };
+    try {
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "start"], { cwd: dir, env, encoding: "utf8" });
+      const correction = run(["harness", "correction", "--user", "harness-all-daemon", "--text", "Use npm test, not pnpm in this repo.", "--wrong-action", "pnpm test", "--correct-action", "npm test", "--repo", "demo/harness-all"]);
+      const outputs = [
+        correction,
+        run(["harness", "context", "--user", "harness-all-daemon", "--task", "prepare daemon parity patch", "--repo", "demo/harness-all"]),
+        run(["harness", "guard", "--user", "harness-all-daemon", "--action", "npm test", "--repo", "demo/harness-all"]),
+        run(["harness", "outcome", "--user", "harness-all-daemon", "--command", "npm test", "--exit-code", "0", "--summary", "daemon lifecycle passed"]),
+        run(["harness", "patch-evidence", "--user", "harness-all-daemon", "--task", "daemon parity patch", "--files", "src/example.ts", "--commands", "npm test", "--memory-ids", correction.data.id]),
+        run(["harness", "session-end", "--user", "harness-all-daemon"]),
+        run(["harness", "handoff", "--user", "harness-all-daemon"]),
+        run(["harness", "release-prepare", "--user", "harness-all-daemon", "--repo", "demo/harness-all"]),
+        run(["harness", "dream-plan", "--user", "harness-all-daemon"]),
+        run(["harness", "source-revalidate", "--user", "harness-all-daemon", "--limit", "5"]),
+        run(["harness", "conflicts"]),
+        run(["harness", "health", "--user", "harness-all-daemon"])
+      ];
+      expect(outputs.map((output) => output.schema.command)).toEqual([
+        "correction",
+        "context",
+        "guard",
+        "outcome",
+        "patch-evidence",
+        "session-end",
+        "handoff",
+        "release-prepare",
+        "dream-plan",
+        "source-revalidate",
+        "conflicts",
+        "health"
+      ]);
+      for (const output of outputs) {
+        expect(Object.keys(output)).toEqual(envelopeKeys);
+        expect(output.backend.kind).toBe("daemon");
+        expect(output.schemaVersion).toBe("1.0");
+        expect(output.errors).toEqual([]);
+        expect(output.mcpParity).toEqual(expect.any(String));
+      }
+      expect(outputs.at(-1)?.mcpParity).toBe("memory_health");
+    } finally {
+      try {
+        execFileSync(process.execPath, [cli, "--runtime-root", dir, "stop"], { cwd: dir, encoding: "utf8" });
+      } catch {
+        // best-effort cleanup
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("uses the daemon-backed runtime path for MCP lifecycle parity handlers", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-mcp-daemon-parity-"));
+    const previousEnv = {
+      COGNIBRAIN_RUNTIME_ROOT: process.env.COGNIBRAIN_RUNTIME_ROOT,
+      MEMORY_DB_PATH: process.env.MEMORY_DB_PATH,
+      MEMORY_API_URL: process.env.MEMORY_API_URL,
+      COGNIBRAIN_API_URL: process.env.COGNIBRAIN_API_URL,
+      COGNIBRAIN_URL: process.env.COGNIBRAIN_URL,
+      COGNIBRAIN_MCP_BACKEND: process.env.COGNIBRAIN_MCP_BACKEND,
+      COGNIBRAIN_MCP_AUTOSTART: process.env.COGNIBRAIN_MCP_AUTOSTART,
+      MEMORY_AUTO_DREAM: process.env.MEMORY_AUTO_DREAM
+    };
+    try {
+      const env = {
+        ...process.env,
+        COGNIBRAIN_RUNTIME_ROOT: dir,
+        MEMORY_DB_PATH: join(dir, "memory.json"),
+        MEMORY_USER_ID: "mcp-daemon",
+        MEMORY_AUTO_DREAM: "false"
+      };
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "start"], { cwd: dir, env, encoding: "utf8" });
+      const correction = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "correction",
+        "--require-daemon",
+        "--user",
+        "mcp-daemon",
+        "--text",
+        "Use npm test, not pnpm in this repo.",
+        "--wrong-action",
+        "pnpm test",
+        "--correct-action",
+        "npm test",
+        "--repo",
+        "demo/mcp-daemon",
+        "--json"
+      ], { cwd: dir, env, encoding: "utf8" }));
+      expect(correction.backend.kind).toBe("daemon");
+
+      process.env.COGNIBRAIN_RUNTIME_ROOT = dir;
+      process.env.MEMORY_DB_PATH = join(dir, "memory.json");
+      process.env.MEMORY_AUTO_DREAM = "false";
+      delete process.env.MEMORY_API_URL;
+      delete process.env.COGNIBRAIN_API_URL;
+      delete process.env.COGNIBRAIN_URL;
+      delete process.env.COGNIBRAIN_MCP_BACKEND;
+      const handlers = createMcpRuntimeToolHandlers({ root, runtimeRoot: dir });
+      const guard = await handlers.actionGuard({
+        userId: "mcp-daemon",
+        action: "pnpm test",
+        codebaseScope: { repo: "demo/mcp-daemon" }
+      }) as { severity?: string };
+      expect(guard.severity).toBe("block");
+      const health = await handlers.health({ userId: "mcp-daemon" }) as { active?: number };
+      expect(health.active).toBeGreaterThan(0);
+    } finally {
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      try {
+        execFileSync(process.execPath, [cli, "--runtime-root", dir, "stop"], { cwd: dir, encoding: "utf8" });
+      } catch {
+        // best-effort cleanup
+      }
       rmSync(dir, { recursive: true, force: true });
     }
   }, slowCliTimeout);

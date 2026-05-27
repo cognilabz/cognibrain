@@ -53,12 +53,12 @@ const checks = [
     has(files.benchmarks, "same-run-api-shape"),
     has(files.benchmarks, "same-run-native"),
     has(files.status, "Production Readiness Status"),
-    has(files.status, "DB-primary row persistence"),
+    has(files.status, "DB-primary MemoryRepository"),
     has(files.status, "JWT/OIDC verifier"),
     has(files.status, "Production policy mode default-denies"),
     has(files.status, "Generated artifacts are internal CI/build outputs"),
     has(files.integrations, "MCP first for agents"),
-    has(files.reference, "For agents, use MCP first")
+    has(files.reference, "For MCP-native agents, use MCP")
   ]),
   check("generated outputs stay internal", [
     packageFiles.every((path) => !path.startsWith("artifacts/")),

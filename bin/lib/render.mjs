@@ -237,7 +237,7 @@ function surfaceLines(kind, payload, options = {}) {
         ["mode", payload.dryRun ? "dry run" : "written", payload.dryRun ? "yellow" : "green"]
       ],
       sections: [
-        { title: "Summary", items: [`${payload.dryRun ? "would scaffold" : "scaffolded"} platform SDK: ${payload.slug}`] },
+        { title: "Summary", items: [`${payload.dryRun ? "would scaffold" : "scaffolded"} ${payload.sdk ?? "platform"} SDK: ${payload.slug}`] },
         { title: "Files", items: payload.files ?? [] },
         { title: "Commands", items: payload.commands ?? [] },
         { title: "Docs", items: [payload.docs].filter(Boolean) }

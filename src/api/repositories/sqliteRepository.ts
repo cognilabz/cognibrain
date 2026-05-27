@@ -1,9 +1,9 @@
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
-import { MemoryStore, type Memory, type MemoryFilter, type MemoryInput, type MemoryPatch, type MemoryRepository, type UnitOfWork } from "../../core";
+import { MemoryStore, type Memory, type MemoryFilter, type MemoryInput, type MemoryPatch, type MemoryRepository, type RepositoryStatePersistence, type UnitOfWork } from "../../core";
 
-export class SQLiteMemoryRepository implements MemoryRepository {
+export class SQLiteMemoryRepository implements MemoryRepository, RepositoryStatePersistence {
   private readonly path: string;
   private database?: SQLiteDatabase;
   readonly store = new MemoryStore();
@@ -93,6 +93,60 @@ export class SQLiteMemoryRepository implements MemoryRepository {
       db.prepare("delete from relations").run();
       db.prepare("delete from memory_fts").run();
       db.prepare("delete from memories").run();
+    });
+  }
+
+  loadState(): unknown {
+    this.db();
+    const row = this.db().prepare("select payload from repository_state where key = ?").all("service_state")[0] as { payload?: string } | undefined;
+    if (row?.payload) return JSON.parse(row.payload);
+    return undefined;
+  }
+
+  saveState(state: unknown): void {
+    this.withWriteTransaction(() => {
+      const db = this.db();
+      const now = nowIso();
+      db.prepare("insert into repository_state (key, updated_at, payload) values (?, ?, ?) on conflict(key) do update set updated_at = excluded.updated_at, payload = excluded.payload")
+        .run("service_state", now, JSON.stringify(state));
+      const payload = state as {
+        claims?: Array<{ id: string; sourceMemoryId?: string; subject?: string; predicate?: string; object?: string; state?: string }>;
+        conflictSets?: Array<{ id: string; status?: string }>;
+        dreamJobs?: Array<{ jobId: string; userId?: string; status?: string; trigger?: string; mode?: string; queuedAt?: string | Date }>;
+        connectorSyncStates?: Array<{ connectorId: string; lastStatus?: string }>;
+      };
+      replacePayloadTable(db, "claims", payload.claims ?? [], (claim) => [
+        claim.id,
+        claim.sourceMemoryId ?? null,
+        claim.subject ?? null,
+        claim.predicate ?? null,
+        claim.object ?? null,
+        claim.state ?? null,
+        now,
+        JSON.stringify(claim)
+      ]);
+      replacePayloadTable(db, "conflict_sets", payload.conflictSets ?? [], (set) => [
+        set.id,
+        set.status ?? null,
+        now,
+        JSON.stringify(set)
+      ]);
+      replacePayloadTable(db, "dream_jobs", payload.dreamJobs ?? [], (job) => [
+        job.jobId,
+        job.userId ?? null,
+        job.status ?? null,
+        job.trigger ?? null,
+        job.mode ?? null,
+        job.queuedAt ? new Date(job.queuedAt).toISOString() : now,
+        now,
+        JSON.stringify(job)
+      ]);
+      replacePayloadTable(db, "connector_sync_states", payload.connectorSyncStates ?? [], (state) => [
+        state.connectorId,
+        state.lastStatus ?? null,
+        now,
+        JSON.stringify(state)
+      ]);
     });
   }
 
@@ -257,6 +311,43 @@ export class SQLiteMemoryRepository implements MemoryRepository {
         created_at text not null
       );
       create virtual table if not exists memory_fts using fts5(id unindexed, content, entities);
+      create table if not exists repository_state (
+        key text primary key,
+        updated_at text not null,
+        payload text not null
+      );
+      create table if not exists claims (
+        id text primary key,
+        source_memory_id text,
+        subject text,
+        predicate text,
+        object text,
+        state text,
+        updated_at text not null,
+        payload text not null
+      );
+      create table if not exists conflict_sets (
+        id text primary key,
+        status text,
+        updated_at text not null,
+        payload text not null
+      );
+      create table if not exists dream_jobs (
+        job_id text primary key,
+        user_id text,
+        status text,
+        trigger text,
+        mode text,
+        queued_at text,
+        updated_at text not null,
+        payload text not null
+      );
+      create table if not exists connector_sync_states (
+        connector_id text primary key,
+        last_status text,
+        updated_at text not null,
+        payload text not null
+      );
     `);
     return this.database;
   }
@@ -274,6 +365,19 @@ export function sqliteRepositoryAvailable(): boolean {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function replacePayloadTable<T>(db: SQLiteDatabase, table: string, rows: T[], valuesFor: (row: T) => unknown[]): void {
+  db.prepare(`delete from ${table}`).run();
+  const sql = table === "claims"
+    ? "insert into claims (id, source_memory_id, subject, predicate, object, state, updated_at, payload) values (?, ?, ?, ?, ?, ?, ?, ?)"
+    : table === "conflict_sets"
+      ? "insert into conflict_sets (id, status, updated_at, payload) values (?, ?, ?, ?)"
+      : table === "dream_jobs"
+        ? "insert into dream_jobs (job_id, user_id, status, trigger, mode, queued_at, updated_at, payload) values (?, ?, ?, ?, ?, ?, ?, ?)"
+        : "insert into connector_sync_states (connector_id, last_status, updated_at, payload) values (?, ?, ?, ?)";
+  const statement = db.prepare(sql);
+  for (const row of rows) statement.run(...valuesFor(row));
 }
 
 function loadSQLite(): new (path: string) => SQLiteDatabase {

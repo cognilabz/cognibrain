@@ -29,6 +29,10 @@ Usage:
       CLI memory workbench with recent memories, health, maintenance, and dashboard-equivalent memory actions
   cognibrain memories <add|search|coding-context|evidence-pack|why-used|graph|timeline|dream|marketplace|...>
       Run any memory operation from the CLI; equivalent to cognibrain memory <subcommand>
+  cognibrain context|guard|outcome|correction|patch-evidence|session-end|handoff|release-prepare|dream-plan|source-revalidate|conflicts|health --json
+      CLI-first agent lifecycle commands with daemon-backed JSON contracts and local-direct fallback
+  cognibrain harness <lifecycle-command>
+      Backward-compatible alias for existing harness scripts
   cognibrain connections [list|status|doctor] [--json]
       CLI connections workbench for connectors, adapters, harnesses, skill state, and configuration health
   cognibrain connections add <connector-or-adapter> [--dry-run] [--set key=value]
@@ -50,6 +54,8 @@ Usage:
       Inspect available SDK scaffolds and SDK packaging readiness
   cognibrain sdk platform <name> [--kind project_management|chat|docs|code|custom] [--out integrations/<name>] [--dry-run]
       Scaffold a TypeScript platform integration SDK, connector manifest, env example, and README
+  cognibrain sdk harness <name> [--out integrations/<name>] [--dry-run]
+      Scaffold a TypeScript harness integration SDK smoke for non-MCP runners
   cognibrain skill install|status|doctor|path
       Install and inspect the Codex skill
   cognibrain memory add <text>
@@ -62,8 +68,11 @@ Usage:
   cognibrain memory dream
   cognibrain memory health
   cognibrain memory maintenance
+  cognibrain context --task <text> --json
+  cognibrain guard --action <command> --json
+  cognibrain outcome --command <command> --exit-code <code> --json
   cognibrain mcp
-      Run the stdio MCP server for agent harnesses
+      Run the optional stdio MCP adapter for MCP-native agent hosts
   cognibrain clean
       Remove generated local runtime, benchmark and build artifacts
 `);
@@ -160,7 +169,8 @@ export function sdkUsage(exitCode) {
   console.log(`Usage:
   cognibrain sdk list [--json]
   cognibrain sdk doctor [--json]
-  cognibrain sdk platform <name> [--kind issue_tracker|chat|docs|calendar|ci|observability|custom] [--direction ingest|export|two_way] [--auth none|api_key|oauth|token] [--out <dir>] [--dry-run]`);
+  cognibrain sdk platform <name> [--kind issue_tracker|chat|docs|calendar|ci|observability|custom] [--direction ingest|export|two_way] [--auth none|api_key|oauth|token] [--out <dir>] [--dry-run]
+  cognibrain sdk harness <name> [--out <dir>] [--dry-run]`);
   process.exit(exitCode);
 }
 

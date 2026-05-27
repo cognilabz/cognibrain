@@ -21,6 +21,14 @@ The default command prints a stable operator CLI snapshot. It does not depend on
 
 MCP is the default integration path for agents. CLI is the operator surface. SDK/HTTP is for custom integrations, not a second primary agent path.
 
+Public TypeScript SDK subpaths are available for custom integrations:
+
+```ts
+import { CognibrainClient } from "@cognilabz/cognibrain/sdk/typescript/client";
+import { createPlatformIntegration } from "@cognilabz/cognibrain/sdk/typescript/connectors";
+import { CognibrainHarnessSdk } from "@cognilabz/cognibrain/sdk/typescript/harness";
+```
+
 ## Install
 
 ```bash

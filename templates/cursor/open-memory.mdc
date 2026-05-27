@@ -5,14 +5,14 @@ globs:
 alwaysApply: true
 ---
 
-Before long-running coding tasks, query cognibrain through MCP with `memory_context_pack`, or `memory_coding_context_pack` when the host exposes the coding-specific tool.
+Before long-running coding tasks, query cognibrain through the CLI lifecycle: `./bin/cognibrain.mjs context --task "<task>" --json`.
 
 Start the local runtime with `./bin/cognibrain.mjs start` when API or dashboard access is needed. Inspect it with `./bin/cognibrain.mjs status`.
 
 Use returned memories as source-backed hints. Verify current code, tests, and benchmark artifacts before acting on stale or drift-prone facts.
 
-Before shell commands or file edits with durable side effects, call `memory_action_guard` when available.
+Before shell commands or file edits with durable side effects, call `./bin/cognibrain.mjs guard --action "<command>" --json`.
 
-After durable discoveries, user corrections, connector decisions, or benchmark results, record them with `memory_add`. Finish non-trivial patches with `memory_patch_evidence`.
+After durable discoveries, user corrections, connector decisions, or benchmark results, record them with `./bin/cognibrain.mjs memory add "<fact>"`. Finish non-trivial patches with `./bin/cognibrain.mjs patch-evidence --task "<task>" --json`.
 
-Use `memory_maintenance_status` to check automatic dream state. Run `memory_dream` after major sessions, imports, handoff, or when contradictory memories appear.
+MCP tools such as `memory_coding_context_pack`, `memory_action_guard`, `memory_add`, and `memory_patch_evidence` are optional native adapters for Cursor hosts that expose them. Use `memory_maintenance_status` to check automatic dream state. Run `memory_dream` after major sessions, imports, handoff, or when contradictory memories appear.

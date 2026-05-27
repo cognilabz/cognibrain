@@ -34,8 +34,11 @@ export interface ConnectorManifest {
     authorizeUrl: string;
     tokenUrl?: string;
     clientIdRef?: string;
+    clientSecretRef?: string;
     scopes?: string[];
     redirectUri?: string;
+    refreshUrl?: string;
+    revokeUrl?: string;
   };
   vendor?: {
     provider:
@@ -75,8 +78,13 @@ export interface ConnectorAuthSession {
   redirectUri?: string;
   scopes: string[];
   tokenRef?: string;
+  refreshTokenRef?: string;
   tokenHash?: string;
+  refreshTokenHash?: string;
+  accessTokenExpiresAt?: Date | string;
+  revokedAt?: Date | string;
   error?: string;
+  metadata?: Record<string, unknown>;
   createdAt: Date | string;
   updatedAt: Date | string;
   expiresAt?: Date | string;

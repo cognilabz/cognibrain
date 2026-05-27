@@ -196,6 +196,21 @@ export interface SearchResult {
   citation: string;
   stale: boolean;
   queryPlan?: QueryPlan;
+  truth?: {
+    selectedClaimId?: string;
+    selectedMemoryId?: string;
+    currentTruthState: "selected" | "uncertain" | "missing";
+    suppressedClaimIds: string[];
+    reason: string;
+    conflictSetId?: string;
+  };
+  risk?: {
+    riskLevel: "low" | "medium" | "high" | "release-critical" | "destructive";
+    warnings: string[];
+    verificationRequests: string[];
+    actionGuardBlock?: boolean;
+    truthReason?: string;
+  };
 }
 
 export interface EvidencePack {
@@ -258,6 +273,7 @@ export interface EvidencePack {
     decision?: SearchResult["decision"];
     policyDecision?: PolicyDecision;
     score?: number;
+    truthDecision?: CurrentTruthDecision;
   }>;
   policyDecisions?: PolicyDecision[];
   graphPaths?: string[];

@@ -527,8 +527,11 @@ export const connectorManifestSchema = z.object({
       authorizeUrl: z.string().url(),
       tokenUrl: z.string().url().optional(),
       clientIdRef: z.string().optional(),
+      clientSecretRef: z.string().optional(),
       scopes: z.array(z.string()).optional(),
-      redirectUri: z.string().url().optional()
+      redirectUri: z.string().url().optional(),
+      refreshUrl: z.string().url().optional(),
+      revokeUrl: z.string().url().optional()
     })
     .optional()
 });

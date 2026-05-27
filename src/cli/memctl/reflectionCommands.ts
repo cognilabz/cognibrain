@@ -28,6 +28,94 @@ type CommandContext = { service: MemoryService; userId: string };
 export async function handleReflectionCommands(command: string | undefined, args: string[], context: CommandContext): Promise<boolean> {
   const { service, userId } = context;
   switch (command) {
+  case "truth-conflicts": {
+    const status = args[0];
+    if (status && !["open", "resolved", "operator_review"].includes(status)) fail("Usage: memctl truth-conflicts [open|resolved|operator_review]");
+    console.log(JSON.stringify(service.listConflictSets(status as "open" | "resolved" | "operator_review" | undefined), null, 2));
+    return true;
+  }
+  case "truth-current": {
+    const memoryId = args[0];
+    if (!memoryId) fail("Usage: memctl truth-current <memory-id>");
+    console.log(JSON.stringify(service.currentTruthForMemory(service.get(memoryId)), null, 2));
+    return true;
+  }
+  case "truth-resolve": {
+    const [conflictSetId, selectedClaimId, ...reasonParts] = args;
+    if (!conflictSetId || !selectedClaimId) fail("Usage: memctl truth-resolve <conflict-set-id> <selected-claim-id> [reason]");
+    console.log(JSON.stringify(service.resolveConflictSet(conflictSetId, {
+      selectedClaimId,
+      reason: reasonParts.join(" ") || "resolved from CLI truth workbench",
+      resolvedBy: "operator"
+    }), null, 2));
+    return true;
+  }
+  case "dream-plan": {
+    console.log(JSON.stringify(service.dreamPlan({
+      userId,
+      trigger: dreamTriggerFromArgs(args),
+      mode: args.includes("--reflect") ? "reflect" : "dream",
+      budget: dreamBudgetFromArgs(args),
+      sourceRefresh: args.includes("--source-refresh"),
+      force: args.includes("--force"),
+      connectorIds: csvList(optionValue(args, "--connectors") ?? process.env.MEMORY_CONNECTOR_IDS)
+    }), null, 2));
+    return true;
+  }
+  case "dream-run": {
+    console.log(JSON.stringify(await service.runDreamCycleAsync({
+      userId,
+      trigger: dreamTriggerFromArgs(args),
+      mode: args.includes("--reflect") ? "reflect" : "dream",
+      budget: dreamBudgetFromArgs(args),
+      sourceRefresh: args.includes("--source-refresh"),
+      force: args.includes("--force"),
+      connectorIds: csvList(optionValue(args, "--connectors") ?? process.env.MEMORY_CONNECTOR_IDS)
+    }), null, 2));
+    return true;
+  }
+  case "dream-jobs": {
+    console.log(JSON.stringify(service.dreamJobStatus(args[0]), null, 2));
+    return true;
+  }
+  case "dream-start": {
+    console.log(JSON.stringify(await service.startDreamJob({
+      userId,
+      trigger: dreamTriggerFromArgs(args),
+      mode: args.includes("--reflect") ? "reflect" : "dream",
+      budget: dreamBudgetFromArgs(args),
+      sourceRefresh: args.includes("--source-refresh"),
+      force: args.includes("--force"),
+      connectorIds: csvList(optionValue(args, "--connectors") ?? process.env.MEMORY_CONNECTOR_IDS)
+    }, fetch, Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000), { wait: args.includes("--wait") }), null, 2));
+    return true;
+  }
+  case "dream-cancel": {
+    const jobId = args[0];
+    if (!jobId) fail("Usage: memctl dream-cancel <job-id> [reason]");
+    console.log(JSON.stringify(service.cancelDreamJob(jobId, args.slice(1).join(" ") || undefined), null, 2));
+    return true;
+  }
+  case "dream-retry": {
+    const jobId = args[0];
+    if (!jobId) fail("Usage: memctl dream-retry <job-id> [--wait]");
+    console.log(JSON.stringify(await service.retryDreamJob(jobId, fetch, Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000), { wait: args.includes("--wait") }), null, 2));
+    return true;
+  }
+  case "dream-verify": {
+    console.log(JSON.stringify(service.resolveVerificationQueue(userId, { connectorIds: csvList(optionValue(args, "--connectors") ?? process.env.MEMORY_CONNECTOR_IDS) }), null, 2));
+    return true;
+  }
+  case "dream-conflicts": {
+    console.log(JSON.stringify(service.listConflictSets("open"), null, 2));
+    return true;
+  }
+  case "dream-resolve": {
+    const [conflictSetId, selectedClaimId, ...reasonParts] = args;
+    if (!conflictSetId || !selectedClaimId) fail("Usage: memctl dream-resolve <conflict-set-id> <selected-claim-id> [reason]");
+    console.log(JSON.stringify(service.resolveConflictSet(conflictSetId, { selectedClaimId, reason: reasonParts.join(" ") || "resolved from CLI dream workbench", resolvedBy: "operator" }), null, 2));
+    return true;
+  }
   case "reflect":
   case "dream": {
     const report = command === "dream" ? service.dream(userId) : service.reflect(userId);
@@ -248,4 +336,19 @@ export async function handleReflectionCommands(command: string | undefined, args
   }
   }
   return false;
+}
+
+function dreamTriggerFromArgs(args: string[]) {
+  const trigger = optionValue(args, "--trigger") ?? process.env.MEMORY_DREAM_TRIGGER;
+  if (!trigger) return undefined;
+  const allowed = ["manual_reflect", "manual_dream", "auto_write_threshold", "auto_interval", "harness_session_end", "harness_handoff", "before_release", "after_connector_sync", "after_negative_feedback", "after_contradiction_detected"];
+  if (!allowed.includes(trigger)) fail(`Unsupported dream trigger: ${trigger}`);
+  return trigger as "manual_reflect" | "manual_dream" | "auto_write_threshold" | "auto_interval" | "harness_session_end" | "harness_handoff" | "before_release" | "after_connector_sync" | "after_negative_feedback" | "after_contradiction_detected";
+}
+
+function dreamBudgetFromArgs(args: string[]) {
+  const budget = optionValue(args, "--budget") ?? process.env.MEMORY_DREAM_BUDGET;
+  if (!budget) return undefined;
+  if (!["quick", "standard", "deep", "release"].includes(budget)) fail(`Unsupported dream budget: ${budget}`);
+  return budget as "quick" | "standard" | "deep" | "release";
 }

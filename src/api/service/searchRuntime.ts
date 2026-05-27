@@ -34,7 +34,10 @@ export function search(service: any, options: SearchOptions): SearchResult[] {
       verifier: effectiveOptions.verifier ?? service.defaultVerifier,
       lexicalProvider: effectiveOptions.lexicalProvider ?? service.lexicalProviderForPersistence()
     });
-    const plannedResults = (rawResults as SearchResult[]).map((result) => ({ ...result, queryPlan: intent.plan }));
+    const plannedResults = (rawResults as SearchResult[])
+      .map((result) => ({ ...result, queryPlan: intent.plan }))
+      .map((result) => applyTruthDecision(service, result))
+      .map((result) => applyRiskAwareInjection(result, effectiveOptions.query));
     const denied: PolicyDecision[] = [];
     const results = plannedResults.filter((result) => {
       const decision = service.evaluatePolicy("retrieve", result.memory, { userId: effectiveOptions.userId, orgId: effectiveOptions.orgId, agentId: effectiveOptions.agentId });
@@ -73,6 +76,83 @@ export function classifyQueryIntent(service: any, query: string): QueryIntentRep
       reasons: plan.explanation,
       plan
     };
+  }
+
+function applyTruthDecision(service: any, result: SearchResult): SearchResult {
+    const truthDecision = service.currentTruthForMemory(result.memory);
+    if (!truthDecision) return result;
+    const explicitClaim = Boolean(result.memory.metadata?.claim);
+    const truth = {
+      selectedClaimId: truthDecision.selectedClaimId,
+      selectedMemoryId: truthDecision.selectedMemoryId,
+      currentTruthState: truthDecision.state,
+      suppressedClaimIds: truthDecision.suppressedClaimIds ?? [],
+      reason: truthDecision.reason,
+      conflictSetId: truthDecision.conflictSetId
+    };
+    const selectedDifferentMemory = truthDecision.state === "selected" && truthDecision.selectedMemoryId && truthDecision.selectedMemoryId !== result.memory.id;
+    if (explicitClaim && selectedDifferentMemory) {
+      return {
+        ...result,
+        truth,
+        decision: "exclude",
+        explanation: [...(result.explanation ?? []), `truth excluded: ${truthDecision.reason}`]
+      };
+    }
+    if (explicitClaim && truthDecision.state === "uncertain") {
+      return {
+        ...result,
+        truth,
+        decision: result.decision === "exclude" ? "exclude" : "review",
+        explanation: [...(result.explanation ?? []), `truth review required: ${truthDecision.reason}`]
+      };
+    }
+    return {
+      ...result,
+      truth,
+      explanation: [...(result.explanation ?? []), `truth ${truthDecision.state}: ${truthDecision.reason}`]
+    };
+  }
+
+function applyRiskAwareInjection(result: SearchResult, query: string): SearchResult {
+    const riskLevel = classifyRetrievalRisk(query);
+    if (riskLevel === "low") return { ...result, risk: { riskLevel, warnings: [], verificationRequests: [], truthReason: result.truth?.reason } };
+    const warnings: string[] = [];
+    const verificationRequests: string[] = [];
+    if (result.stale) verificationRequests.push("memory is stale for this risk level");
+    if (result.memory.trust < 0.75) warnings.push("memory trust below high-risk threshold");
+    if (result.memory.beliefState === "needs_verification") verificationRequests.push("memory is verification-due before injection");
+    if (result.memory.beliefState === "contradicted" || result.truth?.currentTruthState === "uncertain") warnings.push("memory is conflicted or truth-uncertain");
+    const verificationDueAt = result.memory.temporal?.verificationDueAt ? new Date(result.memory.temporal.verificationDueAt).getTime() : undefined;
+    if (verificationDueAt && verificationDueAt <= Date.now()) verificationRequests.push("source verification is due");
+    const actionGuardBlock = (riskLevel === "destructive" || riskLevel === "release-critical") && (warnings.length > 0 || verificationRequests.length > 0);
+    if (!warnings.length && !verificationRequests.length) return { ...result, risk: { riskLevel, warnings, verificationRequests, truthReason: result.truth?.reason } };
+    const nextDecision: SearchResult["decision"] = actionGuardBlock ? "review" : result.decision === "exclude" ? "exclude" : "warn";
+    return {
+      ...result,
+      decision: nextDecision,
+      unsafeToInject: result.unsafeToInject || actionGuardBlock,
+      explanation: [
+        ...(result.explanation ?? []),
+        `risk-aware injection ${riskLevel}: ${[...warnings, ...verificationRequests].join("; ")}`
+      ],
+      risk: {
+        riskLevel,
+        warnings,
+        verificationRequests,
+        actionGuardBlock,
+        truthReason: result.truth?.reason
+      }
+    };
+  }
+
+function classifyRetrievalRisk(query: string): NonNullable<SearchResult["risk"]>["riskLevel"] {
+    const normalized = query.toLowerCase();
+    if (/\b(delete|remove|drop|destroy|wipe|truncate|reset|rm -rf|force push)\b/.test(normalized)) return "destructive";
+    if (/\b(release|deploy|production|prod|rollback|migration|incident|pagerduty)\b/.test(normalized)) return "release-critical";
+    if (/\b(security|secret|credential|token|billing|payment|compliance)\b/.test(normalized)) return "high";
+    if (/\b(test|build|merge|publish|connector|oauth)\b/.test(normalized)) return "medium";
+    return "low";
   }
 
 export function routeMemory(service: any, options: SearchOptions): MemoryRouteReport {
@@ -250,13 +330,16 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
         .map((result) => ({
           memoryId: result.memory.id,
           reason: result.decision === "exclude"
-            ? "retrieval decision excluded this memory"
+            ? result.truth?.reason
+              ? `truth-aware retrieval excluded this memory: ${result.truth.reason}`
+              : "retrieval decision excluded this memory"
             : (result.confidence ?? 1) < 0.5
               ? "calibrated confidence below injection threshold"
               : "token budget or reranking kept this memory outside the context body",
           decision: result.decision,
           policyDecision: policyDecisions.find((decision) => decision.memoryId === result.memory.id),
-          score: result.score
+          score: result.score,
+          truthDecision: service.currentTruthForMemory(result.memory)
         })),
       policyDecisions,
       graphPaths: [...new Set(includedResults.flatMap((result) => result.graphPaths ?? []))] as string[],

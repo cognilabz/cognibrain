@@ -26,6 +26,7 @@ import {
   sqliteAvailable,
   type PersistedMemoryFile
 } from "./persistence";
+import { AsyncPostgresMemoryRepository, PostgresMemoryRepository, SQLiteMemoryRepository, sqliteRepositoryAvailable } from "./repositories";
 import {
   EntityRegistry,
   activateGraph,
@@ -58,6 +59,7 @@ import {
   type LifecyclePolicy,
   type DomainModule,
   type MemoryRepository,
+  type RepositoryStatePersistence,
   type MemoryStorageAdapter
 } from "../core";
 import {
@@ -94,6 +96,7 @@ import {
   beginConnectorOAuth as beginConnectorOAuthImpl,
   completeConnectorOAuth as completeConnectorOAuthImpl,
   revokeConnectorAuth as revokeConnectorAuthImpl,
+  refreshConnectorOAuth as refreshConnectorOAuthImpl,
   connectorAuthStatus as connectorAuthStatusImpl,
   listConnectorManifests as listConnectorManifestsImpl,
   syncConnectorEvents as syncConnectorEventsImpl,
@@ -227,6 +230,7 @@ import {
   managedMigrationBundle as managedMigrationBundleImpl,
   importMigrationBundle as importMigrationBundleImpl,
   verifyBackupRecovery as verifyBackupRecoveryImpl,
+  verifyBackupReplay as verifyBackupReplayImpl,
   managedDeploymentPlan as managedDeploymentPlanImpl,
   createManagedTenant as createManagedTenantImpl,
   listManagedTenants as listManagedTenantsImpl,
@@ -582,10 +586,25 @@ function repositoryFromStorage(storage?: MemoryStorageAdapter): MemoryRepository
   return undefined;
 }
 
+function createRepositoryFromEnv(defaultPath = ".memory-harness.json"): MemoryRepository | undefined {
+  const backend = process.env.MEMORY_STORAGE_BACKEND ?? "json";
+  if (backend === "sqlite" || backend === "sql" || backend === "sqlite-repository") {
+    if (!sqliteRepositoryAvailable()) return undefined;
+    return new SQLiteMemoryRepository(process.env.MEMORY_SQLITE_PATH ?? defaultPath.replace(/\.json$/i, ".sqlite"));
+  }
+  if ((backend === "postgres-repository" || backend === "postgres-db-primary") && process.env.MEMORY_POSTGRES_URL) {
+    return new PostgresMemoryRepository(process.env.MEMORY_POSTGRES_URL);
+  }
+  return undefined;
+}
+
 function memoryStoreForRepository(repository: MemoryRepository): MemoryStore {
   if (repository instanceof InMemoryMemoryRepository) return repository.store;
   const maybeRepositoryStore = (repository as { store?: unknown }).store;
-  if (maybeRepositoryStore instanceof MemoryStore) return maybeRepositoryStore;
+  if (maybeRepositoryStore instanceof MemoryStore) {
+    repository.export();
+    return maybeRepositoryStore;
+  }
   const store = new MemoryStore();
   store.import(repository.export());
   return store;
@@ -660,7 +679,7 @@ export class MemoryService {
 
   constructor(options: MemoryServiceOptions = {}) {
     const runtimeConfig = loadRuntimeConfig(options.configPath);
-    this.repository = options.repository ?? repositoryFromStorage(options.storage) ?? new InMemoryMemoryRepository();
+    this.repository = options.repository ?? repositoryFromStorage(options.storage) ?? createRepositoryFromEnv(options.persistencePath ?? ".memory-harness.json") ?? new InMemoryMemoryRepository();
     this.store = memoryStoreForRepository(this.repository);
     this.storage = options.storage ?? new RepositoryBackedStorageAdapter(this.repository);
     this.persistence = options.persistence ?? (options.persistencePath ? new JsonFilePersistenceAdapter(options.persistencePath) : undefined);
@@ -705,6 +724,7 @@ export class MemoryService {
     this.defaultTranslator = provider.translator;
     for (const manifest of officialConnectorManifests()) this.connectorManifests.set(manifest.id, manifest);
     for (const module of officialMarketplaceModules()) this.marketplaceModules.set(module.id, module);
+    this.registerDefaultSourceResolvers();
     this.load();
   }
 
@@ -1017,6 +1037,61 @@ export class MemoryService {
     return getEvidencePackImpl(this, id);
   }
 
+  resourceAuthorizationScope(input: {
+    resource?: string;
+    path?: string;
+    userId?: string;
+    orgId?: string;
+    projectId?: string;
+    memoryId?: string;
+    contextPackId?: string;
+    evidencePackId?: string;
+    dreamJobId?: string;
+    connectorId?: string;
+    policyRuleId?: string;
+  }): { found: boolean; userId?: string; orgId?: string; projectId?: string; connectorId?: string; memoryId?: string; lookupReason?: string } | undefined {
+    const memoryId = input.memoryId && safeGet(this.store, input.memoryId) ? input.memoryId : undefined;
+    const memory = memoryId ? safeGet(this.store, memoryId) : undefined;
+    if (memory) return { found: true, userId: memory.userId, orgId: memory.orgId, projectId: memory.projectId, memoryId: memory.id, lookupReason: "memory lookup" };
+    const evidenceId = input.evidencePackId ?? input.contextPackId;
+    const evidence = evidenceId ? this.evidencePacks.get(evidenceId) : undefined;
+    if (evidence) return { found: true, userId: evidence.userId, orgId: evidence.scope?.orgId, projectId: evidence.scope?.projectId, lookupReason: "evidence pack lookup" };
+    const context = input.contextPackId ? this.codingContextPacks.get(input.contextPackId) : undefined;
+    if (context) return { found: true, userId: context.userId, orgId: context.scope?.orgId, projectId: context.scope?.projectId, lookupReason: "context pack lookup" };
+    const dreamJob = input.dreamJobId ? this.dreamJobs.get(input.dreamJobId) : undefined;
+    if (dreamJob) return { found: true, userId: dreamJob.userId, orgId: dreamJob.input?.scope?.orgId, projectId: dreamJob.input?.scope?.projectId, lookupReason: "dream job lookup" };
+    const policy = input.policyRuleId ? this.policyRules.get(input.policyRuleId) ?? this.retentionRules.get(input.policyRuleId) : undefined;
+    if (policy) return { found: true, userId: policy.scope && "userId" in policy.scope ? policy.scope.userId : undefined, orgId: policy.scope && "orgId" in policy.scope ? policy.scope.orgId : undefined, lookupReason: "policy rule lookup" };
+    if (input.connectorId) {
+      const review = this.listConnectorReviewQueue({ connectorId: input.connectorId })[0];
+      const sync = this.connectorSyncStates.get(input.connectorId);
+      return { found: Boolean(review || sync || this.connectorManifests.has(input.connectorId)), userId: review?.userId, orgId: review?.orgId, projectId: review?.projectId, connectorId: input.connectorId, lookupReason: "connector lookup" };
+    }
+    return undefined;
+  }
+
+  prometheusMetrics(): string {
+    const metrics = this.metricsReport();
+    const lines = [
+      "# HELP cognibrain_memories_total Total memories by user scope.",
+      "# TYPE cognibrain_memories_total gauge",
+      `cognibrain_memories_total ${this.store.list().length}`,
+      "# HELP cognibrain_searches_total Search requests handled.",
+      "# TYPE cognibrain_searches_total counter",
+      `cognibrain_searches_total ${metrics.searches}`,
+      "# HELP cognibrain_no_hit_searches_total Searches with no hits.",
+      "# TYPE cognibrain_no_hit_searches_total counter",
+      `cognibrain_no_hit_searches_total ${metrics.noHitSearches}`,
+      "# HELP cognibrain_connector_sync_records_total Connector sync records.",
+      "# TYPE cognibrain_connector_sync_records_total gauge",
+      `cognibrain_connector_sync_records_total ${this.connectorSyncRecords.length}`,
+      "# HELP cognibrain_dream_jobs_total Dream jobs tracked.",
+      "# TYPE cognibrain_dream_jobs_total gauge",
+      `cognibrain_dream_jobs_total ${this.dreamJobs.size}`
+    ];
+    return `${lines.join("\n")}\n`;
+  }
+
   async enrichContext(
     input: ContextEnrichmentInput,
     fetchImpl: typeof fetch = fetch,
@@ -1157,10 +1232,12 @@ export class MemoryService {
     }
     job.status = "running";
     job.startedAt = new Date().toISOString();
+    job.logs = [...(job.logs ?? []), { at: job.startedAt, level: "info", message: "dream job running" }];
     try {
       const report = await this.runDreamCycleAsync({ ...input, mode, trigger, connectorIds: job.plan.connectorIds, sourceRefresh: job.plan.sourceRefresh }, fetchImpl, timeoutMs);
       job.finishedAt = new Date().toISOString();
       job.report = report;
+      job.logs = [...(job.logs ?? []), { at: job.finishedAt, level: "info", message: "dream job completed", payload: { releaseBlockers: report.dreamCycle.plan.releaseBlockers?.length ?? 0 } }];
       job.progress = {
         connectorPolls: report.dreamCycle.connectorRefresh?.attempted ?? 0,
         connectorPollFailures: report.dreamCycle.connectorRefresh?.failed ?? 0,
@@ -1174,6 +1251,7 @@ export class MemoryService {
     } catch (error) {
       if (this.dreamJobs.get(job.jobId)?.status !== "cancelled") job.status = "failed";
       job.finishedAt = new Date().toISOString();
+      job.logs = [...(job.logs ?? []), { at: job.finishedAt, level: "error", message: error instanceof Error ? error.message : "dream job failed" }];
       if (this.dreamJobs.get(job.jobId)?.status !== "cancelled") job.error = error instanceof Error ? error.message : "dream job failed";
     }
     this.recordAudit(job.status === "failed" ? "policy.violation" : "reflect.run", { userId: input.userId, metadata: { resource: "dream-job", jobId: job.jobId, status: job.status, trigger, mode, progress: job.progress, error: job.error } });
@@ -1205,6 +1283,8 @@ export class MemoryService {
     const job = this.dreamJobs.get(jobId);
     if (!job) throw new Error(`Dream job not found: ${jobId}`);
     if (job.status !== "failed" && job.status !== "cancelled") throw new Error(`Dream job ${jobId} is not retryable from status ${job.status}`);
+    job.status = "retrying";
+    job.logs = [...(job.logs ?? []), { at: new Date().toISOString(), level: "info", message: "dream job retry queued" }];
     const input = { ...(job.input ?? { userId: job.userId }), trigger: job.trigger, mode: job.mode, budget: job.plan.budget, sourceRefresh: job.plan.sourceRefresh, connectorIds: job.plan.connectorIds };
     const retry = await this.startDreamJob(input, fetchImpl, timeoutMs, options);
     retry.retryOf = jobId;
@@ -1330,6 +1410,45 @@ export class MemoryService {
     return resolver;
   }
 
+  listSourceResolvers(): SourceResolver[] {
+    return [...this.sourceResolvers.values()];
+  }
+
+  private registerDefaultSourceResolvers(): void {
+    const providers = ["github", "jira", "confluence", "notion", "sentry", "pagerduty"];
+    for (const provider of providers) {
+      const connectorIds = [`official-${provider}`, provider];
+      for (const connectorId of connectorIds) {
+        this.registerSourceResolver({
+          id: `resolver:${connectorId}`,
+          connectorId,
+          supports: (sourceRef) => sourceRef.connectorId === connectorId || sourceRef.connectorId === provider,
+          fetch: async (sourceRef, memory) => this.latestSourceRecordFromMemories(sourceRef, memory) ?? { missing: true },
+          get: (sourceRef, memory) => this.latestSourceRecordFromMemories(sourceRef, memory),
+          compare: (memory, sourceRecord) => defaultSourceResolverDecision(memory, sourceRecord)
+        });
+      }
+    }
+  }
+
+  private latestSourceRecordFromMemories(sourceRef: NonNullable<Memory["provenance"]["sourceRef"]>, memory: Memory): SourceRecord | undefined {
+    const candidates = this.store.list(memory.userId)
+      .filter((item) => item.provenance.sourceRef?.connectorId === sourceRef.connectorId)
+      .filter((item) => !sourceRef.externalId || item.provenance.sourceRef?.externalId === sourceRef.externalId)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    const current = candidates[0] ?? memory;
+    return {
+      sourceRef,
+      content: current.content,
+      title: typeof current.metadata?.title === "string" ? current.metadata.title : undefined,
+      updatedAt: current.updatedAt,
+      version: current.provenance.sourceRef?.version,
+      hash: current.provenance.sourceRef?.hash,
+      status: "found",
+      metadata: { provider: sourceRef.connectorId, memoryId: current.id }
+    };
+  }
+
   resolveVerificationQueue(userId: string, options: { limit?: number; connectorIds?: string[] } = {}): VerificationResolutionReport {
     return resolveVerificationQueueImpl(this, userId, options);
   }
@@ -1431,6 +1550,10 @@ export class MemoryService {
 
   revokeConnectorAuth(connectorId: string, actorId = "system"): ConnectorAuthSession[] {
     return revokeConnectorAuthImpl(this, connectorId, actorId);
+  }
+
+  refreshConnectorOAuth(connectorId: string): ConnectorAuthSession {
+    return refreshConnectorOAuthImpl(this, connectorId);
   }
 
   connectorAuthStatus(connectorId?: string): ConnectorAuthSession[] {
@@ -1658,6 +1781,10 @@ export class MemoryService {
 
   verifyBackupRecovery(bundle?: ManagedMigrationBundle, options: { keyring?: DecryptionKeyMaterial[] } = {}): BackupRecoveryReport {
     return verifyBackupRecoveryImpl(this, bundle, options);
+  }
+
+  verifyBackupReplay(bundle?: ManagedMigrationBundle, options: { keyring?: DecryptionKeyMaterial[] } = {}): BackupRecoveryReport & { replay: ReturnType<MemoryService["replayAuditState"]> } {
+    return verifyBackupReplayImpl(this, bundle, options);
   }
   setRetentionRule(input: Omit<RetentionRule, "id" | "createdAt" | "updatedAt"> & { id?: string }): RetentionRule {
     return setRetentionRuleImpl(this, input);
@@ -2566,14 +2693,7 @@ export class MemoryService {
     };
   }
 
-  private load(): void {
-    const raw = this.persistence?.load();
-    if (!raw) return;
-    if (Array.isArray(raw)) {
-      this.repository.import(raw);
-      this.syncReadModelFromRepository();
-      return;
-    }
+  importMemoryFile(raw: PersistedMemoryFile, options: { persist?: boolean } = {}): void {
     this.maintenance = raw.maintenance ?? { users: {} };
     this.metrics = raw.metrics ?? this.metrics;
     this.feedbackEvents = raw.feedback ?? [];
@@ -2617,6 +2737,22 @@ export class MemoryService {
     this.syncReadModelFromRepository();
     for (const memory of this.store.list()) this.entities.ingest(memory);
     if (!this.claims.size) for (const memory of this.store.list()) this.registerMemoryClaim(memory);
+    if (options.persist !== false) this.persist();
+  }
+
+  private load(): void {
+    const raw = this.persistence?.load() ?? this.loadRepositoryState();
+    if (!raw) {
+      this.syncReadModelFromRepository();
+      if (!this.claims.size) for (const memory of this.store.list()) this.registerMemoryClaim(memory);
+      return;
+    }
+    if (Array.isArray(raw)) {
+      this.repository.import(raw);
+      this.syncReadModelFromRepository();
+      return;
+    }
+    this.importMemoryFile(raw, { persist: false });
   }
 
   private syncReadModelFromRepository(): void {
@@ -2627,7 +2763,7 @@ export class MemoryService {
   }
 
   private persist(): void {
-    if (!this.persistence) return;
+    this.repository.import(this.store.export());
     const payload: PersistedMemoryFile = {
       version: 2,
       memories: this.store.export(),
@@ -2662,7 +2798,19 @@ export class MemoryService {
       policyRules: [...this.policyRules.values()],
       retentionRules: [...this.retentionRules.values()]
     };
-    this.persistence.save(payload);
+    if (this.persistence) this.persistence.save(payload);
+    else this.saveRepositoryState(payload);
+  }
+
+  private loadRepositoryState(): PersistedMemoryFile | Memory[] | undefined {
+    const state = (this.repository as MemoryRepository & RepositoryStatePersistence).loadState?.();
+    if (!state) return undefined;
+    if (Array.isArray(state)) return state as Memory[];
+    return state as PersistedMemoryFile;
+  }
+
+  private saveRepositoryState(payload: PersistedMemoryFile): void {
+    (this.repository as MemoryRepository & RepositoryStatePersistence).saveState?.(payload);
   }
 
   private defaultKeyring(): DecryptionKeyMaterial[] {
@@ -2679,8 +2827,12 @@ export class MemoryService {
 export function createDefaultMemoryService() {
   const persistencePath = process.env.NODE_ENV === "test" ? undefined : process.env.MEMORY_DB_PATH ?? ".memory-harness.json";
   const autoDreamEnabled = process.env.MEMORY_AUTO_DREAM !== "false";
+  const repository = persistencePath ? createRepositoryFromEnv(persistencePath) : undefined;
+  const storageBackend = process.env.MEMORY_STORAGE_BACKEND ?? "json";
+  const sqliteBackend = storageBackend === "sqlite" || storageBackend === "sql" || storageBackend === "sqlite-repository";
   return new MemoryService({
-    persistence: persistencePath ? createPersistenceFromEnv(persistencePath) : undefined,
+    repository,
+    persistence: persistencePath && !repository ? (sqliteBackend ? new JsonFilePersistenceAdapter(persistencePath) : createPersistenceFromEnv(persistencePath)) : undefined,
     autoDream: {
       enabled: autoDreamEnabled,
       intervalHours: Number(process.env.MEMORY_DREAM_INTERVAL_HOURS ?? 6),
@@ -2696,4 +2848,25 @@ export function createDefaultMemoryService() {
   });
 }
 
-export const defaultService = createDefaultMemoryService();
+export async function createProductionMemoryService() {
+  const backend = process.env.MEMORY_STORAGE_BACKEND ?? "json";
+  if ((backend === "postgres-async" || backend === "postgres-production" || backend === "postgres-db-primary") && process.env.MEMORY_POSTGRES_URL) {
+    const asyncRepository = new AsyncPostgresMemoryRepository(process.env.MEMORY_POSTGRES_URL, { enableRls: process.env.MEMORY_POSTGRES_RLS === "true" });
+    await asyncRepository.initialize();
+    const loadedState = await asyncRepository.loadStateAsync();
+    const service = createDefaultMemoryService();
+    Object.defineProperty(service, "productionAsyncRepository", { value: asyncRepository, enumerable: false });
+    if (loadedState && typeof loadedState === "object" && !Array.isArray(loadedState)) {
+      service.importMemoryFile(loadedState as PersistedMemoryFile);
+    }
+    return service;
+  }
+  return createDefaultMemoryService();
+}
+
+export let defaultService = createDefaultMemoryService();
+
+export async function initializeDefaultMemoryService(): Promise<MemoryService> {
+  defaultService = await createProductionMemoryService();
+  return defaultService;
+}

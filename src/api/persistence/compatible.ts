@@ -184,7 +184,7 @@ export class CassandraCompatiblePersistenceAdapter implements MemoryPersistenceA
   capabilities(): PersistenceCapabilities {
     return {
       durable: true,
-      distributedReady: true,
+      distributedReady: false,
       transactional: false,
       appendOnly: true,
       sql: false,
@@ -193,9 +193,9 @@ export class CassandraCompatiblePersistenceAdapter implements MemoryPersistenceA
       replication: "quorum",
       sharding: "range",
       notes: [
-        "Cassandra-compatible wide-column adapter with partition/clustering keys and append-only snapshot events.",
+        "Experimental Cassandra-compatible snapshot/event-journal adapter; it is not a queryable production memory repository.",
         "The local file-backed emulator is intended for CI, migration tests, and package validation.",
-        "Set MEMORY_STORAGE_BACKEND=cassandra with a production Cassandra driver boundary before remote cluster deployment."
+        "Keep Cassandra claims at snapshot/event-journal maturity until a queryable repository with indexed reads is implemented."
       ]
     };
   }

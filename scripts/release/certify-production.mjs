@@ -15,6 +15,7 @@ const requiredSteps = [
   ["docs audit", "npm", ["run", "audit:docs"]],
   ["release contract audit", "npm", ["run", "release:contract"]],
   ["product truth audit", "npm", ["run", "audit:truth"]],
+  ["full plan gap audit", "npm", ["run", "audit:plan-gaps"]],
   ["operator maturity", "npm", ["run", "operator:maturity"]],
   ["harness maturity", "npm", ["run", "harness:maturity"]],
   ["connector certification", "npm", ["run", "connectors:certification"]]

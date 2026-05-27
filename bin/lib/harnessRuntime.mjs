@@ -139,23 +139,11 @@ function writeVsCodeConfig() {
 }
 
 function writeOpenCodeConfig() {
-  const path = join(launchCwd, ".opencode", "mcp.json");
-  const json = readJson(path, { mcpServers: {} });
-  json.mcpServers ??= {};
-  json.mcpServers.cognibrain = stdioServerConfig();
-  writeJson(path, json);
-  console.log(`Wrote OpenCode MCP config: ${path}`);
   writeTemplateFile(join(launchCwd, ".opencode", "cognibrain.md"), "templates/opencode/cognibrain.md");
   writeHarnessPackageManifest();
 }
 
 function writeOpenClawConfig() {
-  const path = join(launchCwd, ".openclaw", "mcp.json");
-  const json = readJson(path, { mcpServers: {} });
-  json.mcpServers ??= {};
-  json.mcpServers.cognibrain = stdioServerConfig();
-  writeJson(path, json);
-  console.log(`Wrote OpenClaw MCP config: ${path}`);
   writeTemplateFile(join(launchCwd, ".openclaw", "cognibrain.md"), "templates/openclaw/cognibrain.md");
   writeHarnessPackageManifest();
 }
@@ -173,21 +161,11 @@ function writeCrewAIConfig() {
 }
 
 function writeWindsurfConfig() {
-  const path = join(launchCwd, ".windsurf", "mcp.json");
-  const json = readJson(path, { mcpServers: {} });
-  json.mcpServers ??= {};
-  json.mcpServers.cognibrain = stdioServerConfig();
-  writeJson(path, json);
   writeTemplateFile(join(launchCwd, ".windsurf", "rules", "cognibrain.md"), "templates/windsurf/cognibrain.md");
   writeHarnessPackageManifest();
 }
 
 function writeContinueConfig() {
-  const path = join(launchCwd, ".continue", "config.json");
-  const json = readJson(path, { mcpServers: {} });
-  json.mcpServers ??= {};
-  json.mcpServers.cognibrain = stdioServerConfig();
-  writeJson(path, json);
   writeTemplateFile(join(launchCwd, ".continue", "rules", "cognibrain.md"), "templates/continue/cognibrain.md");
   writeHarnessPackageManifest();
 }
@@ -237,19 +215,19 @@ function writeTextFile(targetPath, content) {
   if (existsSync(targetPath)) {
     const current = readFileSync(targetPath, "utf8");
     if (current === normalized) {
-      console.log(`cognibrain harness file already current: ${targetPath}`);
+      console.log(`cognibrain integration file already current: ${targetPath}`);
       return;
     }
     if (current.includes("cognibrain") && shouldRefreshHarnessFiles()) {
       writeFileSync(targetPath, normalized);
-      console.log(`Refreshed cognibrain harness file: ${targetPath}`);
+      console.log(`Refreshed cognibrain integration file: ${targetPath}`);
       return;
     }
     if (current.includes("cognibrain")) {
       const sidecar = `${targetPath}.cognibrain`;
       mkdirSync(dirname(sidecar), { recursive: true });
       writeFileSync(sidecar, normalized);
-      console.log(`Wrote reviewable cognibrain harness update: ${sidecar}`);
+      console.log(`Wrote reviewable cognibrain integration update: ${sidecar}`);
       return;
     }
     const sidecar = `${targetPath}.cognibrain`;
@@ -295,9 +273,9 @@ applyTo: "**/*"
 
 Use the local cognibrain runtime for durable project memory. Start it with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} start\`.
 
-Before multi-step coding or debugging, query memory through MCP when available. Use \`memory_context_pack\` as the portable baseline, \`memory_coding_context_pack\` when exposed for code-specific context, and \`memory_action_guard\` before shell commands or file edits with durable side effects.
+Before multi-step coding or debugging, use the daemon-backed CLI lifecycle: \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} context --task "<task>" --json\`. Before shell commands or file edits with durable side effects, run \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} guard --action "<command>" --json\`. If this host exposes cognibrain MCP tools, they are optional native adapters for the same lifecycle contract.
 
-After durable discoveries, record source-backed facts with \`memory_add\` or \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory add "<fact>"\`. Finish non-trivial patches with \`memory_patch_evidence\` or \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory patch-evidence "<task>"\`.
+After durable discoveries, record source-backed facts with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory add "<fact>"\`. Finish non-trivial patches with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} patch-evidence --task "<task>" --json\`.
 
 Use feedback adapters through the CLI:
 
@@ -334,11 +312,11 @@ function generatedExternalAgentContract(target) {
     runtimeRoot: launchCwd,
     protocol: "json-command",
     commands: {
-      contextPack: `${process.execPath} ${cli} --runtime-root ${launchCwd} memory coding-context "$TASK"`,
-      preToolGuard: `${process.execPath} ${cli} --runtime-root ${launchCwd} memory action-guard "$COMMAND"`,
-      recordAction: `${process.execPath} ${cli} --runtime-root ${launchCwd} memory action "$COMMAND"`,
-      recordCorrection: `${process.execPath} ${cli} --runtime-root ${launchCwd} memory code-correction "$CORRECTION"`,
-      patchEvidence: `${process.execPath} ${cli} --runtime-root ${launchCwd} memory patch-evidence "$TASK"`
+      contextPack: `${process.execPath} ${cli} --runtime-root ${launchCwd} context --task "$TASK" --json`,
+      preToolGuard: `${process.execPath} ${cli} --runtime-root ${launchCwd} guard --action "$COMMAND" --json`,
+      recordAction: `${process.execPath} ${cli} --runtime-root ${launchCwd} outcome --command "$COMMAND" --json`,
+      recordCorrection: `${process.execPath} ${cli} --runtime-root ${launchCwd} correction --text "$CORRECTION" --json`,
+      patchEvidence: `${process.execPath} ${cli} --runtime-root ${launchCwd} patch-evidence --task "$TASK" --json`
     },
     safety: {
       secrets: "do not store secret values; pass env var names or redacted refs only",
@@ -360,7 +338,7 @@ function writeHarnessPackageManifest() {
         mcpConfig: join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "config.toml"),
         policyFile: join(launchCwd, "AGENTS.md"),
         skill: join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills", "cognibrain", "SKILL.md"),
-        feedback: ["memory_add", "memory_maintenance_status", "memory_dream"]
+        feedback: ["cognibrain context", "cognibrain guard", "memory_add", "memory_maintenance_status", "memory_dream"]
       },
       claude: {
         mcpConfig: join(launchCwd, ".mcp.json"),
@@ -375,21 +353,21 @@ function writeHarnessPackageManifest() {
       cursor: {
         mcpConfig: join(launchCwd, ".cursor", "mcp.json"),
         rule: join(launchCwd, ".cursor", "rules", "open-memory.mdc"),
-        feedback: ["memory_add", "memory_context_pack", "memory_dream"]
+        feedback: ["cognibrain context", "cognibrain guard", "memory add", "optional MCP context adapter", "memory_dream"]
       },
       vscode: {
         mcpConfig: join(launchCwd, ".vscode", "mcp.json"),
-        feedback: ["memory_context_pack", "memory_add", "connector-telemetry"]
+        feedback: ["cognibrain context", "cognibrain guard", "memory add", "optional MCP context adapter", "connector-telemetry"]
       },
       opencode: {
-        mcpConfig: join(launchCwd, ".opencode", "mcp.json"),
         instructions: join(launchCwd, ".opencode", "cognibrain.md"),
-        feedback: ["memory_context_pack", "connector-telemetry", "memory_dream"]
+        protocol: "cli-lifecycle",
+        feedback: ["cognibrain context", "cognibrain outcome", "connector-telemetry", "memory_dream"]
       },
       openclaw: {
-        mcpConfig: join(launchCwd, ".openclaw", "mcp.json"),
         instructions: join(launchCwd, ".openclaw", "cognibrain.md"),
-        feedback: ["memory_context_pack", "connector-telemetry", "memory_dream"]
+        protocol: "cli-lifecycle",
+        feedback: ["cognibrain context", "cognibrain outcome", "connector-telemetry", "memory_dream"]
       },
       langgraph: {
         config: join(launchCwd, "langgraph.cognibrain.json"),
@@ -402,29 +380,29 @@ function writeHarnessPackageManifest() {
         feedback: ["task memory prefetch", "tool outcome telemetry"]
       },
       windsurf: {
-        mcpConfig: join(launchCwd, ".windsurf", "mcp.json"),
         rules: join(launchCwd, ".windsurf", "rules", "cognibrain.md"),
-        feedback: ["memory_context_pack", "connector-telemetry", "memory_dream"]
+        protocol: "cli-lifecycle",
+        feedback: ["cognibrain context", "cognibrain guard", "connector-telemetry", "memory_dream"]
       },
       continue: {
-        mcpConfig: join(launchCwd, ".continue", "config.json"),
         rules: join(launchCwd, ".continue", "rules", "cognibrain.md"),
-        feedback: ["memory_context_pack", "accepted_change", "rejected_suggestion"]
+        protocol: "cli-lifecycle",
+        feedback: ["cognibrain context", "cognibrain correction", "accepted_change", "rejected_suggestion"]
       },
       aider: {
         config: join(launchCwd, ".aider.conf.yml"),
         instructions: join(launchCwd, ".aider", "cognibrain.md"),
-        feedback: ["pre-command memory search", "test outcome telemetry"]
+        feedback: ["cognibrain context", "cognibrain guard", "cognibrain outcome", "test outcome telemetry"]
       },
       "roo-cline": {
         mcpConfig: join(launchCwd, ".roo", "mcp.json"),
         rules: join(launchCwd, ".clinerules", "cognibrain.md"),
-        feedback: ["memory_context_pack", "tool outcome telemetry", "correction capture"]
+        feedback: ["cognibrain context", "cognibrain outcome", "tool outcome telemetry", "correction capture"]
       },
       goose: {
         config: join(launchCwd, ".goose", "config.yaml"),
         instructions: join(launchCwd, ".goose", "cognibrain.md"),
-        feedback: ["memory_context_pack", "tool outcome telemetry"]
+        feedback: ["cognibrain context", "cognibrain outcome", "tool outcome telemetry"]
       },
       "sourcegraph-amp": {
         instructions: join(launchCwd, ".amp", "cognibrain.md"),
@@ -477,17 +455,13 @@ function harnessGeneratedHealth() {
     join(launchCwd, ".cursor", "rules", "open-memory.mdc"),
     join(launchCwd, ".vscode", "mcp.json"),
     join(launchCwd, ".vscode", "cognibrain.instructions.md"),
-    join(launchCwd, ".opencode", "mcp.json"),
     join(launchCwd, ".opencode", "cognibrain.md"),
-    join(launchCwd, ".openclaw", "mcp.json"),
     join(launchCwd, ".openclaw", "cognibrain.md"),
     join(launchCwd, "langgraph.cognibrain.json"),
     join(launchCwd, "langgraph-cognibrain.ts"),
     join(launchCwd, "crewai.cognibrain.json"),
     join(launchCwd, "crewai_cognibrain.py"),
-    join(launchCwd, ".windsurf", "mcp.json"),
     join(launchCwd, ".windsurf", "rules", "cognibrain.md"),
-    join(launchCwd, ".continue", "config.json"),
     join(launchCwd, ".continue", "rules", "cognibrain.md"),
     join(launchCwd, ".aider.conf.yml"),
     join(launchCwd, ".aider", "cognibrain.md"),

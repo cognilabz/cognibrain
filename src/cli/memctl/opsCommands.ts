@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import type { MemoryService } from "../../api/service";
 import { buildLeaderboardArtifact } from "../../eval/leaderboard";
 import { runNextgenBenchmarkSuites } from "../../eval/nextgenBenchmarks";
@@ -34,6 +35,16 @@ export async function handleOpsCommands(command: string | undefined, args: strin
   }
   case "leaderboard": {
     console.log(JSON.stringify(buildLeaderboardArtifact({ outputPath: args[0] ?? "artifacts/leaderboard.json", nextgenPath: process.env.MEMORY_NEXTGEN_BENCHMARK_PATH, evaluationPath: process.env.MEMORY_EVALUATION_REPORT_PATH }), null, 2));
+    return true;
+  }
+  case "benchmark-proof": {
+    const output = execFileSync("npm", ["run", "benchmark:release", "--silent"], { encoding: "utf8", maxBuffer: 2_000_000 });
+    console.log(output.trim());
+    return true;
+  }
+  case "production-certify": {
+    const output = execFileSync("npm", ["run", "certify:production", "--silent"], { encoding: "utf8", maxBuffer: 5_000_000 });
+    console.log(output.trim());
     return true;
   }
   case "provider-status": {

@@ -1,4 +1,4 @@
-import type { ActionGuardReport, CodebaseScope, CodingContextPack, ConnectorManifest, ConnectorSyncRecord, ContextEnrichmentReport, EngineeringMemoryKind, EpisodeRecord, EvidencePack, FeedbackKind, GraphExplainReport, HarnessActionInput, MarketplaceModule, Memory, MemoryInput, MemoryPolicyOperation, MemoryPolicyRule, MemoryRouteReport, MemoryScope, PatchEvidenceTrail, PolicyDecision, QueryIntentReport, SearchOptions, SearchResult } from "../../src/core";
+import type { ActionGuardReport, CodebaseScope, CodingContextPack, ConnectorManifest, ConnectorSyncRecord, ContextEnrichmentReport, EngineeringMemoryKind, EpisodeRecord, EvidencePack, FeedbackKind, GraphExplainReport, HarnessActionInput, HarnessLifecycleEventInput, HarnessLifecycleEventReport, MarketplaceModule, Memory, MemoryInput, MemoryPolicyOperation, MemoryPolicyRule, MemoryRouteReport, MemoryScope, PatchEvidenceTrail, PolicyDecision, QueryIntentReport, SearchOptions, SearchResult } from "../../src/core";
 
 export interface CognibrainClientOptions {
   baseUrl?: string;
@@ -127,6 +127,10 @@ export class CognibrainClient {
 
   patchEvidenceTrail(input: { userId: string; task: string; agentId?: string; sessionId?: string; appId?: string; orgId?: string; projectId?: string; codebaseScope?: CodebaseScope; filesChanged?: string[]; commandsRun?: string[]; memoryIds?: string[] }): Promise<PatchEvidenceTrail> {
     return this.request("/patch-evidence", { method: "POST", body: input });
+  }
+
+  recordHarnessLifecycleEvent(input: HarnessLifecycleEventInput): Promise<HarnessLifecycleEventReport> {
+    return this.request("/harness/events", { method: "POST", body: input });
   }
 
   route(options: SearchOptions): Promise<MemoryRouteReport> {

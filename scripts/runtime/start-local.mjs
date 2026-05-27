@@ -44,6 +44,7 @@ async function startDaemon() {
     detached: true,
     env: {
       ...process.env,
+      NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV,
       COGNIBRAIN_RUNTIME_ROOT: runtimeRoot,
       HOST: process.env.HOST ?? "127.0.0.1",
       PORT: String(apiPort),
@@ -59,7 +60,7 @@ async function startDaemon() {
     ui = spawn(vite, ["--host", "127.0.0.1", "--port", String(uiPort), "--strictPort"], {
       cwd: root,
       detached: true,
-      env: { ...process.env, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, VITE_API_URL: process.env.VITE_API_URL ?? `http://localhost:${apiPort}` },
+      env: { ...process.env, NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, VITE_API_URL: process.env.VITE_API_URL ?? `http://127.0.0.1:${apiPort}` },
       stdio: ["ignore", uiLog, uiLog]
     });
     ui.unref();
@@ -70,8 +71,8 @@ async function startDaemon() {
     startedAt: new Date().toISOString(),
     root,
     runtimeRoot,
-    api: { pid: api.pid, port: apiPort, url: `http://localhost:${apiPort}` },
-    ui: ui ? { pid: ui.pid, port: uiPort, url: `http://localhost:${uiPort}` } : null,
+    api: { pid: api.pid, port: apiPort, url: `http://127.0.0.1:${apiPort}` },
+    ui: ui ? { pid: ui.pid, port: uiPort, url: `http://127.0.0.1:${uiPort}` } : null,
     dbPath: defaultDbPath
   };
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
@@ -90,6 +91,7 @@ async function startForeground() {
     cwd: root,
     env: {
       ...process.env,
+      NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV,
       COGNIBRAIN_RUNTIME_ROOT: runtimeRoot,
       HOST: process.env.HOST ?? "127.0.0.1",
       PORT: String(apiPort),
@@ -103,13 +105,13 @@ async function startForeground() {
     uiPort = await findOpenPort(uiStartPort);
     ui = spawn(vite, ["--host", "127.0.0.1", "--port", String(uiPort), "--strictPort"], {
       cwd: root,
-      env: { ...process.env, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, VITE_API_URL: process.env.VITE_API_URL ?? `http://localhost:${apiPort}` },
+      env: { ...process.env, NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, VITE_API_URL: process.env.VITE_API_URL ?? `http://127.0.0.1:${apiPort}` },
       stdio: "inherit"
     });
   }
 
-  console.log(`cognibrain API: http://localhost:${apiPort}`);
-  console.log(uiPort ? `cognibrain UI:  http://localhost:${uiPort}` : "cognibrain UI:  optional; rerun with --dashboard");
+  console.log(`cognibrain API: http://127.0.0.1:${apiPort}`);
+  console.log(uiPort ? `cognibrain UI:  http://127.0.0.1:${uiPort}` : "cognibrain UI:  optional; rerun with --dashboard");
   const stop = () => {
     api.kill("SIGTERM");
     if (ui) ui.kill("SIGTERM");

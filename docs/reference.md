@@ -76,18 +76,27 @@ Important routes:
 ## TypeScript SDK
 
 ```ts
-import { CognibrainClient } from "@cognilabz/cognibrain/sdk/typescript/client";
+import { CognibrainClient, CognibrainHarnessSdk, createPlatformIntegration } from "@cognilabz/cognibrain/sdk/typescript";
 
 const client = new CognibrainClient({ baseUrl: "http://127.0.0.1:8787" });
-await client.addMemory({
+await client.add({
   userId: "local",
   content: "Release patches must run npm test."
 });
-const context = await client.contextPack({
+const context = await client.codingContextPack({
   userId: "local",
   query: "prepare release patch"
 });
+const harness = new CognibrainHarnessSdk(client);
+const integration = createPlatformIntegration({ name: "Acme Tasks" });
 ```
+
+Stable TypeScript subpaths:
+
+- `@cognilabz/cognibrain/sdk/typescript`
+- `@cognilabz/cognibrain/sdk/typescript/client`
+- `@cognilabz/cognibrain/sdk/typescript/connectors`
+- `@cognilabz/cognibrain/sdk/typescript/harness`
 
 ## Python SDK
 

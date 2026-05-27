@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
-import { defaultService } from "./service";
+import { defaultService, initializeDefaultMemoryService } from "./service";
 import type { ManagedMigrationBundle, Memory, MemoryPolicyOperation } from "../core";
 
 const port = Number(process.env.PORT ?? 8787);
@@ -81,11 +81,13 @@ import {
   actorScopeViolation,
   applyRequestHeaders,
   authenticate,
+  authorizeResource,
   authorizeRoute,
   checkRateLimit,
   json,
   parseRelationTypes,
   rememberRequestAuth,
+  routePermission,
   send,
   sendText,
   serialize,
@@ -148,6 +150,42 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     send(response, 403, { error: permission.reason, code: "rbac_forbidden", requestId: response.getHeader("X-Request-ID") });
     return;
   }
+  const route = routePermission(method, url.pathname);
+  if (route) {
+    const lookedUpScope = defaultService.resourceAuthorizationScope({
+      resource: route.resource,
+      path: url.pathname,
+      userId: url.searchParams.get("userId") ?? undefined,
+      orgId: url.searchParams.get("orgId") ?? undefined,
+      projectId: url.searchParams.get("projectId") ?? undefined,
+      connectorId: url.searchParams.get("connectorId") ?? (parts[0] === "connectors" ? parts[1] : undefined),
+      memoryId: parts[0] === "memories" || parts[0] === "connectors" && parts[1] === "review-queue" ? parts[1] === "review-queue" ? parts[2] : parts[1] : undefined,
+      contextPackId: parts[0] === "context-packs" || parts[0] === "coding-context-packs" ? parts[1] : undefined,
+      evidencePackId: parts[0] === "evidence-pack" ? parts[1] : undefined,
+      dreamJobId: parts[0] === "dream" && parts[1] === "jobs" ? parts[2] : undefined,
+      policyRuleId: parts[0] === "policy" || parts[0] === "retention" ? parts[2] : undefined
+    });
+    const resourceDecision = authorizeResource(auth.statusReport, route.action, {
+      resource: route.resource,
+      action: route.action,
+      path: url.pathname,
+      userId: lookedUpScope?.userId ?? url.searchParams.get("userId") ?? undefined,
+      orgId: lookedUpScope?.orgId ?? url.searchParams.get("orgId") ?? undefined,
+      projectId: lookedUpScope?.projectId ?? url.searchParams.get("projectId") ?? undefined,
+      connectorId: url.searchParams.get("connectorId") ?? parts[1],
+      memoryId: parts[1],
+      contextPackId: parts[1],
+      evidencePackId: parts[1],
+      dreamJobId: parts[2],
+      found: lookedUpScope?.found,
+      lookupReason: lookedUpScope?.lookupReason
+    });
+    if (!resourceDecision.allowed) {
+      defaultService.recordSecurityEvent({ actorId: auth.statusReport.actorId, userId: auth.statusReport.userId, path: url.pathname, method, status: 403, code: "resource_scope_forbidden" });
+      send(response, 403, { error: resourceDecision.reason, code: "resource_scope_forbidden", requestId: response.getHeader("X-Request-ID") });
+      return;
+    }
+  }
 
   if (method === "GET" && url.pathname === "/health") {
     send(response, 200, { ok: true, auth: auth.statusReport, ...defaultService.health(url.searchParams.get("userId") ?? undefined) });
@@ -169,6 +207,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (method === "GET" && url.pathname === "/metrics/prometheus") {
+    sendText(response, 200, defaultService.prometheusMetrics(), "text/plain; version=0.0.4");
+    return;
+  }
+
   if (await handleGraphRoutes({ method, url, parts, request, response })) return;
 
   if (await handlePlatformRoutes({ method, url, parts, request, response, auth })) return;
@@ -183,6 +226,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 }
 
 if (process.env.NODE_ENV !== "test") {
+  await initializeDefaultMemoryService();
   server.listen(port, host, () => {
     console.log(`cognibrain API listening on http://${host}:${port}`);
   });

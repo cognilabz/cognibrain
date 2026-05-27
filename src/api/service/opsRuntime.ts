@@ -103,6 +103,12 @@ export function verifyBackupRecovery(service: any, bundle?: ManagedMigrationBund
     };
   }
 
+export function verifyBackupReplay(service: any, bundle?: ManagedMigrationBundle, options: { keyring?: DecryptionKeyMaterial[] } = {}): BackupRecoveryReport & { replay: ReturnType<typeof service.replayAuditState> } {
+    const recovery = verifyBackupRecovery(service, bundle, options);
+    const replay = service.replayAuditState();
+    return { ...recovery, verified: recovery.verified && replay.valid, replay };
+  }
+
 export function managedDeploymentPlan(service: any, options: { target?: ManagedMigrationBundle["target"]; ssoProvider?: string; secretManager?: string } = {}): ManagedDeploymentPlan {
     const mode = options.target ?? "backup";
     return {

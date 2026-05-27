@@ -1,8 +1,9 @@
 # cognibrain memory policy
 
-Use the configured cognibrain stdio extension as the durable engineering memory layer.
+Use the cognibrain CLI lifecycle as the durable engineering memory layer. The configured stdio extension is an optional MCP adapter for native Goose tool discovery.
 
-- Recall project policy with `memory_context_pack`, or `memory_coding_context_pack` when exposed, before long-running tasks.
-- Check procedures and action risk with `memory_action_guard` before shell commands or file edits with durable side effects.
-- Store corrections and tool outcomes with source-backed confidence.
-- Use evidence packs when a decision came from external systems, and `memory_patch_evidence` after non-trivial patches.
+- Recall project policy with `cognibrain context --task "<task>" --json` before long-running tasks.
+- Check procedures and action risk with `cognibrain guard --action "<command>" --json` before shell commands or file edits with durable side effects.
+- Store corrections and tool outcomes with `cognibrain correction --text "<correction>" --json` and `cognibrain outcome --command "<command>" --exit-code <code> --json`.
+- Use `cognibrain patch-evidence --task "<task>" --json` after non-trivial patches.
+- Use MCP tools only as optional adapters for the same lifecycle.

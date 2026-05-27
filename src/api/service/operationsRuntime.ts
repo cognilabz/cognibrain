@@ -19,6 +19,19 @@ export function translateText(service: any, text: string, sourceLanguage?: strin
     return report;
   }
 
+export function structuredLog(service: any, event: string, payload: Record<string, unknown> = {}): Record<string, unknown> {
+    const record = {
+      timestamp: new Date().toISOString(),
+      level: payload.level ?? "info",
+      event,
+      traceId: payload.traceId ?? contentHash(`${event}:${Date.now()}`).slice(2, 14),
+      service: "cognibrain",
+      payload
+    };
+    service.recordAudit("provider.call", { metadata: { resource: "structured-log", event, traceId: record.traceId } });
+    return record;
+  }
+
 export function deliverWebhookQueue(service: any, handler?: (webhook: WebhookRegistration, event: AuditEvent) => { ok: boolean; error?: string }): { delivered: number; failed: number; queued: number } {
     let delivered = 0;
     let failed = 0;
@@ -123,8 +136,13 @@ export function storageStatus(service: any): StorageBackendStatus {
           vector: { strategy: "in-memory" as const, indexed: false, notes: ["Optional embedding providers can score vectors in memory for development without API keys."] },
           notes: ["Unavailable in this Node runtime; use Node with node:sqlite or another SQL adapter."]
         };
+    const repositoryName = service.repository?.constructor?.name;
+    const repositoryActive =
+      repositoryName === "SQLiteMemoryRepository" ? "sqlite-repository"
+        : repositoryName === "PostgresMemoryRepository" ? "postgres-repository"
+          : undefined;
     return {
-      active: service.persistence?.kind ?? "memory",
+      active: service.persistence?.kind ?? repositoryActive ?? "memory",
       adapters: [memory, json, jsonl, sqlite, postgres, cockroach, cassandra, postgresRemote, cockroachRemote, cassandraRemote]
     };
   }

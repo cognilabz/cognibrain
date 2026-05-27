@@ -46,6 +46,13 @@ export function dreamPlan(service: any, input: DreamCycleInput): DreamPlanReport
     if (trigger === "after_connector_sync" && connectorIds.length) reasons.push("connector sync changed source-backed evidence");
     if (trigger === "after_negative_feedback") reasons.push("negative feedback should be reflected before reuse");
     if (trigger === "after_contradiction_detected") reasons.push("contradiction signal requires belief revision");
+    const releaseBlockers = trigger === "before_release"
+      ? [
+          ...(contradictions ? [`${contradictions} contradicted memories must be resolved before release`] : []),
+          ...(needsVerification ? [`${needsVerification} memories need verification before release`] : []),
+          ...(staleSourceRefs ? [`${staleSourceRefs} source-backed memories need source refresh before release`] : [])
+        ]
+      : [];
 
     const recommendedActions: string[] = [];
     if (input.sourceRefresh || budget === "deep" || budget === "release") {
@@ -88,6 +95,7 @@ export function dreamPlan(service: any, input: DreamCycleInput): DreamPlanReport
       forced: Boolean(input.force),
       reasons: reasons.length ? reasons : ["dream not due"],
       recommendedActions,
+      releaseBlockers,
       signals: {
         activeMemories: active.length,
         writesSinceDream: status.writesSinceDream,
@@ -236,7 +244,8 @@ export async function startDreamJob(service: any, input: DreamCycleInput, fetchI
       queuedAt: new Date().toISOString(),
       progress: { connectorPolls: 0, memoriesEvaluated: 0, contradictions: 0, sourceRevalidations: 0, verificationScheduled: 0 },
       plan,
-      input: { ...input, mode, trigger }
+      input: { ...input, mode, trigger },
+      logs: [{ at: new Date().toISOString(), level: "info", message: "dream job queued", payload: { trigger, mode } }]
     };
     service.dreamJobs.set(job.jobId, job);
     const execution = service.executeDreamJob(job, input, mode, trigger, fetchImpl, timeoutMs);

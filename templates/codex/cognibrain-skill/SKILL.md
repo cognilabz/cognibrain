@@ -28,14 +28,14 @@ Run `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor` when setup or runtime b
 
 ## Retrieval Policy
 
-1. Prefer MCP tools when available.
-2. Call `memory_context_pack` before multi-step coding, repo archaeology, debugging loops, benchmark work, or user-preference-sensitive edits.
-3. Use `memory_coding_context_pack` instead when the host exposes it and the work is code-specific.
+1. Use the daemon-backed CLI lifecycle as the default integration path.
+2. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs context --task "<task>" --json` before multi-step coding, repo archaeology, debugging loops, benchmark work, or user-preference-sensitive edits.
+3. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs guard --action "<command>" --json` before shell commands or file edits with durable side effects.
 4. Treat returned memories as evidence, not authority.
 5. Verify drift-prone facts against current files, benchmark artifacts, or source systems before acting on them.
-6. Call `memory_action_guard` before shell commands or file edits with durable side effects when the tool is available.
+6. Use MCP tools such as `memory_coding_context_pack` and `memory_action_guard` only as optional native adapters when this host exposes them.
 
-CLI fallback:
+Additional memory search:
 
 ```bash
 node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs memory search "<task or question>"
@@ -54,7 +54,7 @@ Store only durable, useful facts:
 
 Use `memory_add` with provenance, confidence, tags, and metadata when possible. Never store secrets, credentials, private keys, raw sensitive transcripts, or one-off scratch observations.
 
-For non-trivial patches, call `memory_patch_evidence` with files changed, commands run, and the memory ids used.
+For non-trivial patches, call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs patch-evidence --task "<task>" --json` with files changed, commands run, and the memory ids used. Use `memory_patch_evidence` only as an optional MCP adapter when available.
 
 CLI fallback:
 

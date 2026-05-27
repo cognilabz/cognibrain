@@ -24,6 +24,7 @@ export const API_ROUTE_CONTRACTS: ApiRouteContract[] = [
   route("/auth/status", ["GET"], stable, "security"),
   route("/maintenance", ["GET"], candidate, "operations"),
   route("/metrics", ["GET"], candidate, "operations"),
+  route("/metrics/prometheus", ["GET"], candidate, "operations"),
   route("/memories", ["GET", "POST"], stable, "memory"),
   route("/memories/{id}", ["GET", "PATCH", "DELETE"], stable, "memory"),
   route("/memories/{id}/archive", ["POST"], stable, "memory"),
@@ -120,6 +121,7 @@ export const API_ROUTE_CONTRACTS: ApiRouteContract[] = [
   route("/connectors/auth/begin", ["POST"], candidate, "connector"),
   route("/connectors/auth/callback", ["POST"], candidate, "connector"),
   route("/connectors/auth/revoke", ["POST"], candidate, "connector"),
+  route("/connectors/auth/refresh", ["POST"], candidate, "connector"),
   route("/connectors/list", ["GET"], candidate, "connector"),
   route("/connectors/sync", ["POST"], candidate, "connector"),
   route("/connectors/poll", ["POST"], candidate, "connector"),
@@ -167,11 +169,11 @@ export const API_ROUTE_CONTRACTS: ApiRouteContract[] = [
 ];
 
 export const CLI_COMMAND_CONTRACTS: CommandContract[] = [
-  ...["cognibrain", "home", "ui", "tui", "init", "setup", "doctor", "start", "dev", "dashboard", "status", "stop", "proof", "truth", "service", "memories", "memory", "connections", "config", "connector", "adapter", "sdk", "skill", "mcp", "clean"].map((command) => commandContract(command, stable, "operator-cli")),
+  ...["cognibrain", "home", "ui", "tui", "init", "setup", "doctor", "start", "dev", "dashboard", "status", "stop", "proof", "truth", "dream", "service", "memories", "memory", "connections", "config", "connector", "adapter", "sdk", "skill", "mcp", "clean"].map((command) => commandContract(command, stable, "operator-cli")),
   commandContract("cognibrain-connect", candidate, "binary")
 ];
 
-const stableMemctl = "add list extract action coding-context context-enrich code-correction action-guard patch-evidence search inspect route intent evidence evidence-pack why-used reflect dream health maintenance verify confirm retract feedback feedback-injection metrics profiles profile-set profile-learn profile-sample timeline timeline-summarize temporal graph graph-path explain graph-activate graph-export graph-query audit audit-chain compliance compliance-export policy-rules policy-rule policy-evaluate retention-rule retention-rules retention-review retention-enforce storage api-spec connectors connector-register connector-sync connector-sync-records connector-health connector-auth connector-auth-begin connector-auth-callback connector-list connector-poll connector-writeback connector-feedback connector-telemetry consent revert export delete-user".split(/\s+/);
+const stableMemctl = "add list extract action coding-context context-enrich code-correction action-guard patch-evidence search inspect edit archive route intent evidence evidence-pack why-used reflect dream truth-current truth-conflicts truth-resolve dream-plan dream-run dream-start dream-jobs dream-cancel dream-retry dream-verify dream-conflicts dream-resolve health maintenance verify confirm retract feedback feedback-injection metrics profiles profile-set profile-learn profile-sample timeline timeline-summarize temporal graph graph-path explain graph-activate graph-export graph-query audit audit-chain compliance compliance-export policy-rules policy-rule policy-evaluate retention-rule retention-rules retention-review retention-enforce storage api-spec connectors connector-register connector-configure connector-test connector-preview connector-sync connector-review connector-approve connector-reject connector-sync-records connector-health connector-auth connector-auth-begin connector-auth-callback connector-auth-refresh connector-list connector-poll connector-writeback connector-feedback connector-telemetry benchmark-proof production-certify consent revert export delete-user".split(/\s+/);
 const candidateMemctl = "identity-link patterns entities entity-enrich entity-merge entity-split graph-changes infer agent-register agents agent-persona persona-set personas brain-create brains source-create events episodes episode federated-search share-request share-approve promote review share-revoke revoke key-report key-rotate privacy-insights privacy-cross-brain migration-export managed-tenant-create managed-tenants managed-control-plane provider-status translate media-ingest webhook-deliver connector-auth-revoke offline-add offline-update sync sync-status lifecycle-preview dream-policy observations predictions".split(/\s+/);
 const experimentalMemctl = "marketplace marketplace-plan marketplace-install marketplace-submit marketplace-submissions marketplace-scan marketplace-review marketplace-publish marketplace-rate benchmark-nextgen leaderboard".split(/\s+/);
 

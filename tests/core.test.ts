@@ -10,7 +10,7 @@ import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { connectorAuthHeaders, createConnectorManifest, createPlatformIntegration, createWritebackPlan, runConnectorPoll } from "../src/connectors/sdk";
 import { MemoryService } from "../src/api/service";
-import { SQLiteMemoryRepository, sqliteRepositoryAvailable } from "../src/api/repositories";
+import { PostgresMemoryRepository, SQLiteMemoryRepository, sqliteRepositoryAvailable } from "../src/api/repositories";
 import { CognibrainClient, CognibrainError } from "../sdk/typescript/client";
 import { AppendOnlyLogPersistenceAdapter, CassandraCompatiblePersistenceAdapter, CassandraRemotePersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, PostgresRemotePersistenceAdapter, SQLitePersistenceAdapter, createPersistenceFromEnv, sqliteAvailable } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
@@ -186,6 +186,40 @@ describe("TypeScript memory core", () => {
     }
   });
 
+  it("persists MemoryService truth and dream state inside SQLiteMemoryRepository without a JSON sidecar", async () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-sqlite-state-"));
+    try {
+      const path = join(dir, "memory.sqlite");
+      const service = new MemoryService({ repository: new SQLiteMemoryRepository(path), autoDream: { enabled: false } });
+      const firstClaim: MemoryClaim = {
+        id: "claim-old",
+        subject: "atlas",
+        predicate: "test_command",
+        object: "pnpm test",
+        qualifiers: {},
+        source: { kind: "agent", confidence: 0.6 },
+        confidence: 0.6,
+        durability: "durable",
+        sensitivity: "none",
+        scope: { userId: "u1", projectId: "atlas" }
+      };
+      const secondClaim: MemoryClaim = { ...firstClaim, id: "claim-new", object: "npm test", source: { kind: "reviewed_code", confidence: 0.97 }, confidence: 0.97 };
+      service.add({ userId: "u1", projectId: "atlas", content: "Atlas test command is pnpm test.", source: { kind: "agent", confidence: 0.6 }, metadata: { claim: firstClaim } });
+      const current = service.add({ userId: "u1", projectId: "atlas", content: "Atlas test command is npm test.", source: { kind: "reviewed_code", confidence: 0.97 }, metadata: { claim: secondClaim, engineeringKind: "review_correction" } });
+      await service.startDreamJob({ userId: "u1", trigger: "manual_dream", mode: "dream", force: true }, fetch, 10_000, { wait: true });
+
+      const reloaded = new MemoryService({ repository: new SQLiteMemoryRepository(path), autoDream: { enabled: false } });
+      expect(reloaded.list("u1").map((memory) => memory.content).join("\n")).toContain("npm test");
+      expect(reloaded.currentTruthForMemory(reloaded.get(current.id))?.selectedMemoryId).toBe(current.id);
+      expect(reloaded.listConflictSets().some((set) => set.claimIds.length === 2)).toBe(true);
+      expect(reloaded.dreamJobStatus().length).toBeGreaterThanOrEqual(1);
+      expect(reloaded.storageStatus().active).toBe("sqlite-repository");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("selects current truth from claim records and explains suppressed stale claims in evidence packs", () => {
     const service = new MemoryService();
     const npmClaim: MemoryClaim = {
@@ -226,8 +260,13 @@ describe("TypeScript memory core", () => {
     expect(oldTruth?.selectedMemoryId).toBe(currentMemory.id);
     expect(oldTruth?.suppressedClaimIds.length).toBeGreaterThanOrEqual(1);
 
+    const search = service.search({ userId: "u1", projectId: "atlas", query: "Atlas package manager", limit: 2 });
+    expect(search.find((result) => result.memory.id === oldMemory.id)?.decision).toBe("exclude");
+    expect(search.find((result) => result.memory.id === oldMemory.id)?.truth?.selectedMemoryId).toBe(currentMemory.id);
+
     const pack = service.evidencePack({ userId: "u1", projectId: "atlas", query: "Atlas package manager", limit: 2 });
     expect(pack.truthDecisions?.some((decision) => decision.selectedMemoryId === currentMemory.id)).toBe(true);
+    expect(pack.excludedResults?.some((result) => result.memoryId === oldMemory.id && result.truthDecision?.selectedMemoryId === currentMemory.id)).toBe(true);
     expect(JSON.stringify(pack.results)).toContain("truth state");
   });
 
@@ -2197,7 +2236,7 @@ describe("TypeScript memory core", () => {
       });
       const reloaded = new MemoryService({ persistence: new CassandraCompatiblePersistenceAdapter(cassandraPath) });
       expect(reloaded.search({ userId: "u1", query: "Cassandra partitions team memories" })[0].memory.id).toBe(memory.id);
-      expect(reloaded.storageStatus().adapters.some((adapter) => adapter.kind === "cassandra-compatible" && adapter.distributedReady && adapter.sharding === "range")).toBe(true);
+      expect(reloaded.storageStatus().adapters.some((adapter) => adapter.kind === "cassandra-compatible" && !adapter.distributedReady && adapter.notes.some((note) => note.includes("snapshot/event-journal")))).toBe(true);
       const raw = JSON.parse(readFileSync(cassandraPath, "utf8"));
       expect(raw.dialect).toBe("cassandra-compatible");
       expect(raw.tables.persistence_events.length).toBeGreaterThanOrEqual(1);
@@ -2207,13 +2246,44 @@ describe("TypeScript memory core", () => {
     }
   });
 
+  it("keeps the Postgres repository driver-backed with service-state tables and optional RLS", () => {
+    const source = readFileSync("src/api/repositories/postgresRepository.ts", "utf8");
+    expect(source).toContain('require("pg")');
+    expect(source).not.toContain('"psql"');
+    expect(source).toContain("cognibrain_repository_state");
+    expect(source).toContain("cognibrain_claims");
+    expect(source).toContain("cognibrain_conflict_sets");
+    expect(source).toContain("cognibrain_dream_jobs");
+    expect(source).toContain("cognibrain_connector_sync_states");
+    expect(source).toContain("enable row level security");
+  });
+
+  it("runs Postgres repository live tests only with explicit test credentials", () => {
+    const url = process.env.MEMORY_POSTGRES_TEST_URL;
+    if (!url) {
+      expect({ state: "credential-blocked", reason: "MEMORY_POSTGRES_TEST_URL not set" }).toMatchObject({ state: "credential-blocked" });
+      return;
+    }
+    const repository = new PostgresMemoryRepository(url, { timeoutMs: 15_000 });
+    const memory = repository.create({
+      userId: "postgres-test-user",
+      orgId: "postgres-test-org",
+      projectId: "postgres-test-project",
+      content: "Postgres repository live credential test writes through pg.",
+      source: { kind: "human", confidence: 0.99 }
+    });
+    expect(repository.get(memory.id).content).toContain("pg");
+    repository.delete(memory.id);
+  });
+
   it("exposes production remote persistence driver capabilities", () => {
     const postgresRemote = new PostgresRemotePersistenceAdapter("postgres://example.invalid/cognibrain");
     const cockroachRemote = new PostgresRemotePersistenceAdapter("postgres://example.invalid:26257/cognibrain", { cockroach: true });
     const cassandraRemote = new CassandraRemotePersistenceAdapter("127.0.0.1", { keyspace: "cognibrain" });
     expect(postgresRemote.capabilities()).toMatchObject({ distributedReady: true, transactional: true, appendOnly: true, sql: true, replication: "logical" });
     expect(cockroachRemote.kind).toBe("cockroach-remote");
-    expect(cassandraRemote.capabilities()).toMatchObject({ distributedReady: true, appendOnly: true, replication: "quorum", sharding: "range" });
+    expect(cassandraRemote.capabilities()).toMatchObject({ distributedReady: false, appendOnly: true, replication: "quorum", sharding: "range" });
+    expect(cassandraRemote.capabilities().notes.some((note) => note.includes("snapshot/event-journal"))).toBe(true);
     const status = new MemoryService().storageStatus();
     expect(status.adapters.map((adapter) => adapter.kind)).toEqual(expect.arrayContaining(["postgres-remote", "cockroach-remote", "cassandra-remote"]));
   });
@@ -2414,5 +2484,21 @@ describe("TypeScript memory core", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("marks release-critical retrieval with risk-aware verification requests and releaseBlockers", () => {
+    const service = new MemoryService();
+    const memory = service.add({
+      userId: "risk-user",
+      content: "Production deploy uses the old migration checklist.",
+      source: { kind: "human", confidence: 0.7 },
+      temporal: { verificationDueAt: new Date(Date.now() - 60_000) }
+    });
+    service.update(memory.id, { trust: 0.4 });
+    const results = service.search({ userId: "risk-user", query: "deploy production release-critical migration", limit: 3 });
+    expect(results[0]?.risk?.riskLevel).toBe("release-critical");
+    expect(results[0]?.risk?.verificationRequests.length).toBeGreaterThan(0);
+    const plan = service.dreamPlan({ userId: "risk-user", trigger: "before_release", mode: "dream" });
+    expect(plan.releaseBlockers?.length).toBeGreaterThan(0);
   });
 });

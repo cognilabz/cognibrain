@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { adapterDefinitions, connectorDefinitions } from "./catalogs.mjs";
+import { handleHarnessCommand, handleLifecycleCommand, handleMemoryLifecycleCommand, isLifecycleCommand, isMemoryLifecycleCommand } from "./lifecycleCli.mjs";
 import { createHarnessRuntime } from "./harnessRuntime.mjs";
 import { renderCliPanel, renderCliSurface } from "./render.mjs";
 import { createServiceRuntime } from "./serviceRuntime.mjs";
@@ -39,6 +40,11 @@ const {
   printServiceLogs
 } = createServiceRuntime({ root, runtimeRoot, hostPlatformName, optionValue, optionValues, readJson, writeJson, runtimeStatus, serviceUsage });
 
+if (isLifecycleCommand(command)) {
+  await handleLifecycleCommand([command, ...commandArgs], { root, launchCwd, runtimeRoot });
+  return;
+}
+
 switch (command) {
   case undefined:
   case "ui":
@@ -76,8 +82,16 @@ switch (command) {
     break;
 
   case "proof":
-  case "truth":
     await proofCommand(commandArgs);
+    break;
+
+  case "truth":
+    if (commandArgs.length === 0 || commandArgs.includes("--help")) await proofCommand(commandArgs);
+    else runTsxAndExit("src/cli/memctl.ts", [`truth-${commandArgs[0]}`, ...commandArgs.slice(1)]);
+    break;
+
+  case "dream":
+    runTsxAndExit("src/cli/memctl.ts", [`dream-${commandArgs[0] ?? "plan"}`, ...commandArgs.slice(1)]);
     break;
 
   case "stop":
@@ -118,11 +132,19 @@ switch (command) {
     break;
 
   case "memory":
+    if (isMemoryLifecycleCommand(commandArgs)) {
+      await handleMemoryLifecycleCommand(commandArgs, { root, launchCwd, runtimeRoot });
+      return;
+    }
     runTsxAndExit("src/cli/memctl.ts", commandArgs);
     break;
 
   case "memories":
     await memoriesCommand(commandArgs);
+    break;
+
+  case "harness":
+    await handleHarnessCommand(commandArgs, { root, launchCwd, runtimeRoot });
     break;
 
   case "mcp":
@@ -366,6 +388,17 @@ async function doctor(doctorArgs) {
   const add = (name, ok, detail = "", level = ok ? "ok" : "fail") => checks.push({ name, ok, detail, level });
 
   add("Node >= 20", majorVersion(process.version) >= 20, process.version);
+  const sqliteRuntime = sqliteRuntimeCheck();
+  const selectedStorage = process.env.MEMORY_STORAGE_BACKEND ?? readJson(configPaths().setupState, null)?.storage;
+  const sqliteRequired = selectedStorage === "sqlite" || selectedStorage === "sql";
+  add(
+    "SQLite runtime",
+    sqliteRuntime.ok || !sqliteRequired,
+    sqliteRuntime.ok
+      ? "node:sqlite DatabaseSync available"
+      : `${sqliteRuntime.detail}; use JSON storage, Postgres storage, or a Node runtime with node:sqlite`,
+    sqliteRuntime.ok ? "ok" : sqliteRequired ? "fail" : "warn"
+  );
   const npmVersion = runCapture("npm", ["--version"]);
   add("npm available", npmVersion.status === 0, npmVersion.stdout.trim() || npmVersion.stderr.trim());
   add("package manifest", existsSync(join(root, "package.json")), join(root, "package.json"));
@@ -707,16 +740,21 @@ async function sdkCommand(commandArgs) {
     if (!result.ok) process.exit(1);
     return;
   }
-  if (subcommand !== "platform") sdkUsage(1);
+  if (subcommand !== "platform" && subcommand !== "harness") sdkUsage(1);
   const name = commandArgs[1];
   if (!name) sdkUsage(1);
-  const result = platformSdkScaffold(name, {
-    kind: optionValue(commandArgs, "--kind") ?? "custom",
-    direction: optionValue(commandArgs, "--direction") ?? "two_way",
-    auth: optionValue(commandArgs, "--auth") ?? "token",
-    out: optionValue(commandArgs, "--out"),
-    dryRun: commandArgs.includes("--dry-run")
-  });
+  const result = subcommand === "platform"
+    ? platformSdkScaffold(name, {
+        kind: optionValue(commandArgs, "--kind") ?? "custom",
+        direction: optionValue(commandArgs, "--direction") ?? "two_way",
+        auth: optionValue(commandArgs, "--auth") ?? "token",
+        out: optionValue(commandArgs, "--out"),
+        dryRun: commandArgs.includes("--dry-run")
+      })
+    : harnessSdkScaffold(name, {
+        out: optionValue(commandArgs, "--out"),
+        dryRun: commandArgs.includes("--dry-run")
+      });
   if (commandArgs.includes("--json")) printJson(result);
   else await renderCliSurface("sdk-scaffold", result, { title: "cognibrain SDK scaffold" });
 }
@@ -1053,6 +1091,9 @@ async function cliHomeData() {
       "cognibrain status",
       "cognibrain memories",
       "cognibrain memories search <query>",
+      "cognibrain context --task <task> --json",
+      "cognibrain guard --action <command> --json",
+      "cognibrain outcome --command <command> --exit-code <code> --json",
       "cognibrain connections",
       "cognibrain connections add github --set repo=owner/repo",
       "cognibrain config show",
@@ -1579,14 +1620,18 @@ function sdkCatalog() {
       sdk: "platform",
       status: "available",
       command: "cognibrain sdk platform <name> --kind project_management --out integrations/<name>",
-      docs: "docs/integrations.md#platform-sdk",
       includes: ["TypeScript integration", "connector manifest", ".env.example", "README"]
+    },
+    {
+      sdk: "harness",
+      status: "available",
+      command: "cognibrain sdk harness <name> --out integrations/<name>",
+      includes: ["TypeScript harness integration", ".env.example", "README", "HTTP lifecycle smoke"]
     },
     {
       sdk: "connector-author",
       status: "available",
-      command: "import { createPlatformIntegration } from 'cognibrain/src/connectors/sdk'",
-      docs: "docs/integrations.md#platform-sdk",
+      command: "import { createPlatformIntegration } from '@cognilabz/cognibrain/sdk/typescript/connectors'",
       includes: ["manifest validation", "event normalization", "writeback dry-run plans", "health envelope"]
     }
   ];
@@ -1605,19 +1650,24 @@ function sdkDoctor() {
       detail: "src/connectors/sdk.ts"
     },
     {
+      name: "public TypeScript SDK exports",
+      ok: existsSync(join(root, "sdk", "typescript", "index.ts")) && readFileSync(join(root, "sdk", "typescript", "index.ts"), "utf8").includes("./harness") && readFileSync(join(root, "sdk", "typescript", "connectors.ts"), "utf8").includes("createPlatformIntegration"),
+      detail: "sdk/typescript/index.ts"
+    },
+    {
+      name: "harness SDK helpers",
+      ok: existsSync(join(root, "sdk", "typescript", "harness.ts")) && readFileSync(join(root, "sdk", "typescript", "harness.ts"), "utf8").includes("CognibrainHarnessSdk"),
+      detail: "sdk/typescript/harness.ts"
+    },
+    {
       name: "platform SDK CLI",
       ok: readFileSync(join(root, "bin", "lib", "cliRuntime.mjs"), "utf8").includes("platformSdkScaffold"),
       detail: "bin/cognibrain.mjs"
     },
     {
-      name: "platform SDK docs",
-      ok: existsSync(join(root, "docs", "integrations.md")),
-      detail: "docs/integrations.md"
-    },
-    {
-      name: "publish package includes src and docs",
-      ok: readFileSync(join(root, "package.json"), "utf8").includes("\"src/\"") && readFileSync(join(root, "package.json"), "utf8").includes("\"docs/\""),
-      detail: "package.json files"
+      name: "publish package exports SDK subpaths",
+      ok: readFileSync(join(root, "package.json"), "utf8").includes("\"./sdk/typescript/harness\"") && readFileSync(join(root, "package.json"), "utf8").includes("\"./sdk/typescript/connectors\""),
+      detail: "package.json exports"
     }
   ];
   return { ok: checks.every((check) => check.ok), checks };
@@ -1710,12 +1760,10 @@ function platformSdkManifest({ slug, name, kind, direction, auth, envPrefix }) {
 }
 
 function platformIntegrationTemplate({ slug, name, kind, direction, auth, envPrefix }) {
-  const clientImport = pathToFileURL(join(root, "sdk", "typescript", "client.ts")).href;
-  const sdkImport = pathToFileURL(join(root, "src", "connectors", "sdk.ts")).href;
+  const sdkImport = pathToFileURL(join(root, "sdk", "typescript", "index.ts")).href;
   return [
     'import { pathToFileURL } from "node:url";',
-    `import { CognibrainClient } from "${clientImport}";`,
-    `import { createPlatformIntegration, mapPlatformRecord } from "${sdkImport}";`,
+    `import { CognibrainClient, createPlatformIntegration, mapPlatformRecord } from "${sdkImport}";`,
     "",
     "export const integration = createPlatformIntegration(",
     "  {",
@@ -1765,6 +1813,128 @@ function platformIntegrationTemplate({ slug, name, kind, direction, auth, envPre
     "    process.exit(1);",
     "  });",
     "}",
+    ""
+  ].join("\n");
+}
+
+function harnessSdkScaffold(name, options) {
+  const slug = platformSlug(name);
+  const envPrefix = `MEMORY_${slug.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
+  const outputDir = resolve(launchCwd, options.out ?? join(".cognibrain", "integrations", slug));
+  const files = [
+    {
+      path: join(outputDir, `${slug}.harness.ts`),
+      content: harnessIntegrationTemplate({ slug, name, envPrefix })
+    },
+    {
+      path: join(outputDir, ".env.example"),
+      content: harnessEnvTemplate({ slug, envPrefix })
+    },
+    {
+      path: join(outputDir, "README.md"),
+      content: harnessReadmeTemplate({ slug, name })
+    }
+  ];
+  if (!options.dryRun) {
+    for (const file of files) writeGeneratedFile(file.path, file.content);
+  }
+  return {
+    schemaVersion: "1.0",
+    sdk: "harness",
+    name,
+    slug,
+    dryRun: Boolean(options.dryRun),
+    outputDir,
+    files: files.map((file) => file.path),
+    commands: [
+      `npx tsx ${join(outputDir, `${slug}.harness.ts`)}`,
+      `npx cognibrain memory action --user "$${envPrefix}_USER_ID" --command "npm test"`
+    ]
+  };
+}
+
+function harnessIntegrationTemplate({ slug, name, envPrefix }) {
+  const sdkImport = pathToFileURL(join(root, "sdk", "typescript", "index.ts")).href;
+  return [
+    'import { pathToFileURL } from "node:url";',
+    `import { CognibrainHarnessSdk } from "${sdkImport}";`,
+    "",
+    "const harness = new CognibrainHarnessSdk({",
+    "  baseUrl: process.env.COGNIBRAIN_URL,",
+    "  apiKey: process.env.COGNIBRAIN_API_KEY,",
+    `  actorId: process.env.${envPrefix}_AGENT_ID ?? "${slug}-agent"`,
+    "});",
+    "",
+    "export async function runHarnessSmoke() {",
+    "  const context = {",
+    `    userId: process.env.${envPrefix}_USER_ID ?? process.env.MEMORY_USER_ID ?? "local",`,
+    `    agentId: process.env.${envPrefix}_AGENT_ID ?? "${slug}-agent",`,
+    `    appId: "${slug}",`,
+    `    projectId: process.env.${envPrefix}_PROJECT_ID ?? "local",`,
+    `    sessionId: process.env.${envPrefix}_SESSION_ID ?? "${slug}-smoke",`,
+    `    prompt: process.env.${envPrefix}_PROMPT ?? "Run ${escapeTsString(name)} harness smoke.",`,
+    `    codebaseScope: { repo: process.env.${envPrefix}_REPO ?? "local", harness: "${slug}" }`,
+    "  };",
+    "",
+    "  await harness.startSession(context);",
+    "  const preTool = await harness.beforeToolCall(context, { command: process.env.HARNESS_SMOKE_COMMAND ?? \"npm test\" });",
+    "  const outcome = await harness.afterToolCall(context, {",
+    "    command: process.env.HARNESS_SMOKE_COMMAND ?? \"npm test\",",
+    "    exitCode: 0,",
+    "    outputSummary: \"local harness SDK smoke completed\"",
+    "  });",
+    "  const patch = await harness.finishPatch(context, {",
+    "    task: \"harness SDK smoke\",",
+    "    commandsRun: [process.env.HARNESS_SMOKE_COMMAND ?? \"npm test\"],",
+    "    memoryIds: [outcome.action?.id].filter((id): id is string => Boolean(id))",
+    "  });",
+    "  await harness.prepareHandoff(context, { content: \"Harness SDK smoke ready for handoff.\", runDream: false });",
+    "  console.log(JSON.stringify({ harness: context.appId, guard: preTool.guard.severity, patchEvidenceTrailId: patch.trail.id }, null, 2));",
+    "}",
+    "",
+    "if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {",
+    "  runHarnessSmoke().catch((error) => {",
+    "    console.error(error);",
+    "    process.exit(1);",
+    "  });",
+    "}",
+    ""
+  ].join("\n");
+}
+
+function harnessEnvTemplate({ slug, envPrefix }) {
+  return [
+    "COGNIBRAIN_URL=http://127.0.0.1:8787",
+    "COGNIBRAIN_API_KEY=",
+    `${envPrefix}_USER_ID=local`,
+    `${envPrefix}_AGENT_ID=${slug}-agent`,
+    `${envPrefix}_PROJECT_ID=local`,
+    `${envPrefix}_SESSION_ID=${slug}-smoke`,
+    `${envPrefix}_REPO=local`,
+    `${envPrefix}_PROMPT=Run harness SDK smoke.`,
+    "HARNESS_SMOKE_COMMAND=npm test",
+    ""
+  ].join("\n");
+}
+
+function harnessReadmeTemplate({ slug, name }) {
+  return [
+    `# ${name} cognibrain harness integration`,
+    "",
+    "This scaffold connects a non-MCP harness to cognibrain through the public TypeScript Harness SDK.",
+    "",
+    "## Files",
+    "",
+    `- \`${slug}.harness.ts\`: context, guard, telemetry, patch evidence and handoff smoke.`,
+    "- `.env.example`: runtime variable names; keep real secrets outside git.",
+    "",
+    "## Run",
+    "",
+    "```bash",
+    "cp .env.example .env",
+    "npx cognibrain start",
+    `npx tsx ${slug}.harness.ts`,
+    "```",
     ""
   ].join("\n");
 }
@@ -2032,6 +2202,16 @@ function runAndExit(cmd, runArgs) {
 
 function runCapture(cmd, runArgs) {
   return spawnSync(cmd, runArgs, { cwd: root, env: runtimeEnv(), encoding: "utf8" });
+}
+
+function sqliteRuntimeCheck() {
+  const result = spawnSync(process.execPath, ["-e", "const sqlite = require('node:sqlite'); if (!sqlite.DatabaseSync) process.exit(2);"], {
+    cwd: root,
+    env: runtimeEnv(),
+    encoding: "utf8"
+  });
+  if (result.status === 0) return { ok: true, detail: "available" };
+  return { ok: false, detail: (result.stderr || result.stdout || "node:sqlite DatabaseSync unavailable").trim() };
 }
 
 function commandExists(cmd) {

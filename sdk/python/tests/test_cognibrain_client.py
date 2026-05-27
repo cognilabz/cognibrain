@@ -25,6 +25,8 @@ class MockCognibrainHandler(BaseHTTPRequestHandler):
             self._json({"id": "ctx_123", "context": "[mem_1] release checks"})
         elif self.path == "/connectors/health":
             self._json([{"connectorId": "official-github", "status": "idle"}])
+        elif self.path == "/connectors/sync-records?connectorId=official-github":
+            self._json([{"connectorId": "official-github", "status": "applied"}])
         elif self.path == "/sdk/openapi":
             self._json({"openapi": "3.1.0", "paths": {"/memories": ["GET", "POST"]}})
         elif self.path == "/memories?userId=dev":
@@ -44,8 +46,20 @@ class MockCognibrainHandler(BaseHTTPRequestHandler):
             self._json({"id": "mem_1", **body}, status=201)
         elif self.path == "/evidence-pack":
             self._json({"id": "ctx_123", "query": body["query"], "policyDecisions": []})
+        elif self.path == "/coding-context-pack":
+            self._json({"id": "code_ctx_123", "context": "python harness context", "query": body["query"]})
+        elif self.path == "/code/action-guard":
+            self._json({"severity": "allow", "action": body["action"], "allowed": True})
+        elif self.path == "/actions":
+            self._json({"id": "action_1", "command": body["command"], "tags": ["harness-action"]}, status=202)
+        elif self.path == "/code/corrections":
+            self._json({"id": "correction_1", "content": body["content"], "tags": ["engineering-correction"]}, status=202)
+        elif self.path == "/patch-evidence":
+            self._json({"id": "trail_1", "task": body["task"], "toolOutcomeIds": body["memoryIds"]}, status=202)
         elif self.path == "/policy/evaluate":
             self._json({"operation": body["operation"], "allowed": True})
+        elif self.path == "/connectors/poll":
+            self._json({"status": "applied", "connectorId": body["connectorId"]}, status=202)
         elif self.path == "/connectors/writeback":
             self._json({"status": "queued", "connectorId": body["connectorId"]}, status=202)
         elif self.path == "/feedback":
@@ -116,7 +130,23 @@ class CognibrainClientTest(unittest.TestCase):
         self.assertTrue(client.policy_check("retrieve", memory_id="mem_1", actor={"userId": "dev"})["allowed"])
         self.assertEqual(client.connector_health()[0]["connectorId"], "official-github")
         self.assertEqual(client.writeback_connector("official-github", {"dryRun": True})["status"], "queued")
+        self.assertEqual(client.poll_connector("official-github", {"userId": "dev"})["status"], "applied")
+        self.assertEqual(client.connector_sync_records("official-github")[0]["status"], "applied")
         self.assertTrue(client.delete_memory("mem_1"))
+
+    def test_harness_parity_methods(self) -> None:
+        client = CognibrainClient(self.base_url)
+        pack = client.coding_context_pack({"userId": "dev", "query": "harness parity"})
+        guard = client.guard_action({"userId": "dev", "action": "npm test"})
+        action = client.record_action({"userId": "dev", "command": "npm test"})
+        correction = client.record_code_correction({"userId": "dev", "content": "Use npm test."})
+        trail = client.patch_evidence_trail({"userId": "dev", "task": "patch", "memoryIds": [action["id"], correction["id"]]})
+
+        self.assertEqual(pack["id"], "code_ctx_123")
+        self.assertEqual(guard["severity"], "allow")
+        self.assertEqual(action["tags"], ["harness-action"])
+        self.assertEqual(correction["tags"], ["engineering-correction"])
+        self.assertEqual(trail["toolOutcomeIds"], ["action_1", "correction_1"])
 
     def test_typed_http_error(self) -> None:
         client = CognibrainClient(self.base_url, retries=0)

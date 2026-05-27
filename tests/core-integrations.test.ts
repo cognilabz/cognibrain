@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -11,6 +11,9 @@ import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { connectorAuthHeaders, createConnectorManifest, createPlatformIntegration, createWritebackPlan, runConnectorPoll } from "../src/connectors/sdk";
 import { MemoryService } from "../src/api/service";
 import { CognibrainClient, CognibrainError } from "../sdk/typescript/client";
+import { CognibrainHarnessSdk } from "../sdk/typescript/harness";
+import { createPlatformIntegration as createPublicPlatformIntegration } from "../sdk/typescript/connectors";
+import * as publicTypescriptSdk from "../sdk/typescript/index";
 import { AppendOnlyLogPersistenceAdapter, CassandraCompatiblePersistenceAdapter, CassandraRemotePersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, PostgresRemotePersistenceAdapter, SQLitePersistenceAdapter, createPersistenceFromEnv, sqliteAvailable } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
 import { buildLeaderboardArtifact, validateLeaderboardArtifact } from "../src/eval/leaderboard";
@@ -417,6 +420,120 @@ describe("TypeScript memory core integrations", () => {
     expect(health).toMatchObject({ ok: true, connectorId: "acme-tasks", tokenRef: "env:MEMORY_ACME_TASKS_TOKEN" });
   });
 
+  it("exposes public TypeScript SDK subpaths and runs the async harness lifecycle", async () => {
+    expect(publicTypescriptSdk.CognibrainClient).toBe(CognibrainClient);
+    expect(createPublicPlatformIntegration({ name: "Public Tasks" }).manifest.id).toBe("public-tasks");
+
+    const calls: Array<{ path: string; body?: Record<string, unknown> }> = [];
+    const fetchImpl = (async (url, init) => {
+      const path = String(url).replace("http://memory.local", "");
+      const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : undefined;
+      calls.push({ path, body });
+      if (path === "/coding-context-pack") {
+        return new Response(JSON.stringify({
+          schemaVersion: "1.0",
+          id: "code_ctx_sdk",
+          generatedAt: "2026-05-27T00:00:00.000Z",
+          query: body?.query,
+          userId: body?.userId,
+          tokenBudget: 900,
+          context: "Use public harness SDK.",
+          sections: [],
+          excludedStaleRules: []
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (path === "/code/action-guard") {
+        return new Response(JSON.stringify({
+          schemaVersion: "1.0",
+          generatedAt: "2026-05-27T00:00:00.000Z",
+          userId: body?.userId,
+          action: body?.action,
+          allowed: true,
+          severity: "allow",
+          warnings: [],
+          blockedBy: [],
+          alternatives: [],
+          evidenceIds: []
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (path === "/actions") {
+        return new Response(JSON.stringify({ id: "mem_action", content: "action", tags: ["harness-action"] }), { status: 202, headers: { "content-type": "application/json" } });
+      }
+      if (path === "/code/corrections") {
+        return new Response(JSON.stringify({ id: "mem_correction", content: body?.content, tags: ["engineering-correction"] }), { status: 202, headers: { "content-type": "application/json" } });
+      }
+      if (path === "/patch-evidence") {
+        return new Response(JSON.stringify({
+          schemaVersion: "1.0",
+          id: "trail_sdk",
+          generatedAt: "2026-05-27T00:00:00.000Z",
+          userId: body?.userId,
+          task: body?.task,
+          memoryIds: body?.memoryIds ?? [],
+          correctionIds: ["mem_correction"],
+          procedureIds: [],
+          toolOutcomeIds: ["mem_action"],
+          graphPaths: [],
+          excludedStaleRules: [],
+          memoriesUsed: [],
+          correctionsApplied: [],
+          proceduresRecalled: [],
+          forbiddenActionsAvoided: [],
+          toolOutcomes: [],
+          staleMemoriesExcluded: [],
+          summary: { filesChanged: body?.filesChanged ?? [], commandsRun: body?.commandsRun ?? [], evidenceCount: 1 }
+        }), { status: 202, headers: { "content-type": "application/json" } });
+      }
+      if (path === "/harness/events") {
+        return new Response(JSON.stringify({
+          eventMemory: { id: `event_${calls.length}`, content: body?.event, tags: [`harness:${body?.event}`] },
+          dream: { plan: { shouldDream: false } }
+        }), { status: 202, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: path }), { status: 404, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    const harness = new CognibrainHarnessSdk(new CognibrainClient({ baseUrl: "http://memory.local", fetchImpl }));
+    const context = {
+      userId: "sdk-user",
+      agentId: "external-agent",
+      appId: "external-harness",
+      projectId: "memory",
+      sessionId: "run-1",
+      prompt: "Run the public harness SDK lifecycle",
+      codebaseScope: { repo: "memory", harness: "external-harness" }
+    };
+
+    const session = await harness.startSession(context);
+    const preTool = await harness.beforeToolCall(context, { command: "npm test" });
+    const action = await harness.afterToolCall(context, { command: "npm test", exitCode: 0, outputSummary: "ok" });
+    const correction = await harness.captureCorrection(context, { content: "Use public harness SDK imports.", correctAction: "import from sdk/typescript/harness", evidenceIds: [action.action.id] });
+    const patch = await harness.finishPatch(context, { task: "public harness SDK", commandsRun: ["npm test"], memoryIds: [action.action.id, correction.correction.id] });
+    const handoff = await harness.prepareHandoff(context, { content: "handoff", runDream: false });
+    const release = await harness.prepareRelease(context, { content: "release", runDream: false });
+
+    expect(session.codingContextPack.context).toContain("public harness SDK");
+    expect(preTool.guard.severity).toBe("allow");
+    expect(action.action.tags).toContain("harness-action");
+    expect(patch.trail.id).toBe("trail_sdk");
+    expect(handoff.eventMemory.tags).toContain("harness:handoff");
+    expect(release.eventMemory.tags).toContain("harness:release_candidate");
+    expect(calls.map((call) => call.path)).toEqual([
+      "/coding-context-pack",
+      "/harness/events",
+      "/harness/events",
+      "/code/action-guard",
+      "/harness/events",
+      "/actions",
+      "/harness/events",
+      "/code/corrections",
+      "/harness/events",
+      "/patch-evidence",
+      "/harness/events",
+      "/harness/events",
+      "/harness/events"
+    ]);
+  });
+
   it("validates connector manifests, syncs connector events, retries webhooks, and ingests translated media", () => {
     const service = new MemoryService();
     const official = service.listConnectorManifests();
@@ -533,6 +650,74 @@ describe("TypeScript memory core integrations", () => {
     expect(media.memories[0].metadata.translatedFrom).toBe("de");
     expect(service.auditTrail({ type: "provider.call" }).length).toBeGreaterThan(0);
     expect(service.providerStatus().tasks).toContain("translate");
+  });
+
+  it("exchanges OAuth codes through token endpoints while persisting only secret refs", async () => {
+    const tokenServer = spawn(process.execPath, ["-e", `
+      const { createServer } = require("node:http");
+      const server = createServer((request, response) => {
+        let body = "";
+        request.on("data", (chunk) => body += chunk);
+        request.on("end", () => {
+          if (request.url !== "/token" || !body.includes("code=real-code") || !body.includes("client_secret=client-secret")) {
+            response.writeHead(400, { "content-type": "application/json" });
+            response.end(JSON.stringify({ error: "invalid_request", body }));
+            return;
+          }
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify({ access_token: "raw-access-token", refresh_token: "raw-refresh-token", expires_in: 3600 }));
+        });
+      });
+      server.listen(0, "127.0.0.1", () => console.log(server.address().port));
+    `], { stdio: ["ignore", "pipe", "pipe"] });
+    const port = await new Promise<number>((resolve, reject) => {
+      tokenServer.once("error", reject);
+      tokenServer.stdout.once("data", (chunk) => resolve(Number(String(chunk).trim())));
+    });
+    process.env.MEMORY_SECRET_OAUTH_REAL_DOCS_CLIENT_ID = "client-id";
+    process.env.MEMORY_SECRET_OAUTH_REAL_DOCS_CLIENT_SECRET = "client-secret";
+    try {
+      const service = new MemoryService();
+      service.registerConnectorManifest({
+        id: "oauth-real-docs",
+        name: "OAuth Real Docs",
+        kind: "docs",
+        version: "1.0.0",
+        direction: "two_way",
+        capabilities: ["ingest", "poll"],
+        auth: "oauth",
+        defaultSourceKind: "human",
+        metadataMapping: {},
+        oauth: {
+          authorizeUrl: "https://auth.example.com/authorize",
+          tokenUrl: `http://127.0.0.1:${port}/token`,
+          clientIdRef: "secret://oauth-real-docs/client-id",
+          clientSecretRef: "secret://oauth-real-docs/client-secret",
+          scopes: ["docs.read"]
+        },
+        poll: { endpoint: "https://api.example.com/docs/poll" }
+      });
+      const session = service.beginConnectorOAuth("oauth-real-docs", { stateSalt: "unit" });
+      const authorized = service.completeConnectorOAuth({ connectorId: "oauth-real-docs", state: session.state, code: "real-code" });
+      expect(authorized.status).toBe("authorized");
+      expect(authorized.tokenRef).toMatch(/^secret:\/\/oauth\/oauth-real-docs\/access\//);
+      expect(authorized.refreshTokenRef).toMatch(/^secret:\/\/oauth\/oauth-real-docs\/refresh\//);
+      expect(JSON.stringify(authorized)).not.toContain("raw-access-token");
+      expect(JSON.stringify(authorized)).not.toContain("raw-refresh-token");
+      const refreshed = service.refreshConnectorOAuth("oauth-real-docs");
+      expect(refreshed.tokenRef).toMatch(/^secret:\/\/oauth\/oauth-real-docs\/access\//);
+      expect(refreshed.tokenRef).not.toBe(authorized.tokenRef);
+      expect(JSON.stringify(refreshed)).not.toContain("raw-access-token");
+      expect(JSON.stringify(refreshed.metadata?.secretRef)).toContain("secret://oauth/");
+      const revoked = service.revokeConnectorAuth("oauth-real-docs", "operator");
+      expect(revoked[0].tokenRef).toBeUndefined();
+      expect(revoked[0].refreshTokenRef).toBeUndefined();
+      expect(revoked[0].revokedAt).toBeTruthy();
+    } finally {
+      delete process.env.MEMORY_SECRET_OAUTH_REAL_DOCS_CLIENT_ID;
+      delete process.env.MEMORY_SECRET_OAUTH_REAL_DOCS_CLIENT_SECRET;
+      tokenServer.kill();
+    }
   });
 
   it("extracts local OCR, PDF OCR, ASR, and video frame metadata into auditable memories", () => {

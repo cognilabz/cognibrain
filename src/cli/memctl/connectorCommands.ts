@@ -22,6 +22,14 @@ export async function handleConnectorCommand(
     console.log(JSON.stringify(service.listConnectorManifests(kind), null, 2));
     return true;
   }
+  case "connector-configure": {
+    const connectorId = args[0];
+    if (!connectorId) fail("Usage: memctl connector-configure <connector-id>");
+    const manifest = service.listConnectorManifests().find((item) => item.id === connectorId || item.id === `official-${connectorId}`);
+    if (!manifest) fail(`Connector manifest not found: ${connectorId}`);
+    console.log(JSON.stringify({ connectorId: manifest.id, auth: manifest.auth, oauth: manifest.oauth, requiredEnv: manifest.vendor?.requiredEnv ?? [], next: [`memctl connector-auth-begin ${manifest.id}`, `memctl connector-test ${manifest.id}`] }, null, 2));
+    return true;
+  }
   case "connector-register": {
     const manifestJson = args.join(" ");
     if (!manifestJson) fail("Usage: memctl connector-register '<manifest-json>'");
@@ -60,6 +68,35 @@ export async function handleConnectorCommand(
         2
       )
     );
+    return true;
+  }
+  case "connector-test": {
+    const connectorId = args[0];
+    if (!connectorId) fail("Usage: memctl connector-test <connector-id>");
+    console.log(JSON.stringify(service.connectorHealth(connectorId)[0] ?? { connectorId, status: "missing" }, null, 2));
+    return true;
+  }
+  case "connector-preview": {
+    const connectorId = args[0];
+    if (!connectorId) fail("Usage: memctl connector-preview <connector-id>");
+    const manifest = service.listConnectorManifests().find((item) => item.id === connectorId || item.id === `official-${connectorId}`);
+    console.log(JSON.stringify({ dryRun: true, connectorId, manifest, reviewQueue: service.listConnectorReviewQueue({ connectorId: manifest?.id ?? connectorId }) }, null, 2));
+    return true;
+  }
+  case "connector-review": {
+    console.log(JSON.stringify(service.listConnectorReviewQueue({ connectorId: args[0], userId: process.env.MEMORY_USER_ID }), null, 2));
+    return true;
+  }
+  case "connector-approve": {
+    const memoryId = args[0];
+    if (!memoryId) fail("Usage: memctl connector-approve <memory-id> [reason]");
+    console.log(JSON.stringify(service.reviewConnectorMemory(memoryId, { decision: "approve", reviewerId: process.env.MEMORY_ACTOR_ID ?? "cli", reason: args.slice(1).join(" ") || undefined }), null, 2));
+    return true;
+  }
+  case "connector-reject": {
+    const memoryId = args[0];
+    if (!memoryId) fail("Usage: memctl connector-reject <memory-id> [reason]");
+    console.log(JSON.stringify(service.reviewConnectorMemory(memoryId, { decision: "reject", reviewerId: process.env.MEMORY_ACTOR_ID ?? "cli", reason: args.slice(1).join(" ") || undefined }), null, 2));
     return true;
   }
   case "connector-sync-records": {
@@ -103,6 +140,12 @@ export async function handleConnectorCommand(
     const connectorId = args[0];
     if (!connectorId) fail("Usage: memctl connector-auth-revoke <connector-id>");
     console.log(JSON.stringify(service.revokeConnectorAuth(connectorId, process.env.MEMORY_ACTOR_ID ?? "cli"), null, 2));
+    return true;
+  }
+  case "connector-auth-refresh": {
+    const connectorId = args[0];
+    if (!connectorId) fail("Usage: memctl connector-auth-refresh <connector-id>");
+    console.log(JSON.stringify(service.refreshConnectorOAuth(connectorId), null, 2));
     return true;
   }
   case "connector-list": {

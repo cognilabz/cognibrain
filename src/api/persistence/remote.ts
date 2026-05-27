@@ -336,7 +336,7 @@ export class CassandraRemotePersistenceAdapter implements MemoryPersistenceAdapt
   capabilities(): PersistenceCapabilities {
     return {
       durable: true,
-      distributedReady: true,
+      distributedReady: false,
       transactional: false,
       appendOnly: true,
       sql: false,
@@ -345,9 +345,9 @@ export class CassandraRemotePersistenceAdapter implements MemoryPersistenceAdapt
       replication: "quorum",
       sharding: "range",
       notes: [
-        "Cassandra remote driver using cqlsh-compatible CQL with append-only wide-column snapshot tables.",
-        "Set MEMORY_STORAGE_BACKEND=cassandra-remote, MEMORY_CASSANDRA_CONTACT_POINT and MEMORY_CASSANDRA_KEYSPACE for production deployments.",
-        "Consistency, replication and sharding are delegated to the configured Cassandra cluster."
+        "Experimental Cassandra remote snapshot/event-journal path using cqlsh-compatible CQL.",
+        "Do not treat Cassandra as a production query backend until a queryable repository is implemented.",
+        "Consistency, replication and sharding are delegated to the configured Cassandra cluster for journal storage only."
       ]
     };
   }

@@ -110,6 +110,7 @@ interface MaturityReport {
     tenantVerified: number;
     productionCertified: number;
     webhookVerified: number;
+    publicConnectorSdk: boolean;
     averageQualityScore: number;
   };
   passed: boolean;
@@ -193,6 +194,7 @@ export function generateConnectorMaturity(options: ConnectorMaturityOptions = {}
       tenantVerified: rows.filter((row) => row.maturity.tenantVerified).length,
       productionCertified: rows.filter((row) => row.maturity.productionCertified).length,
       webhookVerified: rows.filter((row) => row.maturity.webhook).length,
+      publicConnectorSdk: publicConnectorSdkReady(),
       averageQualityScore: roundedAverage(rows.map((row) => row.qualityScore))
     },
     passed: rows.length >= 19 && rows.every((row) =>
@@ -204,6 +206,7 @@ export function generateConnectorMaturity(options: ConnectorMaturityOptions = {}
       row.maturity.apiSpec &&
       row.maturity.liveSmokeSupport &&
       (row.maturity.webhook || !webhookSupportedProviders.has(row.provider)) &&
+      publicConnectorSdkReady() &&
       row.gaps.includes("production-certified proof not claimed")
     )
   };
@@ -322,6 +325,22 @@ function connectorQuality(
   };
 }
 
+function publicConnectorSdkReady(): boolean {
+  if (!existsSync("sdk/typescript/connectors.ts") || !existsSync("sdk/typescript/index.ts") || !existsSync("bin/lib/cliRuntime.mjs")) return false;
+  const connectors = readFileSync("sdk/typescript/connectors.ts", "utf8");
+  const index = readFileSync("sdk/typescript/index.ts", "utf8");
+  const cli = readFileSync("bin/lib/cliRuntime.mjs", "utf8");
+  return [
+    "createPlatformIntegration",
+    "createConnectorManifest",
+    "normalizeConnectorEvent",
+    "runConnectorPoll",
+    "createDryRunWritebackPlan"
+  ].every((needle) => connectors.includes(needle)) &&
+    index.includes("./connectors") &&
+    cli.includes("sdk/typescript/index.ts");
+}
+
 function renderMarkdown(report: MaturityReport): string {
   const rows = report.rows
     .map((row) => `| ${row.provider} | ${row.category} | ${row.proofLevel} | ${score(row.qualityScore)} | ${mark(row.maturity.driver)} | ${mark(row.maturity.hermeticFixture)} | ${mark(row.maturity.apiSpec)} | ${mark(row.maturity.liveSmokeSupport)} | ${mark(row.maturity.webhook)} | ${mark(row.maturity.tenantVerified)} | ${mark(row.maturity.tuiSetup)} | ${mark(row.maturity.listImplemented)} | ${mark(row.maturity.pollImplemented)} | ${mark(row.maturity.writebackImplemented)} | ${mark(row.maturity.productionCertified)} |`)
@@ -334,7 +353,7 @@ Proof levels are ordered as: ${report.proofLevels.map((level) => `\`${level}\``)
 
 Native connector means there is a first-party connector manifest and driver path. It does not mean customer production certification unless the production-certified column is true. Marketing can make strong live-system claims only for \`tenant-verified\` or \`production-certified\` rows.
 
-Current checked connector state: ${report.summary.hermeticDrivers} hermetic drivers, ${report.summary.apiSpecVerified} API/spec-verified drivers, ${report.summary.liveSmokeReady} live-smoke-ready drivers, ${report.summary.webhookVerified} webhook-verified priority drivers, ${report.summary.credentialBlockedCertification} credential-blocked certification rows, ${report.summary.tenantVerified} tenant-verified live smokes, ${report.summary.productionCertified} production certifications, average quality score ${score(report.summary.averageQualityScore)}. Live-system proof requires tenant credentials plus \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`.
+Current checked connector state: ${report.summary.hermeticDrivers} hermetic drivers, ${report.summary.apiSpecVerified} API/spec-verified drivers, ${report.summary.liveSmokeReady} live-smoke-ready drivers, ${report.summary.webhookVerified} webhook-verified priority drivers, public Connector SDK ${report.summary.publicConnectorSdk ? "present" : "missing"}, ${report.summary.credentialBlockedCertification} credential-blocked certification rows, ${report.summary.tenantVerified} tenant-verified live smokes, ${report.summary.productionCertified} production certifications, average quality score ${score(report.summary.averageQualityScore)}. Live-system proof requires tenant credentials plus \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`.
 
 | Connector | Category | Proof level | Quality | Driver | Fixture | API/spec | Live-smoke ready | Webhook | Tenant verified | TUI setup | List | Poll | Writeback | Production-certified |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

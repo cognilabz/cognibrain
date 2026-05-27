@@ -66,6 +66,27 @@ npx cognibrain memory connector-health acme
 
 The scaffold includes TypeScript integration code, a connector manifest, `.env.example`, local README, poll/writeback placeholders and normalized event mapping helpers.
 
+Connector authors can import the public TypeScript surface instead of private source paths:
+
+```ts
+import { createPlatformIntegration, mapPlatformRecord } from "@cognilabz/cognibrain/sdk/typescript/connectors";
+```
+
+## Harness SDK
+
+Use the Harness SDK when a runner cannot use MCP-native tools but still needs context, action guard, telemetry, corrections, patch evidence and handoff lifecycle calls:
+
+```bash
+npx cognibrain sdk harness external-runner --out integrations/external-runner
+npx tsx integrations/external-runner/external-runner.harness.ts
+```
+
+Harness integrations import from the public TypeScript surface:
+
+```ts
+import { CognibrainHarnessSdk } from "@cognilabz/cognibrain/sdk/typescript/harness";
+```
+
 ## Verification
 
 Generated verification reports are local outputs under `artifacts/`.

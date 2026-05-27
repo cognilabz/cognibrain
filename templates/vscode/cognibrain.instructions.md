@@ -1,16 +1,16 @@
 # Cognibrain Memory Contract
 
-Use the generated `.vscode/mcp.json` server named `cognibrain` for memory access.
+Use the cognibrain CLI lifecycle as the default memory access path. The generated `.vscode/mcp.json` server named `cognibrain` is an optional native adapter for hosts that benefit from MCP tool discovery.
 
 Before multi-step coding or debugging:
 
-- Call `memory_coding_context_pack` when available.
-- Call `memory_context_pack` for portable project context.
-- Call `memory_action_guard` before shell commands, dependency changes, migrations, destructive actions, or file edits with durable side effects.
+- Call `./bin/cognibrain.mjs context --task "<task>" --json`.
+- Call `./bin/cognibrain.mjs guard --action "<command>" --json` before shell commands, dependency changes, migrations, destructive actions, or file edits with durable side effects.
+- Use `memory_coding_context_pack`, `memory_context_pack`, and `memory_action_guard` only as MCP adapters when the host exposes them.
 
 After changes:
 
-- Call `memory_action_record` or `memory_action_outcome` for important tool results.
-- Call `memory_code_correction` when a user or reviewer corrects the agent.
-- Call `memory_patch_evidence` after non-trivial patches.
-- Call `memory_dream_plan` or `memory_dream_job_start` for handoff, release, or source-refresh workflows.
+- Call `./bin/cognibrain.mjs outcome --command "<command>" --exit-code <code> --json` for important tool results.
+- Call `./bin/cognibrain.mjs correction --text "<correction>" --json` when a user or reviewer corrects the agent.
+- Call `./bin/cognibrain.mjs patch-evidence --task "<task>" --json` after non-trivial patches.
+- Call `./bin/cognibrain.mjs dream-plan --json` for handoff, release, or source-refresh workflows.

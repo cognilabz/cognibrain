@@ -1,4 +1,6 @@
-import { createHmac, createVerify, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHmac, createPublicKey, createVerify, randomUUID, timingSafeEqual } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import { relationTypeSchema } from "../serverSchemas";
@@ -169,14 +171,14 @@ export function bearerToken(header?: string): string | undefined {
 }
 
 export function jwtVerifierConfigured(): boolean {
-  return Boolean(process.env.MEMORY_JWT_ISSUER && process.env.MEMORY_JWT_AUDIENCE && (process.env.MEMORY_JWT_HS256_SECRET || process.env.MEMORY_JWT_PUBLIC_KEY || process.env.MEMORY_JWT_PUBLIC_KEY_BASE64));
+  return Boolean((process.env.MEMORY_JWT_ISSUER || process.env.MEMORY_TENANT_AUTH_CONFIG) && (process.env.MEMORY_JWT_AUDIENCE || process.env.MEMORY_TENANT_AUTH_CONFIG) && (process.env.MEMORY_JWT_HS256_SECRET || process.env.MEMORY_JWT_PUBLIC_KEY || process.env.MEMORY_JWT_PUBLIC_KEY_BASE64 || process.env.MEMORY_JWKS_JSON || process.env.MEMORY_JWKS_PATH || process.env.MEMORY_JWKS_URL));
 }
 
 export function verifyJwt(token: string): { valid: boolean; error?: string; actorId?: string; userId?: string; orgId?: string; projectId?: string; scopes?: string[] } {
   const parts = token.split(".");
   if (parts.length !== 3) return { valid: false, error: "JWT must have three segments" };
   const [encodedHeader, encodedPayload, signature] = parts;
-  let header: { alg?: string; typ?: string };
+  let header: { alg?: string; typ?: string; kid?: string };
   let payload: Record<string, unknown>;
   try {
     header = JSON.parse(base64UrlDecode(encodedHeader).toString("utf8")) as { alg?: string; typ?: string };
@@ -189,25 +191,30 @@ export function verifyJwt(token: string): { valid: boolean; error?: string; acto
   const verified = header.alg === "HS256"
     ? verifyHs256(signingInput, signatureBytes)
     : header.alg === "RS256"
-      ? verifyRs256(signingInput, signatureBytes)
+      ? verifyRs256(signingInput, signatureBytes, header.kid)
       : false;
   if (!verified) return { valid: false, error: `Unsupported or invalid JWT signature (${header.alg ?? "missing alg"})` };
   const now = Math.floor(Date.now() / 1000);
   if (typeof payload.exp === "number" && payload.exp <= now) return { valid: false, error: "JWT expired" };
   if (typeof payload.nbf === "number" && payload.nbf > now) return { valid: false, error: "JWT not active yet" };
-  if (process.env.MEMORY_JWT_ISSUER && payload.iss !== process.env.MEMORY_JWT_ISSUER) return { valid: false, error: "JWT issuer mismatch" };
-  const expectedAudience = process.env.MEMORY_JWT_AUDIENCE;
+  const tenantConfig = tenantAuthConfig(payload);
+  const allowedIssuers = tenantConfig?.allowedIssuers ?? splitEnv(process.env.MEMORY_JWT_ISSUERS) ?? (process.env.MEMORY_JWT_ISSUER ? [process.env.MEMORY_JWT_ISSUER] : undefined);
+  if (allowedIssuers?.length && !allowedIssuers.includes(String(payload.iss ?? ""))) return { valid: false, error: "JWT issuer mismatch" };
+  const expectedAudience = tenantConfig?.allowedAudiences?.[0] ?? process.env.MEMORY_JWT_AUDIENCE;
   const aud = payload.aud;
   const audiences = Array.isArray(aud) ? aud.map(String) : typeof aud === "string" ? [aud] : [];
-  if (expectedAudience && !audiences.includes(expectedAudience)) return { valid: false, error: "JWT audience mismatch" };
-  const scopes = jwtScopes(payload);
+  const allowedAudiences = tenantConfig?.allowedAudiences ?? (expectedAudience ? [expectedAudience] : undefined);
+  if (allowedAudiences?.length && !audiences.some((item) => allowedAudiences.includes(item))) return { valid: false, error: "JWT audience mismatch" };
   const userId = stringClaim(payload, "userId") ?? stringClaim(payload, "sub");
+  const projectId = stringClaim(payload, "projectId") ?? stringClaim(payload, "project_id");
+  if (tenantConfig?.allowedProjects?.length && projectId && !tenantConfig.allowedProjects.includes(projectId)) return { valid: false, error: "JWT project mismatch" };
+  const scopes = [...new Set([...jwtScopes(payload), ...roleToScopes(payload)])];
   return {
     valid: true,
     actorId: stringClaim(payload, "actorId") ?? userId,
     userId,
     orgId: stringClaim(payload, "orgId") ?? stringClaim(payload, "org_id"),
-    projectId: stringClaim(payload, "projectId") ?? stringClaim(payload, "project_id"),
+    projectId,
     scopes
   };
 }
@@ -219,14 +226,114 @@ export function verifyHs256(signingInput: string, signature: Buffer): boolean {
   return buffersEqual(expected, signature);
 }
 
-export function verifyRs256(signingInput: string, signature: Buffer): boolean {
-  const key = process.env.MEMORY_JWT_PUBLIC_KEY ?? (process.env.MEMORY_JWT_PUBLIC_KEY_BASE64 ? Buffer.from(process.env.MEMORY_JWT_PUBLIC_KEY_BASE64, "base64").toString("utf8") : undefined);
+export function verifyRs256(signingInput: string, signature: Buffer, kid?: string): boolean {
+  const key = jwtPublicKey(kid);
   if (!key) return false;
   const verifier = createVerify("RSA-SHA256");
   verifier.update(signingInput);
   verifier.end();
   return verifier.verify(key, signature);
 }
+
+type JwksKey = Record<string, unknown> & { kid?: string };
+
+export function jwtPublicKey(kid?: string): string | ReturnType<typeof createPublicKey> | undefined {
+  const direct = process.env.MEMORY_JWT_PUBLIC_KEY ?? (process.env.MEMORY_JWT_PUBLIC_KEY_BASE64 ? Buffer.from(process.env.MEMORY_JWT_PUBLIC_KEY_BASE64, "base64").toString("utf8") : undefined);
+  if (direct) return direct;
+  const jwks = loadJwks();
+  if (!jwks?.keys?.length) return undefined;
+  const selected = kid ? jwks.keys.find((key) => key.kid === kid) : jwks.keys[0];
+  if (!selected) return undefined;
+  try {
+    return createPublicKey({ key: selected as never, format: "jwk" });
+  } catch {
+    return undefined;
+  }
+}
+
+export function loadJwks(): { keys: JwksKey[] } | undefined {
+  const jwksUrl = process.env.MEMORY_JWKS_URL;
+  const raw = process.env.MEMORY_JWKS_JSON
+    ?? (process.env.MEMORY_JWKS_PATH ? readFileSync(process.env.MEMORY_JWKS_PATH, "utf8") : undefined)
+    ?? (jwksUrl ? loadJwksFromDiscoveryUrl(jwksUrl) : undefined);
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as { keys?: JwksKey[] };
+    return { keys: Array.isArray(parsed.keys) ? parsed.keys : [] };
+  } catch {
+    return undefined;
+  }
+}
+
+export function loadJwksFromDiscoveryUrl(jwksUrl: string): string | undefined {
+  const cachePath = process.env.MEMORY_JWKS_CACHE_PATH;
+  const maxAgeMs = Number(process.env.MEMORY_JWKS_CACHE_MAX_AGE_MS ?? 5 * 60_000);
+  if (cachePath && existsSync(cachePath)) {
+    const stat = JSON.parse(readFileSync(cachePath, "utf8")) as { fetchedAt?: number; body?: string };
+    if (stat.body && stat.fetchedAt && Date.now() - stat.fetchedAt < maxAgeMs) return stat.body;
+  }
+  const body = execFileSync(process.execPath, ["-e", JWKS_DISCOVERY_WORKER], {
+    input: JSON.stringify({ jwksUrl }),
+    encoding: "utf8",
+    timeout: Number(process.env.MEMORY_JWKS_FETCH_TIMEOUT_MS ?? 5_000),
+    maxBuffer: 1_000_000
+  });
+  if (cachePath) writeFileSync(cachePath, JSON.stringify({ fetchedAt: Date.now(), body }));
+  return body;
+}
+
+export function tenantAuthConfig(payload: Record<string, unknown>): { allowedIssuers?: string[]; allowedAudiences?: string[]; allowedProjects?: string[] } | undefined {
+  const raw = process.env.MEMORY_TENANT_AUTH_CONFIG;
+  if (!raw) return undefined;
+  const orgId = stringClaim(payload, "orgId") ?? stringClaim(payload, "org_id");
+  try {
+    const config = JSON.parse(raw) as Record<string, { allowedIssuers?: string[]; allowedAudiences?: string[]; allowedProjects?: string[] }>;
+    return (orgId && config[orgId]) || config.default;
+  } catch {
+    return undefined;
+  }
+}
+
+export function roleToScopes(payload: Record<string, unknown>): string[] {
+  const rawRoles = payload.roles ?? payload.role;
+  const roles = Array.isArray(rawRoles) ? rawRoles.map(String) : typeof rawRoles === "string" ? rawRoles.split(/\s+/) : [];
+  const defaultMap: Record<string, string[]> = {
+    reader: ["memory:read"],
+    writer: ["memory:read", "memory:write"],
+    operator: ["memory:read", "memory:write", "dream:write", "connector:read"],
+    admin: ["memory:admin"],
+    "connector-admin": ["connector:admin", "memory:read"],
+    "security-admin": ["security:admin", "policy:admin"],
+    "service-account": ["memory:read", "memory:write", "connector:write", "dream:write"]
+  };
+  let configured: Record<string, string[]> = {};
+  try {
+    configured = process.env.MEMORY_ROLE_SCOPE_MAP ? JSON.parse(process.env.MEMORY_ROLE_SCOPE_MAP) : {};
+  } catch {
+    configured = {};
+  }
+  return roles.flatMap((role) => configured[role] ?? defaultMap[role] ?? []);
+}
+
+function splitEnv(value?: string): string[] | undefined {
+  const values = value?.split(",").map((item) => item.trim()).filter(Boolean);
+  return values?.length ? values : undefined;
+}
+
+const JWKS_DISCOVERY_WORKER = `
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => input += chunk);
+process.stdin.on("end", async () => {
+  const { jwksUrl } = JSON.parse(input || "{}");
+  const response = await fetch(jwksUrl, { headers: { accept: "application/json" } });
+  if (!response.ok) throw new Error("JWKS discovery failed: " + response.status);
+  process.stdout.write(await response.text());
+}).catch((error) => {
+  process.stderr.write(error && error.stack ? error.stack : String(error));
+  process.exit(1);
+});
+`;
 
 export function base64UrlDecode(value: string): Buffer {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
@@ -261,6 +368,33 @@ export function authorizeRoute(method: string, pathname: string, auth: AuthStatu
   const accepted = [permission.scope, ...permission.legacyScopes];
   if (accepted.some((scope) => scopes.has(scope))) return { allowed: true };
   return { allowed: false, reason: `Missing required scope: ${permission.scope}` };
+}
+
+export type ResourceAuthorizationTarget = {
+  resource?: RoutePermission["resource"];
+  action?: RoutePermission["action"];
+  path?: string;
+  userId?: string;
+  orgId?: string;
+  projectId?: string;
+  connectorId?: string;
+  memoryId?: string;
+  contextPackId?: string;
+  evidencePackId?: string;
+  dreamJobId?: string;
+  found?: boolean;
+  lookupReason?: string;
+};
+
+export function authorizeResource(auth: AuthStatusReport, action: RoutePermission["action"], resource: ResourceAuthorizationTarget): { allowed: boolean; reason?: string } {
+  if (auth.mode !== "jwt-oidc") return { allowed: true };
+  if (auth.scopes?.some((scope) => scope === "admin" || scope === "memory:admin" || scope === "memory:all")) return { allowed: true };
+  const denied = scopedResourceViolation(auth, resource);
+  if (denied) return { allowed: false, reason: denied };
+  const resourceName = resource.resource ?? "memory";
+  const scopedPermission = `${resourceName}:${action}`;
+  if (auth.scopes?.some((scope) => scope === scopedPermission || scope === `${resourceName}:admin`)) return { allowed: true };
+  return { allowed: true };
 }
 
 export function routeScope(method: string, pathname: string): string | undefined {
@@ -319,16 +453,33 @@ export function actorScopeViolation(auth: AuthStatusReport | undefined, value: u
   if (!auth || auth.mode !== "jwt-oidc") return undefined;
   if (auth.scopes?.some((scope) => scope === "admin" || scope === "memory:admin" || scope === "memory:all")) return undefined;
   if (!value || typeof value !== "object") return undefined;
+  return scopedResourceViolation(auth, value as Record<string, unknown>);
+}
+
+function scopedResourceViolation(auth: AuthStatusReport, body: Record<string, unknown>): string | undefined {
+  for (const observed of collectScopedValues(body)) {
+    const expected = auth[observed.authKey];
+    if (expected && observed.value && observed.value !== expected) return `${observed.key} must match authenticated actor scope`;
+  }
+  return undefined;
+}
+
+export function collectScopedValues(value: unknown, seen = new Set<unknown>()): Array<{ key: string; authKey: keyof AuthStatusReport; value: string }> {
+  if (!value || typeof value !== "object" || seen.has(value)) return [];
+  seen.add(value);
+  const out: Array<{ key: string; authKey: keyof AuthStatusReport; value: string }> = [];
+  if (Array.isArray(value)) {
+    for (const item of value) out.push(...collectScopedValues(item, seen));
+    return out;
+  }
   const body = value as Record<string, unknown>;
   const checks: Array<[keyof AuthStatusReport, string]> = [["userId", "userId"], ["orgId", "orgId"], ["projectId", "projectId"]];
   for (const [authKey, bodyKey] of checks) {
-    const expected = auth[authKey];
     const observed = body[bodyKey];
-    if (expected && typeof observed === "string" && observed && observed !== expected) {
-      return `${bodyKey} must match authenticated actor scope`;
-    }
+    if (typeof observed === "string") out.push({ key: bodyKey, authKey, value: observed });
   }
-  return undefined;
+  for (const nested of Object.values(body)) out.push(...collectScopedValues(nested, seen));
+  return out;
 }
 
 export function parseRelationTypes(value: string | null): z.infer<typeof relationTypeSchema>[] | undefined {

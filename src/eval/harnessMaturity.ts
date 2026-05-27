@@ -30,6 +30,7 @@ interface HarnessMaturityRow {
   harness: string;
   name: string;
   status: HarnessStatus;
+  proofLevel: "runtime-smoke" | "generated-config" | "instruction-only" | "planned";
   maturity: {
     configGenerated: boolean;
     skillOrRules: boolean;
@@ -65,6 +66,9 @@ interface HarnessMaturityReport {
     generated: number;
     planned: number;
     mcpTargets: number;
+    cliLifecycleProtocol: boolean;
+    cliMcpParityCommands: number;
+    publicHarnessSdk: boolean;
     e2eDemos: number;
     preToolGuardTargets: number;
     correctionCaptureTargets: number;
@@ -79,12 +83,12 @@ const catalog: HarnessCatalogRow[] = [
   row("copilot", "GitHub Copilot", [".github/copilot-instructions.md"], [".github/instructions/cognibrain.instructions.md"], false),
   row("cursor", "Cursor", [".cursor/mcp.json"], [".cursor/rules/open-memory.mdc"], true),
   row("vscode", "VS Code MCP", [".vscode/mcp.json"], [".vscode/cognibrain.instructions.md"], true),
-  row("opencode", "OpenCode", [".opencode/mcp.json"], [".opencode/cognibrain.md"], true),
-  row("openclaw", "OpenClaw", [".openclaw/mcp.json"], [".openclaw/cognibrain.md"], true),
+  row("opencode", "OpenCode", [".opencode/cognibrain.md"], [".opencode/cognibrain.md"], false, ["CLI lifecycle instructions are generated; MCP-native config is not installed by default."]),
+  row("openclaw", "OpenClaw", [".openclaw/cognibrain.md"], [".openclaw/cognibrain.md"], false, ["CLI lifecycle instructions are generated; MCP-native config is not installed by default."]),
   row("langgraph", "LangGraph", ["langgraph.cognibrain.json"], ["langgraph-cognibrain.ts"], false),
   row("crewai", "CrewAI", ["crewai.cognibrain.json"], ["crewai_cognibrain.py"], false),
-  row("windsurf", "Windsurf", [".windsurf/mcp.json"], [".windsurf/rules/cognibrain.md"], true),
-  row("continue", "Continue.dev", [".continue/config.json"], [".continue/rules/cognibrain.md"], true),
+  row("windsurf", "Windsurf", [".windsurf/rules/cognibrain.md"], [".windsurf/rules/cognibrain.md"], false, ["CLI lifecycle rules are generated; MCP-native config is not installed by default."]),
+  row("continue", "Continue.dev", [".continue/rules/cognibrain.md"], [".continue/rules/cognibrain.md"], false, ["CLI lifecycle rules are generated; MCP-native config is not installed by default."]),
   row("aider", "Aider", [".aider.conf.yml"], [".aider/cognibrain.md"], false, ["Aider uses file-based instructions plus CLI feedback commands rather than MCP-native hooks."]),
   row("roo-cline", "Roo Code / Cline", [".roo/mcp.json"], [".clinerules/cognibrain.md"], true),
   row("goose", "Goose", [".goose/config.yaml"], [".goose/cognibrain.md"], true),
@@ -110,12 +114,15 @@ export function generateHarnessMaturity(options: { out?: string; markdown?: stri
       generated: rows.filter((item) => item.maturity.configGenerated).length,
       planned: rows.filter((item) => item.status === "planned").length,
       mcpTargets: rows.filter((item) => item.maturity.mcp).length,
+      cliLifecycleProtocol: cliLifecycleProtocolReady(),
+      cliMcpParityCommands: lifecycleCliParityCommandCount(),
+      publicHarnessSdk: publicHarnessSdkReady(),
       e2eDemos: rows.filter((item) => item.maturity.e2eDemo).length,
       preToolGuardTargets: rows.filter((item) => item.maturity.preToolGuard).length,
       correctionCaptureTargets: rows.filter((item) => item.maturity.correctionCapture).length,
       evidenceTrailTargets: rows.filter((item) => item.maturity.patchEvidenceTrail).length
     },
-    passed: rows.length >= 16 && rows.filter((item) => item.maturity.configGenerated).length >= 16 && goldenPaths.every((item) => item.passed)
+    passed: rows.length >= 16 && rows.filter((item) => item.maturity.configGenerated).length >= 16 && cliLifecycleProtocolReady() && lifecycleCliParityCommandCount() >= 10 && publicHarnessSdkReady() && goldenPaths.every((item) => item.passed)
   };
   if (options.out) writeJson(options.out, report);
   if (options.markdown) writeText(options.markdown, renderMarkdown(report));
@@ -131,7 +138,8 @@ function maturityRow(
   const configGenerated = generatedHarnesses.has(item.id) && item.configPaths.every((path) => path.startsWith("$CODEX_HOME") || install.files.has(path));
   const skillOrRules = item.rulesPaths.length > 0 && item.rulesPaths.every((path) => path.startsWith("$CODEX_HOME") || install.files.has(path));
   const mcp = item.mcp && configGenerated;
-  const hookCapable = mcp || ["copilot", "langgraph", "crewai", "aider", "sourcegraph-amp", "devin-style"].includes(item.id);
+  const cliLifecycleCapable = ["copilot", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "sourcegraph-amp", "devin-style"].includes(item.id);
+  const hookCapable = mcp || cliLifecycleCapable;
   const telemetryCapable = configGenerated;
   const maturity = {
     configGenerated,
@@ -164,6 +172,7 @@ function maturityRow(
     harness: item.id,
     name: item.name,
     status,
+    proofLevel: maturity.e2eDemo ? "runtime-smoke" : maturity.configGenerated ? "generated-config" : maturity.skillOrRules ? "instruction-only" : "planned",
     maturity,
     evidence: {
       manifest: install.manifestPath,
@@ -283,7 +292,7 @@ function renderMarkdown(report: HarnessMaturityReport): string {
 
 Generated at ${report.generatedAt} from the harness package manifest, setup output and golden-path simulator.
 
-Current checked state: ${report.summary.generated} generated harness packages, ${report.summary.mcpTargets} MCP-capable targets, ${report.summary.preToolGuardTargets} pre-tool guard targets, ${report.summary.correctionCaptureTargets} correction-capture targets, ${report.summary.evidenceTrailTargets} patch-evidence targets and ${report.summary.e2eDemos} golden-path demos. Non-native rows are marked without claiming vendor-native hooks.
+Current checked state: ${report.summary.generated} generated harness packages, ${report.summary.mcpTargets} MCP-capable targets, ${report.summary.preToolGuardTargets} pre-tool guard targets, ${report.summary.correctionCaptureTargets} correction-capture targets, ${report.summary.evidenceTrailTargets} patch-evidence targets, ${report.summary.e2eDemos} golden-path demos, public Harness SDK ${report.summary.publicHarnessSdk ? "present" : "missing"}, CLI lifecycle protocol ${report.summary.cliLifecycleProtocol ? "present" : "missing"} and ${report.summary.cliMcpParityCommands} CLI/MCP parity commands. Non-native rows are marked without claiming vendor-native hooks.
 
 | Harness | Status | Config | Skill/rules | MCP | Pre-LLM context | Pre-tool guard | Telemetry | Correction | Evidence trail | Install wizard | Doctor | E2E demo | Gaps |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
@@ -295,7 +304,57 @@ Evidence:
 - \`npm run harness:maturity\` regenerates this document and the artifact.
 - Golden-path demos simulate install -> context -> action guard -> telemetry -> correction -> evidence for generated harness rows.
 - External-agent modes use the generated JSON-command contract unless a vendor-native hook is available.
+- The universal CLI lifecycle protocol is checked as the CLI-first path and must preserve MCP parity for context, guard, outcome, correction, patch evidence, dream/session/release, source revalidation and conflicts.
+- The dream lifecycle proof is counted only when context, guard, outcome, correction, patch evidence, session and release commands remain in the MCP parity contract.
 `;
+}
+
+function cliLifecycleProtocolReady(): boolean {
+  const content = readFileSync("bin/lib/lifecycleCli.mjs", "utf8");
+  return [
+    "class CliBackendClient",
+    "class DaemonBackend",
+    "class LocalDirectBackend",
+    "EXIT_CODES",
+    "COMMAND_SCHEMAS",
+    "MCP_PARITY",
+    "handleLifecycleCommand",
+    "handleHarnessCommand",
+    "handleMemoryLifecycleCommand"
+  ].every((needle) => content.includes(needle));
+}
+
+function publicHarnessSdkReady(): boolean {
+  if (!existsSync("sdk/typescript/harness.ts") || !existsSync("sdk/typescript/index.ts") || !existsSync("bin/lib/cliRuntime.mjs")) return false;
+  const harness = readFileSync("sdk/typescript/harness.ts", "utf8");
+  const index = readFileSync("sdk/typescript/index.ts", "utf8");
+  const cli = readFileSync("bin/lib/cliRuntime.mjs", "utf8");
+  return [
+    "class CognibrainHarnessSdk",
+    "beforeToolCall",
+    "afterToolCall",
+    "finishPatch",
+    "prepareHandoff",
+    "prepareRelease"
+  ].every((needle) => harness.includes(needle)) &&
+    index.includes("./harness") &&
+    cli.includes("harnessSdkScaffold");
+}
+
+function lifecycleCliParityCommandCount(): number {
+  const content = readFileSync("bin/lib/lifecycleCli.mjs", "utf8");
+  return [
+    "memory_coding_context_pack",
+    "memory_action_guard",
+    "memory_action_outcome",
+    "memory_code_correction",
+    "memory_patch_evidence",
+    "memory_dream_plan",
+    "memory_session_end",
+    "memory_release_prepare",
+    "memory_source_revalidate",
+    "memory_conflict_sets"
+  ].filter((needle) => content.includes(needle)).length;
 }
 
 function row(id: string, name: string, configPaths: string[], rulesPaths: string[], mcp: boolean, notes: string[] = []): HarnessCatalogRow {

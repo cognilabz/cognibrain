@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createHmac } from "node:crypto";
+import { createHmac, createSign, generateKeyPairSync } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { server } from "../src/api/server";
 
@@ -28,6 +28,17 @@ function signJwt(payload: Record<string, unknown>): string {
   return `${encodedHeader}.${encodedPayload}.${signature}`;
 }
 
+function signRsJwt(payload: Record<string, unknown>, privateKey: string, kid: string): string {
+  const header = { alg: "RS256", typ: "JWT", kid };
+  const encodedHeader = base64Url(JSON.stringify(header));
+  const encodedPayload = base64Url(JSON.stringify(payload));
+  const signer = createSign("RSA-SHA256");
+  signer.update(`${encodedHeader}.${encodedPayload}`);
+  signer.end();
+  const signature = signer.sign(privateKey).toString("base64url");
+  return `${encodedHeader}.${encodedPayload}.${signature}`;
+}
+
 function base64Url(value: string): string {
   return Buffer.from(value).toString("base64url");
 }
@@ -41,6 +52,10 @@ describe("cognibrain HTTP API contract", () => {
     delete process.env.MEMORY_JWT_ISSUER;
     delete process.env.MEMORY_JWT_AUDIENCE;
     delete process.env.MEMORY_JWT_HS256_SECRET;
+    delete process.env.MEMORY_JWT_PUBLIC_KEY;
+    delete process.env.MEMORY_JWT_PUBLIC_KEY_BASE64;
+    delete process.env.MEMORY_JWKS_JSON;
+    delete process.env.MEMORY_JWKS_PATH;
     delete process.env.MEMORY_CORS_ORIGINS;
     delete process.env.MEMORY_RATE_LIMIT_MAX;
     delete process.env.MEMORY_RATE_LIMIT_WINDOW_MS;
@@ -173,7 +188,7 @@ describe("cognibrain HTTP API contract", () => {
     expect(allowed.status).toBe(200);
   });
 
-  it("validates JWT issuer/audience/scopes and binds actor scope", async () => {
+  it("validates JWT issuer/audience/scopes and denies cross-org nested body leakage", async () => {
     process.env.MEMORY_JWT_ISSUER = "https://issuer.example";
     process.env.MEMORY_JWT_AUDIENCE = "cognibrain-api";
     process.env.MEMORY_JWT_HS256_SECRET = "jwt-test-secret";
@@ -216,6 +231,77 @@ describe("cognibrain HTTP API contract", () => {
     expect(connectorHealth.status).toBe(200);
     const memoryReadWithConnectorScope = await fetch(`${baseUrl}/memories?userId=jwt-user`, { headers: { authorization: `Bearer ${connectorReadToken}` } });
     expect(memoryReadWithConnectorScope.status).toBe(403);
+
+    const scopedToken = signJwt({
+      iss: "https://issuer.example",
+      aud: "cognibrain-api",
+      sub: "jwt-user",
+      orgId: "org-jwt",
+      scope: "memory:read memory:write graph:read connector:read dream:write",
+      exp: Math.floor(Date.now() / 1000) + 300
+    });
+    const scopedHeaders = { authorization: `Bearer ${scopedToken}`, "content-type": "application/json" };
+    const searchLeak = await fetch(`${baseUrl}/search`, {
+      method: "POST",
+      headers: scopedHeaders,
+      body: JSON.stringify({ userId: "other-user", query: "scope leak" })
+    });
+    expect(searchLeak.status).toBe(403);
+    const evidenceLeak = await fetch(`${baseUrl}/evidence-pack`, {
+      method: "POST",
+      headers: scopedHeaders,
+      body: JSON.stringify({ userId: "other-user", query: "scope leak" })
+    });
+    expect(evidenceLeak.status).toBe(403);
+    const graphLeak = await fetch(`${baseUrl}/graph?userId=other-user`, { headers: { authorization: `Bearer ${scopedToken}` } });
+    expect(graphLeak.status).toBe(403);
+    const connectorLeak = await fetch(`${baseUrl}/connectors/review-queue?userId=other-user`, { headers: { authorization: `Bearer ${scopedToken}` } });
+    expect(connectorLeak.status).toBe(403);
+    const dreamLeak = await fetch(`${baseUrl}/dream/plan`, {
+      method: "POST",
+      headers: scopedHeaders,
+      body: JSON.stringify({ userId: "other-user" })
+    });
+    expect(dreamLeak.status).toBe(403);
+
+    const nestedBodyLeak = await fetch(`${baseUrl}/connectors/sync`, {
+      method: "POST",
+      headers: scopedHeaders,
+      body: JSON.stringify({
+        connectorId: "official-github",
+        events: [{ role: "user", content: "nested body leak", metadata: { orgId: "other-org" } }],
+        userId: "jwt-user",
+        orgId: "org-jwt"
+      })
+    });
+    expect(nestedBodyLeak.status).toBe(403);
+  });
+
+  it("validates RS256 JWTs against JWKS kid selection", async () => {
+    const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const jwk = publicKey.export({ format: "jwk" }) as Record<string, unknown>;
+    const privatePem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    process.env.MEMORY_JWT_ISSUER = "https://issuer.example";
+    process.env.MEMORY_JWT_AUDIENCE = "cognibrain-api";
+    process.env.MEMORY_JWKS_JSON = JSON.stringify({ keys: [{ ...jwk, kid: "key-2026-a", alg: "RS256", use: "sig" }] });
+    const baseUrl = await listen();
+    const token = signRsJwt({
+      iss: "https://issuer.example",
+      aud: "cognibrain-api",
+      sub: "jwks-user",
+      scope: "memory:write memory:read",
+      exp: Math.floor(Date.now() / 1000) + 300
+    }, privatePem, "key-2026-a");
+
+    const created = await fetch(`${baseUrl}/memories`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ userId: "jwks-user", content: "JWKS kid-selected JWT writes are accepted." })
+    });
+
+    expect(created.status).toBe(201);
+    const listed = await fetch(`${baseUrl}/memories?userId=jwks-user`, { headers: { authorization: `Bearer ${token}` } });
+    expect(listed.status).toBe(200);
   });
 
   it("applies configurable CORS, request body limits, and rate limits", async () => {

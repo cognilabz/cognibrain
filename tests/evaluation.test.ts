@@ -20,8 +20,11 @@ import { runVendorCredentialSmoke } from "../src/eval/vendorCredentialSmoke";
 import { generateHarnessMaturity } from "../src/eval/harnessMaturity";
 import { generateOperatorOsMaturity } from "../src/eval/operatorOsMaturity";
 import { generateBenchmarkHardeningReport } from "../src/eval/benchmarkHardening";
+import { generateBenchmarkRelease } from "../src/eval/benchmarkRelease";
+import { generatePlanGapAudit } from "../src/eval/planGaps";
 import { runOperatorMemoryBenchmark } from "../src/eval/operatorMemoryBenchmark";
 import { publishArenaReport } from "../src/eval/publishArena";
+import { CLI_COMMAND_CONTRACTS, MEMCTL_COMMAND_CONTRACTS } from "../src/api/releaseContract";
 
 type ConnectorBaseArtifacts = {
   vendorContract: string;
@@ -273,6 +276,50 @@ describe("self verification benchmark loop", () => {
     expect(certification.summary.productionCertified).toBe(0);
   });
 
+  it("requires signed live-smoke and owner artifacts for tenant and production connector certification", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-signed-cert-"));
+    const maturityPath = join(dir, "maturity.json");
+    const livePath = join(dir, "live.json");
+    const qualityPath = join(dir, "quality.json");
+    const transportPath = join(dir, "transport.json");
+    writeFileSync(maturityPath, JSON.stringify({
+      rows: [{
+        provider: "github",
+        connectorId: "official-github",
+        maturity: {
+          hermeticFixture: true,
+          apiSpec: true,
+          liveSmokeSupport: true,
+          webhook: true,
+          tenantVerified: true,
+          productionCertified: true
+        },
+        evidence: {}
+      }]
+    }));
+    writeFileSync(qualityPath, JSON.stringify({ rows: [{ provider: "github", passed: true }] }));
+    writeFileSync(transportPath, JSON.stringify({ passed: true }));
+    writeFileSync(livePath, JSON.stringify({
+      writebackEnabled: false,
+      providers: [{
+        provider: "github",
+        checks: { noPlainTokenRetained: true },
+        signature: { status: "verified", signer: "tenant" },
+        ownerApproval: { status: "approved", actor: "owner", signedAt: "2026-05-27T00:00:00.000Z" }
+      }]
+    }));
+    const certified = generateConnectorCertification({ maturityInput: maturityPath, liveSmokeInput: livePath, qualityInput: qualityPath, transportInput: transportPath });
+    expect(certified.rows[0].state).toBe("production-certified");
+
+    writeFileSync(livePath, JSON.stringify({
+      writebackEnabled: false,
+      providers: [{ provider: "github", checks: { noPlainTokenRetained: true } }]
+    }));
+    const unsigned = generateConnectorCertification({ maturityInput: maturityPath, liveSmokeInput: livePath, qualityInput: qualityPath, transportInput: transportPath });
+    expect(unsigned.rows[0].state).toBe("credential-blocked");
+    expect(unsigned.rows[0].checks.tenantLiveSmoke).toBe(false);
+  });
+
   it("proves priority connector webhook signature, replay, normalization, and review queue paths", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-webhooks-"));
     const report = generateConnectorWebhookProof({ out: join(dir, "connector-webhooks.json") });
@@ -292,7 +339,8 @@ describe("self verification benchmark loop", () => {
     expect(report.summary.total).toBeGreaterThanOrEqual(16);
     expect(report.summary.generated).toBeGreaterThanOrEqual(16);
     expect(report.rows.find((row) => row.harness === "windsurf")?.maturity.configGenerated).toBe(true);
-    expect(report.rows.find((row) => row.harness === "continue")?.maturity.mcp).toBe(true);
+    expect(report.rows.find((row) => row.harness === "continue")?.maturity.configGenerated).toBe(true);
+    expect(report.rows.find((row) => row.harness === "continue")?.maturity.mcp).toBe(false);
     expect(report.rows.find((row) => row.harness === "devin-style")?.maturity.configGenerated).toBe(true);
     expect(report.goldenPaths.every((path) => path.passed)).toBe(true);
     expect(readFileSync(join(dir, "harness-maturity.md"), "utf8")).toContain("Harness Maturity Matrix");
@@ -309,11 +357,48 @@ describe("self verification benchmark loop", () => {
       markdown: join(dir, "benchmark-hardening.md")
     });
     expect(operator.passed).toBe(true);
+    expect(operator.rows.find((row) => row.surface === "Truth")?.passed).toBe(true);
+    expect(operator.rows.find((row) => row.surface === "Dream")?.passed).toBe(true);
     expect(operator.rows.find((row) => row.surface === "Policies")?.passed).toBe(true);
     expect(operator.rows.find((row) => row.surface === "Retention")?.passed).toBe(true);
     expect(benchmark.passed).toBe(true);
     expect(benchmark.dataset.sha256).toHaveLength(64);
     expect(benchmark.realRepoTrack.repoCount).toBeGreaterThanOrEqual(5);
+  });
+
+  it("generates immutable benchmark release manifests and the code-backed plan gap audit", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-plan-gaps-"));
+    const scenarios = join(dir, "scenarios.json");
+    writeFileSync(scenarios, JSON.stringify([{ id: "s1", query: "release-critical truth" }]));
+    const release = generateBenchmarkRelease({
+      out: join(dir, "cognicodebench-release.json"),
+      markdown: join(dir, "cognicodebench-release.md"),
+      scenarioPath: scenarios
+    });
+    expect(release.releases.find((item) => item.id === "cognicodebench-v2.0" && item.split === "public-dev")?.sha256).toHaveLength(64);
+    expect(release.releases.some((item) => item.split === "hidden-eval-placeholder")).toBe(true);
+    const gaps = generatePlanGapAudit({ out: join(dir, "plan-gaps.json"), markdown: join(dir, "plan-gaps.md") });
+    expect(gaps.checks.map((item) => item.area)).toEqual(expect.arrayContaining(["storage", "security", "truth", "dream", "connectors", "harness", "operator", "benchmarks", "enterprise"]));
+  });
+
+  it("covers truth and dream workbench commands in the release contract", () => {
+    const cliCommands = new Set(CLI_COMMAND_CONTRACTS.map((contract) => contract.command));
+    const memctlCommands = new Set(MEMCTL_COMMAND_CONTRACTS.map((contract) => contract.command));
+    expect([...cliCommands]).toEqual(expect.arrayContaining(["truth", "dream"]));
+    expect([...memctlCommands]).toEqual(expect.arrayContaining([
+      "truth-current",
+      "truth-conflicts",
+      "truth-resolve",
+      "dream-plan",
+      "dream-run",
+      "dream-start",
+      "dream-jobs",
+      "dream-cancel",
+      "dream-retry",
+      "dream-verify",
+      "dream-conflicts",
+      "dream-resolve"
+    ]));
   });
 
   it("runs the operator memory dream benchmark and blocks unsupported market claims", async () => {

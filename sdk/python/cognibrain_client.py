@@ -102,6 +102,9 @@ class CognibrainClient:
     def evidence_pack(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/evidence-pack", dict(payload))
 
+    def coding_context_pack(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/coding-context-pack", dict(payload))
+
     def get_evidence_pack(self, context_pack_id: str) -> dict[str, Any]:
         encoded = urllib.parse.quote(context_pack_id)
         return self._request("GET", f"/context-packs/{encoded}/evidence")
@@ -133,6 +136,25 @@ class CognibrainClient:
 
     def writeback_connector(self, connector_id: str, payload: Mapping[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/connectors/writeback", {"connectorId": connector_id, **dict(payload)})
+
+    def poll_connector(self, connector_id: str, scope: Mapping[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/connectors/poll", {"connectorId": connector_id, **dict(scope)})
+
+    def connector_sync_records(self, connector_id: str | None = None) -> list[dict[str, Any]]:
+        query = f"?connectorId={urllib.parse.quote(connector_id)}" if connector_id else ""
+        return self._request("GET", f"/connectors/sync-records{query}")
+
+    def guard_action(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/code/action-guard", dict(payload))
+
+    def record_action(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/actions", dict(payload))
+
+    def record_code_correction(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/code/corrections", dict(payload))
+
+    def patch_evidence_trail(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/patch-evidence", dict(payload))
 
     def policy_rules(self) -> list[dict[str, Any]]:
         return self._request("GET", "/policy/rules")

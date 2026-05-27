@@ -79,6 +79,7 @@ export function officialConnectorManifests(): ConnectorManifest[] {
       authorizeUrl: `https://connectors.cognibrain.local/${id.replace(/^official-/, "")}/oauth/authorize`,
       tokenUrl: `https://connectors.cognibrain.local/${id.replace(/^official-/, "")}/oauth/token`,
       clientIdRef: `secret://${id}/client-id`,
+      clientSecretRef: `secret://${id}/client-secret`,
       scopes: oauthScopes,
       redirectUri: "http://localhost:8787/connectors/auth/callback"
     },
@@ -100,9 +101,11 @@ export function officialConnectorManifests(): ConnectorManifest[] {
     requiredEnv: string[]
   ): ConnectorManifest => {
     const vendorEndpoint = `vendor://${provider}`;
+    const oauth = providerOAuthManifest(id, provider, oauthScopes);
     return {
       ...service(id, name, kind, capabilities, metadataMapping, defaultSourceKind, oauthScopes),
-      auth: provider === "datadog" ? "api_key" : "token",
+      auth: oauth ? "oauth" : provider === "datadog" ? "api_key" : "token",
+      oauth,
       list: { endpoint: `${vendorEndpoint}/list`, method: "GET" },
       poll: capabilities.includes("poll") ? { endpoint: `${vendorEndpoint}/poll`, method: "GET" } : undefined,
       writeback: capabilities.includes("writeback") ? { operations: connectorWritebackOperations(kind), endpoint: `${vendorEndpoint}/writeback`, method: "POST" } : undefined,
@@ -137,6 +140,26 @@ export function officialConnectorManifests(): ConnectorManifest[] {
     vendor("official-pagerduty", "PagerDuty", "project_management", ["ingest", "export", "webhook", "poll", "writeback"], { incidentId: "externalId", service: "metadata.service", urgency: "metadata.urgency", status: "metadata.status", url: "source.uri" }, "import", ["incidents.read", "services.read"], "pagerduty", "https://developer.pagerduty.com/api-reference/", ["MEMORY_PAGERDUTY_ACCOUNT", "MEMORY_PAGERDUTY_TOKEN"]),
     vendor("official-posthog", "PostHog", "docs", ["ingest", "export", "webhook", "poll", "writeback"], { featureFlag: "externalId", project: "metadata.project", experiment: "metadata.experiment", actor: "source.author", url: "source.uri" }, "import", ["feature_flags:read", "insights:read"], "posthog", "https://posthog.com/docs/api/feature-flags", ["MEMORY_POSTHOG_PROJECT", "MEMORY_POSTHOG_TOKEN"])
   ];
+}
+
+function providerOAuthManifest(id: string, provider: NonNullable<ConnectorManifest["vendor"]>["provider"], scopes: string[]): ConnectorManifest["oauth"] | undefined {
+  const configs: Partial<Record<NonNullable<ConnectorManifest["vendor"]>["provider"], { authorizeUrl: string; tokenUrl: string; refreshUrl?: string; revokeUrl?: string }>> = {
+    github: { authorizeUrl: "https://github.com/login/oauth/authorize", tokenUrl: "https://github.com/login/oauth/access_token", revokeUrl: "https://api.github.com/applications/{client_id}/token" },
+    slack: { authorizeUrl: "https://slack.com/oauth/v2/authorize", tokenUrl: "https://slack.com/api/oauth.v2.access", revokeUrl: "https://slack.com/api/auth.revoke" },
+    jira: { authorizeUrl: "https://auth.atlassian.com/authorize", tokenUrl: "https://auth.atlassian.com/oauth/token", refreshUrl: "https://auth.atlassian.com/oauth/token" },
+    confluence: { authorizeUrl: "https://auth.atlassian.com/authorize", tokenUrl: "https://auth.atlassian.com/oauth/token", refreshUrl: "https://auth.atlassian.com/oauth/token" },
+    notion: { authorizeUrl: "https://api.notion.com/v1/oauth/authorize", tokenUrl: "https://api.notion.com/v1/oauth/token" },
+    linear: { authorizeUrl: "https://linear.app/oauth/authorize", tokenUrl: "https://api.linear.app/oauth/token", revokeUrl: "https://api.linear.app/oauth/revoke" }
+  };
+  const config = configs[provider];
+  if (!config) return undefined;
+  return {
+    ...config,
+    clientIdRef: `secret://${id}/client-id`,
+    clientSecretRef: `secret://${id}/client-secret`,
+    scopes,
+    redirectUri: "http://localhost:8787/connectors/auth/callback"
+  };
 }
 
 export function officialMarketplaceModules(): MarketplaceModule[] {

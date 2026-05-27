@@ -52,6 +52,7 @@ export interface DreamPlanReport {
   forced: boolean;
   reasons: string[];
   recommendedActions: string[];
+  releaseBlockers?: string[];
   signals: {
     activeMemories: number;
     writesSinceDream: number;
@@ -95,7 +96,7 @@ export interface DreamPreparationReport {
 export interface DreamJob {
   jobId: string;
   userId: string;
-  status: "queued" | "running" | "done" | "failed" | "cancelled";
+  status: "queued" | "running" | "done" | "succeeded" | "failed" | "cancelled" | "retrying";
   trigger: DreamCycleTrigger;
   mode: DreamCycleMode;
   queuedAt: Date | string;
@@ -115,6 +116,7 @@ export interface DreamJob {
   retryOf?: string;
   report?: DreamCycleReport;
   error?: string;
+  logs?: Array<{ at: Date | string; level: "info" | "warn" | "error"; message: string; payload?: Record<string, unknown> }>;
 }
 
 export interface DreamConnectorRefreshReport {
@@ -193,6 +195,9 @@ export interface SourceValidationDecision {
 
 export interface SourceResolver {
   connectorId: string;
+  id?: string;
+  supports?(sourceRef: NonNullable<Memory["provenance"]["sourceRef"]>): boolean;
+  fetch?(sourceRef: NonNullable<Memory["provenance"]["sourceRef"]>, memory: Memory): Promise<SourceRecord | { missing: true }>;
   get(sourceRef: NonNullable<Memory["provenance"]["sourceRef"]>, memory: Memory): SourceRecord | undefined;
   compare?(memory: Memory, sourceRecord: SourceRecord): SourceValidationDecision;
 }

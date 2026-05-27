@@ -220,6 +220,19 @@ export async function handleMemoryCommands(command: string | undefined, args: st
     console.log(JSON.stringify(service.get(id), null, 2));
     return true;
   }
+  case "edit": {
+    const [id, ...contentParts] = args;
+    const content = contentParts.join(" ");
+    if (!id || !content) fail("Usage: memctl edit <memory-id> <new-content>");
+    console.log(JSON.stringify(service.update(id, { content, metadata: { ...metadataFromEnv(), editedBy: process.env.MEMORY_ACTOR_ID ?? "cli" } }), null, 2));
+    return true;
+  }
+  case "archive": {
+    const id = args[0];
+    if (!id) fail("Usage: memctl archive <memory-id>");
+    console.log(JSON.stringify(service.archive(id), null, 2));
+    return true;
+  }
   case "route": {
     const query = args.join(" ");
     if (!query) fail("Usage: memctl route <query>");

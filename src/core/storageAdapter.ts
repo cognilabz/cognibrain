@@ -27,6 +27,11 @@ export interface MemoryRepository {
   transaction<T>(operation: (tx: UnitOfWork) => T): T;
 }
 
+export interface RepositoryStatePersistence {
+  loadState?(): unknown;
+  saveState?(state: unknown): void;
+}
+
 export interface MemoryStorageAdapter {
   create(input: MemoryInput): Memory;
   get(id: string): Memory;

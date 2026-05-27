@@ -80,6 +80,12 @@ export async function handleConnectorRoutes(context: RouteContext): Promise<bool
     return true;
   }
 
+  if (method === "POST" && url.pathname === "/connectors/auth/refresh") {
+    const body = connectorOAuthRevokeSchema.pick({ connectorId: true }).parse(await json(request));
+    send(response, 202, defaultService.refreshConnectorOAuth(body.connectorId));
+    return true;
+  }
+
   if (method === "GET" && url.pathname === "/connectors/list") {
     const connectorId = url.searchParams.get("connectorId");
     if (!connectorId) {

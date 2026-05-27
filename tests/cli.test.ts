@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -18,10 +18,12 @@ describe("cognibrain CLI", () => {
     expect(output).toContain("cognibrain setup");
     expect(output).toContain("cognibrain doctor");
     expect(output).toContain("cognibrain memories");
+    expect(output).toContain("cognibrain context|guard|outcome|correction|patch-evidence|session-end|handoff|release-prepare|dream-plan|source-revalidate|conflicts|health --json");
     expect(output).toContain("cognibrain connections");
     expect(output).toContain("cognibrain proof|truth");
     expect(output).toContain("cognibrain service");
     expect(output).toContain("cognibrain memory search");
+    expect(output).toContain("cognibrain guard --action <command> --json");
     expect(output).toContain("Guided self-hosted install");
     expect(output).toContain("azure-devops");
     expect(output).toContain("cognibrain adapter list");
@@ -187,9 +189,35 @@ describe("cognibrain CLI", () => {
       expect(list).toContain("cognibrain sdk platform");
       expect(doctor).toContain("platform SDK helpers");
       expect(readFileSync(join(out, "acme.integration.ts"), "utf8")).toContain("createPlatformIntegration");
+      expect(readFileSync(join(out, "acme.integration.ts"), "utf8")).toContain("sdk/typescript/index.ts");
+      expect(readFileSync(join(out, "acme.integration.ts"), "utf8")).not.toContain("src/connectors/sdk.ts");
       expect(readFileSync(join(out, "acme.connector.json"), "utf8")).toContain("\"kind\": \"project_management\"");
       expect(readFileSync(join(out, ".env.example"), "utf8")).toContain("MEMORY_ACME_TOKEN");
       expect(readFileSync(join(out, "README.md"), "utf8")).toContain("connector-register");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("scaffolds non-MCP harness integrations through the SDK CLI", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-sdk-harness-"));
+    try {
+      const out = join(dir, "integrations", "external-runner");
+      const dryRun = execFileSync(process.execPath, [cli, "--runtime-root", dir, "sdk", "harness", "external-runner", "--out", out, "--dry-run"], { cwd: dir, encoding: "utf8" });
+      expect(dryRun).toContain("would scaffold harness SDK: external-runner");
+      expect(existsSync(join(out, "external-runner.harness.ts"))).toBe(false);
+
+      const output = execFileSync(process.execPath, [cli, "--runtime-root", dir, "sdk", "harness", "external-runner", "--out", out], { cwd: dir, encoding: "utf8" });
+      const list = execFileSync(process.execPath, [cli, "--runtime-root", dir, "sdk", "list"], { cwd: dir, encoding: "utf8" });
+      const doctor = execFileSync(process.execPath, [cli, "--runtime-root", dir, "sdk", "doctor"], { cwd: dir, encoding: "utf8" });
+
+      expect(output).toContain("scaffolded harness SDK: external-runner");
+      expect(list).toContain("cognibrain sdk harness");
+      expect(doctor).toContain("harness SDK helpers");
+      expect(readFileSync(join(out, "external-runner.harness.ts"), "utf8")).toContain("CognibrainHarnessSdk");
+      expect(readFileSync(join(out, "external-runner.harness.ts"), "utf8")).toContain("sdk/typescript/index.ts");
+      expect(readFileSync(join(out, ".env.example"), "utf8")).toContain("MEMORY_EXTERNAL_RUNNER_USER_ID");
+      expect(readFileSync(join(out, "README.md"), "utf8")).toContain("non-MCP harness");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -260,7 +288,9 @@ describe("cognibrain CLI", () => {
         MEMORY_USER_ID: "cli-code",
         MEMORY_PROJECT_ID: "atlas",
         MEMORY_REPO: "atlas",
-        MEMORY_AUTO_DREAM: "false"
+        MEMORY_AUTO_DREAM: "false",
+        COGNIBRAIN_CLI_BACKEND: "local-direct",
+        COGNIBRAIN_HARNESS_AUTOSTART: "false"
       };
       const wrong = JSON.parse(execFileSync(process.execPath, [cli, "memory", "action", "pnpm test"], {
         cwd: root,
@@ -276,27 +306,30 @@ describe("cognibrain CLI", () => {
         cwd: root,
         env: {
           ...env,
-          MEMORY_PREVIOUS_MEMORY_ID: wrong.id,
+          MEMORY_PREVIOUS_MEMORY_ID: wrong.data.id,
           MEMORY_PREVIOUS_WRONG_ACTION: "pnpm test",
           MEMORY_CORRECT_ACTION: "npm test",
           MEMORY_ENGINEERING_KIND: "repo_policy"
         },
         encoding: "utf8"
       }));
-      expect(correction.metadata.correctionPipeline.derivedMemoryIds.length).toBeGreaterThanOrEqual(2);
-      const guard = JSON.parse(execFileSync(process.execPath, [cli, "memory", "action-guard", "pnpm test"], { cwd: root, env, encoding: "utf8" }));
-      expect(guard.severity).not.toBe("allow");
+      expect(correction.data.metadata.correctionPipeline.derivedMemoryIds.length).toBeGreaterThanOrEqual(2);
+      const guardResult = spawnSync(process.execPath, [cli, "memory", "action-guard", "pnpm test", "--json"], { cwd: root, env, encoding: "utf8" });
+      expect(guardResult.status).toBe(3);
+      const guard = JSON.parse(guardResult.stdout);
+      expect(guard.type).toBe("guard");
+      expect(guard.data.severity).not.toBe("allow");
       const trail = JSON.parse(execFileSync(process.execPath, [cli, "memory", "patch-evidence", "release validation"], {
         cwd: root,
         env: {
           ...env,
-          MEMORY_MEMORY_IDS: [wrong.id, correction.id, ...correction.metadata.correctionPipeline.derivedMemoryIds].join(","),
+          MEMORY_MEMORY_IDS: [wrong.data.id, correction.data.id, ...correction.data.metadata.correctionPipeline.derivedMemoryIds].join(","),
           MEMORY_COMMANDS_RUN: "npm test"
         },
         encoding: "utf8"
       }));
-      expect(trail.correctionsApplied.some((item: { memoryId: string }) => item.memoryId === correction.id)).toBe(true);
-      expect(trail.forbiddenActionsAvoided.length).toBeGreaterThan(0);
+      expect(trail.data.correctionsApplied.some((item: { memoryId: string }) => item.memoryId === correction.data.id)).toBe(true);
+      expect(trail.data.forbiddenActionsAvoided.length).toBeGreaterThan(0);
       const procedureOnly = execFileSync(process.execPath, [cli, "memory", "search", "npm test"], {
         cwd: root,
         env: { ...env, MEMORY_ENGINEERING_KIND: "procedure" },
@@ -304,6 +337,236 @@ describe("cognibrain CLI", () => {
       });
       expect(procedureOnly).toContain("Procedure");
       expect(procedureOnly).not.toContain("Forbidden action");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("runs the CLI-first lifecycle commands with stable JSON contracts and local-direct fallback", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-cli-"));
+    try {
+      const env = {
+        ...process.env,
+        MEMORY_DB_PATH: join(dir, "memory.json"),
+        MEMORY_USER_ID: "harness-cli",
+        MEMORY_AUTO_DREAM: "false",
+        COGNIBRAIN_HARNESS_AUTOSTART: "false"
+      };
+      const correction = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "correction",
+        "--local-direct",
+        "--user",
+        "harness-cli",
+        "--text",
+        "Use npm test, not pnpm in this repo.",
+        "--wrong-action",
+        "pnpm test",
+        "--correct-action",
+        "npm test",
+        "--repo",
+        "demo/harness",
+        "--harness",
+        "codex",
+        "--json"
+      ], { cwd: dir, env, encoding: "utf8" }));
+      expect(correction.schemaVersion).toBe("1.0");
+      expect(correction.ok).toBe(true);
+      expect(correction.type).toBe("correction");
+      expect(correction.mcpParity).toBe("memory_code_correction");
+      expect(correction.backend.kind).toBe("local-direct");
+      expect(correction.schema.jsonEnvelope.exitCodes.guardBlock).toBe(3);
+
+      const context = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "context",
+        "--local-direct",
+        "--user",
+        "harness-cli",
+        "--task",
+        "prepare validation patch",
+        "--repo",
+        "demo/harness",
+        "--harness",
+        "codex",
+        "--json"
+      ], { cwd: dir, env, encoding: "utf8" }));
+      expect(context.ok).toBe(true);
+      expect(context.type).toBe("context");
+      expect(context.mcpParity).toBe("memory_coding_context_pack");
+      expect(context.nextRecommendedCommands).toContain("cognibrain guard --action \"<command>\" --json");
+
+      const blocked = spawnSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "guard",
+        "--local-direct",
+        "--user",
+        "harness-cli",
+        "--action",
+        "pnpm test",
+        "--repo",
+        "demo/harness",
+        "--harness",
+        "codex",
+        "--json"
+      ], { cwd: dir, env, encoding: "utf8" });
+      expect(blocked.status).toBe(3);
+      const guard = JSON.parse(blocked.stdout);
+      expect(guard.type).toBe("guard");
+      expect(guard.decision).toBe("block");
+      expect(guard.ok).toBe(false);
+      expect(guard.mcpParity).toBe("memory_action_guard");
+
+      const harnessAlias = spawnSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "harness",
+        "guard",
+        "--local-direct",
+        "--user",
+        "harness-cli",
+        "--action",
+        "pnpm test",
+        "--repo",
+        "demo/harness",
+        "--harness",
+        "codex",
+        "--json"
+      ], { cwd: dir, env, encoding: "utf8" });
+      expect(harnessAlias.status).toBe(3);
+      const harnessGuard = JSON.parse(harnessAlias.stdout);
+      expect(harnessGuard.schemaVersion).toBe(guard.schemaVersion);
+      expect(harnessGuard.type).toBe(guard.type);
+      expect(harnessGuard.mcpParity).toBe(guard.mcpParity);
+
+      const memoryAlias = spawnSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "memory",
+        "action-guard",
+        "pnpm test",
+        "--local-direct",
+        "--json"
+      ], { cwd: dir, env: { ...env, MEMORY_REPO: "demo/harness", MEMORY_HARNESS: "codex" }, encoding: "utf8" });
+      expect(memoryAlias.status).toBe(3);
+      const memoryGuard = JSON.parse(memoryAlias.stdout);
+      expect(memoryGuard.type).toBe("guard");
+      expect(memoryGuard.mcpParity).toBe("memory_action_guard");
+
+      const outcome = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "outcome",
+        "--local-direct",
+        "--user",
+        "harness-cli",
+        "--command",
+        "npm test",
+        "--exit-code",
+        "0",
+        "--cwd",
+        dir,
+        "--summary",
+        "All tests passed",
+        "--files",
+        "src/example.ts",
+        "--json"
+      ], { cwd: dir, env, encoding: "utf8" }));
+      expect(outcome.ok).toBe(true);
+      expect(outcome.type).toBe("outcome");
+      expect(outcome.mcpParity).toBe("memory_action_outcome");
+
+      const patch = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "patch-evidence",
+        "--local-direct",
+        "--user",
+        "harness-cli",
+        "--task",
+        "validation patch",
+        "--files",
+        "src/example.ts",
+        "--commands",
+        "npm test",
+        "--memory-ids",
+        [correction.data.id, outcome.data.id].join(","),
+        "--json"
+      ], { cwd: dir, env, encoding: "utf8" }));
+      expect(patch.ok).toBe(true);
+      expect(patch.type).toBe("patch_evidence");
+      expect(patch.mcpParity).toBe("memory_patch_evidence");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("autostarts and uses the daemon-backed lifecycle backend on first top-level call", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-daemon-"));
+    try {
+      const env = {
+        ...process.env,
+        MEMORY_DB_PATH: join(dir, "memory.json"),
+        MEMORY_USER_ID: "harness-daemon",
+        MEMORY_AUTO_DREAM: "false"
+      };
+      const health = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "health",
+        "--require-daemon",
+        "--user",
+        "harness-daemon",
+        "--json"
+      ], { cwd: dir, env, encoding: "utf8" }));
+      expect(health.ok).toBe(true);
+      expect(health.backend.kind).toBe("daemon");
+      expect(health.type).toBe("health");
+    } finally {
+      try {
+        execFileSync(process.execPath, [cli, "--runtime-root", dir, "stop"], { cwd: dir, encoding: "utf8" });
+      } catch {
+        // best-effort cleanup
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("fails with exit code 5 when a required daemon is unavailable", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-require-daemon-"));
+    try {
+      const result = spawnSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "health",
+        "--require-daemon",
+        "--no-autostart",
+        "--json"
+      ], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          MEMORY_API_URL: "http://127.0.0.1:45999",
+          MEMORY_AUTO_DREAM: "false"
+        },
+        encoding: "utf8"
+      });
+      expect(result.status).toBe(5);
+      const payload = JSON.parse(result.stdout);
+      expect(payload.ok).toBe(false);
+      expect(payload.errors[0].code).toBe("daemon_unavailable");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -330,17 +593,13 @@ describe("cognibrain CLI", () => {
         join(dir, ".cursor", "mcp.json"),
         join(dir, ".cursor", "rules", "open-memory.mdc"),
         join(dir, ".vscode", "mcp.json"),
-        join(dir, ".opencode", "mcp.json"),
         join(dir, ".opencode", "cognibrain.md"),
-        join(dir, ".openclaw", "mcp.json"),
         join(dir, ".openclaw", "cognibrain.md"),
         join(dir, "langgraph.cognibrain.json"),
         join(dir, "langgraph-cognibrain.ts"),
         join(dir, "crewai.cognibrain.json"),
         join(dir, "crewai_cognibrain.py"),
-        join(dir, ".windsurf", "mcp.json"),
         join(dir, ".windsurf", "rules", "cognibrain.md"),
-        join(dir, ".continue", "config.json"),
         join(dir, ".continue", "rules", "cognibrain.md"),
         join(dir, ".aider.conf.yml"),
         join(dir, ".aider", "cognibrain.md"),
@@ -383,14 +642,17 @@ describe("cognibrain CLI", () => {
       expect(manifest.harnesses.copilot.feedback).toContain("accepted_change");
       expect(manifest.harnesses.langgraph.feedback).toContain("tool outcome telemetry");
       expect(manifest.harnesses.crewai.feedback).toContain("tool outcome telemetry");
-      expect(manifest.harnesses.windsurf.feedback).toContain("memory_context_pack");
+      expect(manifest.harnesses.windsurf.protocol).toBe("cli-lifecycle");
+      expect(manifest.harnesses.windsurf.feedback).toContain("cognibrain guard");
+      expect(manifest.harnesses.opencode.mcpConfig).toBeUndefined();
+      expect(manifest.harnesses.continue.mcpConfig).toBeUndefined();
       expect(manifest.harnesses["roo-cline"].feedback).toContain("correction capture");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   }, slowCliTimeout);
 
-  it("writes reviewable sidecars when refreshing existing cognibrain harness instructions", () => {
+  it("writes reviewable sidecars when refreshing existing cognibrain integration instructions", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-refresh-"));
     const codexHome = join(dir, ".codex");
     try {
@@ -402,13 +664,13 @@ describe("cognibrain CLI", () => {
       });
 
       expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("Old cognibrain instructions");
-      expect(readFileSync(join(dir, "AGENTS.md.cognibrain"), "utf8")).toContain("memory_coding_context_pack");
+      expect(readFileSync(join(dir, "AGENTS.md.cognibrain"), "utf8")).toContain("context --task");
       execFileSync(process.execPath, [cli, "config", "codex", "--refresh"], {
         cwd: dir,
         env: { ...process.env, CODEX_HOME: codexHome, MEMORY_AUTO_DREAM: "false" },
         encoding: "utf8"
       });
-      expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("memory_coding_context_pack");
+      expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("context --task");
       const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8"));
       expect(manifest.harnesses.codex).toBeDefined();
     } finally {

@@ -40,6 +40,7 @@ interface ConnectorCertificationOptions {
 }
 
 const priorityWebhookProviders = new Set(["github", "jira", "confluence", "notion", "linear", "gitlab", "slack", "teams", "sentry", "pagerduty"]);
+const certificationBoundary = "hermetic fixtures may never produce tenant-verified or production-certified rows";
 
 export function generateConnectorCertification(options: ConnectorCertificationOptions = {}): ConnectorCertificationReport {
   const artifactPaths = {
@@ -98,8 +99,10 @@ function certificationRow(
   const provider = String(row.provider ?? "unknown");
   const maturity = object(row.maturity);
   const liveChecks = object(liveRow?.checks);
-  const tenantVerified = maturity.tenantVerified === true;
-  const productionCertified = maturity.productionCertified === true;
+  const signedLiveSmoke = liveArtifactSigned(liveRow);
+  const ownerApproved = productionOwnerApproved(liveRow);
+  const tenantVerified = maturity.tenantVerified === true && signedLiveSmoke;
+  const productionCertified = maturity.productionCertified === true && tenantVerified && ownerApproved;
   const webhookNeeded = priorityWebhookProviders.has(provider);
   const maturityEvidence = object(row.evidence);
   const checks = {
@@ -111,14 +114,17 @@ function certificationRow(
     transportRetryPagination: provider === "github" ? transport.passed === true : true,
     dryRunByDefault: liveReport.writebackEnabled !== true,
     noPlainTokenRetained: liveChecks.noPlainTokenRetained === true || liveRow?.skipped === true,
+    signedLiveSmokeArtifact: signedLiveSmoke,
+    ownerApprovedProductionArtifact: ownerApproved,
     tenantLiveSmoke: tenantVerified,
     productionCertification: productionCertified
   };
   const implementationReady = checks.hermeticDriver && checks.apiSpec && checks.liveSmokeHarness && checks.webhookSecurity && checks.semanticQuality && checks.transportRetryPagination && checks.dryRunByDefault && checks.noPlainTokenRetained;
+  const certificationOnlyChecks = new Set(["signedLiveSmokeArtifact", "ownerApprovedProductionArtifact", "tenantLiveSmoke", "productionCertification"]);
   const blockedBy = [
-    ...(!implementationReady ? Object.entries(checks).filter(([name, passed]) => !passed && !["tenantLiveSmoke", "productionCertification"].includes(name)).map(([name]) => name) : []),
-    ...(!tenantVerified ? ["tenant credentials and MEMORY_VENDOR_LIVE_SMOKE=true artifact"] : []),
-    ...(!productionCertified ? ["deployment owner production certification artifact"] : [])
+    ...(!implementationReady ? Object.entries(checks).filter(([name, passed]) => !passed && !certificationOnlyChecks.has(name)).map(([name]) => name) : []),
+    ...(!tenantVerified ? ["signed tenant live-smoke artifact with MEMORY_VENDOR_LIVE_SMOKE=true"] : []),
+    ...(!productionCertified ? ["signed deployment owner production certification artifact"] : [])
   ];
   const state: CertificationState = productionCertified
     ? "production-certified"
@@ -145,6 +151,23 @@ function certificationRow(
   };
 }
 
+function liveArtifactSigned(liveRow: Record<string, unknown> | undefined): boolean {
+  if (!liveRow || liveRow.skipped === true) return false;
+  const signature = object(liveRow.signature);
+  if (signature.status === "verified" || signature.verified === true) return true;
+  const artifact = object(liveRow.artifact);
+  const artifactSignature = object(artifact.signature);
+  return artifactSignature.status === "verified" || artifactSignature.verified === true;
+}
+
+function productionOwnerApproved(liveRow: Record<string, unknown> | undefined): boolean {
+  const approval = object(liveRow?.ownerApproval);
+  if (approval.status === "approved" && typeof approval.signedAt === "string" && typeof approval.actor === "string") return true;
+  const artifact = object(liveRow?.artifact);
+  const artifactApproval = object(artifact.ownerApproval);
+  return artifactApproval.status === "approved" && typeof artifactApproval.signedAt === "string" && typeof artifactApproval.actor === "string";
+}
+
 function renderMarkdown(report: ConnectorCertificationReport): string {
   const rows = report.rows
     .map((row) => `| ${row.provider} | ${row.state} | ${row.canBecomeTenantVerified ? "yes" : "no"} | ${row.checks.tenantLiveSmoke ? "yes" : "no"} | ${row.checks.productionCertification ? "yes" : "no"} | ${row.blockedBy.join("; ")} |`)
@@ -153,7 +176,7 @@ function renderMarkdown(report: ConnectorCertificationReport): string {
 
 Generated at ${report.generatedAt}.
 
-This page is the production-certification boundary. A row can be implementation-ready without being tenant-verified. Tenant verification requires real customer or deployment credentials and \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`. Production certification requires an owner-approved deployment artifact; it is not inferred from hermetic fixtures.
+This page is the production-certification boundary. A row can be implementation-ready without being tenant-verified. Tenant verification requires real customer or deployment credentials and \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`. Production certification requires an owner-approved deployment artifact; ${certificationBoundary}.
 
 | Provider | State | Can become tenant verified | Tenant live smoke | Production certified | Blocked by |
 | --- | --- | ---: | ---: | ---: | --- |

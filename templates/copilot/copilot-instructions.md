@@ -6,12 +6,10 @@ This repository uses cognibrain for durable agent memory.
 - Prefer current files and tests over memories when they conflict.
 - For benchmark work, use `npm run benchmark:certified` and cite `artifacts/locomo-report.json`.
 - For local verification, use `npm run verify`.
-- If an MCP-capable Copilot environment is available, use the cognibrain tools:
-  - `memory_context_pack` before long-running work,
-  - `memory_coding_context_pack` for code-specific context when exposed,
-  - `memory_action_guard` before shell commands or file edits with durable side effects,
-  - `memory_add` after durable discoveries,
-  - `memory_patch_evidence` after non-trivial patches,
-  - `memory_maintenance_status` to inspect automatic dream state,
-  - `memory_dream` after major sessions, imports, handoff, or contradictions.
+- Use the CLI lifecycle as the default agent path:
+  - `./bin/cognibrain.mjs context --task "<task>" --json` before long-running work,
+  - `./bin/cognibrain.mjs guard --action "<command>" --json` before shell commands or file edits with durable side effects,
+  - `./bin/cognibrain.mjs outcome --command "<command>" --exit-code <code> --json` after important tool results,
+  - `./bin/cognibrain.mjs patch-evidence --task "<task>" --json` after non-trivial patches.
+- If an MCP-capable Copilot environment is available, use MCP tools only as optional adapters for the same lifecycle.
 - Keep memory updates scoped, source-backed, and privacy-aware.

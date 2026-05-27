@@ -1,5 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
-import { shouldUseExternalVendor } from "../connectors/vendorConnectors";
+import { listExternalVendorItems, shouldUseExternalVendor } from "../connectors/vendorConnectors";
 import { applyRedactionPolicy, decryptMemoryContent, type DecryptionKeyMaterial, type RedactionPolicy } from "../core/privacy";
 import { createJsonCommandIntelligenceFromEnv } from "../core/providers";
 import { loadRuntimeConfig } from "../core/runtimeConfig";
@@ -592,10 +592,45 @@ function createRepositoryFromEnv(defaultPath = ".memory-harness.json"): MemoryRe
     if (!sqliteRepositoryAvailable()) return undefined;
     return new SQLiteMemoryRepository(process.env.MEMORY_SQLITE_PATH ?? defaultPath.replace(/\.json$/i, ".sqlite"));
   }
-  if ((backend === "postgres-repository" || backend === "postgres-db-primary") && process.env.MEMORY_POSTGRES_URL) {
+  if ((backend === "postgres-repository" || backend === "postgres-db-primary" || backend === "postgres-production" || backend === "postgres-async") && process.env.MEMORY_POSTGRES_URL) {
     return new PostgresMemoryRepository(process.env.MEMORY_POSTGRES_URL);
   }
   return undefined;
+}
+
+function sourceRefMatchesVendorItem(sourceRef: NonNullable<Memory["provenance"]["sourceRef"]>, item: Record<string, unknown>): boolean {
+  const externalId = stringFromCandidate(item, ["externalId", "id", "key", "issueKey", "identifier", "number", "iid", "gid"]);
+  const uri = stringFromCandidate(item, ["url", "uri", "webUrl", "web_url", "html_url", "permalink_url"]);
+  return Boolean(
+    (sourceRef.externalId && externalId && String(sourceRef.externalId).toLowerCase() === externalId.toLowerCase()) ||
+    (sourceRef.url && uri && normalizeComparableUrl(sourceRef.url) === normalizeComparableUrl(uri)) ||
+    (sourceRef.externalId && uri && uri.toLowerCase().includes(String(sourceRef.externalId).toLowerCase()))
+  );
+}
+
+function stringFromCandidate(item: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = item[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
+}
+
+function liveSourceVersion(item: Record<string, unknown>): string | undefined {
+  return stringFromCandidate(item, ["version", "updatedAt", "updated_at", "modifiedAt", "lastEditedTime", "last_edited_time", "etag"]);
+}
+
+function compactLiveSourceContent(item: Record<string, unknown>): string {
+  return [
+    stringFromCandidate(item, ["title", "name", "summary", "subject", "key", "identifier"]),
+    stringFromCandidate(item, ["content", "body", "description", "text", "notes", "status", "state"]),
+    stringFromCandidate(item, ["url", "uri", "webUrl", "web_url", "html_url", "permalink_url"])
+  ].filter((value): value is string => Boolean(value)).join(" | ") || stableStringify(item).slice(0, 1200);
+}
+
+function normalizeComparableUrl(value: string): string {
+  return value.replace(/\/+$/, "").toLowerCase();
 }
 
 function memoryStoreForRepository(repository: MemoryRepository): MemoryStore {
@@ -1377,15 +1412,7 @@ export class MemoryService {
     options: { connectorIds?: string[]; scope?: DreamCycleInput["scope"]; onlyDue?: boolean; limit?: number } = {}
   ): SourceRevalidationReport {
     const now = new Date();
-    const connectorIds = new Set(options.connectorIds ?? []);
-    const dueMemoryIds = new Set(this.verificationQueue(userId).items.map((item) => item.memoryId));
-    const candidates = this.store.list(userId)
-      .filter((memory) => !memory.archivedAt)
-      .filter((memory) => Boolean(memory.provenance.sourceRef))
-      .filter((memory) => !connectorIds.size || connectorIds.has(memory.provenance.sourceRef?.connectorId ?? ""))
-      .filter((memory) => this.memoryMatchesDreamScope(memory, options.scope))
-      .filter((memory) => !options.onlyDue || dueMemoryIds.has(memory.id) || (memory.temporal.stalenessRisk ?? 0) >= 0.65)
-      .slice(0, options.limit ?? 200);
+    const candidates = this.sourceRevalidationCandidates(userId, options);
     const results = candidates.map((memory) => this.revalidateMemorySourceRef(memory.id, userId));
     const report: SourceRevalidationReport = {
       userId,
@@ -1401,8 +1428,36 @@ export class MemoryService {
     return report;
   }
 
+  async revalidateSourceRefsAsync(
+    userId: string,
+    options: { connectorIds?: string[]; scope?: DreamCycleInput["scope"]; onlyDue?: boolean; limit?: number } = {}
+  ): Promise<SourceRevalidationReport> {
+    const now = new Date();
+    const candidates = this.sourceRevalidationCandidates(userId, options);
+    const results: SourceRevalidationResult[] = [];
+    for (const memory of candidates) {
+      results.push(await this.revalidateMemorySourceRefAsync(memory.id, userId));
+    }
+    const report: SourceRevalidationReport = {
+      userId,
+      generatedAt: now.toISOString(),
+      evaluated: candidates.length,
+      results,
+      summary: sourceRevalidationSummary(results)
+    };
+    if (results.length) {
+      this.recordAudit("reflect.run", { userId, metadata: { resource: "source-revalidation", mode: "live", evaluated: report.evaluated, summary: report.summary } });
+      this.persist();
+    }
+    return report;
+  }
+
   revalidateMemory(memoryId: string, userId?: string): SourceRevalidationResult {
     return revalidateMemoryImpl(this, memoryId, userId);
+  }
+
+  async revalidateMemoryAsync(memoryId: string, userId?: string): Promise<SourceRevalidationResult> {
+    return this.revalidateMemorySourceRefAsync(memoryId, userId);
   }
 
   registerSourceResolver(resolver: SourceResolver): SourceResolver {
@@ -1423,7 +1478,7 @@ export class MemoryService {
           id: `resolver:${connectorId}`,
           connectorId,
           supports: (sourceRef) => sourceRef.connectorId === connectorId || sourceRef.connectorId === provider,
-          fetch: async (sourceRef, memory) => this.latestSourceRecordFromMemories(sourceRef, memory) ?? { missing: true },
+          fetch: async (sourceRef, memory) => this.fetchLiveSourceRecord(sourceRef, memory),
           get: (sourceRef, memory) => this.latestSourceRecordFromMemories(sourceRef, memory),
           compare: (memory, sourceRecord) => defaultSourceResolverDecision(memory, sourceRecord)
         });
@@ -1447,6 +1502,54 @@ export class MemoryService {
       status: "found",
       metadata: { provider: sourceRef.connectorId, memoryId: current.id }
     };
+  }
+
+  private async fetchLiveSourceRecord(sourceRef: NonNullable<Memory["provenance"]["sourceRef"]>, memory: Memory): Promise<SourceRecord | { missing: true }> {
+    const connectorId = sourceRef.connectorId;
+    if (!connectorId) return this.latestSourceRecordFromMemories(sourceRef, memory) ?? { missing: true };
+    const manifest = this.connectorManifests.get(connectorId)
+      ?? this.connectorManifests.get(`official-${connectorId}`);
+    if (!manifest) return this.latestSourceRecordFromMemories(sourceRef, memory) ?? { missing: true };
+    const listed = await listExternalVendorItems(manifest, fetch, Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000));
+    if (listed.status === "failed") {
+      const local = this.latestSourceRecordFromMemories(sourceRef, memory);
+      return local
+        ? { ...local, metadata: { ...(local.metadata ?? {}), liveFetchSkipped: true, liveFetchError: listed.error } }
+        : { missing: true };
+    }
+    const item = listed.items.find((candidate) => sourceRefMatchesVendorItem(sourceRef, candidate));
+    if (!item) return { missing: true };
+    const hash = contentHash(stableStringify(item));
+    return {
+      sourceRef: { ...sourceRef, version: liveSourceVersion(item), hash },
+      content: compactLiveSourceContent(item),
+      title: stringFromCandidate(item, ["title", "name", "summary", "key", "identifier", "externalId", "id"]),
+      updatedAt: stringFromCandidate(item, ["updatedAt", "updated_at", "modifiedAt", "lastEditedTime", "last_edited_time"]) ?? new Date().toISOString(),
+      version: liveSourceVersion(item),
+      hash,
+      status: "found",
+      metadata: {
+        provider: manifest.vendor?.provider,
+        connectorId: manifest.id,
+        liveFetch: true,
+        responseStatusCode: listed.responseStatusCode
+      }
+    };
+  }
+
+  private sourceRevalidationCandidates(
+    userId: string,
+    options: { connectorIds?: string[]; scope?: DreamCycleInput["scope"]; onlyDue?: boolean; limit?: number } = {}
+  ): Memory[] {
+    const connectorIds = new Set(options.connectorIds ?? []);
+    const dueMemoryIds = new Set(this.verificationQueue(userId).items.map((item) => item.memoryId));
+    return this.store.list(userId)
+      .filter((memory) => !memory.archivedAt)
+      .filter((memory) => Boolean(memory.provenance.sourceRef))
+      .filter((memory) => !connectorIds.size || connectorIds.has(memory.provenance.sourceRef?.connectorId ?? ""))
+      .filter((memory) => this.memoryMatchesDreamScope(memory, options.scope))
+      .filter((memory) => !options.onlyDue || dueMemoryIds.has(memory.id) || (memory.temporal.stalenessRisk ?? 0) >= 0.65)
+      .slice(0, options.limit ?? 200);
   }
 
   resolveVerificationQueue(userId: string, options: { limit?: number; connectorIds?: string[] } = {}): VerificationResolutionReport {
@@ -2123,6 +2226,32 @@ export class MemoryService {
         : { status: "source_missing" as const, reason: "source resolver returned no source record" };
       return this.applySourceResolverDecision(memory, sourceRef, decision);
     }
+    return this.revalidateMemorySourceRefFallback(memory, sourceRef);
+  }
+
+  private async revalidateMemorySourceRefAsync(memoryId: string, userId?: string): Promise<SourceRevalidationResult> {
+    const memory = this.store.get(memoryId);
+    if (userId && memory.userId !== userId) throw new Error(`User ${userId} cannot revalidate memory ${memoryId}`);
+    const sourceRef = memory.provenance.sourceRef;
+    if (!sourceRef) {
+      return this.revalidateMemorySourceRef(memoryId, userId);
+    }
+    const resolver = sourceRef.connectorId ? this.sourceResolvers.get(sourceRef.connectorId) : undefined;
+    if (resolver) {
+      const fetched = resolver.fetch ? await resolver.fetch(sourceRef, memory) : resolver.get(sourceRef, memory);
+      const sourceRecord = fetched && !("missing" in fetched) ? fetched : undefined;
+      const decision: SourceValidationDecision = sourceRecord
+        ? resolver.compare?.(memory, sourceRecord) ?? defaultSourceResolverDecision(memory, sourceRecord)
+        : { status: "source_missing" as const, reason: resolver.fetch ? "live source resolver returned missing" : "source resolver returned no source record" };
+      return this.applySourceResolverDecision(memory, sourceRef, decision);
+    }
+    return this.revalidateMemorySourceRefFallback(memory, sourceRef);
+  }
+
+  private revalidateMemorySourceRefFallback(
+    memory: Memory,
+    sourceRef: NonNullable<Memory["provenance"]["sourceRef"]>
+  ): SourceRevalidationResult {
     if (memory.metadata.verificationReason === "source_deleted" || memory.metadata.sourceDeletedAt) {
       const updated = this.store.update(memory.id, {
         beliefState: "needs_verification",
@@ -2131,7 +2260,7 @@ export class MemoryService {
       });
       this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: "source_missing" } });
       return {
-        memoryId,
+        memoryId: memory.id,
         connectorId: sourceRef.connectorId,
         externalId: sourceRef.externalId,
         status: "source_missing",
@@ -2162,7 +2291,7 @@ export class MemoryService {
       });
       this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: "superseded", sourceMemoryId: latest.id } });
       return {
-        memoryId,
+        memoryId: memory.id,
         connectorId: sourceRef.connectorId,
         externalId: sourceRef.externalId,
         status: "superseded",
@@ -2185,7 +2314,7 @@ export class MemoryService {
       });
       this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: "needs_operator_review", syncRecordId: failedRecord.id } });
       return {
-        memoryId,
+        memoryId: memory.id,
         connectorId: sourceRef.connectorId,
         externalId: sourceRef.externalId,
         status: "needs_operator_review",
@@ -2214,7 +2343,7 @@ export class MemoryService {
       });
       this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: memory.beliefState === "contradicted" ? "needs_operator_review" : "confirmed", sourceMemoryId: latest.id } });
       return {
-        memoryId,
+        memoryId: memory.id,
         connectorId: sourceRef.connectorId,
         externalId: sourceRef.externalId,
         status: memory.beliefState === "contradicted" ? "needs_operator_review" : "confirmed",
@@ -2235,7 +2364,7 @@ export class MemoryService {
     });
     this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: "needs_operator_review" } });
     return {
-      memoryId,
+      memoryId: memory.id,
       connectorId: sourceRef.connectorId,
       externalId: sourceRef.externalId,
       status: "needs_operator_review",
@@ -2762,11 +2891,18 @@ export class MemoryService {
     this.store.import(this.repository.export());
   }
 
+  private repositorySharesReadModel(): boolean {
+    return this.repository instanceof InMemoryMemoryRepository || (this.repository as { store?: unknown }).store === this.store;
+  }
+
   private persist(): void {
-    this.repository.import(this.store.export());
+    const memories = this.store.export();
+    if (!this.repositorySharesReadModel()) {
+      this.repository.import(memories);
+    }
     const payload: PersistedMemoryFile = {
       version: 2,
-      memories: this.store.export(),
+      memories,
       episodes: [...this.episodes.values()],
       maintenance: this.maintenance,
       metrics: this.metrics,

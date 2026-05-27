@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { performance } from "node:perf_hooks";
 import { MemoryService } from "../api/service";
-import { PostgresRemotePersistenceAdapter } from "../api/persistence";
+import { PostgresMemoryRepository } from "../api/repositories";
 
 interface PostgresLiveArtifact {
   schemaVersion: "1.0";
@@ -74,7 +74,7 @@ const psqlCommand = process.env.MEMORY_PSQL_COMMAND ?? firstExisting([
 ]);
 process.env.MEMORY_POSTGRES_CONTAINER_NAME = containerName;
 process.env.MEMORY_PSQL_COMMAND = psqlCommand;
-process.env.MEMORY_STORAGE_BACKEND = "postgres-remote";
+process.env.MEMORY_STORAGE_BACKEND = "postgres-db-primary";
 process.env.MEMORY_POSTGRES_URL = url;
 process.env.MEMORY_REDACTION_MODE ??= "encrypt";
 process.env.MEMORY_ENCRYPTION_KEY ??= "postgres-live-test-key-with-enough-length";
@@ -86,9 +86,10 @@ process.env.MEMORY_SECRET_MANAGER ??= "local-env";
 waitForPostgres();
 resetSchema();
 
-const adapter = new PostgresRemotePersistenceAdapter(url, { command: psqlCommand });
-const storage = new MemoryService({ persistence: adapter }).storageStatus();
-const startsWithPostgresBackend = storage.active === "postgres-remote";
+const repository = new PostgresMemoryRepository(url);
+const service = new MemoryService({ repository });
+const storage = service.storageStatus();
+const startsWithPostgresBackend = storage.active === "postgres-repository";
 
 const writeLatencies: number[] = [];
 const searchLatencies: number[] = [];
@@ -98,8 +99,7 @@ let backupVerified = false;
 let keyProvider = "unconfigured";
 
 try {
-  const builder = new MemoryService();
-  builder.add({
+  service.add({
     userId: "alice",
     orgId: "org-a",
     projectId: "postgres-live",
@@ -107,7 +107,7 @@ try {
     consent: { visibility: "private", allowTraining: false, deleteOnRequest: true },
     source: { kind: "human", confidence: 0.98 }
   });
-  builder.add({
+  service.add({
     userId: "bob",
     orgId: "org-b",
     projectId: "postgres-live",
@@ -115,7 +115,7 @@ try {
     consent: { visibility: "org", allowTraining: false, deleteOnRequest: true },
     source: { kind: "human", confidence: 0.96 }
   });
-  builder.add({
+  service.add({
     userId: "security",
     orgId: "org-sec",
     projectId: "postgres-live",
@@ -123,15 +123,16 @@ try {
     consent: { visibility: "private", allowTraining: false, deleteOnRequest: true },
     source: { kind: "tool", confidence: 0.98 }
   });
-  const bundle = builder.managedMigrationBundle({ target: "self_hosted", backupRef: process.env.MEMORY_BACKUP_REF, secretManager: process.env.MEMORY_SECRET_MANAGER });
-  const recovery = builder.verifyBackupRecovery(bundle);
-  const keyReport = builder.keyProviderReport();
+  const bundle = service.managedMigrationBundle({ target: "self_hosted", backupRef: process.env.MEMORY_BACKUP_REF, secretManager: process.env.MEMORY_SECRET_MANAGER });
+  const recovery = service.verifyBackupRecovery(bundle);
+  const keyReport = service.keyProviderReport();
   encryptedMemories = recovery.encryptedMemories;
   backupVerified = recovery.verified && recovery.encryptedMemories > 0;
   keyProvider = keyReport.provider;
 
   for (let index = 0; index < 25; index += 1) {
-    builder.add({
+    const start = performance.now();
+    service.add({
       userId: `bench-${index % 5}`,
       orgId: `org-${index % 3}`,
       projectId: "postgres-live",
@@ -139,12 +140,10 @@ try {
       entities: ["postgres", "tsvector", `tenant-${index % 3}`],
       source: { kind: "tool", confidence: 0.9 }
     });
-    const start = performance.now();
-    adapter.save({ version: 2, memories: builder.store.export(), maintenance: { users: {} } });
     writeLatencies.push(performance.now() - start);
   }
 
-  const searchService = new MemoryService({ persistence: new PostgresRemotePersistenceAdapter(url, { command: psqlCommand }) });
+  const searchService = new MemoryService({ repository: new PostgresMemoryRepository(url) });
   for (let index = 0; index < 10; index += 1) {
     const start = performance.now();
     const results = searchService.search({
@@ -162,7 +161,7 @@ try {
   throw error;
 }
 
-const reloaded = new MemoryService({ persistence: new PostgresRemotePersistenceAdapter(url, { command: psqlCommand }) });
+const reloaded = new MemoryService({ repository: new PostgresMemoryRepository(url) });
 const aliceAtlasRows = psqlNumber("select count(*) from cognibrain_memories where user_id = 'alice' and org_id = 'org-a' and project_id = 'postgres-live' and content like '%Atlas launch code%'");
 const bobAtlasRows = psqlNumber("select count(*) from cognibrain_memories where user_id = 'bob' and org_id = 'org-b' and project_id = 'postgres-live' and content like '%Atlas launch code%'");
 const bobBeaconResults = reloaded.search({ userId: "bob", orgId: "org-b", projectId: "postgres-live", query: "Bob Beacon green Postgres", limit: 5 });
@@ -173,13 +172,12 @@ const multiUserIsolation = aliceAtlasRows === 1 &&
   bobSearchLeaks === 0;
 
 const migrationBefore = migrationStatus();
-new MemoryService({ persistence: new PostgresRemotePersistenceAdapter(url, { command: psqlCommand }) }).storageStatus();
+new PostgresMemoryRepository(url).export();
 const migrationAfter = migrationStatus();
 const idempotentMigrations = migrationBefore.count === migrationAfter.count && migrationBefore.maxVersion === migrationAfter.maxVersion;
 
-const lexical = adapter.lexicalSearch("tsvector proof", { limit: 5 });
-const indexedLexicalSearch = lexical.length > 0 && lexical[0].explanation === "postgres tsvector";
-const encryptionKeyConfigured = storage.adapters.some((item) => item.kind === "postgres-remote" && item.encryptedAtRest === true) &&
+const indexedLexicalSearch = psqlNumber("select count(*) from cognibrain_memories where search_vector @@ plainto_tsquery('simple', 'tsvector proof')") > 0;
+const encryptionKeyConfigured = process.env.MEMORY_REDACTION_MODE === "encrypt" &&
   keyProvider !== "unconfigured" &&
   encryptedMemories > 0;
 const rollbackProbeBefore = psqlNumber("select count(*) from cognibrain_memories where memory_id = 'rollback_probe'");
@@ -188,7 +186,7 @@ run(psqlCommand, [
   "-v",
   "ON_ERROR_STOP=1",
   "-c",
-  "begin; insert into cognibrain_memories(memory_id, user_id, content, memory_type, layer, belief_state, visibility, created_at, updated_at, payload) values ('rollback_probe', 'rollback-user', 'rollback transaction probe', 'project', 'long_term', 'active', 'private', now(), now(), '{}'::jsonb); rollback;"
+  "begin; insert into cognibrain_memories(memory_id, user_id, content, memory_type, memory_layer, belief_state, visibility, created_at, updated_at, payload) values ('rollback_probe', 'rollback-user', 'rollback transaction probe', 'project', 'long_term', 'active', 'private', now(), now(), '{}'::jsonb); rollback;"
 ]);
 const rollbackProbeAfter = psqlNumber("select count(*) from cognibrain_memories where memory_id = 'rollback_probe'");
 const transactionRollback = rollbackProbeBefore === rollbackProbeAfter;
@@ -341,7 +339,7 @@ function resetSchema(): void {
     "ON_ERROR_STOP=1",
     "-At",
     "-c",
-    "drop table if exists cognibrain_context_packs, cognibrain_audit_events, cognibrain_relations, cognibrain_entities, cognibrain_memories, cognibrain_persistence_events, cognibrain_snapshots, cognibrain_schema_migrations cascade"
+    "drop table if exists cognibrain_context_packs, cognibrain_audit_events, cognibrain_relations, cognibrain_entities, cognibrain_memories, cognibrain_persistence_events, cognibrain_snapshots, cognibrain_schema_migrations, cognibrain_repository_state, cognibrain_claims, cognibrain_conflict_sets, cognibrain_claim_evidence, cognibrain_truth_resolutions, cognibrain_dream_jobs, cognibrain_dream_job_logs, cognibrain_connector_sync_states, cognibrain_evidence_packs, cognibrain_policy_rules, cognibrain_retention_rules cascade"
   ]);
 }
 

@@ -1,6 +1,6 @@
 # Usage And Reference
 
-For agents, use MCP first. For operators, use the CLI. For product integrations, use SDK/HTTP.
+For MCP-native agents, use MCP. For shell-hook capable agents, use the harness lifecycle CLI. For operators, use the CLI. For product integrations, use SDK/HTTP.
 
 ## CLI
 
@@ -21,6 +21,26 @@ cognibrain service install --activate
 
 The CLI is stable text output by default and supports JSON where automation needs it.
 
+## Harness CLI
+
+`cognibrain harness ...` is the JSON-first lifecycle path for any agent host, git hook or CI runner that can execute shell commands. Top-level lifecycle commands such as `cognibrain context`, `cognibrain guard` and `cognibrain outcome` share the same contract.
+
+```bash
+cognibrain harness context --task "prepare the next patch" --repo cognilabz/cognibrain --json
+cognibrain harness guard --action "npm test" --json
+cognibrain harness outcome --command "npm test" --exit-code 0 --json
+cognibrain harness correction --text "Use npm test, not pnpm." --json
+cognibrain harness patch-evidence --task "package cleanup" --files package.json --commands "npm test" --json
+cognibrain harness session-end --run-dream-if-due --json
+cognibrain harness release-prepare --repo cognilabz/cognibrain --json
+cognibrain harness dream-plan --json
+cognibrain harness source-revalidate --user local --json
+cognibrain harness conflicts --json
+cognibrain harness health --json
+```
+
+Daemon-backed mode is preferred. Auth-enabled daemons can be called with `--api-key`, `--bearer-token`, `--auth-env`, `MEMORY_API_KEY`, `COGNIBRAIN_API_KEY`, `COGNIBRAIN_API_TOKEN` or `MEMORY_BEARER_TOKEN`. In production/security mode the harness CLI requires the daemon unless `--local-direct` is explicitly requested.
+
 ## MCP
 
 MCP-capable hosts should call Cognibrain tools directly before coding or debugging work:
@@ -34,7 +54,7 @@ MCP-capable hosts should call Cognibrain tools directly before coding or debuggi
 | Patch evidence | Record files changed, commands run and memories used. |
 | Maintenance | Inspect health and run dream-cycle maintenance. |
 
-The CLI exposes fallback equivalents under `cognibrain memory`, `cognibrain memories`, `cognibrain context`, `cognibrain guard`, `cognibrain outcome` and `cognibrain patch-evidence`.
+The harness lifecycle exposes equivalent JSON commands under `cognibrain harness`, `cognibrain context`, `cognibrain guard`, `cognibrain outcome`, `cognibrain correction`, `cognibrain patch-evidence`, `cognibrain session-end`, `cognibrain handoff`, `cognibrain release-prepare`, `cognibrain dream-plan`, `cognibrain source-revalidate`, `cognibrain conflicts` and `cognibrain health`.
 
 ## HTTP API
 

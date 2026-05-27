@@ -2,15 +2,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer, type IncomingMessage } from "node:http";
-import { createDefaultMemoryService } from "../api/service";
+import type { MemoryService } from "../api/service";
+import { createMcpRuntimeToolHandlers } from "./mcpRuntimeClient";
 import { registerMemoryMcpTools } from "./mcpTools";
 
-export function createOpenMemoryMcpServer(service = createDefaultMemoryService()) {
+export function createOpenMemoryMcpServer(service?: MemoryService) {
   const server = new McpServer({
     name: "cognibrain",
     version: "0.1.0"
   });
-  registerMemoryMcpTools(server, service);
+  registerMemoryMcpTools(server, service ? service : createMcpRuntimeToolHandlers());
 
   return server;
 }

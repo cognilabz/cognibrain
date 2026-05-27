@@ -40,6 +40,7 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
   const files: FileMap = {
     packageJson: read("package.json"),
     postgres: read("src/api/repositories/postgresRepository.ts"),
+    persistenceFactory: read("src/api/persistence/factory.ts"),
     service: read("src/api/service.ts"),
     server: read("src/api/server.ts"),
     helpers: read("src/api/server/helpers.ts"),
@@ -63,6 +64,7 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
     operatorMaturity: read("src/eval/operatorOsMaturity.ts"),
     connectorCertification: read("src/eval/connectorCertification.ts"),
     benchmarkRelease: read("src/eval/benchmarkRelease.ts"),
+    postgresLive: read("src/eval/postgresLive.ts"),
     productionCertifier: read("scripts/release/certify-production.mjs"),
     testsApi: read("tests/api.test.ts"),
     testsCore: read("tests/core.test.ts"),
@@ -79,11 +81,17 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
       ["src/api/repositories/postgresRepository.ts", "checksumSql"],
       ["src/api/repositories/postgresRepository.ts", "enable row level security"]
     ]),
-    check("storage.async-production-startup", "storage", "HTTP production startup initializes async repositories before listening.", files, [
+    check("storage.async-production-startup", "storage", "HTTP production startup initializes async repositories before listening and keeps production Postgres aliases on the primary repository path.", files, [
       ["src/api/service.ts", "createProductionMemoryService"],
       ["src/api/service.ts", "initializeDefaultMemoryService"],
       ["src/api/server.ts", "await initializeDefaultMemoryService()"],
-      ["src/api/service.ts", "postgres-production"]
+      ["src/api/service.ts", "postgres-production"],
+      ["src/api/service.ts", "postgres-async"],
+      ["src/api/service.ts", "new PostgresMemoryRepository(process.env.MEMORY_POSTGRES_URL)"],
+      ["src/api/persistence/factory.ts", "DB-primary MemoryRepository backend"],
+      ["src/eval/postgresLive.ts", "new PostgresMemoryRepository(url)"],
+      ["src/eval/postgresLive.ts", "storage.active === \"postgres-repository\""],
+      ["tests/core.test.ts", "does not route DB-primary Postgres aliases through the legacy remote persistence factory"]
     ]),
     check("security.resource-aware-auth", "security", "Resource authorization loads resource scope and recursively denies cross-scope bodies.", files, [
       ["src/api/server/helpers.ts", "authorizeResource"],
@@ -115,12 +123,16 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
       ["src/api/service/searchRuntime.ts", "truthReason"],
       ["tests/core.test.ts", "release-critical"]
     ]),
-    check("dream.durable-source-aware", "dream", "Dreaming has durable jobs, logs, retry/cancel, release blockers and provider SourceResolver v2.", files, [
+    check("dream.durable-source-aware", "dream", "Dreaming has durable jobs, logs, retry/cancel, release blockers and provider SourceResolver v2 with live async fetch revalidation.", files, [
       ["src/api/repositories/postgresRepository.ts", "cognibrain_dream_jobs"],
       ["src/api/repositories/postgresRepository.ts", "cognibrain_dream_job_logs"],
       ["src/core/types/dream.ts", "supports?("],
       ["src/core/types/dream.ts", "fetch?("],
       ["src/api/service.ts", "registerDefaultSourceResolvers"],
+      ["src/api/service.ts", "revalidateSourceRefsAsync"],
+      ["src/api/service.ts", "await resolver.fetch"],
+      ["src/api/service.ts", "listExternalVendorItems"],
+      ["tests/core.test.ts", "default GitHub source resolver fetches current provider state"],
       ["src/api/service.ts", "releaseBlockers"],
       ["tests/core.test.ts", "releaseBlockers"]
     ]),
@@ -211,6 +223,7 @@ function keyForPath(path: string): string {
   const entry = Object.entries({
     packageJson: "package.json",
     postgres: "src/api/repositories/postgresRepository.ts",
+    persistenceFactory: "src/api/persistence/factory.ts",
     service: "src/api/service.ts",
     server: "src/api/server.ts",
     helpers: "src/api/server/helpers.ts",
@@ -234,6 +247,7 @@ function keyForPath(path: string): string {
     operatorMaturity: "src/eval/operatorOsMaturity.ts",
     connectorCertification: "src/eval/connectorCertification.ts",
     benchmarkRelease: "src/eval/benchmarkRelease.ts",
+    postgresLive: "src/eval/postgresLive.ts",
     productionCertifier: "scripts/release/certify-production.mjs",
     testsApi: "tests/api.test.ts",
     testsCore: "tests/core.test.ts",

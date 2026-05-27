@@ -169,8 +169,8 @@ export class PostgresRemotePersistenceAdapter implements MemoryPersistenceAdapte
       lexical: { strategy: "postgres-tsvector", indexed: true, notes: ["Remote driver maintains an indexed generated tsvector column for live Postgres lexical scoring."] },
       vector: { strategy: "pgvector", indexed: false, notes: ["Remote Postgres deployments can enable pgvector indexes for external embedding providers; embeddings stay optional and can be disabled by privacy policy."] },
       notes: [
-        `${this.options.cockroach ? "CockroachDB" : "Postgres"} remote DB-primary driver with transactional row-level memory upserts and append-only memory.created, memory.updated and memory.deleted events.`,
-        "Set MEMORY_STORAGE_BACKEND=postgres-remote or cockroach-remote and MEMORY_POSTGRES_URL for production deployments.",
+        `${this.options.cockroach ? "CockroachDB" : "Postgres"} legacy remote persistence driver with transactional row-level memory upserts and append-only memory.created, memory.updated and memory.deleted events.`,
+        "Use MEMORY_STORAGE_BACKEND=postgres-db-primary or postgres-production with MEMORY_POSTGRES_URL for the production MemoryRepository path; postgres-remote remains a compatibility adapter.",
         "Snapshots are retained as backup/compaction artifacts while cognibrain_memories is the durable source of truth."
       ]
     };

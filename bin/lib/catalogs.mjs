@@ -305,7 +305,7 @@ export function adapterDefinitions() {
       verification: "npm run verify:postgres",
       docs: "docs/operations.md#storage",
       fields: [
-        { name: "backend", label: "Storage backend", env: "MEMORY_STORAGE_BACKEND", default: "postgres-remote" },
+        { name: "backend", label: "Storage backend", env: "MEMORY_STORAGE_BACKEND", default: "postgres-db-primary" },
         { name: "urlEnv", label: "Postgres URL", env: "MEMORY_POSTGRES_URL", secret: true, default: "MEMORY_POSTGRES_URL" }
       ],
       sampleEvents: ["team shared memory", "remote tsvector search", "backup-ready production store"]

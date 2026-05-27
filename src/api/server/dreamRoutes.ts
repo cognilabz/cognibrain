@@ -119,7 +119,7 @@ export async function handleDreamRoutes(input: {
 
     if (method === "POST" && url.pathname === "/sources/revalidate") {
       const body = sourceRevalidationBodySchema.parse(await json(request));
-      send(response, 202, body.memoryId ? defaultService.revalidateMemory(body.memoryId, body.userId) : defaultService.revalidateSourceRefs(body.userId, { connectorIds: body.connectorIds, limit: body.limit }));
+      send(response, 202, body.memoryId ? await defaultService.revalidateMemoryAsync(body.memoryId, body.userId) : await defaultService.revalidateSourceRefsAsync(body.userId, { connectorIds: body.connectorIds, limit: body.limit }));
       return true;
     }
 

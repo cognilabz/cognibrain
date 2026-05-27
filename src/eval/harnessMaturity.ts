@@ -304,8 +304,8 @@ Evidence:
 - \`npm run internal -- harness:maturity\` regenerates this document and the artifact.
 - Golden-path demos simulate install -> context -> action guard -> telemetry -> correction -> evidence for generated harness rows.
 - External-agent modes use the generated JSON-command contract unless a vendor-native hook is available.
-- The universal CLI lifecycle protocol is checked as the CLI-first path and must preserve MCP parity for context, guard, outcome, correction, patch evidence, dream/session/release, source revalidation and conflicts.
-- The dream lifecycle proof is counted only when context, guard, outcome, correction, patch evidence, session and release commands remain in the MCP parity contract.
+- The universal CLI lifecycle protocol is checked as the CLI-first path and must preserve MCP parity for context, guard, outcome, correction, patch evidence, dream/session/release, source revalidation, conflicts and health.
+- The dream lifecycle proof is counted only when context, guard, outcome, correction, patch evidence, session, handoff, release, source revalidation, conflicts and health commands remain in the MCP parity contract.
 `;
 }
 
@@ -318,6 +318,7 @@ function cliLifecycleProtocolReady(): boolean {
     "EXIT_CODES",
     "COMMAND_SCHEMAS",
     "MCP_PARITY",
+    "health: \"memory_health\"",
     "handleLifecycleCommand",
     "handleHarnessCommand",
     "handleMemoryLifecycleCommand"
@@ -351,9 +352,11 @@ function lifecycleCliParityCommandCount(): number {
     "memory_patch_evidence",
     "memory_dream_plan",
     "memory_session_end",
+    "memory_handoff_prepare",
     "memory_release_prepare",
     "memory_source_revalidate",
-    "memory_conflict_sets"
+    "memory_conflict_sets",
+    "memory_health"
   ].filter((needle) => content.includes(needle)).length;
 }
 

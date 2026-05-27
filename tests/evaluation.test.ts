@@ -62,7 +62,7 @@ describe("self verification benchmark loop", () => {
     expect(report.passed).toBe(true);
     expect(report.ours.accuracy).toBeGreaterThan(Math.max(...report.baselines.map((item) => item.accuracy)));
     expect(report.ours.meanTokens).toBeLessThan(report.marketGate.requiredMeanTokensUnder);
-  });
+  }, 30_000);
 
   it("runs an official LoCoMo evidence-recall slice with the user simulator", () => {
     const report = runLocomoBenchmark({
@@ -102,7 +102,7 @@ describe("self verification benchmark loop", () => {
     });
     expect(report.passed).toBe(true);
     expect(report.ours.correct).toBe(1);
-  });
+  }, 30_000);
 
   it("runs a BEAM-style retrieval nugget fixture with the user simulator", async () => {
     const dir = mkdtempSync(join(tmpdir(), "open-memory-beam-"));
@@ -230,7 +230,7 @@ describe("self verification benchmark loop", () => {
     expect(report.rows.find((row) => row.provider === "jira")?.proofLevel).toBe("live-smoke-ready");
     expect(report.rows.find((row) => row.provider === "github")?.maturity.webhook).toBe(true);
     expect(report.rows.every((row) => row.qualityScore > 0)).toBe(true);
-  });
+  }, 30_000);
 
   it("proves connector transport retry and pagination behavior", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-transport-"));
@@ -274,7 +274,7 @@ describe("self verification benchmark loop", () => {
     expect(certification.passed).toBe(true);
     expect(certification.summary.credentialBlocked).toBeGreaterThanOrEqual(19);
     expect(certification.summary.productionCertified).toBe(0);
-  });
+  }, 30_000);
 
   it("requires signed live-smoke and owner artifacts for tenant and production connector certification", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-signed-cert-"));

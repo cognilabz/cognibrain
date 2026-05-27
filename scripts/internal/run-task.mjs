@@ -5,6 +5,8 @@ const root = new URL("../..", import.meta.url).pathname;
 const [taskName, ...passthrough] = process.argv.slice(2);
 
 const tasks = {
+  "test": cmd("npm", ["test"]),
+  "build": cmd("npm", ["run", "build"]),
   "eval": cmd("npx", ["tsx", "src/eval/run.ts"]),
   "eval:nextgen": cmd("npx", ["tsx", "src/eval/nextgen.ts", "--out", "artifacts/nextgen-eval.json"]),
   "benchmark:locomo": cmd("npx", ["tsx", "src/eval/locomo.ts"]),

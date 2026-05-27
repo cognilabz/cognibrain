@@ -466,7 +466,7 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
     },
 
     revalidateSourceRefs(args: MemoryRevalidateArgs) {
-      return args.memoryId ? service.revalidateMemory(args.memoryId, args.userId) : service.revalidateSourceRefs(args.userId, { connectorIds: args.connectorIds, limit: args.limit });
+      return args.memoryId ? service.revalidateMemoryAsync(args.memoryId, args.userId) : service.revalidateSourceRefsAsync(args.userId, { connectorIds: args.connectorIds, limit: args.limit });
     },
 
     resolveVerification(args: MemoryRevalidateArgs) {
@@ -575,12 +575,15 @@ function dreamCycleInput(args: MemoryDreamCycleArgs): DreamCycleInput {
   };
 }
 
-export function jsonText(payload: unknown) {
+export type MemoryToolHandlers = ReturnType<typeof createMemoryToolHandlers>;
+
+export async function jsonText(payload: unknown) {
+  const resolved = await payload;
   return {
     content: [
       {
         type: "text" as const,
-        text: JSON.stringify(payload, null, 2)
+        text: JSON.stringify(resolved, null, 2)
       }
     ]
   };

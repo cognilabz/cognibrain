@@ -1,21 +1,18 @@
 # Production Readiness Status
 
-This matrix is the current truth boundary for Cognibrain. It separates implemented self-hosted product capability from production certification. Generated artifacts are internal CI/build outputs under `artifacts/`; they are ignored by git and excluded from npm packages.
+This page summarizes the current self-hosted repository boundary.
 
-| Feature | Current state | Verification | Claim boundary |
+| Area | Current status | Evidence gate | Boundary |
 | --- | --- | --- | --- |
-| CLI | Stable operator CLI covers setup, status, service, config, connectors and proof without animated TUI rendering. | `npm test`, `npm run audit:structure` | Dashboard remains optional. |
-| MCP | MCP server exposes context, coding context, action guard, durable writes, patch evidence and maintenance. | `npm test`, `npm run mcp` | MCP is the primary agent path. |
-| SDK/HTTP | HTTP API and typed clients support custom integrations and non-MCP runtimes. | `npm test`, `/openapi.json` | SDK/HTTP is not the recommended primary agent path when MCP exists. |
-| Storage | DB-primary row persistence with granular memory writes, SQL rows and append-only events. | `npm test`, `npm run verify:postgres` | Snapshots are retained only as backup/compaction artifacts. |
-| Security/Auth | API-key/Bearer auth plus optional JWT/OIDC verifier, route-level RBAC and actor-bound scopes. | `npm test -- tests/api.test.ts` | Deployments own issuer, audience, TLS and identity-provider configuration. |
-| Policy | Policy rules exist and Production policy mode default-denies when no rule matches. | `npm test` | DB-level row isolation is still deployment-specific. |
-| Connectors | First-party connector drivers are implementation-ready and live-smoke-ready. | `npm run verify:compatibility` | 0 tenant-verified live smokes and 0 production certifications without real credentials and owner certification. |
-| Benchmarks | CogniCodeBench, Arena and public benchmark commands exist. | `npm run benchmark:cognicode`, `npm run benchmark:arena` | Synthetic/API-shape rows are not vendor certification or real-customer field proof. |
-| Operations | Release check, doctor, service plans and optional Docker packaging exist. | `npm run release:check` | Managed SaaS, autoscaling, billing and hosted support are not claimed. |
+| CLI | Stable operator CLI covers setup, status, service, config, connectors and proof without animated TUI rendering. | `npm test`, `npm run internal -- audit:structure` | Dashboard remains optional. |
+| MCP | Agent-facing tools cover context, coding context, action guard, durable writes, corrections, patch evidence and maintenance. | `npm test`, MCP server source | CLI remains operator/fallback path. |
+| Storage | DB-primary row persistence with SQLite/Postgres repositories and backup snapshots. | `npm run internal -- verify:postgres`, tests | Rerun on target database. |
+| Auth | API-key/Bearer auth, optional JWT/OIDC verifier, route-level RBAC and actor scopes. | Server source, release contract | Deployment identity configuration is operator-owned. |
+| Policy | Production policy mode default-denies when no rule matches. | Core tests, product truth gate | Local/dev modes can be more permissive. |
+| Connectors | First-party connector drivers are implementation-ready and live-smoke-ready. | `npm run internal -- verify:compatibility` | 0 tenant-verified live smokes and 0 production certifications without real credentials and owner certification. |
+| Benchmarks | CogniCodeBench, Arena and proof gates exist behind the internal runner. | `npm run internal -- benchmark:cognicode`, `npm run internal -- benchmark:arena` | `same-run-api-shape` rows are not vendor certification. |
+| Packaging | npm package excludes generated artifacts and local runtime state. | `npm pack --dry-run`, release check | Docker is optional packaging. |
 
-## Remaining External Boundaries
+Generated artifacts are internal CI/build outputs under `artifacts/`. They help maintainers review changes but are not packaged as source documentation.
 
-- Tenant-verified connector live smokes require real provider credentials and `MEMORY_VENDOR_LIVE_SMOKE=true`.
-- Production-certified connector rows require an owner-approved deployment certification artifact.
-- Managed SaaS uptime, billing, autoscaling and hosted support are not claimed by this repository.
+Current non-claims: managed SaaS uptime, hosted support, billing, autoscaling, deployment-specific SSO rollout, tenant-verified connector live smokes and production-certified connector rows.

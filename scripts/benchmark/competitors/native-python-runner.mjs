@@ -17,7 +17,7 @@ if (!system) {
 }
 
 if (!existsSync(python) || !existsSync(script)) {
-  printBlocked(system, `native Python runner is not installed; run npm run benchmark:competitors:native`);
+  printBlocked(system, `native Python runner is not installed; run npm run internal -- benchmark:competitors:native`);
   process.exit(0);
 }
 

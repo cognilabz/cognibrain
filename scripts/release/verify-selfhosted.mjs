@@ -20,18 +20,19 @@ const files = {
 
 const checks = [
   check("one-command self-hosted install is documented and wired", [
-    has(files.package, "setup:selfhosted"),
+    has(files.package, "\"setup\""),
     has(files.package, "verify:selfhosted"),
     has(files.bootstrap, "--self-hosted"),
     has(files.readme, "npx cognibrain init"),
     has(files.install, "npx cognibrain service install --activate")
   ]),
   check("connector compatibility gates are present", [
-    has(files.package, "verify:compatibility"),
-    has(files.package, "verify:vendor-live"),
+    has(files.package, "scripts/internal/run-task.mjs"),
+    has(read("scripts/internal/run-task.mjs"), "verify:compatibility"),
+    has(read("scripts/internal/run-task.mjs"), "verify:vendor-live"),
     has(files.integrations, "Native Connectors"),
     has(files.integrations, "Connector Maturity Matrix"),
-    has(files.integrations, "verify:vendor-connectors"),
+    has(files.integrations, "npm run internal -- verify:vendor-connectors"),
     artifact("artifacts/connectors-live.json", (report) => report.passed === true && (report.harnesses ?? []).length >= 8),
     artifact("artifacts/vendor-connectors-live.json", (report) => report.passed === true),
     artifact("artifacts/vendor-live-smoke.json", (report) => report.passed === true && report.mode === "credential_smoke"),

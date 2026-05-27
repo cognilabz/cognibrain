@@ -17,15 +17,17 @@ checks.push(check("scripts are grouped by role", () => {
 
 checks.push(check("script package commands use grouped paths", () => {
   const scripts = Object.values(packageJson.scripts ?? {}).join("\n");
+  const internalRunner = read("scripts/internal/run-task.mjs");
   return [
-    "scripts/runtime/start-local.mjs",
-    "scripts/runtime/install-codex-skill.mjs",
+    "bin/cognibrain.mjs",
+    "scripts/internal/run-task.mjs",
+    "scripts/release/release-check.mjs"
+  ].every((path) => scripts.includes(path)) && [
     "scripts/release/audit-docs.mjs",
     "scripts/release/audit-product-truth.mjs",
-    "scripts/release/release-check.mjs",
     "scripts/benchmark/benchmark-hard-arena.mjs",
     "scripts/demo/demo-proof.mjs"
-  ].every((path) => scripts.includes(path));
+  ].every((path) => internalRunner.includes(path));
 }));
 
 checks.push(check("SDKs live under sdk", () => {

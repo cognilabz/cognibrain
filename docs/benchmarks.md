@@ -1,32 +1,45 @@
 # Benchmarks
 
-Cognibrain benchmark commands are useful for development and release review, but their generated reports are internal build outputs. Generated reports are written under `artifacts/`; those files are ignored by git, not committed and not shipped in the npm package. The benchmark commands write ignored local reports under `artifacts/`.
+Cognibrain includes benchmark and proof tools for maintainers. The benchmark commands write ignored local reports under `artifacts/`.
 
-## Commands
+## Common Gates
 
 ```bash
-npm run benchmark:cognicode
-npm run benchmark:arena
-npm run benchmark:certified
-npm run benchmark:hardening
-npm run audit:truth
+npm run internal -- benchmark:cognicode
+npm run internal -- benchmark:arena
+npm run internal -- benchmark:certified
+npm run internal -- benchmark:hardening
+npm run internal -- audit:truth
 ```
+
+## What The Benchmarks Cover
+
+| Suite | Purpose |
+| --- | --- |
+| CogniCodeBench | Synthetic coding-agent scenarios for correction carry-over, stale-rule suppression and connector noise. |
+| Benchmark Arena | Same scenario stream across Cognibrain and configured comparison systems. |
+| Hardening | Scenario hashing, schema checks, fixture coverage and competitor-run boundaries. |
+| Connector gates | Native connector transforms, API/spec coverage, webhook transport and credential-smoke readiness. |
 
 ## Proof Levels
 
-| Proof level | Meaning |
+| Level | Meaning |
 | --- | --- |
-| `same-run-full` | Cognibrain executed the full local implementation. |
-| `same-run-native` | A competitor or external system ran through a local native runner. |
-| `same-run-cloud-api` | A competitor or external system ran through a configured cloud API. |
-| `same-run-cli` | A competitor or external system ran through a configured CLI. |
-| `same-run-api-shape` | Compatibility model only; not a real vendor run. |
-| `credential-blocked` | A stronger run is wired but credentials or services were unavailable. |
+| `same-run-full` | Cognibrain ran locally in this repository. |
+| `same-run-native` | A native runner for another system ran locally in the same benchmark pass. |
+| `same-run-cloud-api` | A configured cloud API runner executed in the same benchmark pass. |
+| `same-run-cli` | A configured vendor CLI ran in the same benchmark pass. |
+| `same-run-api-shape` | Compatibility model only; not a vendor-certified result. |
+| `credential-blocked` | The code path exists, but live credentials are required for stronger proof. |
 
-## Boundaries
+Benchmark claims should state the proof level. Synthetic scenarios are useful for regression control; they are not a guarantee for every customer repo.
 
-- Synthetic benchmark scenarios are not customer deployment proof.
-- API-shape competitor rows are not vendor certification.
-- Native/cloud/CLI competitor rows require configured external runners.
-- Public benchmark rows prove only the checked local run against the documented baseline.
-- Real customer field proof requires a separate deployment artifact.
+## Publishing Artifacts
+
+Maintainers can regenerate local HTML/JSON outputs:
+
+```bash
+npm run internal -- leaderboard:publish
+```
+
+Generated reports are written under `artifacts/` and are not committed as public docs.

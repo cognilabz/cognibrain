@@ -1,92 +1,72 @@
-# Operations And Production Boundary
+# Operations Guide
 
-Cognibrain is packaged for self-hosted operation first. Managed SaaS is a future product track and is not claimed by this repository.
+Cognibrain is designed to run as a self-hosted service controlled by the CLI. Docker is optional. The CLI is the required control plane.
 
-## Release Check
+## Runbook
 
 ```bash
+cognibrain status
+cognibrain doctor --fix
+cognibrain service status
+cognibrain proof
 npm run release:check
 ```
 
-The release check writes a local report under `artifacts/` and runs:
+## Runtime State
 
-- unit tests,
-- dashboard build,
-- status verification,
-- CogniCodeBench,
-- Benchmark Arena,
-- first-win demo,
-- docs audit,
-- product truth audit,
-- Postgres verifier,
-- connector compatibility,
-- local runtime start,
-- publish doctor,
-- npm pack dry-run,
-- Python SDK tests.
+Local runtime data is written under `.cognibrain/` by default. Set `COGNIBRAIN_RUNTIME_ROOT` to move it.
 
-## Runtime
+Generated reports belong under `artifacts/`. `artifacts/` is ignored by git and excluded from the npm package.
+
+## Service Management
 
 ```bash
-npx cognibrain start
-npx cognibrain status
-npx cognibrain stop
+cognibrain service plan
+cognibrain service install --activate
+cognibrain service logs
+cognibrain service restart
+cognibrain service uninstall --deactivate
 ```
 
-Service startup:
+Supported native managers:
 
-```bash
-npx cognibrain service plan
-npx cognibrain service install --activate
-npx cognibrain service logs
-```
-
-The service runs the API in the foreground so systemd, launchd or Task Scheduler owns the process.
+| Platform | Manager |
+| --- | --- |
+| Linux | systemd user service by default; system service with `--system`. |
+| macOS | launchd LaunchAgent by default; LaunchDaemon with `--system`. |
+| Windows | Task Scheduler startup task. |
 
 ## Storage
 
-| Mode | Use it for | Verification |
-| --- | --- | --- |
-| JSON/JSONL | Small local demos and package smoke tests. | `npm test` |
-| SQLite | Local self-hosted durable storage. | `npm test` |
-| Postgres | Team or production-like deployment. | `npm run verify:postgres` |
+| Mode | Use |
+| --- | --- |
+| Local/default | Fast local development and solo agent memory. |
+| SQLite | Local durable row store. |
+| Postgres | Team or production-like deployment. |
 
-Current storage uses DB-primary row persistence for SQLite and Postgres-compatible adapters. Memories, relations, entities, audit events, context packs, retrieval profiles and retention rules are written through granular row-level paths, with `memory.created`, `memory.updated`, `memory.deleted` and `snapshot.compacted` events recorded in the journal. Snapshots are retained only as backup/compaction artifacts. Postgres proof writes a local ignored report under `artifacts/`; rerun it in the target environment before making deployment-specific production claims.
+Postgres proof is a deployment gate, not a universal claim:
 
-`artifacts/` is ignored by git and excluded from npm packages. Treat it as CI/build output, not source documentation.
+```bash
+npm run internal -- verify:postgres
+```
 
-## Auth And Secrets
+Rerun storage checks on the target database before production claims.
 
-Cognibrain supports local-only operation, API-key deployment and an optional JWT/OIDC verifier. Configure issuer, audience and a HS256 or RS256 verification key with `MEMORY_JWT_ISSUER`, `MEMORY_JWT_AUDIENCE`, `MEMORY_JWT_HS256_SECRET`, `MEMORY_JWT_PUBLIC_KEY` or `MEMORY_JWT_PUBLIC_KEY_BASE64`. The route-level RBAC layer maps validated scopes to `memory:read`, `memory:write` and `memory:admin`; actor-bound scopes prevent a validated user from spoofing another `userId`, `orgId` or `projectId` unless an admin/memory-all scope is present. Connector and adapter configs store `env:` references rather than token values.
+## Security
 
-Production policy mode default-denies when no rule matches. Set `MEMORY_SECURITY_MODE=production`, `MEMORY_PRODUCTION_MODE=true` or `MEMORY_POLICY_MODE=production` to fail closed. DB-level row isolation is still deployment-specific; use the target database's RLS or tenant policy if that deployment requires database-enforced isolation.
+Use API keys for local automation and JWT/OIDC where a deployment already has an identity provider. In production policy mode, unmatched policy checks default-deny.
 
-Operational rules:
+Recommended production posture:
 
-- keep connector tokens in environment variables or a secret manager,
-- do not commit generated `.cognibrain/` runtime state,
-- run `npx cognibrain doctor --publish` before publishing,
-- run `npx cognibrain proof` before public claims or release notes,
-- use HTTPS or a documented TLS terminator for non-local deployments,
-- keep the dashboard opt-in unless a team explicitly wants a browser inspection view.
+- Set an API key or OIDC verifier.
+- Run with DB-backed persistence.
+- Keep connector tokens in environment variables or a secret manager.
+- Run `cognibrain proof` and the relevant release gates before publishing claims.
 
-## Backup And Migration
+## Docker And Deploy
 
-Use the API and CLI export paths for portable bundles, and validate restore in the target storage backend. For self-hosted production, pair Cognibrain with host-level backups for Postgres or the selected storage adapter.
+Docker files and Kubernetes manifests are included as optional packaging under `docker/` and `deploy/`. They are not required for local usage.
 
-## Current Non-Claims
+## Product Boundary
 
-This repo does not claim:
-
-- not claimed: managed SaaS uptime,
-- not claimed: billing readiness,
-- not claimed: hosted support,
-- not claimed: autoscaling behavior,
-- not claimed: managed SSO rollout for a specific identity provider,
-- not claimed: DB-level row isolation,
-- not claimed: tenant live connector certification,
-- not claimed: production-certified connector rows,
-- not claimed: real Graphiti/Zep or Cognee runs without LLM/vendor credentials,
-- not claimed: vendor-certified competitor benchmark results.
-
-Those claims require a deployment-specific control-plane run or vendor-hosted benchmark certification.
+Managed SaaS is a future product track. This repository currently describes a self-hosted open-source package and does not claim managed uptime, billing, hosted support, autoscaling or tenant-specific enterprise rollout.

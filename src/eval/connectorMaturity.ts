@@ -292,7 +292,7 @@ function maturityRow(
       fixtureArtifact: artifactPaths.vendorContract,
       apiSpecArtifact: artifactPaths.apiSpecs,
       liveSmokeArtifact: artifactPaths.liveSmoke,
-      verification: "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
+      verification: "npm run internal -- verify:vendor-connectors && npm run internal -- verify:vendor-api-specs && npm run internal -- verify:vendor-live && npm run internal -- connectors:webhooks"
     },
     gaps
   };
@@ -353,7 +353,7 @@ Proof levels are ordered as: ${report.proofLevels.map((level) => `\`${level}\``)
 
 Native connector means there is a first-party connector manifest and driver path. It does not mean customer production certification unless the production-certified column is true. Marketing can make strong live-system claims only for \`tenant-verified\` or \`production-certified\` rows.
 
-Current checked connector state: ${report.summary.hermeticDrivers} hermetic drivers, ${report.summary.apiSpecVerified} API/spec-verified drivers, ${report.summary.liveSmokeReady} live-smoke-ready drivers, ${report.summary.webhookVerified} webhook-verified priority drivers, public Connector SDK ${report.summary.publicConnectorSdk ? "present" : "missing"}, ${report.summary.credentialBlockedCertification} credential-blocked certification rows, ${report.summary.tenantVerified} tenant-verified live smokes, ${report.summary.productionCertified} production certifications, average quality score ${score(report.summary.averageQualityScore)}. Live-system proof requires tenant credentials plus \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`.
+Current checked connector state: ${report.summary.hermeticDrivers} hermetic drivers, ${report.summary.apiSpecVerified} API/spec-verified drivers, ${report.summary.liveSmokeReady} live-smoke-ready drivers, ${report.summary.webhookVerified} webhook-verified priority drivers, public Connector SDK ${report.summary.publicConnectorSdk ? "present" : "missing"}, ${report.summary.credentialBlockedCertification} credential-blocked certification rows, ${report.summary.tenantVerified} tenant-verified live smokes, ${report.summary.productionCertified} production certifications, average quality score ${score(report.summary.averageQualityScore)}. Live-system proof requires tenant credentials plus \`MEMORY_VENDOR_LIVE_SMOKE=true npm run internal -- verify:vendor-live\`.
 
 | Connector | Category | Proof level | Quality | Driver | Fixture | API/spec | Live-smoke ready | Webhook | Tenant verified | TUI setup | List | Poll | Writeback | Production-certified |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -366,7 +366,7 @@ Evidence:
 - \`artifacts/vendor-live-smoke.json\` records whether tenant credentials were configured, whether live smoke was opted in, and whether token material was retained.
 - \`artifacts/connector-webhooks.json\` proves signature validation, replay protection, normalization, source refs and review queues for priority webhook-capable connectors.
 - \`artifacts/connector-certification.json\` separates implementation-ready rows from tenant-verified and production-certified rows.
-- \`npm run connectors:maturity\` regenerates this page and \`artifacts/connector-maturity.json\`.
+- \`npm run internal -- connectors:maturity\` regenerates this page and \`artifacts/connector-maturity.json\`.
 `;
 }
 

@@ -45,7 +45,7 @@ export function generateBenchmarkHardeningReport(options: { scenarios?: string; 
     scenarioDatasetPresent: scenarios.length >= 100,
     scenarioSchemaPresent: existsSync("docs/schemas/cognicodebench-scenario.schema.json"),
     datasetHasHash: datasetHash.length === 64,
-    scenarioGenerationIsPinned: read("package.json").includes("--scenarios-out artifacts/cognicodebench/scenarios.json"),
+    scenarioGenerationIsPinned: read("scripts/internal/run-task.mjs").includes("--scenarios-out") && read("scripts/internal/run-task.mjs").includes("artifacts/cognicodebench/scenarios.json"),
     realRepoTrackPresent: Array.isArray(repoTrack.demos) && repoTrack.demos.length >= 5,
     realRepoWorkflowsPresent: Array.isArray(repoTrack.demos) && repoTrack.demos.every((demo) => demo.beforeTask && demo.wrongAction && demo.correction && demo.nextTask && demo.expectedNextAction),
     competitorProofLevelsBounded: competitors.every((system) => typeof system.proofLevel === "string"),
@@ -61,7 +61,7 @@ export function generateBenchmarkHardeningReport(options: { scenarios?: string; 
       sha256: datasetHash,
       scenarioCount: scenarios.length,
       schema: "docs/schemas/cognicodebench-scenario.schema.json",
-      immutableCommand: "npm run benchmark:cognicode:generate"
+      immutableCommand: "npm run internal -- benchmark:cognicode:generate"
     },
     realRepoTrack: {
       path: "fixtures/cognicodebench/demo-repos.json",

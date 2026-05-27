@@ -18,7 +18,8 @@ const files = {
   reference: read("docs/reference.md"),
   integrations: read("docs/integrations.md"),
   operations: read("docs/operations.md"),
-  package: read("package.json")
+  package: read("package.json"),
+  internalRunner: read("scripts/internal/run-task.mjs")
 };
 
 const checks = [
@@ -63,8 +64,9 @@ const checks = [
     packageFiles.every((path) => !path.startsWith("artifacts/")),
     !packageFiles.includes("public/benchmark-arena/"),
     !packageFiles.includes("public/leaderboard/"),
-    has(files.package, "\"verify:status\""),
-    has(files.package, "\"audit:docs\""),
+    has(files.package, "\"internal\""),
+    has(files.internalRunner, "verify:status"),
+    has(files.internalRunner, "audit:docs"),
     !has(files.package, "audit:plan1_")
   ])
 ];

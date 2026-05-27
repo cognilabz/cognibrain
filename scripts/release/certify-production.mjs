@@ -11,27 +11,27 @@ const artifactPath = valueAfter("--out") ?? "artifacts/production-certification.
 const requiredSteps = [
   ["unit tests", "npm", ["run", "test"]],
   ["dashboard build", "npm", ["run", "build"]],
-  ["status verifier", "npm", ["run", "verify:status"]],
-  ["docs audit", "npm", ["run", "audit:docs"]],
-  ["release contract audit", "npm", ["run", "release:contract"]],
-  ["product truth audit", "npm", ["run", "audit:truth"]],
-  ["full plan gap audit", "npm", ["run", "audit:plan-gaps"]],
-  ["operator maturity", "npm", ["run", "operator:maturity"]],
-  ["harness maturity", "npm", ["run", "harness:maturity"]],
-  ["connector certification", "npm", ["run", "connectors:certification"]]
+  ["status verifier", "npm", ["run", "internal", "--", "verify:status"]],
+  ["docs audit", "npm", ["run", "internal", "--", "audit:docs"]],
+  ["release contract audit", "npm", ["run", "internal", "--", "release:contract"]],
+  ["product truth audit", "npm", ["run", "internal", "--", "audit:truth"]],
+  ["full plan gap audit", "npm", ["run", "internal", "--", "audit:plan-gaps"]],
+  ["operator maturity", "npm", ["run", "internal", "--", "operator:maturity"]],
+  ["harness maturity", "npm", ["run", "internal", "--", "harness:maturity"]],
+  ["connector certification", "npm", ["run", "internal", "--", "connectors:certification"]]
 ];
 
 const fullSteps = [
-  ["benchmark hardening", "npm", ["run", "benchmark:hardening"]],
-  ["connector compatibility", "npm", ["run", "verify:compatibility"]],
+  ["benchmark hardening", "npm", ["run", "internal", "--", "benchmark:hardening"]],
+  ["connector compatibility", "npm", ["run", "internal", "--", "verify:compatibility"]],
   ["npm pack dry-run", "npm", ["pack", "--dry-run"]],
   ["Python SDK tests", "python3", ["-m", "unittest", "discover", "-s", "sdk/python/tests"]]
 ];
 
 const liveSteps = process.env.MEMORY_PRODUCTION_CERTIFY_LIVE === "true"
   ? [
-      ["Postgres verifier", "npm", ["run", "verify:postgres"]],
-      ["tenant connector live smoke", "npm", ["run", "verify:vendor-live"]]
+      ["Postgres verifier", "npm", ["run", "internal", "--", "verify:postgres"]],
+      ["tenant connector live smoke", "npm", ["run", "internal", "--", "verify:vendor-live"]]
     ]
   : [];
 

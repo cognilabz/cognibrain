@@ -1,109 +1,91 @@
-# Reference
-
-This is the compact command and API reference for the self-hosted product.
-
-## Surface Contract
+# Usage And Reference
 
 For agents, use MCP first. For operators, use the CLI. For product integrations, use SDK/HTTP.
-
-| Surface | Primary caller | Contract |
-| --- | --- | --- |
-| MCP | Agent harnesses | Context recall, coding context, action guards, durable writes, corrections, patch evidence and maintenance. |
-| CLI | Humans, scripts and installers | Runtime control, setup, status, connectors, adapters, skills, service automation, proof and fallback memory commands. |
-| SDK/HTTP | Apps and custom integrations | Typed client path for platform connectors, polling, writeback, dashboards and non-MCP runtimes. |
 
 ## CLI
 
 ```bash
 cognibrain
-cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes]
-cognibrain status [--json]
-cognibrain memories [--json]
-cognibrain memories add <text>
-cognibrain memories search <query>
-cognibrain memories coding-context <query>
-cognibrain connections [--json]
-cognibrain connections add <connector-or-adapter> [--set key=value]
-cognibrain connections doctor
-cognibrain config show [--json]
-cognibrain config all
-cognibrain proof|truth [--json] [--no-refresh]
-cognibrain service plan [--platform linux|macos|windows] [--json]
-cognibrain service install [--activate] [--dashboard] [--system]
-cognibrain sdk platform <name> --kind project_management --out integrations/<name>
-cognibrain doctor [--fix] [--publish]
-cognibrain mcp
+cognibrain init --profile solo-dev --yes
+cognibrain status
+cognibrain proof
+cognibrain memories list --json
+cognibrain memories add "Release work requires npm test."
+cognibrain memories coding-context "prepare the next patch"
+cognibrain guard --action "edit package.json" --json
+cognibrain patch-evidence --task "package cleanup" --json
+cognibrain connections list
+cognibrain connections add github --set repo=cognilabz/cognibrain
+cognibrain service install --activate
 ```
+
+The CLI is stable text output by default and supports JSON where automation needs it.
 
 ## MCP
 
-Use the installed MCP server for agent memory workflows:
+MCP-capable hosts should call Cognibrain tools directly before coding or debugging work:
 
-- `memory_context_pack`
-- `memory_coding_context_pack`
-- `memory_action_guard`
-- `memory_add`
-- `memory_patch_evidence`
-- `memory_maintenance_status`
-- `memory_dream`
+| Tool class | Purpose |
+| --- | --- |
+| Context pack | Retrieve compact memory context for a task. |
+| Coding context | Retrieve codebase-specific corrections and conventions. |
+| Action guard | Warn or block known bad actions before edits or shell commands. |
+| Memory add | Store durable corrections, decisions and setup facts. |
+| Patch evidence | Record files changed, commands run and memories used. |
+| Maintenance | Inspect health and run dream-cycle maintenance. |
 
-## API
+The CLI exposes fallback equivalents under `cognibrain memory`, `cognibrain memories`, `cognibrain context`, `cognibrain guard`, `cognibrain outcome` and `cognibrain patch-evidence`.
 
-Run the local API:
+## HTTP API
+
+The HTTP API backs the CLI, MCP server and SDKs. It includes memory CRUD, search, context/evidence packs, graph, connectors, governance, marketplace, timeline and operations routes. Use the generated OpenAPI route when integrating external services:
 
 ```bash
-npx cognibrain start
-curl http://127.0.0.1:8787/health
-curl http://127.0.0.1:8787/openapi.json
+curl http://localhost:8787/openapi.json
 ```
 
-Important routes:
+## Package Scripts
 
-| Route | Purpose |
-| --- | --- |
-| `/memories` | Add, list, inspect, update and delete memories. |
-| `/search` | Search memory with policy-aware retrieval. |
-| `/coding-context-pack` | Generate compact engineering context for coding agents. |
-| `/evidence-pack` | Return cited evidence for a query. |
-| `/code/action-guard` | Check a shell/file action against repo policy and corrections. |
-| `/actions` | Record harness command, file, test, PR and outcome telemetry. |
-| `/code/corrections` | Capture user or reviewer corrections as engineering memory. |
-| `/patch-evidence` | Build the evidence trail for a non-trivial patch. |
-| `/connectors/*` | Register, poll, sync, health-check and write back connectors. |
-| `/maintenance` | Dream-cycle and lifecycle status. |
-| `/openapi.json` | OpenAPI 3.1 contract for SDK generation. |
+Public npm scripts are intentionally compact:
 
-## TypeScript SDK
+```bash
+npm test
+npm run build
+npm run verify
+npm run release:check
+npm run verify:selfhosted
+```
+
+Maintainer-only gates live behind the internal runner:
+
+```bash
+npm run internal -- benchmark:cognicode
+npm run internal -- verify:compatibility
+npm run internal -- audit:truth
+```
+
+## SDKs
+
+TypeScript exports:
 
 ```ts
-import { CognibrainClient, CognibrainHarnessSdk, createPlatformIntegration } from "@cognilabz/cognibrain/sdk/typescript";
-
-const client = new CognibrainClient({ baseUrl: "http://127.0.0.1:8787" });
-await client.add({
-  userId: "local",
-  content: "Release patches must run npm test."
-});
-const context = await client.codingContextPack({
-  userId: "local",
-  query: "prepare release patch"
-});
-const harness = new CognibrainHarnessSdk(client);
-const integration = createPlatformIntegration({ name: "Acme Tasks" });
+import { CognibrainClient } from "@cognilabz/cognibrain/sdk/typescript/client";
+import { createPlatformIntegration } from "@cognilabz/cognibrain/sdk/typescript/connectors";
+import { CognibrainHarnessSdk } from "@cognilabz/cognibrain/sdk/typescript/harness";
 ```
 
-Stable TypeScript subpaths:
+Python:
 
-- `@cognilabz/cognibrain/sdk/typescript`
-- `@cognilabz/cognibrain/sdk/typescript/client`
-- `@cognilabz/cognibrain/sdk/typescript/connectors`
-- `@cognilabz/cognibrain/sdk/typescript/harness`
+```python
+from cognibrain_client import CognibrainClient
 
-## Python SDK
-
-```bash
-python3 -m unittest discover -s sdk/python/tests
+client = CognibrainClient(api_key="dev-secret", actor_id="agent")
+pack = client.evidence_pack({
+    "userId": "dev",
+    "query": "What should I remember before release?",
+    "tokenBudget": 900,
+})
+print(pack["context"])
 ```
 
-See [../sdk/python/README.md](../sdk/python/README.md) for the dependency-free Python client.
-
-The TypeScript and Python SDKs both wrap the same HTTP API. TypeScript is shipped for Node/TS applications; Python is shipped for LangGraph, CrewAI and Python automation. Agents should still use MCP first when MCP is available.
+See [../sdk/python/README.md](../sdk/python/README.md).

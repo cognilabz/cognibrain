@@ -301,7 +301,7 @@ ${rows}
 Evidence:
 
 - \`artifacts/harness-maturity.json\` contains the machine-readable matrix.
-- \`npm run harness:maturity\` regenerates this document and the artifact.
+- \`npm run internal -- harness:maturity\` regenerates this document and the artifact.
 - Golden-path demos simulate install -> context -> action guard -> telemetry -> correction -> evidence for generated harness rows.
 - External-agent modes use the generated JSON-command contract unless a vendor-native hook is available.
 - The universal CLI lifecycle protocol is checked as the CLI-first path and must preserve MCP parity for context, guard, outcome, correction, patch evidence, dream/session/release, source revalidation and conflicts.

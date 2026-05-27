@@ -176,7 +176,7 @@ function renderMarkdown(report: ConnectorCertificationReport): string {
 
 Generated at ${report.generatedAt}.
 
-This page is the production-certification boundary. A row can be implementation-ready without being tenant-verified. Tenant verification requires real customer or deployment credentials and \`MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live\`. Production certification requires an owner-approved deployment artifact; ${certificationBoundary}.
+This page is the production-certification boundary. A row can be implementation-ready without being tenant-verified. Tenant verification requires real customer or deployment credentials and \`MEMORY_VENDOR_LIVE_SMOKE=true npm run internal -- verify:vendor-live\`. Production certification requires an owner-approved deployment artifact; ${certificationBoundary}.
 
 | Provider | State | Can become tenant verified | Tenant live smoke | Production certified | Blocked by |
 | --- | --- | ---: | ---: | ---: | --- |

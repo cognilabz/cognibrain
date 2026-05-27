@@ -4,7 +4,7 @@ This repository uses cognibrain for durable agent memory.
 
 - Use `./bin/cognibrain.mjs start` to start the local API, `./bin/cognibrain.mjs status` to inspect it, and `./bin/cognibrain.mjs stop` to stop it. Add `--dashboard` only when a browser dashboard is needed.
 - Prefer current files and tests over memories when they conflict.
-- For benchmark work, use `npm run benchmark:certified` and cite `artifacts/locomo-report.json`.
+- For benchmark work, use `npm run internal -- benchmark:certified` and cite the generated artifact under `artifacts/`.
 - For local verification, use `npm run verify`.
 - Use the CLI lifecycle as the default agent path:
   - `./bin/cognibrain.mjs context --task "<task>" --json` before long-running work,

@@ -2,42 +2,38 @@
 
 Self-hosted engineering memory for coding agents.
 
-Cognibrain stores durable engineering context such as repo rules, reviewer corrections, failed commands, connector events and patch evidence, then returns compact context before the next agent action. The practical goal is simple: Stop fixing the same agent mistake twice.
-
-```bash
-npm i @cognilabz/cognibrain
-npx cognibrain
-```
-
-The default command prints a stable operator CLI snapshot. It does not depend on an animated terminal UI, so it stays readable in small panes, CI logs and remote shells.
-
-## Public Surface
-
-| Surface | Role |
-| --- | --- |
-| CLI | Human and automation control plane: setup, status, service, connectors, config, proof and fallback memory commands. |
-| MCP | Default integration path for agents: context packs, coding context, action guards, durable writes, corrections, patch evidence and maintenance. |
-| SDK/HTTP | Custom product integrations: source-system connectors, polling/writeback, dashboards and non-MCP runtimes. |
-
-MCP is the default integration path for agents. CLI is the operator surface. SDK/HTTP is for custom integrations, not a second primary agent path.
-
-Public TypeScript SDK subpaths are available for custom integrations:
-
-```ts
-import { CognibrainClient } from "@cognilabz/cognibrain/sdk/typescript/client";
-import { createPlatformIntegration } from "@cognilabz/cognibrain/sdk/typescript/connectors";
-import { CognibrainHarnessSdk } from "@cognilabz/cognibrain/sdk/typescript/harness";
-```
-
-## Install
+Cognibrain stores durable engineering context such as repo rules, reviewer corrections, failed commands, connector events and patch evidence, then returns compact context before the next agent action. The practical promise is simple: Stop fixing the same agent mistake twice.
 
 ```bash
 npm i @cognilabz/cognibrain
 npx cognibrain init
-npx cognibrain doctor --fix
+npx cognibrain status
 ```
 
-Checkout path:
+The default command shows a stable operator CLI snapshot with runtime state, memory health, connections and next actions. It is intentionally text-first, so it works in small panes, CI logs and remote shells.
+
+## Public Surface
+
+| Surface | Use it for |
+| --- | --- |
+| CLI | Setup, status, service management, connectors, config, proof and operator automation. |
+| MCP | Agent integration: context packs, coding context, action guards, corrections, patch evidence and memory maintenance. |
+| SDK/HTTP | Product integrations, custom connectors, dashboards and non-MCP runtimes. |
+
+MCP is the default integration path for agents. The CLI is the operator surface. SDK/HTTP is for custom integrations.
+
+## Quick Start
+
+From npm:
+
+```bash
+npm i @cognilabz/cognibrain
+npx cognibrain init --profile solo-dev --yes
+npx cognibrain doctor --fix
+npx cognibrain status
+```
+
+From a checkout:
 
 ```bash
 git clone https://github.com/cognilabz/cognibrain.git
@@ -47,110 +43,130 @@ npm install
 ./bin/cognibrain.mjs doctor --fix
 ```
 
-Dashboard is optional:
+The dashboard is optional:
 
 ```bash
 npx cognibrain dashboard
-npx cognibrain start --dashboard
 ```
 
-More setup detail: [docs/install.md](docs/install.md).
+More detail: [docs/install.md](docs/install.md).
 
 ## Daily Usage
 
 ```bash
-npx cognibrain status
-npx cognibrain memories
-npx cognibrain memories add "This repo uses npm test, not pnpm."
+npx cognibrain memories add "This repo uses npm test before release."
 npx cognibrain memories coding-context "prepare the release patch"
-npx cognibrain connections
-npx cognibrain connections add github --set repo=cognilabz/cognibrain
+npx cognibrain guard --action "edit src/api/server.ts" --json
+npx cognibrain patch-evidence --task "release patch" --json
 npx cognibrain proof
 ```
 
-For agents, use MCP tools first. Use `npx cognibrain memories coding-context "<task>"` only when MCP is unavailable.
+For MCP-capable agents, use MCP tools first. Use the CLI memory commands as an operator path or fallback.
 
 ## Connectors
 
-Native connector drivers exist for GitHub, GitLab, Azure DevOps, Slack, Discord, Teams, Jira, Confluence, Notion, Linear, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog.
+Cognibrain includes first-party connector definitions and drivers for common code, planning, docs, chat, calendar and observability systems, including GitHub, GitLab, Azure DevOps, Slack, Jira, Confluence, Notion, Linear, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog.
 
 ```bash
+npx cognibrain connections add github --set repo=cognilabz/cognibrain
 npx cognibrain connections add jira --set baseUrl=https://example.atlassian.net --set project=ENG
-npx cognibrain connections add slack --set channelId=C123 --token-env MEMORY_SLACK_TOKEN
 npx cognibrain connections add storage-postgres --url-env MEMORY_POSTGRES_URL
 ```
 
 Connector configs store non-secret values and `env:` references. Token values stay outside the repo.
 
-## Benchmarks And Proof
-
-Generated proof outputs are internal build artifacts. Commands write ignored local reports under `artifacts/`; they are useful for CI and release review, but they are not committed or shipped in the npm package.
+Community adapters can be scaffolded from the CLI:
 
 ```bash
-npm run benchmark:cognicode
-npm run benchmark:arena
-npm run verify:compatibility
-npm run audit:truth
+npx cognibrain sdk platform acme-tracker --kind issue_tracker --out integrations/acme-tracker
+npx cognibrain sdk harness custom-agent --out integrations/custom-agent
 ```
 
-Benchmark claims are bounded by proof level. `same-run-full` means Cognibrain executed locally. `same-run-native`, `same-run-cloud-api` and `same-run-cli` require configured external runners. `same-run-api-shape` is only a compatibility model.
+## SDKs
+
+TypeScript:
+
+```ts
+import { CognibrainClient } from "@cognilabz/cognibrain/sdk/typescript/client";
+import { createPlatformIntegration } from "@cognilabz/cognibrain/sdk/typescript/connectors";
+import { CognibrainHarnessSdk } from "@cognilabz/cognibrain/sdk/typescript/harness";
+```
+
+Python:
+
+```bash
+cd sdk/python
+python3 -m pip install .
+python3 -m unittest discover -s tests
+```
+
+See [docs/integrations.md](docs/integrations.md) and [sdk/python/README.md](sdk/python/README.md).
+
+## Benchmarks And Proof
+
+Generated proof outputs are internal build artifacts. They are written under `artifacts/`, ignored by git and excluded from the npm package.
+
+Maintainers can run the internal gates through the compact runner:
+
+```bash
+npm run internal -- benchmark:cognicode
+npm run internal -- benchmark:arena
+npm run internal -- verify:compatibility
+npm run proof
+```
+
+Benchmark claims are bounded by proof level. `same-run-full` means Cognibrain executed locally. `same-run-native`, `same-run-cloud-api` and `same-run-cli` require configured external runners. `same-run-api-shape` is compatibility modeling, not vendor certification.
 
 ## Production Boundary
 
 Cognibrain is a self-hosted production candidate, not a managed SaaS product.
 
-Current implemented boundaries:
+Implemented boundaries include DB-primary row persistence, API-key/Bearer auth, optional JWT/OIDC verifier, route-level RBAC, actor scopes and production policy mode that default-denies when no rule matches.
 
-- DB-primary row persistence with snapshots retained only as backup/compaction artifacts.
-- API-key/Bearer auth plus optional JWT/OIDC verifier, route-level RBAC and actor-bound scopes.
-- Production policy mode default-denies when no rule matches.
-- Connector rows are native driver paths and implementation-ready certification rows, not tenant production certifications.
-
-This repository does not claim managed SaaS uptime, billing, hosted support, autoscaling, deployment-specific SSO rollout, tenant-verified connector live smokes or production-certified connector rows. See [docs/status.md](docs/status.md), [docs/operations.md](docs/operations.md) and [docs/claims.md](docs/claims.md).
+This repository does not claim managed SaaS uptime, billing, hosted support, autoscaling, deployment-specific SSO rollout, tenant-verified connector live smokes or production-certified connector rows. See [docs/status.md](docs/status.md) and [docs/claims.md](docs/claims.md).
 
 ## Development
 
 ```bash
 npm test
 npm run build
-npm run verify:status
-npm run audit:docs
-npm run audit:truth
+npm run verify
 npm run release:check
 ```
 
-Generated outputs stay local:
+`package.json` keeps the public script surface small. Specialized benchmark, connector and audit jobs live behind:
 
-- `artifacts/`
-- `.cognibrain/`
+```bash
+npm run internal -- <task>
+```
 
 ## Repository Map
 
 | Path | Purpose |
 | --- | --- |
 | `bin/` | Public CLI entrypoints. |
-| `src/` | Product source: API, MCP/connectors, core memory logic, CLI UI, dashboard and eval code. |
-| `src/api/` | Service, HTTP server and persistence adapters. |
-| `src/connectors/` | MCP server and connector registry. |
-| `src/core/` | Memory model, retrieval, graph and policy logic. |
+| `src/` | Product source: API, MCP/connectors, core memory logic, CLI commands, dashboard and eval code. |
+| `src/api/` | HTTP server, service runtime and persistence adapters. |
+| `src/connectors/` | MCP server, connector registry and connector tooling. |
+| `src/core/` | Memory model, retrieval, graph, policy and storage logic. |
 | `src/cli/` | Script-safe memory command implementation. |
-| `src/eval/` | Internal benchmarks and verification generators. |
-| `sdk/typescript/` | TypeScript HTTP client for app integrations. |
-| `sdk/python/` | Dependency-free Python HTTP client for Python agent frameworks. |
-| `scripts/` | Grouped runtime, release, benchmark, demo and local-dev automation. |
-| `fixtures/` | Small deterministic fixtures used by tests, demos and connector examples. |
-| `docs/` | Handwritten public documentation. |
+| `src/eval/` | Internal benchmark and verification generators. |
+| `sdk/typescript/` | TypeScript HTTP and integration SDK. |
+| `sdk/python/` | Dependency-free Python HTTP client. |
+| `scripts/` | Grouped runtime, release, benchmark, demo, internal and local-dev automation. |
+| `fixtures/` | Deterministic fixtures for tests, demos and connector examples. |
 | `templates/` | Harness and integration templates. |
 | `docker/` | Optional self-host packaging. |
 | `deploy/` | Optional deployment manifests. |
-| `data/benchmarks/` | Large local benchmark corpora; ignored and not shipped in the package. |
+| `data/benchmarks/` | Large local benchmark corpora; ignored and not shipped. |
 
 ## Documentation
 
 - [Documentation home](docs/README.md)
-- [Install and self-hosting](docs/install.md)
-- [Connectors and integration surfaces](docs/integrations.md)
-- [Operations and production boundary](docs/operations.md)
-- [CLI, MCP, API and SDK reference](docs/reference.md)
+- [Install and setup](docs/install.md)
+- [Usage and reference](docs/reference.md)
+- [Connectors, SDKs and community adapters](docs/integrations.md)
+- [Operations guide](docs/operations.md)
 - [Benchmarks](docs/benchmarks.md)
-- [Claims and evidence map](docs/claims.md)
+- [Production status](docs/status.md)
+- [Claims and evidence](docs/claims.md)

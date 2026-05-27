@@ -59,7 +59,7 @@ if (arena.status !== 0) {
   process.exit(arena.status ?? 1);
 }
 
-const publish = spawnSync("npm", ["run", "benchmark:arena:publish"], {
+const publish = spawnSync("node", ["scripts/internal/run-task.mjs", "benchmark:arena:publish"], {
   cwd: root,
   env,
   encoding: "utf8",

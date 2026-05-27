@@ -19,7 +19,7 @@ if (!system) {
 }
 
 if (!existsSync(python) || !existsSync(script)) {
-  printBlocked(system, "operator-memory native Python runner is not installed; run npm run benchmark:competitors:native first");
+  printBlocked(system, "operator-memory native Python runner is not installed; run npm run internal -- benchmark:competitors:native first");
   process.exit(0);
 }
 

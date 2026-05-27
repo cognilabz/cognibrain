@@ -3,14 +3,14 @@ import { runAnswerGenerationBenchmark } from "./answerGeneration";
 
 export function runCertifiedBenchmarks(args = process.argv.slice(2)) {
   const retrievalOnly = args.includes("--retrieval-only");
-  run("npm", ["run", "benchmark:locomo", "--", "--top-k", "20"]);
-  run("npm", ["run", "benchmark:longmemeval", "--", "--top-k", "20"]);
-  run("npm", ["run", "benchmark:beam", "--", "--split", "100K", "--top-k", "20"]);
-  run("npm", ["run", "benchmark:beam:500k"]);
+  run("npx", ["tsx", "src/eval/locomo.ts", "--top-k", "20"]);
+  run("npx", ["tsx", "src/eval/longmemeval.ts", "--top-k", "20"]);
+  run("npx", ["tsx", "src/eval/beam.ts", "--split", "100K", "--top-k", "20"]);
+  run("npx", ["tsx", "src/eval/beam.ts", "--split", "500K", "--top-k", "20", "--out", "artifacts/beam-500k-report.json"]);
   if (!retrievalOnly) {
     runAnswerGenerationBenchmark({ outputPath: "artifacts/answer-generation.json" });
   }
-  run("npm", ["run", "benchmark:market"]);
+  run("npx", ["tsx", "src/eval/marketGate.ts"]);
   return { retrievalOnly, answerGeneration: !retrievalOnly };
 }
 

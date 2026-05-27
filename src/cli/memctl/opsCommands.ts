@@ -38,12 +38,12 @@ export async function handleOpsCommands(command: string | undefined, args: strin
     return true;
   }
   case "benchmark-proof": {
-    const output = execFileSync("npm", ["run", "benchmark:release", "--silent"], { encoding: "utf8", maxBuffer: 2_000_000 });
+    const output = execFileSync("npm", ["run", "--silent", "internal", "--", "benchmark:release"], { encoding: "utf8", maxBuffer: 2_000_000 });
     console.log(output.trim());
     return true;
   }
   case "production-certify": {
-    const output = execFileSync("npm", ["run", "certify:production", "--silent"], { encoding: "utf8", maxBuffer: 5_000_000 });
+    const output = execFileSync("npm", ["run", "release:certify", "--silent"], { encoding: "utf8", maxBuffer: 5_000_000 });
     console.log(output.trim());
     return true;
   }

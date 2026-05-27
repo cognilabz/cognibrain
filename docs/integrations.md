@@ -1,107 +1,94 @@
-# Integrations
+# Connectors, SDKs And Community Adapters
 
-Cognibrain has three public integration surfaces. Keep them separate; that makes the product easier to understand and easier to operate.
+Cognibrain has three integration surfaces:
 
-## Surface Contract
-
-| Surface | Use it for | Do not use it for |
-| --- | --- | --- |
-| MCP | MCP first for agents: context packs, coding context, action guards, durable writes, corrections, patch evidence and maintenance. | Human setup flows or source-system adapter code. |
-| CLI | CLI for humans and automation: install, status, config, connectors, service, proof and fallback memory commands. | Long-lived app integrations when SDK/HTTP is available. |
-| SDK/HTTP | SDK/HTTP only for app and connector integrations: polling, writeback, dashboards and non-MCP runtimes. | Primary coding-agent memory calls when MCP is available. |
-
-Recommended agent flow:
-
-1. Call `memory_context_pack` or `memory_coding_context_pack`.
-2. Call `memory_action_guard` before durable shell or file operations.
-3. Write durable corrections and patch evidence after non-trivial work.
-4. Use CLI fallback only when MCP is unavailable.
+| Surface | Boundary |
+| --- | --- |
+| MCP first for agents | Agent hosts should retrieve context, run action guards and write patch evidence through MCP. |
+| CLI for humans and automation | Operators use the CLI for setup, status, service, connectors, config and proof. |
+| SDK/HTTP only for app and connector integrations | Product teams and community maintainers use SDK/HTTP for custom sources, dashboards and non-MCP runtimes. |
 
 ## Native Connectors
 
-Native connector drivers exist for:
-
-| Category | Connectors |
-| --- | --- |
-| Code | GitHub, GitLab, Azure DevOps |
-| Chat | Slack, Discord, Microsoft Teams |
-| Planning and docs | Jira, Confluence, Notion, Linear |
-| Google workspace | Gmail, Google Drive, Google Calendar |
-| Work tracking | Asana, ClickUp |
-| Operations and product | Sentry, Datadog, PagerDuty and PostHog |
-
-Configure connectors from the CLI:
+Native connector definitions exist for GitHub, GitLab, Azure DevOps, Slack, Discord, Teams, Jira, Confluence, Notion, Linear, Gmail, Google Drive, Google Calendar, Asana, ClickUp, Sentry, Datadog, PagerDuty and PostHog.
 
 ```bash
-npx cognibrain connections add github --set repo=cognilabz/cognibrain
-npx cognibrain connections add jira --set baseUrl=https://example.atlassian.net --set project=ENG
-npx cognibrain connections add slack --set channelId=C123 --token-env MEMORY_SLACK_TOKEN
-npx cognibrain connections doctor
+cognibrain connections list
+cognibrain connections add github --set repo=cognilabz/cognibrain
+cognibrain connections add slack --set channelId=C123 --token-env MEMORY_SLACK_TOKEN
+cognibrain connections add storage-postgres --url-env MEMORY_POSTGRES_URL
 ```
 
-Configs store non-secret fields and `env:` references. Token values stay in environment variables or deployment secret tooling.
+Connector configs store identifiers, URLs and `env:` references. Secrets stay in the environment.
 
-## Adapters
+## Connector Maturity Matrix
 
-Runtime adapters cover storage, provider intelligence, embeddings, media extraction, benchmark comparison and remote MCP transport.
+The maturity gates are generated from connector code and verification scripts. Maintainers can refresh them with:
 
 ```bash
-npx cognibrain connections add storage-sqlite --set path=.cognibrain/memory.sqlite
-npx cognibrain connections add storage-postgres --url-env MEMORY_POSTGRES_URL
-npx cognibrain connections add intelligence-json-command --command-env MEMORY_INTELLIGENCE_COMMAND
-npx cognibrain connections add embedding-openai-compatible --set baseUrl=http://localhost:11434/v1 --set model=text-embedding-3-small
-npx cognibrain connections add mcp-remote --set url=https://memory.example.com/mcp --token-env MEMORY_MCP_REMOTE_TOKEN
+npm run internal -- verify:vendor-connectors
+npm run internal -- verify:vendor-api-specs
+npm run internal -- verify:vendor-live
+npm run internal -- connectors:maturity
 ```
 
-## Platform SDK
-
-Use the Platform SDK when the source system is not built in yet:
+Credential-backed live smoke is opt-in:
 
 ```bash
-npx cognibrain sdk platform acme --kind project_management --out integrations/acme
-npx cognibrain memory connector-register "$(cat integrations/acme/acme.connector.json)"
-npx tsx integrations/acme/acme.integration.ts
-npx cognibrain memory connector-health acme
+MEMORY_VENDOR_LIVE_SMOKE=true npm run internal -- verify:vendor-live
+MEMORY_VENDOR_LIVE_SMOKE=true MEMORY_VENDOR_LIVE_WRITE=true npm run internal -- verify:vendor-live
 ```
 
-The scaffold includes TypeScript integration code, a connector manifest, `.env.example`, local README, poll/writeback placeholders and normalized event mapping helpers.
+Without tenant credentials, rows can be implementation-ready or credential-blocked, but not tenant-verified.
 
-Connector authors can import the public TypeScript surface instead of private source paths:
+## Community Adapter SDK
 
-```ts
-import { createPlatformIntegration, mapPlatformRecord } from "@cognilabz/cognibrain/sdk/typescript/connectors";
+Use the CLI to scaffold a connector-style integration:
+
+```bash
+cognibrain sdk platform acme-tracker --kind issue_tracker --direction ingest --auth token --out integrations/acme-tracker
 ```
+
+The scaffold includes a manifest, TypeScript adapter entrypoint, env example and README. A good community adapter should:
+
+- Map external records to durable memory fields.
+- Keep secrets in environment variables.
+- Provide a dry-run or preview path.
+- Include a small fixture and smoke test.
+- Document rate limits and required scopes.
 
 ## Harness SDK
 
-Use the Harness SDK when a runner cannot use MCP-native tools but still needs context, action guard, telemetry, corrections, patch evidence and handoff lifecycle calls:
+For non-MCP agent runners:
 
 ```bash
-npx cognibrain sdk harness external-runner --out integrations/external-runner
-npx tsx integrations/external-runner/external-runner.harness.ts
+cognibrain sdk harness custom-agent --out integrations/custom-agent
 ```
 
-Harness integrations import from the public TypeScript surface:
+Harness adapters should inject context before model calls, run action guards before side effects and write patch evidence after non-trivial changes.
+
+## TypeScript SDK
 
 ```ts
-import { CognibrainHarnessSdk } from "@cognilabz/cognibrain/sdk/typescript/harness";
+import { CognibrainClient } from "@cognilabz/cognibrain/sdk/typescript/client";
+import { createPlatformIntegration } from "@cognilabz/cognibrain/sdk/typescript/connectors";
+
+const client = new CognibrainClient({ baseUrl: "http://localhost:8787", apiKey: process.env.MEMORY_API_KEY });
+const integration = createPlatformIntegration({
+  id: "acme-tracker",
+  kind: "issue_tracker",
+  direction: "ingest",
+});
 ```
 
-## Verification
+## Python SDK
 
-Generated verification reports are local outputs under `artifacts/`.
+The Python SDK is dependency-free and aimed at Python agent frameworks:
 
 ```bash
-npm run verify:compatibility
-npm run connectors:maturity
-npm run harness:maturity
+cd sdk/python
+python3 -m pip install .
+python3 -m unittest discover -s tests
 ```
 
-Real live-system proof is opt-in:
-
-```bash
-MEMORY_VENDOR_LIVE_SMOKE=true npm run verify:vendor-live
-MEMORY_VENDOR_LIVE_SMOKE=true MEMORY_VENDOR_LIVE_WRITE=true npm run verify:vendor-live
-```
-
-The first command lists, polls and dry-runs writeback with tenant credentials. The second can write to real systems and should only run against a controlled test target.
+Examples live in `sdk/python/examples/`.

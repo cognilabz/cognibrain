@@ -19,8 +19,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run verify:nextgen
-      - run: npm run leaderboard:publish
+      - run: npm run verify:ci
+      - run: npm run internal -- leaderboard:publish
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -51,7 +51,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run benchmark:certified
+      - run: npm run internal -- benchmark:certified
       - uses: actions/upload-artifact@v4
         if: always()
         with:

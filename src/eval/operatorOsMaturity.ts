@@ -34,13 +34,13 @@ const surfaces = [
   surface("Connectors", ["cognibrain connector wizard github", "cognibrain connector doctor", "cognibrain connector list", "cognibrain memory connector-configure", "cognibrain memory connector-review"], ["cognibrain connector", "connector wizard"], ["tests/cli.test.ts"]),
   surface("Runtime", ["cognibrain service plan", "cognibrain service logs", "cognibrain status"], ["cognibrain service", "service logs"], ["tests/cli.test.ts"]),
   surface("Config", ["cognibrain config show", "cognibrain config doctor", "cognibrain config all"], ["cognibrain config", "setup"], ["tests/cli.test.ts"]),
-  surface("Benchmarks", ["npm run benchmark:arena", "npm run audit:truth", "npm run audit:plan-gaps", "cognibrain proof"], ["cognibrain proof", "benchmark:arena"], ["tests/evaluation.test.ts"]),
+  surface("Benchmarks", ["npm run internal -- benchmark:arena", "npm run internal -- audit:truth", "npm run internal -- audit:plan-gaps", "cognibrain proof"], ["cognibrain proof", "benchmark:arena"], ["tests/evaluation.test.ts"]),
   surface("Truth", ["cognibrain truth conflicts", "cognibrain truth current <id>", "cognibrain truth resolve <conflictSetId> <claimId>"], ["truth-conflicts", "truth-current", "truth-resolve"], ["src/cli/memctl/reflectionCommands.ts", "tests/core.test.ts"]),
   surface("Dream", ["cognibrain dream plan", "cognibrain dream run", "cognibrain dream jobs", "cognibrain dream verify", "cognibrain dream conflicts", "cognibrain dream resolve"], ["dream-plan", "dream-run", "dream-jobs"], ["src/cli/memctl/reflectionCommands.ts", "tests/core.test.ts"]),
   surface("Logs", ["cognibrain service logs", "cognibrain doctor --publish"], ["service logs", "doctor --publish"], ["bin/cognibrain.mjs"]),
   surface("Policies", ["cognibrain memory policy-rule", "cognibrain memory policy-evaluate"], ["policy", "retention"], ["src/cli/memctl.ts", "src/api/server.ts"]),
   surface("Retention", ["cognibrain memory retention-rule", "cognibrain memory retention-enforce"], ["retention", "compliance"], ["src/cli/memctl.ts", "src/api/server.ts"]),
-  surface("Docs", ["cognibrain proof", "npm run audit:docs"], ["docs/status.md", "docs/claims.md"], ["scripts/release/audit-docs.mjs"])
+  surface("Docs", ["cognibrain proof", "npm run internal -- audit:docs"], ["docs/status.md", "docs/claims.md"], ["scripts/release/audit-docs.mjs"])
 ];
 
 export function generateOperatorOsMaturity(options: { out?: string; markdown?: string } = {}): OperatorOsReport {
@@ -53,6 +53,7 @@ export function generateOperatorOsMaturity(options: { out?: string; markdown?: s
     memctl: read("src/cli/memctl.ts"),
     server: read("src/api/server.ts"),
     packageJson: read("package.json"),
+    internalRunner: read("scripts/internal/run-task.mjs"),
     cliTests: read("tests/cli.test.ts"),
     evalTests: read("tests/evaluation.test.ts"),
     docs: [read("docs/status.md"), read("docs/claims.md"), read("docs/operations.md")].join("\n")
@@ -83,7 +84,7 @@ export function generateOperatorOsMaturity(options: { out?: string; markdown?: s
 }
 
 function operatorRow(item: ReturnType<typeof surface>, files: Record<string, string>, all: string): OperatorRow {
-  const cliCommands = item.commands.filter((command) => commandIncludes(files.cli + files.cliRuntime + files.memctl + files.packageJson, command));
+  const cliCommands = item.commands.filter((command) => commandIncludes(files.cli + files.cliRuntime + files.memctl + files.packageJson + files.internalRunner, command));
   const cliSurface = item.surfaceNeedles.every((needle) => all.includes(needle));
   const compactOutput = (((files.cli + files.cliRuntime).includes("clipText") && (files.cli + files.cliRuntime).includes("terminalWidth")) || (files.render.includes("function renderPlainSurface") && files.render.includes("compactItems"))) && !all.includes("renderInteractiveCliApp");
   const transactionalPath = cliCommands.length === item.commands.length;
@@ -113,6 +114,10 @@ function surface(name: string, commands: string[], surfaceNeedles: string[], evi
 }
 
 function commandIncludes(content: string, command: string): boolean {
+  if (command.startsWith("npm run internal -- ")) {
+    const task = command.replace(/^npm run internal -- /, "");
+    return content.includes('"internal"') && content.includes(`"${task}"`);
+  }
   if (command.startsWith("npm run ")) return content.includes(`"${command.replace(/^npm run /, "")}"`);
   const compact = command.replace(/^cognibrain\s+memory\s+/, "").replace(/^cognibrain\s+memories\s+/, "").replace(/^cognibrain\s+/, "");
   const first = compact.split(/\s+/)[0];

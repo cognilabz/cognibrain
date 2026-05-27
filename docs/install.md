@@ -1,20 +1,33 @@
-# Install And Self-Hosting
+# Install And Setup
 
-The install path is intentionally terminal-first. Install the package, use the stable operator CLI, and keep the dashboard off unless you want a browser view.
+Cognibrain runs as a local/self-hosted API with a stable operator CLI. The dashboard is optional.
+
+## Requirements
+
+- Node.js 20 or newer
+- npm
+- Python 3 only if you use or test the Python SDK
+- Postgres only for Postgres-backed deployments; local development can use the default local runtime
+
+## Install From npm
 
 ```bash
 npm i @cognilabz/cognibrain
-npx cognibrain
-npx cognibrain tui
-npx cognibrain init
+npx cognibrain init --profile solo-dev --yes
 npx cognibrain doctor --fix
+npx cognibrain status
 ```
 
-Running only `npx cognibrain` or explicitly `npx cognibrain tui` prints the same compact operator snapshot. The CLI is deliberately line-oriented: no jumping frames, no alternate-screen state, no minimum-wide terminal requirement. Use subcommands for each workflow and `--json` wherever automation needs structured output.
+Useful profiles:
 
-Docker is optional for people who want container packaging later. The CLI is the required control plane for setup, status, service automation, connectors, adapters, SDK scaffolding and proof checks.
+| Profile | Use |
+| --- | --- |
+| `solo-dev` | Local coding-agent memory on one machine. |
+| `team` | Shared team setup with explicit connector and service configuration. |
+| `enterprise` | Stricter auth, service and storage planning. |
+| `benchmark` | Reproducible benchmark and proof workflows. |
 
-Checkout install:
+## Install From Checkout
 
 ```bash
 git clone https://github.com/cognilabz/cognibrain.git
@@ -24,72 +37,48 @@ npm install
 ./bin/cognibrain.mjs doctor --fix
 ```
 
-## CLI Workbenches
+## Start And Stop
 
 ```bash
+npx cognibrain start
 npx cognibrain status
-npx cognibrain tui --json
-npx cognibrain memories
-npx cognibrain connections
-npx cognibrain connector wizard jira --set project=ENG --json
-npx cognibrain config show
-npx cognibrain skill status
-npx cognibrain doctor --fix
-npx cognibrain proof
+npx cognibrain stop
 ```
 
-Every workbench keeps a `--json` mode for automation.
-
-## Setup Profiles
-
-Running `npx cognibrain init` in a TTY opens the guided wizard. It asks:
-
-- what should improve first: repeated mistakes, repo rules/tests, work-system connectors, benchmark demo or team server,
-- which agent you use: Codex, Claude Code, Cursor, Copilot or LangGraph/CrewAI,
-- connector, storage, auth and first-win demo choices.
-
-For CI, docs and deterministic setup, use `--profile ... --yes`.
-
-| Profile | Use it for | Command |
-| --- | --- | --- |
-| `solo-dev` | Local developer memory with local storage and GitHub defaults. | `npx cognibrain init --profile solo-dev --yes` |
-| `team` | Shared self-hosted team workspace with broader harness and connector setup. | `npx cognibrain init --profile team --yes` |
-| `enterprise` | Pilot deployment with Postgres, auth boundary and live connector smoke expectations. | `npx cognibrain init --profile enterprise --yes` |
-| `benchmark` | Local proof lab for repeatable benchmark artifacts. | `npx cognibrain init --profile benchmark --yes` |
-
-## Service Automation
-
-```bash
-npx cognibrain service plan
-npx cognibrain service plan --platform linux --json
-npx cognibrain service plan --platform macos --json
-npx cognibrain service plan --platform windows --json
-npx cognibrain service install --activate
-npx cognibrain service status
-npx cognibrain service logs
-```
-
-| OS | Manager | Default scope |
-| --- | --- | --- |
-| Linux | systemd | user service, `--system` for machine service |
-| macOS | launchd | LaunchAgent, `--system` for LaunchDaemon |
-| Windows | Task Scheduler | current-user startup task |
-
-Service flags:
-
-```bash
-npx cognibrain service install --env MEMORY_REQUIRE_AUTH=true
-npx cognibrain service install --dashboard --port 8787 --dashboard-port 5173
-npx cognibrain service install --db-path .cognibrain/memory.json
-```
-
-Do not put secret token values directly into `--env`. Use the host service manager or deployment secret tooling for production credentials.
-
-## Optional Dashboard
+The dashboard starts only when requested:
 
 ```bash
 npx cognibrain dashboard
-npx cognibrain start --dashboard
 ```
 
-The dashboard is an inspection view. It is not required for setup, operation, service startup or connector configuration.
+## Service Install
+
+For a machine that should restart Cognibrain automatically:
+
+```bash
+npx cognibrain service plan
+npx cognibrain service install --activate
+npx cognibrain service status
+```
+
+For a self-hosted package smoke:
+
+```bash
+npm run verify:selfhosted
+```
+
+## Configuration
+
+Runtime state lives under `.cognibrain/` by default, or under `COGNIBRAIN_RUNTIME_ROOT` when set.
+
+Common environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `MEMORY_API_KEY` | API key expected by the local API. |
+| `MEMORY_DB_URL` or `MEMORY_POSTGRES_URL` | Postgres connection string for DB-backed deployments. |
+| `MEMORY_POLICY_MODE` | Use `production` for default-deny policy behavior. |
+| `MEMORY_OIDC_ISSUER` | Optional JWT/OIDC issuer. |
+| `MEMORY_OIDC_AUDIENCE` | Optional JWT/OIDC audience. |
+
+Secrets should be stored in the environment or a secret manager, not committed connector config.

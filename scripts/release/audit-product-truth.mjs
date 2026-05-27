@@ -23,6 +23,7 @@ const files = {
   vendorLive: readJson("artifacts/vendor-live-smoke.json", { liveRequested: false, writebackEnabled: false, providers: [] }),
   postgresLive: readJson("artifacts/postgres-live.json", { acceptance: {} }),
   releaseCheck: read("scripts/release/release-check.mjs"),
+  internalRunner: read("scripts/internal/run-task.mjs"),
   cli: readMany(["bin/cognibrain.mjs", "bin/lib/render.mjs"]),
   server: read("src/api/server.ts"),
   dreamRoutes: read("src/api/server/dreamRoutes.ts"),
@@ -261,11 +262,11 @@ const checks = [
   ].every((path) => !packageFiles.has(path)), "fail", {
     packageFiles: Array.from(packageFiles).filter((path) => path.startsWith("artifacts/"))
   }),
-  check("truth-gate-release", "Release and verification gates run the code-first product truth audit.", files.packageJson.scripts?.["audit:truth"] === "node scripts/release/audit-product-truth.mjs" && files.packageJson.scripts?.["verify:nextgen"]?.includes("audit:truth") && files.releaseCheck.includes("audit:truth"), "fail", {
-    scripts: ["audit:truth", "verify:nextgen", "release:check"]
+  check("truth-gate-release", "Release and verification gates run the code-first product truth audit.", files.packageJson.scripts?.["internal"] === "node scripts/internal/run-task.mjs" && files.packageJson.scripts?.["verify:ci"]?.includes("verify:nextgen") && files.releaseCheck.includes("audit:truth") && files.internalRunner.includes("audit-product-truth.mjs"), "fail", {
+    scripts: ["internal:audit:truth", "verify:ci", "release:check"]
   }),
-  check("release-contract-proof", "Public API routes and CLI commands have machine-readable stability levels and release gates enforce the contract.", files.packageJson.scripts?.["release:contract"]?.includes("releaseContract.ts") && files.packageJson.scripts?.["verify:nextgen"]?.includes("release:contract") && files.releaseCheck.includes("release:contract") && files.releaseContract.summary?.failed === 0 && files.releaseContract.summary?.apiRoutes >= 100 && files.releaseContract.summary?.memctlCommands >= 100, "fail", {
-    script: "release:contract",
+  check("release-contract-proof", "Public API routes and CLI commands have machine-readable stability levels and release gates enforce the contract.", files.internalRunner.includes("releaseContract.ts") && files.internalRunner.includes("verify:nextgen") && files.internalRunner.includes("release:contract") && files.releaseCheck.includes("release:contract") && files.releaseContract.summary?.failed === 0 && files.releaseContract.summary?.apiRoutes >= 100 && files.releaseContract.summary?.memctlCommands >= 100, "fail", {
+    script: "internal:release:contract",
     artifact: "artifacts/release-contract-audit.json",
     summary: files.releaseContract.summary
   }),

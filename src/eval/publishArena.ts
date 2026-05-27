@@ -191,8 +191,8 @@ ${proofRows}
 Reproduce:
 
 \`\`\`bash
-npm run benchmark:arena
-npm run benchmark:arena:publish
+npm run internal -- benchmark:arena
+npm run internal -- benchmark:arena:publish
 \`\`\`
 `;
 }

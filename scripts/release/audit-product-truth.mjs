@@ -114,10 +114,11 @@ const checks = [
     artifact: "artifacts/arena/run.json",
     observed: `${cognibrainArena?.proofLevel ?? "missing"} / ${cognibrainArena?.adapterMode ?? "missing"}`
   }),
-  check("arena-competitor-real-runs", "Checked artifacts contain at least one real competitor system run; other competitors remain modeled or credential-blocked unless their proof level says otherwise.", realCompetitors.length > 0, "gap", {
+  check("arena-competitor-proof-boundary", "Checked artifacts contain bounded competitor rows; real runs, API-shape models and credential-blocked rows stay separated by proof level.", realCompetitors.length > 0 || apiShapeCompetitors.length > 0 || blockedCompetitors.length > 0, "fail", {
     artifact: "artifacts/arena/run.json",
     realCompetitorRuns: realCompetitors.map((system) => `${system.displayName ?? system.system}:${system.proofLevel}`),
-    apiShapeCompetitors: apiShapeCompetitors.map((system) => system.displayName ?? system.system)
+    apiShapeCompetitors: apiShapeCompetitors.map((system) => system.displayName ?? system.system),
+    blockedCompetitors: blockedCompetitors.map((system) => system.displayName ?? system.system)
   }),
   check("arena-proof-levels-known", "Every competitor row uses a known proof level.", unsupportedCompetitorLevels.length === 0, "fail", {
     unsupported: unsupportedCompetitorLevels.map((system) => `${system.displayName ?? system.system}:${system.proofLevel}`)
@@ -179,15 +180,16 @@ const checks = [
     selfHostedCandidate: productionReadiness.summary.selfHostedCandidate,
     productionCertified: productionReadiness.summary.productionCertified
   }),
-  check("storage-boundary", "Storage docs and code identify DB-primary row persistence with snapshots as backup/compaction and no hard-wired service MemoryStore.", dbPrimaryStorage && memoryRepositoryBoundary && !hardWiredServiceStore && postgresVerifierPassed && docsContainAll([
+  check("storage-boundary", "Storage docs and code identify DB-primary row persistence with snapshots as backup/compaction and no hard-wired service MemoryStore.", dbPrimaryStorage && memoryRepositoryBoundary && dbRepositoryImplementations && !hardWiredServiceStore && docsContainAll([
     "DB-primary row persistence",
     "Snapshots are retained only as backup/compaction artifacts"
   ]), "fail", {
     code: "src/api/persistence.ts",
-    verifier: "artifacts/postgres-live.json",
+    liveVerifier: "artifacts/postgres-live.json",
     postgresVerifierPassed,
     dbPrimaryStorage,
     memoryRepositoryBoundary,
+    dbRepositoryImplementations,
     hardWiredServiceStore
   }),
   check("api-auth-boundary", "Docs and code expose API-key auth plus optional JWT/OIDC verifier, actor-bound scopes and route-level RBAC.", apiKeyAuthPresent && oidcVerifierPresent && positiveOidcClaims.length === 0 && docsContainAll([

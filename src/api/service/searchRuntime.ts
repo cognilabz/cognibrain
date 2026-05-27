@@ -139,11 +139,13 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
       needsVerification: includedResults.filter((result) => result.memory.beliefState === "needs_verification").length,
       contradicted: includedResults.filter((result) => result.memory.beliefState === "contradicted" || result.contradiction).length
     };
+    const truthDecisions = includedResults.map((result) => service.currentTruthForMemory(result.memory)).filter(Boolean);
     const hash = contentHash(JSON.stringify({
       query: options.query,
       userId: options.userId,
       tokenBudget,
       resultIds: includedResults.map((result) => result.memory.id),
+      truth: truthDecisions,
       policy: policyDecisions.map((decision) => ({ memoryId: decision.memoryId, allowed: decision.allowed, reasons: decision.reasons })),
       temporalState
     }));
@@ -174,10 +176,12 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
       context,
       results: includedResults.map((result) => {
         const policyDecision = policyDecisions.find((decision) => decision.memoryId === result.memory.id);
+        const truthDecision = service.currentTruthForMemory(result.memory);
         const whyIncluded = [
           ...((result.explanation ?? []).length ? result.explanation ?? [] : [`final score ${roundMetric(result.score)} selected this memory`]),
           ...(result.graphPaths?.length ? [`graph path: ${result.graphPaths[0]}`] : []),
-          ...(result.confidence !== undefined ? [`calibrated confidence ${roundMetric(result.confidence)}`] : [])
+          ...(result.confidence !== undefined ? [`calibrated confidence ${roundMetric(result.confidence)}`] : []),
+          ...(truthDecision ? [`truth state ${truthDecision.state}: ${truthDecision.reason}`] : [])
         ];
         const whyNotExcluded = [
           policyDecision?.allowed === false ? `policy denied: ${policyDecision.reasons.join("; ")}` : "policy allowed for actor and scope",
@@ -238,7 +242,8 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
           unsafeToInject: result.unsafeToInject
         },
         policyDecision,
-        contradictionWarnings: result.contradiction ? [result.contradiction.reason] : []
+        contradictionWarnings: result.contradiction ? [result.contradiction.reason] : [],
+        truthDecision
       }; }),
       excludedResults: results
         .filter((result) => result.decision === "exclude" || !context.includes(`[${result.memory.id}]`))
@@ -255,6 +260,7 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
         })),
       policyDecisions,
       graphPaths: [...new Set(includedResults.flatMap((result) => result.graphPaths ?? []))] as string[],
+      truthDecisions,
       temporalState,
       summary: {
         included: includedResults.filter((result) => !result.decision || result.decision === "include").length,

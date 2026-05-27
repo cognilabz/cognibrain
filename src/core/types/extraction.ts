@@ -75,6 +75,50 @@ export interface MemoryClaim {
   scope: Partial<MemoryScope>;
 }
 
+export type ClaimState = "active" | "superseded" | "contradicted" | "needs_verification" | "retracted";
+
+export interface ClaimRecord {
+  id: string;
+  subject: string;
+  predicate: string;
+  object: string;
+  qualifiers: Record<string, unknown>;
+  sourceMemoryId: string;
+  sourceRef?: SourceRef;
+  validFrom?: Date | string;
+  validUntil?: Date | string;
+  confidence: number;
+  trust: number;
+  state: ClaimState;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface ConflictSet {
+  id: string;
+  claimIds: string[];
+  detectedAt: Date | string;
+  status: "open" | "resolved" | "operator_review";
+  resolution?: {
+    selectedClaimId: string;
+    reason: string;
+    resolvedBy: "system" | "operator" | "source_revalidation";
+    resolvedAt: Date | string;
+  };
+}
+
+export interface CurrentTruthDecision {
+  subject: string;
+  predicate: string;
+  selectedClaimId?: string;
+  selectedMemoryId?: string;
+  state: "selected" | "uncertain" | "missing";
+  reason: string;
+  suppressedClaimIds: string[];
+  conflictSetId?: string;
+  scoreBreakdown?: Record<string, number>;
+}
+
 export interface DurabilityDecision {
   contentPreview: string;
   action: "store" | "ignore" | "session_only" | "working_memory" | "ask_user";

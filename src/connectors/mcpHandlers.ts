@@ -110,6 +110,11 @@ export interface MemoryDreamJobStatusArgs {
   jobId?: string;
 }
 
+export interface MemoryDreamJobControlArgs {
+  jobId: string;
+  reason?: string;
+}
+
 export interface MemoryRevalidateArgs {
   userId: string;
   memoryId?: string;
@@ -119,6 +124,30 @@ export interface MemoryRevalidateArgs {
 
 export interface ConnectorSyncStateArgs {
   connectorId?: string;
+}
+
+export interface MemoryConflictListArgs {
+  status?: "open" | "resolved" | "operator_review";
+}
+
+export interface MemoryConflictResolveArgs {
+  conflictSetId: string;
+  selectedClaimId: string;
+  reason: string;
+  resolvedBy?: "system" | "operator" | "source_revalidation";
+}
+
+export interface ConnectorReviewQueueArgs {
+  connectorId?: string;
+  userId?: string;
+  status?: "pending" | "approved" | "rejected";
+}
+
+export interface ConnectorReviewDecisionArgs {
+  memoryId: string;
+  decision: "approve" | "reject";
+  reviewerId?: string;
+  reason?: string;
 }
 
 export interface MemoryHarnessEventArgs extends HarnessLifecycleEventInput {}
@@ -416,6 +445,14 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
       return service.dreamJobStatus(args.jobId);
     },
 
+    dreamJobCancel(args: MemoryDreamJobControlArgs) {
+      return service.cancelDreamJob(args.jobId, args.reason);
+    },
+
+    async dreamJobRetry(args: MemoryDreamJobControlArgs) {
+      return service.retryDreamJob(args.jobId);
+    },
+
     sessionEnd(args: MemoryDreamPrepareArgs) {
       return serializeDreamPreparation(service.prepareDream({ ...dreamCycleInput({ ...args, trigger: "harness_session_end", mode: args.mode ?? "dream" }), run: args.run }));
     },
@@ -438,6 +475,30 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
 
     connectorSyncState(args: ConnectorSyncStateArgs) {
       return service.connectorSyncState(args.connectorId);
+    },
+
+    conflictSets(args: MemoryConflictListArgs) {
+      return service.listConflictSets(args.status);
+    },
+
+    conflictResolve(args: MemoryConflictResolveArgs) {
+      return service.resolveConflictSet(args.conflictSetId, {
+        selectedClaimId: args.selectedClaimId,
+        reason: args.reason,
+        resolvedBy: args.resolvedBy
+      });
+    },
+
+    connectorReviewQueue(args: ConnectorReviewQueueArgs) {
+      return service.listConnectorReviewQueue(args).map(serializeMemory);
+    },
+
+    connectorReviewDecision(args: ConnectorReviewDecisionArgs) {
+      return serializeMemory(service.reviewConnectorMemory(args.memoryId, {
+        decision: args.decision,
+        reviewerId: args.reviewerId,
+        reason: args.reason
+      }));
     },
 
     harnessEvent(args: MemoryHarnessEventArgs) {

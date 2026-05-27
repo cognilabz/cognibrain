@@ -134,6 +134,7 @@ function writeVsCodeConfig() {
   json.servers.cognibrain = { type: "stdio", ...stdioServerConfig() };
   writeJson(path, json);
   console.log(`Wrote VS Code MCP config: ${path}`);
+  writeTemplateFile(join(launchCwd, ".vscode", "cognibrain.instructions.md"), "templates/vscode/cognibrain.instructions.md");
   writeHarnessPackageManifest();
 }
 
@@ -446,6 +447,7 @@ function harnessTemplateHealth() {
     "templates/claude/settings.json",
     "templates/copilot/copilot-instructions.md",
     "templates/cursor/open-memory.mdc",
+    "templates/vscode/cognibrain.instructions.md",
     "templates/opencode/cognibrain.md",
     "templates/openclaw/cognibrain.md",
     "templates/langgraph/langgraph.cognibrain.json",
@@ -474,6 +476,7 @@ function harnessGeneratedHealth() {
     join(launchCwd, ".cursor", "mcp.json"),
     join(launchCwd, ".cursor", "rules", "open-memory.mdc"),
     join(launchCwd, ".vscode", "mcp.json"),
+    join(launchCwd, ".vscode", "cognibrain.instructions.md"),
     join(launchCwd, ".opencode", "mcp.json"),
     join(launchCwd, ".opencode", "cognibrain.md"),
     join(launchCwd, ".openclaw", "mcp.json"),

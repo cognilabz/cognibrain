@@ -17,6 +17,7 @@ const files = {
   connectorWebhooks: readJson("artifacts/connector-webhooks.json", { rows: [], summary: {} }),
   operatorOs: readJson("artifacts/operator-os-maturity.json", { rows: [], summary: {}, passed: false }),
   benchmarkHardening: readJson("artifacts/benchmark-hardening.json", { checks: {}, dataset: {}, passed: false }),
+  releaseContract: readJson("artifacts/release-contract-audit.json", { summary: {}, checks: [] }),
   harnessMaturity: readJson("artifacts/harness-maturity.json", { rows: [], summary: {} }),
   vendorApiSpecs: readJson("artifacts/vendor-api-specs.json", { rows: [], summary: {} }),
   vendorLive: readJson("artifacts/vendor-live-smoke.json", { liveRequested: false, writebackEnabled: false, providers: [] }),
@@ -24,8 +25,19 @@ const files = {
   releaseCheck: read("scripts/release/release-check.mjs"),
   cli: readMany(["bin/cognibrain.mjs", "bin/lib/render.mjs"]),
   server: read("src/api/server.ts"),
+  dreamRoutes: read("src/api/server/dreamRoutes.ts"),
   serverHelpers: read("src/api/server/helpers.ts"),
   service: read("src/api/service.ts"),
+  dreamRuntime: read("src/api/service/dreamRuntime.ts"),
+  mcpTools: read("src/connectors/mcpTools.ts"),
+  mcpHandlers: read("src/connectors/mcpHandlers.ts"),
+  coreTests: read("tests/core.test.ts"),
+  storageAdapter: read("src/core/storageAdapter.ts"),
+  repositories: readMany([
+    "src/api/repositories/sqliteRepository.ts",
+    "src/api/repositories/postgresRepository.ts",
+    "src/api/repositories/index.ts"
+  ]),
   persistence: readMany([
     "src/api/persistence.ts",
     "src/api/persistence/local.ts",
@@ -66,6 +78,7 @@ const priorityWebhookProviders = new Set(["github", "jira", "confluence", "notio
 const harnessRows = Array.isArray(files.harnessMaturity.rows) ? files.harnessMaturity.rows : [];
 const generatedHarnessRows = harnessRows.filter((row) => row?.maturity?.configGenerated === true);
 const harnessGoldenPaths = harnessRows.filter((row) => row?.maturity?.e2eDemo === true);
+const harnessRowsWithGaps = harnessRows.filter((row) => Array.isArray(row?.gaps) && row.gaps.length > 0);
 const hermeticRows = maturityRows.filter((row) => row?.maturity?.hermeticFixture === true && row?.maturity?.apiSpec === true);
 const liveSmokeReadyRows = maturityRows.filter((row) => ["live-smoke-ready", "tenant-verified", "production-certified"].includes(row?.proofLevel));
 const apiSpecVerifiedRows = maturityRows.filter((row) => row?.maturity?.apiSpec === true);
@@ -73,6 +86,10 @@ const vendorLiveProviders = Array.isArray(files.vendorLive.providers) ? files.ve
 const vendorLiveAttempted = vendorLiveProviders.filter((provider) => provider && provider.skipped === false);
 const storageIsSnapshotFirst = files.persistence.includes("insert into cognibrain_snapshots") && files.persistence.includes("truncate table cognibrain_context_packs");
 const dbPrimaryStorage = !storageIsSnapshotFirst && files.persistence.includes("DB-primary repository") && files.persistence.includes("memory.created") && files.persistence.includes("memory.updated") && files.persistence.includes("memory.deleted");
+const hardWiredServiceStore = /readonly\s+store\s*=\s*new\s+MemoryStore\s*\(/.test(files.service);
+const memoryRepositoryBoundary = files.storageAdapter.includes("export interface MemoryRepository") && files.service.includes("readonly repository: MemoryRepository") && files.service.includes("repositoryFromStorage");
+const dbRepositoryImplementations = files.repositories.includes("class SQLiteMemoryRepository") && files.repositories.includes("class PostgresMemoryRepository") && files.repositories.includes("implements MemoryRepository");
+const dreamJobWorkerControl = files.service.includes("cancelDreamJob(") && files.service.includes("retryDreamJob(") && files.dreamRoutes.includes("/dream/jobs") && files.dreamRoutes.includes("cancel") && files.dreamRoutes.includes("retry") && files.mcpTools.includes("memory_dream_job_cancel") && files.mcpTools.includes("memory_dream_job_retry") && files.coreTests.includes("cancels and retries dream jobs");
 const postgresVerifierPassed = files.postgresLive?.acceptance?.startsWithPostgresBackend === true;
 const serverAuthCode = `${files.server}\n${files.serverHelpers}`;
 const oidcVerifierPresent = /\bjwks\b|\bopenid-client\b|\bjose\b|verifyJwt|verifyOidc|issuer.+audience/i.test(serverAuthCode);
@@ -162,14 +179,16 @@ const checks = [
     selfHostedCandidate: productionReadiness.summary.selfHostedCandidate,
     productionCertified: productionReadiness.summary.productionCertified
   }),
-  check("storage-boundary", "Storage docs and code identify DB-primary row persistence with snapshots as backup/compaction.", dbPrimaryStorage && postgresVerifierPassed && docsContainAll([
+  check("storage-boundary", "Storage docs and code identify DB-primary row persistence with snapshots as backup/compaction and no hard-wired service MemoryStore.", dbPrimaryStorage && memoryRepositoryBoundary && !hardWiredServiceStore && postgresVerifierPassed && docsContainAll([
     "DB-primary row persistence",
     "Snapshots are retained only as backup/compaction artifacts"
   ]), "fail", {
     code: "src/api/persistence.ts",
     verifier: "artifacts/postgres-live.json",
     postgresVerifierPassed,
-    dbPrimaryStorage
+    dbPrimaryStorage,
+    memoryRepositoryBoundary,
+    hardWiredServiceStore
   }),
   check("api-auth-boundary", "Docs and code expose API-key auth plus optional JWT/OIDC verifier, actor-bound scopes and route-level RBAC.", apiKeyAuthPresent && oidcVerifierPresent && positiveOidcClaims.length === 0 && docsContainAll([
     "JWT/OIDC verifier",
@@ -191,14 +210,15 @@ const checks = [
     scannedDocs: ["README.md", "docs/README.md", "docs/install.md", "docs/integrations.md", "docs/operations.md", "docs/claims.md", "docs/status.md"],
     matches: positiveOverclaims
   }),
-  check("harness-maturity-proof", "Harness maturity artifact separates generated packages, native hooks and simulator proof for common and external-agent modes.", harnessRows.length >= 16 && generatedHarnessRows.length >= 16 && harnessGoldenPaths.length >= 16 && docsContainAll([
+  check("harness-maturity-proof", "Harness maturity artifact separates generated packages, native hooks and simulator proof for common and external-agent modes without open implementation gaps.", harnessRows.length >= 16 && generatedHarnessRows.length >= 16 && harnessGoldenPaths.length >= 16 && harnessRowsWithGaps.length === 0 && docsContainAll([
     "MCP is the default integration path for agents",
     "SDK/HTTP is for custom integrations"
   ]), "fail", {
     artifact: "artifacts/harness-maturity.json",
     total: harnessRows.length,
     generated: generatedHarnessRows.length,
-    goldenPaths: harnessGoldenPaths.length
+    goldenPaths: harnessGoldenPaths.length,
+    rowsWithGaps: harnessRowsWithGaps.map((row) => row.harness)
   }),
   check("cli-operator-primary", "The installable CLI uses stable compact text surfaces without the removed Ink TUI dependency.", !files.packageJson.dependencies?.ink && !existsSync(join(root, "src", "cli", "inkApp.mjs")) && files.cli.includes("function renderPlainSurface") && files.cli.includes("clipText"), "fail", {
     source: "bin/cognibrain.mjs",
@@ -211,6 +231,10 @@ const checks = [
   check("benchmark-hardening-proof", "Benchmark hardening artifact pins CogniCodeBench scenarios with hashes, schema evidence, real-repo workflow fixtures and native competitor boundaries.", files.benchmarkHardening.passed === true && files.benchmarkHardening.dataset?.sha256?.length === 64 && files.benchmarkHardening.dataset?.scenarioCount >= 100, "fail", {
     artifact: "artifacts/benchmark-hardening.json",
     scenarioCount: files.benchmarkHardening.dataset?.scenarioCount ?? 0
+  }),
+  check("dream-job-worker-proof", "Dream job worker lifecycle supports persisted start, status, cancel and retry paths across service, HTTP, MCP and tests.", dreamJobWorkerControl, "fail", {
+    code: ["src/api/service.ts", "src/api/server/dreamRoutes.ts", "src/connectors/mcpTools.ts", "tests/core.test.ts"],
+    dreamJobWorkerControl
   }),
   check("docker-optional", "Docker is present only as an optional deployment artifact, not the required product path.", docsContainAll([
     "Docker is optional",
@@ -238,9 +262,18 @@ const checks = [
   check("truth-gate-release", "Release and verification gates run the code-first product truth audit.", files.packageJson.scripts?.["audit:truth"] === "node scripts/release/audit-product-truth.mjs" && files.packageJson.scripts?.["verify:nextgen"]?.includes("audit:truth") && files.releaseCheck.includes("audit:truth"), "fail", {
     scripts: ["audit:truth", "verify:nextgen", "release:check"]
   }),
-  check("gap-storage-db-primary", "DB-primary MemoryRepository with granular writes is implemented.", !storageIsSnapshotFirst, "gap", {
-    code: "src/api/persistence.ts",
-    observed: dbPrimaryStorage ? "db-primary row persistence detected" : "snapshot-first persistence plus SQL projection"
+  check("release-contract-proof", "Public API routes and CLI commands have machine-readable stability levels and release gates enforce the contract.", files.packageJson.scripts?.["release:contract"]?.includes("releaseContract.ts") && files.packageJson.scripts?.["verify:nextgen"]?.includes("release:contract") && files.releaseCheck.includes("release:contract") && files.releaseContract.summary?.failed === 0 && files.releaseContract.summary?.apiRoutes >= 100 && files.releaseContract.summary?.memctlCommands >= 100, "fail", {
+    script: "release:contract",
+    artifact: "artifacts/release-contract-audit.json",
+    summary: files.releaseContract.summary
+  }),
+  check("gap-storage-db-primary", "DB-primary MemoryRepository with granular SQLite/Postgres writes is implemented.", !storageIsSnapshotFirst && memoryRepositoryBoundary && dbRepositoryImplementations && !hardWiredServiceStore, "gap", {
+    code: "src/api/service.ts, src/core/storageAdapter.ts, src/api/repositories/",
+    observed: dbPrimaryStorage && memoryRepositoryBoundary && dbRepositoryImplementations && !hardWiredServiceStore ? "repository boundary and db-primary SQLite/Postgres row repositories detected" : "runtime still lacks repository boundary or DB repository implementations",
+    dbPrimaryStorage,
+    memoryRepositoryBoundary,
+    dbRepositoryImplementations,
+    hardWiredServiceStore
   }),
   check("gap-enterprise-authz", "Built-in OIDC/JWT validation and route-level RBAC are implemented.", oidcVerifierPresent, "gap", {
     code: "src/api/server.ts",
@@ -296,6 +329,8 @@ const report = {
     selfHostedCandidate: productionReadiness.summary.selfHostedCandidate,
     productionCertified: productionReadiness.summary.productionCertified,
     dbPrimaryStorage,
+    memoryRepositoryBoundary,
+    hardWiredServiceStore,
     builtInOidcRbac: productionReadiness.summary.builtInOidcRbac,
     defaultDenyPolicy: productionReadiness.summary.defaultDenyPolicy,
     httpHardened: productionReadiness.summary.httpHardened
@@ -318,7 +353,7 @@ const report = {
     ["cli.surface", "stable-operator-cli", "bin/cognibrain.mjs"],
     ["production.selfHostedCandidate", productionReadiness.summary.selfHostedCandidate, "artifacts/production-readiness.json"],
     ["production.certified", productionReadiness.summary.productionCertified, "artifacts/production-readiness.json"],
-    ["storage.mode", dbPrimaryStorage ? "db-primary" : storageIsSnapshotFirst ? "snapshot-first" : "unknown", "src/api/persistence.ts"],
+    ["storage.mode", dbPrimaryStorage && memoryRepositoryBoundary && !hardWiredServiceStore ? "repository-db-primary" : dbPrimaryStorage ? "db-primary-projection" : storageIsSnapshotFirst ? "snapshot-first" : "unknown", "src/api/persistence.ts"],
     ["auth.mode", oidcVerifierPresent ? "oidc-jwt-rbac" : "api-key-or-open-local", "src/api/server.ts"],
     ["policy.default", defaultAllowPolicy ? "allow" : "deny", "src/api/service.ts"],
     ["docker.role", "optional", "docs/install.md"]
@@ -379,7 +414,7 @@ function productionReadinessReport() {
   const rows = [
     readinessRow("CLI", "Stable operator CLI and operator OS maturity artifact implemented", "status/proof/config/policy/retention commands", "Primary operator workbench", "n/a", "tests/cli.test.ts, tests/evaluation.test.ts", "bin/cognibrain.mjs, artifacts/operator-os-maturity.json", "self-hosted operator candidate", "Command-backed terminal paths are covered; browser dashboard remains optional."),
     readinessRow("Memory API and MCP", "Service, HTTP API, MCP server and SDK clients exist", "broad route surface with route-level RBAC", "memory/proof/status commands", "memory_context_pack, coding context, action guard, patch evidence", "tests/api.test.ts, tests/core.test.ts", "docs/reference.md", "local/team/enterprise-auth candidate", "JWT/OIDC verifier is optional and must be configured per deployment."),
-    readinessRow("Storage", dbPrimaryStorage ? "DB-primary repository with granular row upserts" : "DB-primary repository not detected", "storage reports and Postgres verifier", "connection adapters", "n/a", "tests/core.test.ts, src/eval/postgresLive.ts", "artifacts/postgres-live.json", dbPrimaryStorage ? "production storage candidate" : "production gap", "Snapshots are backup/compaction artifacts, not the primary write path."),
+    readinessRow("Storage", dbPrimaryStorage && memoryRepositoryBoundary && !hardWiredServiceStore ? "MemoryRepository runtime boundary with granular DB row upserts" : dbPrimaryStorage ? "DB row persistence detected, runtime repository boundary incomplete" : "DB-primary repository not detected", "storage reports and Postgres verifier", "connection adapters", "n/a", "tests/core.test.ts, src/eval/postgresLive.ts", "artifacts/postgres-live.json", dbPrimaryStorage && memoryRepositoryBoundary && !hardWiredServiceStore ? "production storage candidate" : "production gap", "Snapshots are backup/compaction artifacts, not the primary write path."),
     readinessRow("Security/Auth", oidcVerifierPresent ? "API keys plus optional JWT/OIDC verifier, actor scopes and RBAC" : "No JWT/OIDC verifier detected", "/health open, other routes protected by configured auth", "doctor/status", "agent tools inherit the API boundary", "tests/api.test.ts", "src/api/server.ts", oidcVerifierPresent ? "enterprise auth candidate" : "production gap", "Deployments still own issuer/audience/key configuration and TLS."),
     readinessRow("Policy/Tenant Isolation", defaultAllowPolicy ? "Policy engine exists, default allow without matching rule" : "Production policy mode default-denies", "policy evaluation routes", "policy and retention commands", "context pack policy decisions", "tests/core.test.ts", "src/api/service.ts", defaultAllowPolicy ? "production gap" : "production policy candidate", "DB-level row isolation is deployment-specific; service-level actor binding is implemented."),
     readinessRow("Connectors", `${maturityRows.length} connector rows, ${apiSpecVerifiedRows.length} API/spec verified, ${certificationRows.length} certification rows`, "connector sync/poll/writeback", "connections and connector commands", "connector actions through API/SDK", "tests/evaluation.test.ts", "artifacts/connector-certification.json", `${liveSmokeRows.length} tenant-verified, ${productionCertifiedRows.length} production-certified, ${certificationCredentialBlockedRows.length} credential-blocked`, "Native driver and implementation-ready certification do not equal customer production certification."),
@@ -388,7 +423,7 @@ function productionReadinessReport() {
     readinessRow("Operations", "Release check, doctor, services and optional Docker exist", "status, metrics and health routes", "service plan/install/status", "maintenance tools", "release:check", "artifacts/release-check.json", "self-hosted production candidate", "Managed SaaS, autoscaling, billing and hosted support are not claimed.")
   ];
   const criticalOpenGaps = [
-    !dbPrimaryStorage && "db-primary-storage",
+    (!dbPrimaryStorage || !memoryRepositoryBoundary || hardWiredServiceStore) && "db-primary-storage",
     !oidcVerifierPresent && "oidc-jwt-rbac",
     defaultAllowPolicy && "default-deny-policy",
     corsWildcard && "configured-cors",
@@ -411,6 +446,8 @@ function productionReadinessReport() {
       selfHostedCandidate: true,
       productionCertified: criticalOpenGaps.length === 0 && externalBlockedGaps.length === 0,
       dbPrimaryStorage,
+      memoryRepositoryBoundary,
+      hardWiredServiceStore,
       builtInOidcRbac: oidcVerifierPresent,
       defaultDenyPolicy: !defaultAllowPolicy,
       httpHardened: !corsWildcard && requestRateLimitPresent && bodyLimitPresent,

@@ -11,6 +11,7 @@ import type {
   ConnectorAuthSession,
   ConnectorSyncRecord,
   ConnectorSyncState,
+  DreamJob,
   IdentityLink,
   MarketplaceSubmission,
   MarketplaceModule,
@@ -27,6 +28,7 @@ import type {
   WebhookDelivery,
   WebhookRegistration
 } from "../../core";
+import type { ClaimRecord, ConflictSet } from "../../core";
 
 export interface LexicalSearchOptions {
   memoryIds?: string[];
@@ -48,6 +50,8 @@ export interface PersistedMemoryFile {
   };
   metrics?: MetricsReport;
   feedback?: FeedbackEvent[];
+  claims?: ClaimRecord[];
+  conflictSets?: ConflictSet[];
   retrievalProfiles?: RetrievalProfile[];
   identityLinks?: IdentityLink[];
   domainEvaluations?: DomainEvaluationReport[];
@@ -68,6 +72,7 @@ export interface PersistedMemoryFile {
   connectorAuthSessions?: ConnectorAuthSession[];
   connectorSyncRecords?: ConnectorSyncRecord[];
   connectorSyncStates?: ConnectorSyncState[];
+  dreamJobs?: DreamJob[];
   evidencePacks?: EvidencePack[];
   policyRules?: MemoryPolicyRule[];
   retentionRules?: RetentionRule[];

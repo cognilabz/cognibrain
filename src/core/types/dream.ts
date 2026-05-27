@@ -95,7 +95,7 @@ export interface DreamPreparationReport {
 export interface DreamJob {
   jobId: string;
   userId: string;
-  status: "queued" | "running" | "done" | "failed";
+  status: "queued" | "running" | "done" | "failed" | "cancelled";
   trigger: DreamCycleTrigger;
   mode: DreamCycleMode;
   queuedAt: Date | string;
@@ -111,6 +111,8 @@ export interface DreamJob {
     verificationScheduled: number;
   };
   plan: DreamPlanReport;
+  input?: DreamCycleInput;
+  retryOf?: string;
   report?: DreamCycleReport;
   error?: string;
 }
@@ -169,6 +171,30 @@ export interface SourceRevalidationResult {
   currentHash?: string;
   previousVersion?: string;
   currentVersion?: string;
+}
+
+export interface SourceRecord {
+  sourceRef: NonNullable<Memory["provenance"]["sourceRef"]>;
+  content?: string;
+  title?: string;
+  updatedAt?: Date | string;
+  version?: string;
+  hash?: string;
+  status?: "found" | "missing";
+  metadata?: Record<string, unknown>;
+}
+
+export interface SourceValidationDecision {
+  status: SourceRevalidationStatus;
+  reason: string;
+  sourceRecord?: SourceRecord;
+  beliefState?: Memory["beliefState"];
+}
+
+export interface SourceResolver {
+  connectorId: string;
+  get(sourceRef: NonNullable<Memory["provenance"]["sourceRef"]>, memory: Memory): SourceRecord | undefined;
+  compare?(memory: Memory, sourceRecord: SourceRecord): SourceValidationDecision;
 }
 
 export interface SourceRevalidationReport {

@@ -1,5 +1,6 @@
 import type { BeliefState, ConsentPolicy, FeedbackKind, MemoryAuditEvent, MemoryLayer, MemoryPolicyRule, MemoryProvenance, MemoryRelation, MemorySchemaVersion, MemoryScope, MemoryType, PolicyDecision, Provenance, QueryIntent, QueryPlan, RelationType, RetrievalMode, SourceKind, SourceRef, TemporalMetadata } from "./base";
 import type { CodebaseScope, EngineeringMemoryKind } from "./engineering";
+import type { CurrentTruthDecision } from "./extraction";
 import type { ContextReranker, ContextVerifier, RetrievalProfile, RetrievalWeights } from "./retrieval";
 
 export interface MemoryInput {
@@ -249,6 +250,7 @@ export interface EvidencePack {
     };
     policyDecision?: PolicyDecision;
     contradictionWarnings?: string[];
+    truthDecision?: CurrentTruthDecision;
   }>;
   excludedResults?: Array<{
     memoryId: string;
@@ -259,6 +261,7 @@ export interface EvidencePack {
   }>;
   policyDecisions?: PolicyDecision[];
   graphPaths?: string[];
+  truthDecisions?: CurrentTruthDecision[];
   temporalState?: {
     generatedAt: string;
     stale: number;

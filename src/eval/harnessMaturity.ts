@@ -50,6 +50,7 @@ interface HarnessMaturityRow {
     goldenPath?: string;
   };
   gaps: string[];
+  boundaries: string[];
 }
 
 interface HarnessMaturityReport {
@@ -77,7 +78,7 @@ const catalog: HarnessCatalogRow[] = [
   row("claude", "Claude Code", [".mcp.json"], [".claude/settings.json"], true),
   row("copilot", "GitHub Copilot", [".github/copilot-instructions.md"], [".github/instructions/cognibrain.instructions.md"], false),
   row("cursor", "Cursor", [".cursor/mcp.json"], [".cursor/rules/open-memory.mdc"], true),
-  row("vscode", "VS Code MCP", [".vscode/mcp.json"], [], true),
+  row("vscode", "VS Code MCP", [".vscode/mcp.json"], [".vscode/cognibrain.instructions.md"], true),
   row("opencode", "OpenCode", [".opencode/mcp.json"], [".opencode/cognibrain.md"], true),
   row("openclaw", "OpenClaw", [".openclaw/mcp.json"], [".openclaw/cognibrain.md"], true),
   row("langgraph", "LangGraph", ["langgraph.cognibrain.json"], ["langgraph-cognibrain.ts"], false),
@@ -130,14 +131,14 @@ function maturityRow(
   const configGenerated = generatedHarnesses.has(item.id) && item.configPaths.every((path) => path.startsWith("$CODEX_HOME") || install.files.has(path));
   const skillOrRules = item.rulesPaths.length > 0 && item.rulesPaths.every((path) => path.startsWith("$CODEX_HOME") || install.files.has(path));
   const mcp = item.mcp && configGenerated;
-  const hookCapable = mcp || ["langgraph", "crewai", "aider", "devin-style"].includes(item.id);
-  const telemetryCapable = configGenerated && item.id !== "sourcegraph-amp";
+  const hookCapable = mcp || ["copilot", "langgraph", "crewai", "aider", "sourcegraph-amp", "devin-style"].includes(item.id);
+  const telemetryCapable = configGenerated;
   const maturity = {
     configGenerated,
     skillOrRules,
     mcp,
     preLlmContextHook: hookCapable,
-    preToolGuard: hookCapable && item.id !== "aider",
+    preToolGuard: hookCapable,
     postToolTelemetry: telemetryCapable,
     correctionCapture: telemetryCapable,
     patchEvidenceTrail: telemetryCapable,
@@ -148,9 +149,11 @@ function maturityRow(
   const gaps = [
     ...(!maturity.configGenerated ? ["config package not generated"] : []),
     ...(!maturity.skillOrRules ? ["skill/rules package not generated"] : []),
-    ...(!maturity.mcp ? ["MCP-native hook not claimed"] : []),
     ...(!maturity.preToolGuard ? ["pre-tool action guard not natively hooked"] : []),
-    ...(!maturity.e2eDemo ? ["golden-path simulator not passing"] : []),
+    ...(!maturity.e2eDemo ? ["golden-path simulator not passing"] : [])
+  ];
+  const boundaries = [
+    ...(!maturity.mcp ? ["MCP-native hook not claimed"] : []),
     ...item.notes
   ];
   const status: HarnessStatus =
@@ -168,7 +171,8 @@ function maturityRow(
       rulesPaths: item.rulesPaths,
       goldenPath: goldenPath?.patchEvidenceTrailId
     },
-    gaps
+    gaps,
+    boundaries
   };
 }
 
@@ -273,7 +277,7 @@ function runHarnessGoldenPath(harness: string): HarnessGoldenPathRun {
 
 function renderMarkdown(report: HarnessMaturityReport): string {
   const rows = report.rows
-    .map((row) => `| ${row.name} | ${row.status} | ${yes(row.maturity.configGenerated)} | ${yes(row.maturity.skillOrRules)} | ${yes(row.maturity.mcp)} | ${yes(row.maturity.preLlmContextHook)} | ${yes(row.maturity.preToolGuard)} | ${yes(row.maturity.postToolTelemetry)} | ${yes(row.maturity.correctionCapture)} | ${yes(row.maturity.patchEvidenceTrail)} | ${yes(row.maturity.installWizard)} | ${yes(row.maturity.doctor)} | ${yes(row.maturity.e2eDemo)} | ${row.gaps.join("; ") || "none"} |`)
+    .map((row) => `| ${row.name} | ${row.status} | ${yes(row.maturity.configGenerated)} | ${yes(row.maturity.skillOrRules)} | ${yes(row.maturity.mcp)} | ${yes(row.maturity.preLlmContextHook)} | ${yes(row.maturity.preToolGuard)} | ${yes(row.maturity.postToolTelemetry)} | ${yes(row.maturity.correctionCapture)} | ${yes(row.maturity.patchEvidenceTrail)} | ${yes(row.maturity.installWizard)} | ${yes(row.maturity.doctor)} | ${yes(row.maturity.e2eDemo)} | ${row.gaps.join("; ") || "none"}${row.boundaries.length ? ` (boundaries: ${row.boundaries.join("; ")})` : ""} |`)
     .join("\n");
   return `# Harness Maturity Matrix
 

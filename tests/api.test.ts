@@ -203,6 +203,19 @@ describe("cognibrain HTTP API contract", () => {
 
     const readDenied = await fetch(`${baseUrl}/memories?userId=jwt-user`, { headers: { authorization: `Bearer ${writeToken}` } });
     expect(readDenied.status).toBe(403);
+
+    const connectorReadToken = signJwt({
+      iss: "https://issuer.example",
+      aud: "cognibrain-api",
+      sub: "jwt-user",
+      orgId: "org-jwt",
+      scope: "connector:read",
+      exp: Math.floor(Date.now() / 1000) + 300
+    });
+    const connectorHealth = await fetch(`${baseUrl}/connectors/health`, { headers: { authorization: `Bearer ${connectorReadToken}` } });
+    expect(connectorHealth.status).toBe(200);
+    const memoryReadWithConnectorScope = await fetch(`${baseUrl}/memories?userId=jwt-user`, { headers: { authorization: `Bearer ${connectorReadToken}` } });
+    expect(memoryReadWithConnectorScope.status).toBe(403);
   });
 
   it("applies configurable CORS, request body limits, and rate limits", async () => {

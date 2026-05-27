@@ -30,16 +30,31 @@ interface ConnectorCertificationReport {
   passed: boolean;
 }
 
+interface ConnectorCertificationOptions {
+  out?: string;
+  markdown?: string;
+  maturityInput?: string;
+  liveSmokeInput?: string;
+  transportInput?: string;
+  qualityInput?: string;
+}
+
 const priorityWebhookProviders = new Set(["github", "jira", "confluence", "notion", "linear", "gitlab", "slack", "teams", "sentry", "pagerduty"]);
 
-export function generateConnectorCertification(options: { out?: string; markdown?: string } = {}): ConnectorCertificationReport {
-  const maturity = readJson("artifacts/connector-maturity.json", { rows: [] }) as { rows?: Array<Record<string, unknown>> };
-  const live = readJson("artifacts/vendor-live-smoke.json", { liveRequested: false, writebackEnabled: false, providers: [] }) as { liveRequested?: boolean; writebackEnabled?: boolean; providers?: Array<Record<string, unknown>> };
-  const transport = readJson("artifacts/connector-transport.json", { passed: false }) as { passed?: boolean };
-  const quality = readJson("artifacts/connector-quality.json", { rows: [] }) as { rows?: Array<Record<string, unknown>> };
+export function generateConnectorCertification(options: ConnectorCertificationOptions = {}): ConnectorCertificationReport {
+  const artifactPaths = {
+    maturity: options.maturityInput ?? "artifacts/connector-maturity.json",
+    liveSmoke: options.liveSmokeInput ?? "artifacts/vendor-live-smoke.json",
+    transport: options.transportInput ?? "artifacts/connector-transport.json",
+    quality: options.qualityInput ?? "artifacts/connector-quality.json"
+  };
+  const maturity = readJson(artifactPaths.maturity, { rows: [] }) as { rows?: Array<Record<string, unknown>> };
+  const live = readJson(artifactPaths.liveSmoke, { liveRequested: false, writebackEnabled: false, providers: [] }) as { liveRequested?: boolean; writebackEnabled?: boolean; providers?: Array<Record<string, unknown>> };
+  const transport = readJson(artifactPaths.transport, { passed: false }) as { passed?: boolean };
+  const quality = readJson(artifactPaths.quality, { rows: [] }) as { rows?: Array<Record<string, unknown>> };
   const qualityByProvider = new Map((quality.rows ?? []).map((row) => [String(row.provider), row]));
   const liveByProvider = new Map((live.providers ?? []).map((row) => [String(row.provider), row]));
-  const rows = (maturity.rows ?? []).map((row) => certificationRow(row, liveByProvider.get(String(row.provider)), qualityByProvider.get(String(row.provider)), live, transport));
+  const rows = (maturity.rows ?? []).map((row) => certificationRow(row, liveByProvider.get(String(row.provider)), qualityByProvider.get(String(row.provider)), live, transport, artifactPaths));
   const summary = {
     total: rows.length,
     implementationReady: rows.filter((row) => row.state === "implementation-ready").length,
@@ -72,7 +87,13 @@ function certificationRow(
   liveRow: Record<string, unknown> | undefined,
   qualityRow: Record<string, unknown> | undefined,
   liveReport: { liveRequested?: boolean; writebackEnabled?: boolean },
-  transport: { passed?: boolean }
+  transport: { passed?: boolean },
+  artifactPaths: {
+    maturity: string;
+    liveSmoke: string;
+    transport: string;
+    quality: string;
+  }
 ): CertificationRow {
   const provider = String(row.provider ?? "unknown");
   const maturity = object(row.maturity);
@@ -80,6 +101,7 @@ function certificationRow(
   const tenantVerified = maturity.tenantVerified === true;
   const productionCertified = maturity.productionCertified === true;
   const webhookNeeded = priorityWebhookProviders.has(provider);
+  const maturityEvidence = object(row.evidence);
   const checks = {
     hermeticDriver: maturity.hermeticFixture === true,
     apiSpec: maturity.apiSpec === true,
@@ -111,11 +133,11 @@ function certificationRow(
     state,
     checks,
     evidence: {
-      maturity: "artifacts/connector-maturity.json",
-      apiSpec: "artifacts/vendor-api-specs.json",
-      liveSmoke: "artifacts/vendor-live-smoke.json",
-      quality: "artifacts/connector-quality.json",
-      transport: provider === "github" ? "artifacts/connector-transport.json" : "covered-by-shared-transport-path"
+      maturity: artifactPaths.maturity,
+      apiSpec: String(maturityEvidence.apiSpecArtifact ?? "artifacts/vendor-api-specs.json"),
+      liveSmoke: artifactPaths.liveSmoke,
+      quality: artifactPaths.quality,
+      transport: provider === "github" ? artifactPaths.transport : "covered-by-shared-transport-path"
     },
     blockedBy,
     canBecomeTenantVerified: implementationReady,
@@ -148,12 +170,20 @@ function readJson(path: string, fallback: unknown): unknown {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
-function cliOptions(argv: string[]): { out?: string; markdown?: string } {
+function cliOptions(argv: string[]): ConnectorCertificationOptions {
   const outIndex = argv.indexOf("--out");
   const markdownIndex = argv.indexOf("--markdown");
+  const maturityIndex = argv.indexOf("--maturity-input");
+  const liveSmokeIndex = argv.indexOf("--live-smoke-input");
+  const transportIndex = argv.indexOf("--transport-input");
+  const qualityIndex = argv.indexOf("--quality-input");
   return {
     out: outIndex >= 0 ? argv[outIndex + 1] : "artifacts/connector-certification.json",
-    markdown: markdownIndex >= 0 ? argv[markdownIndex + 1] : "artifacts/docs/connector-certification.md"
+    markdown: markdownIndex >= 0 ? argv[markdownIndex + 1] : "artifacts/docs/connector-certification.md",
+    maturityInput: maturityIndex >= 0 ? argv[maturityIndex + 1] : undefined,
+    liveSmokeInput: liveSmokeIndex >= 0 ? argv[liveSmokeIndex + 1] : undefined,
+    transportInput: transportIndex >= 0 ? argv[transportIndex + 1] : undefined,
+    qualityInput: qualityIndex >= 0 ? argv[qualityIndex + 1] : undefined
   };
 }
 

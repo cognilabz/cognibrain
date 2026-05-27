@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { shouldUseExternalVendor } from "../connectors/vendorConnectors";
 import { applyRedactionPolicy, decryptMemoryContent, type DecryptionKeyMaterial, type RedactionPolicy } from "../core/privacy";
 import { createJsonCommandIntelligenceFromEnv } from "../core/providers";
@@ -42,11 +42,13 @@ import {
   getEngineeringMetadata,
   healthReport,
   IdentityResolver,
+  InMemoryMemoryRepository,
   InMemoryStorageAdapter,
   inferGraphRelations,
   MemoryStore,
   normalizeLifecyclePolicy,
   normalizeRetrievalWeights,
+  RepositoryBackedStorageAdapter,
   queryMemoryGraph,
   runDomainEvaluation,
   DOMAIN_MODULES,
@@ -55,6 +57,7 @@ import {
   withEngineeringMemoryMetadata,
   type LifecyclePolicy,
   type DomainModule,
+  type MemoryRepository,
   type MemoryStorageAdapter
 } from "../core";
 import {
@@ -370,6 +373,9 @@ import type {
   SourceRevalidationReport,
   SourceRevalidationResult,
   SourceRevalidationStatus,
+  SourceResolver,
+  SourceRecord,
+  SourceValidationDecision,
   VerificationResolutionReport,
   EpisodeInput,
   EpisodeRecord,
@@ -394,6 +400,9 @@ import type {
   LearnedProfileReport,
   Memory,
   MemoryClaim,
+  ClaimRecord,
+  ConflictSet,
+  CurrentTruthDecision,
   MemoryExtractionEvent,
   MemoryExtractor,
   MemoryInput,
@@ -459,10 +468,51 @@ import type {
 } from "../core";
 
 const COGNIBRAIN_VERSION = "0.1.0";
+const SOURCE_QUALITY: Record<string, number> = {
+  human: 1,
+  reviewed_code: 0.95,
+  tool: 0.9,
+  import: 0.78,
+  agent: 0.55,
+  transcript: 0.42
+};
+
+function contentDigest(input: string): string {
+  return createHash("sha256").update(input).digest("hex");
+}
+
+function syntheticEventForMemory(memory: Memory): MemoryExtractionEvent {
+  return {
+    role: "user",
+    content: memory.content,
+    timestamp: memory.createdAt,
+    source: memory.source,
+    sourceRef: memory.provenance.sourceRef
+  };
+}
+
+function claimStateForMemory(memory: Memory): ClaimRecord["state"] {
+  if (memory.beliefState === "archived") return "needs_verification";
+  if (memory.beliefState === "stale") return "needs_verification";
+  if (memory.beliefState === "active") return "active";
+  return memory.beliefState;
+}
+
+function defaultSourceResolverDecision(memory: Memory, sourceRecord: SourceRecord): SourceValidationDecision {
+  if (sourceRecord.status === "missing") return { status: "source_missing", reason: "source resolver marked source as missing", sourceRecord };
+  const previous = memory.provenance.sourceRef;
+  const next = sourceRecord.sourceRef;
+  if (previous && sourceRefChanged(previous, next)) return { status: "source_updated", reason: "source resolver detected version or hash change", sourceRecord };
+  if (sourceRecord.version && previous?.version && sourceRecord.version !== previous.version) return { status: "source_updated", reason: "source resolver detected version change", sourceRecord };
+  if (sourceRecord.hash && previous?.hash && sourceRecord.hash !== previous.hash) return { status: "source_updated", reason: "source resolver detected content hash change", sourceRecord };
+  return { status: "confirmed", reason: "source resolver confirmed sourceRef", sourceRecord };
+}
 
 export interface MemoryServiceOptions {
   persistencePath?: string;
   persistence?: MemoryPersistenceAdapter;
+  repository?: MemoryRepository;
+  storage?: MemoryStorageAdapter;
   autoDream?: {
     enabled?: boolean;
     intervalHours?: number;
@@ -474,6 +524,7 @@ export interface MemoryServiceOptions {
   domainModule?: DomainModule;
   configPath?: string;
   entityAliases?: Record<string, string[]>;
+  sourceQuality?: Partial<Record<string, number>>;
   intelligence?: {
     reranker?: SearchOptions["reranker"];
     verifier?: SearchOptions["verifier"];
@@ -524,9 +575,26 @@ export interface MemoryMaintenanceStatus {
   users: Record<string, { lastDreamAt?: string; writesSinceDream: number }>;
 }
 
+function repositoryFromStorage(storage?: MemoryStorageAdapter): MemoryRepository | undefined {
+  if (!storage) return undefined;
+  if (storage instanceof RepositoryBackedStorageAdapter) return storage.repository;
+  if (storage instanceof InMemoryStorageAdapter) return new InMemoryMemoryRepository(storage.store);
+  return undefined;
+}
+
+function memoryStoreForRepository(repository: MemoryRepository): MemoryStore {
+  if (repository instanceof InMemoryMemoryRepository) return repository.store;
+  const maybeRepositoryStore = (repository as { store?: unknown }).store;
+  if (maybeRepositoryStore instanceof MemoryStore) return maybeRepositoryStore;
+  const store = new MemoryStore();
+  store.import(repository.export());
+  return store;
+}
+
 export class MemoryService {
-  readonly store = new MemoryStore();
-  readonly storage: MemoryStorageAdapter = new InMemoryStorageAdapter(this.store);
+  readonly repository: MemoryRepository;
+  readonly store: MemoryStore;
+  readonly storage: MemoryStorageAdapter;
   readonly retrieval: RetrievalEngine;
   readonly reflection: ReflectionEngine;
   readonly identities = new IdentityResolver();
@@ -536,8 +604,11 @@ export class MemoryService {
   private readonly autoDream: Required<NonNullable<MemoryServiceOptions["autoDream"]>>;
   private readonly redactionPolicy: RedactionPolicy;
   private readonly domainModule?: DomainModule;
+  private readonly sourceQuality: Record<string, number>;
   private maintenance: PersistedMemoryFile["maintenance"] = { users: {} };
   private feedbackEvents: FeedbackEvent[] = [];
+  private claims = new Map<string, ClaimRecord>();
+  private conflictSets = new Map<string, ConflictSet>();
   private retrievalProfiles = new Map<string, RetrievalProfile>();
   private domainEvaluations: DomainEvaluationReport[] = [];
   private trainingSamples: RetrievalTrainingSample[] = [];
@@ -557,6 +628,7 @@ export class MemoryService {
   private connectorAuthSessions = new Map<string, ConnectorAuthSession>();
   private connectorSyncRecords: ConnectorSyncRecord[] = [];
   private connectorSyncStates = new Map<string, ConnectorSyncState>();
+  private sourceResolvers = new Map<string, SourceResolver>();
   private dreamJobs = new Map<string, DreamJob>();
   private evidencePacks = new Map<string, EvidencePack>();
   private codingContextPacks = new Map<string, CodingContextPack>();
@@ -588,6 +660,9 @@ export class MemoryService {
 
   constructor(options: MemoryServiceOptions = {}) {
     const runtimeConfig = loadRuntimeConfig(options.configPath);
+    this.repository = options.repository ?? repositoryFromStorage(options.storage) ?? new InMemoryMemoryRepository();
+    this.store = memoryStoreForRepository(this.repository);
+    this.storage = options.storage ?? new RepositoryBackedStorageAdapter(this.repository);
     this.persistence = options.persistence ?? (options.persistencePath ? new JsonFilePersistenceAdapter(options.persistencePath) : undefined);
     this.autoDream = {
       enabled: options.autoDream?.enabled ?? false,
@@ -595,6 +670,10 @@ export class MemoryService {
       writeThreshold: options.autoDream?.writeThreshold ?? 12
     };
     this.domainModule = options.domainModule;
+    this.sourceQuality = { ...SOURCE_QUALITY };
+    for (const [key, value] of Object.entries(options.sourceQuality ?? {})) {
+      if (typeof value === "number") this.sourceQuality[key] = value;
+    }
     const provider = options.intelligence ?? providerFromEnv();
     this.redactionPolicy = options.redactionPolicy ?? runtimeConfig.redactionPolicy ?? options.domainModule?.redactionPolicy ?? {
       mode: redactionModeFromEnv(process.env.MEMORY_REDACTION_MODE),
@@ -675,6 +754,216 @@ export class MemoryService {
     return archiveImpl(this, id);
   }
 
+  registerMemoryClaim(memory: Memory): ClaimRecord | undefined {
+    const rawClaim = memory.metadata?.claim as MemoryClaim | undefined;
+    const claim = rawClaim ?? extractClaim(memory.content, syntheticEventForMemory(memory), memory.scope, memory.source, memory.entities);
+    if (!claim.subject || !claim.predicate || !claim.object) return undefined;
+    const now = new Date().toISOString();
+    const existing = [...this.claims.values()].find((item) => item.sourceMemoryId === memory.id);
+    const record: ClaimRecord = {
+      id: existing?.id ?? `claim_${contentDigest(`${memory.id}:${claim.subject}:${claim.predicate}:${claim.object}`).slice(0, 16)}`,
+      subject: claim.subject,
+      predicate: claim.predicate,
+      object: claim.object,
+      qualifiers: claim.qualifiers ?? {},
+      sourceMemoryId: memory.id,
+      sourceRef: memory.provenance.sourceRef,
+      validFrom: memory.temporal.validFrom ?? memory.createdAt,
+      validUntil: memory.temporal.validUntil,
+      confidence: claim.confidence,
+      trust: memory.trust,
+      state: claimStateForMemory(memory),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    this.claims.set(record.id, record);
+    this.rebuildConflictSetFor(record.subject, record.predicate);
+    return record;
+  }
+
+  currentTruthForMemory(memory: Memory): CurrentTruthDecision | undefined {
+    const claim = [...this.claims.values()].find((item) => item.sourceMemoryId === memory.id) ?? this.registerMemoryClaim(memory);
+    if (!claim) return undefined;
+    return this.currentTruthForClaim(claim);
+  }
+
+  currentTruthForClaim(claim: ClaimRecord): CurrentTruthDecision {
+    const candidates = [...this.claims.values()]
+      .filter((item) => item.subject === claim.subject && item.predicate === claim.predicate)
+      .filter((item) => item.state !== "retracted");
+    if (!candidates.length) {
+      return { subject: claim.subject, predicate: claim.predicate, state: "missing", reason: "no claim candidates available", suppressedClaimIds: [] };
+    }
+    const scored = candidates
+      .map((item) => ({ claim: item, score: this.truthScore(item) }))
+      .sort((a, b) => b.score - a.score);
+    const selected = scored[0];
+    const runnerUp = scored[1];
+    const conflict = this.conflictSetFor(claim.subject, claim.predicate);
+    const uncertain = Boolean(runnerUp && runnerUp.claim.object !== selected.claim.object && selected.score - runnerUp.score < 0.05);
+    if (uncertain) {
+      return {
+        subject: claim.subject,
+        predicate: claim.predicate,
+        selectedClaimId: selected.claim.id,
+        selectedMemoryId: selected.claim.sourceMemoryId,
+        state: "uncertain",
+        reason: `conflicting claims are too close to auto-resolve (${selected.score.toFixed(3)} vs ${runnerUp?.score.toFixed(3)})`,
+        suppressedClaimIds: scored.slice(1).map((item) => item.claim.id),
+        conflictSetId: conflict?.id,
+        scoreBreakdown: { selected: selected.score, runnerUp: runnerUp?.score ?? 0 }
+      };
+    }
+    const sourceReason = `selected by source quality ${this.sourceQualityForClaim(selected.claim).toFixed(2)}, trust ${selected.claim.trust.toFixed(2)}, confidence ${selected.claim.confidence.toFixed(2)}`;
+    return {
+      subject: claim.subject,
+      predicate: claim.predicate,
+      selectedClaimId: selected.claim.id,
+      selectedMemoryId: selected.claim.sourceMemoryId,
+      state: "selected",
+      reason: runnerUp && runnerUp.claim.object !== selected.claim.object
+        ? `${sourceReason}; suppressed conflicting claim ${runnerUp.claim.id}`
+        : sourceReason,
+      suppressedClaimIds: scored.slice(1).map((item) => item.claim.id),
+      conflictSetId: conflict?.id,
+      scoreBreakdown: { selected: selected.score, runnerUp: runnerUp?.score ?? 0 }
+    };
+  }
+
+  listConflictSets(status?: ConflictSet["status"]): ConflictSet[] {
+    return [...this.conflictSets.values()]
+      .filter((conflictSet) => !status || conflictSet.status === status)
+      .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
+  }
+
+  resolveConflictSet(
+    conflictSetId: string,
+    input: { selectedClaimId: string; reason: string; resolvedBy?: "system" | "operator" | "source_revalidation" }
+  ): ConflictSet {
+    const conflictSet = this.conflictSets.get(conflictSetId);
+    if (!conflictSet) throw new Error(`Conflict set not found: ${conflictSetId}`);
+    if (!conflictSet.claimIds.includes(input.selectedClaimId)) throw new Error(`Claim ${input.selectedClaimId} is not part of conflict set ${conflictSetId}`);
+    const selected = this.claims.get(input.selectedClaimId);
+    if (!selected) throw new Error(`Claim not found: ${input.selectedClaimId}`);
+    const now = new Date().toISOString();
+    for (const claimId of conflictSet.claimIds) {
+      const claim = this.claims.get(claimId);
+      if (!claim) continue;
+      const state = claim.id === selected.id ? "active" : "contradicted";
+      this.claims.set(claim.id, { ...claim, state, updatedAt: now });
+      const memory = safeGet(this.store, claim.sourceMemoryId);
+      if (memory && memory.beliefState !== "retracted" && memory.beliefState !== "archived") {
+        this.storage.update(memory.id, {
+          beliefState: state === "active" ? "active" : "contradicted",
+          metadata: {
+            ...memory.metadata,
+            conflictSetId,
+            truthResolutionReason: input.reason,
+            ...(state === "active" ? { selectedTruthClaimId: selected.id } : { suppressedByTruthClaimId: selected.id })
+          }
+        });
+      }
+    }
+    const resolved: ConflictSet = {
+      ...conflictSet,
+      status: "resolved",
+      resolution: {
+        selectedClaimId: selected.id,
+        reason: input.reason,
+        resolvedBy: input.resolvedBy ?? "operator",
+        resolvedAt: now
+      }
+    };
+    this.conflictSets.set(conflictSetId, resolved);
+    this.recordAudit("memory.update", { userId: safeGet(this.store, selected.sourceMemoryId)?.userId ?? "system", memoryId: selected.sourceMemoryId, metadata: { resource: "conflict-set", conflictSetId, selectedClaimId: selected.id, reason: input.reason } });
+    this.persist();
+    return resolved;
+  }
+
+  listConnectorReviewQueue(options: { connectorId?: string; userId?: string; status?: "pending" | "approved" | "rejected" } = {}): Memory[] {
+    return this.store.list(options.userId)
+      .filter((memory) => {
+        const queue = memory.metadata?.reviewQueue as { status?: string; connectorId?: string } | undefined;
+        if (!queue) return false;
+        if (options.connectorId && queue.connectorId !== options.connectorId) return false;
+        return (options.status ?? "pending") === queue.status;
+      });
+  }
+
+  reviewConnectorMemory(
+    memoryId: string,
+    input: { decision: "approve" | "reject"; reviewerId?: string; reason?: string }
+  ): Memory {
+    const memory = this.store.get(memoryId);
+    const queue = memory.metadata?.reviewQueue as { status?: string; connectorId?: string; reason?: string } | undefined;
+    if (!queue) throw new Error(`Memory ${memoryId} is not in the connector review queue`);
+    const status = input.decision === "approve" ? "approved" : "rejected";
+    const reviewedAt = new Date().toISOString();
+    const updated = this.update(memoryId, {
+      beliefState: input.decision === "approve" ? "active" : "retracted",
+      trust: input.decision === "approve" ? Math.max(memory.trust, 0.82) : 0,
+      temporal: input.decision === "approve" ? { ...memory.temporal, lastConfirmedAt: reviewedAt } : memory.temporal,
+      metadata: {
+        ...memory.metadata,
+        reviewQueue: {
+          ...queue,
+          status,
+          reviewedAt,
+          reviewerId: input.reviewerId,
+          decisionReason: input.reason
+        }
+      }
+    });
+    this.recordAudit("memory.update", { userId: updated.userId, memoryId, metadata: { resource: "connector-review-queue", connectorId: queue.connectorId, decision: input.decision, reviewerId: input.reviewerId, reason: input.reason } });
+    return updated;
+  }
+
+  private truthScore(claim: ClaimRecord): number {
+    const sourceQuality = this.sourceQualityForClaim(claim);
+    const validUntilPenalty = claim.validUntil && new Date(claim.validUntil).getTime() < Date.now() ? 0.25 : 0;
+    const statePenalty = claim.state === "needs_verification" ? 0.1 : claim.state === "contradicted" ? 0.2 : claim.state === "superseded" ? 0.35 : 0;
+    const recency = Math.max(0, Math.min(1, 1 - ((Date.now() - new Date(claim.updatedAt).getTime()) / (1000 * 60 * 60 * 24 * 365))));
+    return Math.max(0, claim.trust * 0.4 + claim.confidence * 0.25 + sourceQuality * 0.25 + recency * 0.1 - statePenalty - validUntilPenalty);
+  }
+
+  private sourceQualityForClaim(claim: ClaimRecord): number {
+    const memory = safeGet(this.store, claim.sourceMemoryId);
+    if (!memory) return 0.35;
+    if (memory.metadata?.engineeringKind === "review_correction") return 0.95;
+    if (memory.metadata?.engineeringKind === "tool_outcome") return 0.9;
+    if (memory.metadata?.engineeringKind === "architecture_decision") return 0.88;
+    if (memory.provenance.sourceRef?.connectorId === "jira") return 0.78;
+    if (memory.provenance.sourceRef?.connectorId === "slack") return 0.72;
+    return this.sourceQuality[memory.source.kind] ?? 0.5;
+  }
+
+  private rebuildConflictSetFor(subject: string, predicate: string): ConflictSet | undefined {
+    const candidates = [...this.claims.values()].filter((claim) => claim.subject === subject && claim.predicate === predicate && claim.state !== "retracted");
+    const objects = new Set(candidates.map((claim) => claim.object));
+    const existing = this.conflictSetFor(subject, predicate);
+    if (objects.size <= 1) {
+      if (existing && existing.status === "open") this.conflictSets.set(existing.id, { ...existing, status: "resolved", resolution: { selectedClaimId: candidates[0]?.id ?? "", reason: "claims converged to one object", resolvedBy: "system", resolvedAt: new Date().toISOString() } });
+      return existing;
+    }
+    const id = existing?.id ?? `conflict_${contentDigest(`${subject}:${predicate}`).slice(0, 16)}`;
+    const next: ConflictSet = {
+      id,
+      claimIds: candidates.map((claim) => claim.id),
+      detectedAt: existing?.detectedAt ?? new Date().toISOString(),
+      status: existing?.status === "resolved" ? "operator_review" : existing?.status ?? "open",
+      resolution: existing?.status === "resolved" ? existing.resolution : undefined
+    };
+    this.conflictSets.set(id, next);
+    return next;
+  }
+
+  private conflictSetFor(subject: string, predicate: string): ConflictSet | undefined {
+    return [...this.conflictSets.values()].find((set) => set.id === `conflict_${contentDigest(`${subject}:${predicate}`).slice(0, 16)}` || set.claimIds.some((id) => {
+      const claim = this.claims.get(id);
+      return claim?.subject === subject && claim.predicate === predicate;
+    }));
+  }
+
   private applySupersession(memory: Memory): void {
     const supersedes = memory.relations.filter((relation) => relation.type === "supersedes" && relation.targetId);
     if (!supersedes.length) return;
@@ -695,6 +984,7 @@ export class MemoryService {
           supersessionReason: `Superseded by ${memory.id}`
         }
       });
+      this.registerMemoryClaim(updated);
       this.recordAudit("memory.update", { userId: updated.userId, brainId: updated.brainId, sourceId: updated.sourceId, memoryId: updated.id, metadata: { action: "superseded", supersededBy: memory.id } });
     }
   }
@@ -861,11 +1151,14 @@ export class MemoryService {
     fetchImpl: typeof fetch,
     timeoutMs: number
   ): Promise<void> {
+    if (job.status === "cancelled") {
+      this.persist();
+      return;
+    }
     job.status = "running";
     job.startedAt = new Date().toISOString();
     try {
       const report = await this.runDreamCycleAsync({ ...input, mode, trigger, connectorIds: job.plan.connectorIds, sourceRefresh: job.plan.sourceRefresh }, fetchImpl, timeoutMs);
-      job.status = "done";
       job.finishedAt = new Date().toISOString();
       job.report = report;
       job.progress = {
@@ -877,10 +1170,11 @@ export class MemoryService {
         sourceRevalidations: report.dreamCycle.sourceRevalidation?.evaluated ?? 0,
         verificationScheduled: report.dreamCycle.verificationScheduled
       };
+      if (this.dreamJobs.get(job.jobId)?.status !== "cancelled") job.status = "done";
     } catch (error) {
-      job.status = "failed";
+      if (this.dreamJobs.get(job.jobId)?.status !== "cancelled") job.status = "failed";
       job.finishedAt = new Date().toISOString();
-      job.error = error instanceof Error ? error.message : "dream job failed";
+      if (this.dreamJobs.get(job.jobId)?.status !== "cancelled") job.error = error instanceof Error ? error.message : "dream job failed";
     }
     this.recordAudit(job.status === "failed" ? "policy.violation" : "reflect.run", { userId: input.userId, metadata: { resource: "dream-job", jobId: job.jobId, status: job.status, trigger, mode, progress: job.progress, error: job.error } });
     this.persist();
@@ -888,6 +1182,35 @@ export class MemoryService {
 
   dreamJobStatus(jobId?: string): DreamJob[] {
     return dreamJobStatusImpl(this, jobId);
+  }
+
+  cancelDreamJob(jobId: string, reason?: string): DreamJob {
+    const job = this.dreamJobs.get(jobId);
+    if (!job) throw new Error(`Dream job not found: ${jobId}`);
+    if (job.status === "done" || job.status === "failed" || job.status === "cancelled") return job;
+    job.status = "cancelled";
+    job.finishedAt = new Date().toISOString();
+    job.error = reason ?? "cancelled by operator";
+    this.recordAudit("reflect.run", { userId: job.userId, metadata: { resource: "dream-job", jobId, status: job.status, reason: job.error } });
+    this.persist();
+    return job;
+  }
+
+  async retryDreamJob(
+    jobId: string,
+    fetchImpl: typeof fetch = fetch,
+    timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000),
+    options: { wait?: boolean } = {}
+  ): Promise<DreamJob> {
+    const job = this.dreamJobs.get(jobId);
+    if (!job) throw new Error(`Dream job not found: ${jobId}`);
+    if (job.status !== "failed" && job.status !== "cancelled") throw new Error(`Dream job ${jobId} is not retryable from status ${job.status}`);
+    const input = { ...(job.input ?? { userId: job.userId }), trigger: job.trigger, mode: job.mode, budget: job.plan.budget, sourceRefresh: job.plan.sourceRefresh, connectorIds: job.plan.connectorIds };
+    const retry = await this.startDreamJob(input, fetchImpl, timeoutMs, options);
+    retry.retryOf = jobId;
+    this.recordAudit("reflect.run", { userId: job.userId, metadata: { resource: "dream-job", jobId: retry.jobId, retryOf: jobId, status: retry.status } });
+    this.persist();
+    return retry;
   }
 
   private async refreshDreamSources(
@@ -1000,6 +1323,11 @@ export class MemoryService {
 
   revalidateMemory(memoryId: string, userId?: string): SourceRevalidationResult {
     return revalidateMemoryImpl(this, memoryId, userId);
+  }
+
+  registerSourceResolver(resolver: SourceResolver): SourceResolver {
+    this.sourceResolvers.set(resolver.connectorId, resolver);
+    return resolver;
   }
 
   resolveVerificationQueue(userId: string, options: { limit?: number; connectorIds?: string[] } = {}): VerificationResolutionReport {
@@ -1660,6 +1988,14 @@ export class MemoryService {
       this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: "needs_operator_review", reason: "missing_source_ref" } });
       return { memoryId, status: "needs_operator_review", reason: "memory has no sourceRef" };
     }
+    const resolver = sourceRef.connectorId ? this.sourceResolvers.get(sourceRef.connectorId) : undefined;
+    if (resolver) {
+      const sourceRecord = resolver.get(sourceRef, memory);
+      const decision: SourceValidationDecision = sourceRecord
+        ? resolver.compare?.(memory, sourceRecord) ?? defaultSourceResolverDecision(memory, sourceRecord)
+        : { status: "source_missing" as const, reason: "source resolver returned no source record" };
+      return this.applySourceResolverDecision(memory, sourceRef, decision);
+    }
     if (memory.metadata.verificationReason === "source_deleted" || memory.metadata.sourceDeletedAt) {
       const updated = this.store.update(memory.id, {
         beliefState: "needs_verification",
@@ -1761,7 +2097,7 @@ export class MemoryService {
         previousHash: sourceRef.hash,
         currentHash: latestRef?.hash ?? sourceRef.hash,
         previousVersion: sourceRef.version,
-        currentVersion: latestRef?.version ?? sourceRef.version
+      currentVersion: latestRef?.version ?? sourceRef.version
       };
     }
 
@@ -1780,6 +2116,60 @@ export class MemoryService {
       syncRecordId: syncRecord?.id,
       previousHash: sourceRef.hash,
       previousVersion: sourceRef.version
+    };
+  }
+
+  private applySourceResolverDecision(
+    memory: Memory,
+    sourceRef: NonNullable<Memory["provenance"]["sourceRef"]>,
+    decision: SourceValidationDecision
+  ): SourceRevalidationResult {
+    const now = new Date().toISOString();
+    const sourceRecord = decision.sourceRecord;
+    const status = decision.status;
+    const nextBeliefState = decision.beliefState ?? (
+      status === "confirmed" ? "active" :
+        status === "source_updated" || status === "source_missing" || status === "needs_operator_review" ? "needs_verification" :
+          status === "superseded" ? "superseded" :
+            status === "contradicted" ? "contradicted" :
+              memory.beliefState
+    );
+    const updated = this.store.update(memory.id, {
+      beliefState: nextBeliefState,
+      temporal: {
+        ...memory.temporal,
+        lastConfirmedAt: status === "confirmed" ? now : memory.temporal.lastConfirmedAt,
+        verificationDueAt: status === "confirmed" ? undefined : memory.temporal.verificationDueAt ?? now,
+        stalenessRisk: status === "confirmed" ? 0 : Math.max(memory.temporal.stalenessRisk ?? 0, status === "source_missing" ? 0.85 : 0.7)
+      },
+      metadata: {
+        ...memory.metadata,
+        sourceRevalidation: {
+          status,
+          at: now,
+          reason: decision.reason,
+          resolver: sourceRef.connectorId,
+          sourceRecord: sourceRecord ? {
+            version: sourceRecord.version,
+            hash: sourceRecord.hash,
+            updatedAt: sourceRecord.updatedAt,
+            status: sourceRecord.status
+          } : undefined
+        }
+      }
+    });
+    this.registerMemoryClaim(updated);
+    this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status, resolver: sourceRef.connectorId, reason: decision.reason } });
+    return {
+      memoryId: memory.id,
+      connectorId: sourceRef.connectorId,
+      externalId: sourceRef.externalId,
+      status,
+      reason: decision.reason,
+      previousHash: sourceRef.hash,
+      currentHash: sourceRecord?.hash ?? sourceRecord?.sourceRef.hash,
+      previousVersion: sourceRef.version,
+      currentVersion: sourceRecord?.version ?? sourceRecord?.sourceRef.version
     };
   }
 
@@ -2180,12 +2570,15 @@ export class MemoryService {
     const raw = this.persistence?.load();
     if (!raw) return;
     if (Array.isArray(raw)) {
-      this.store.seed(raw);
+      this.repository.import(raw);
+      this.syncReadModelFromRepository();
       return;
     }
     this.maintenance = raw.maintenance ?? { users: {} };
     this.metrics = raw.metrics ?? this.metrics;
     this.feedbackEvents = raw.feedback ?? [];
+    this.claims = new Map((raw.claims ?? []).map((claim) => [claim.id, claim]));
+    this.conflictSets = new Map((raw.conflictSets ?? []).map((conflictSet) => [conflictSet.id, conflictSet]));
     this.episodes = new Map((raw.episodes ?? []).map((episode) => [episode.id, episode]));
     this.retrievalProfiles = new Map((raw.retrievalProfiles ?? []).map((profile) => [profile.id, profile]));
     if (!this.retrievalProfiles.has("default")) {
@@ -2216,11 +2609,21 @@ export class MemoryService {
     this.connectorAuthSessions = new Map((raw.connectorAuthSessions ?? []).map((session) => [session.id, session]));
     this.connectorSyncRecords = raw.connectorSyncRecords ?? [];
     this.connectorSyncStates = new Map((raw.connectorSyncStates ?? []).map((state) => [state.connectorId, state]));
+    this.dreamJobs = new Map((raw.dreamJobs ?? []).map((job) => [job.jobId, job]));
     this.evidencePacks = new Map((raw.evidencePacks ?? []).map((pack) => [pack.id, pack]));
     this.policyRules = new Map((raw.policyRules ?? []).map((rule) => [rule.id, rule]));
     this.retentionRules = new Map((raw.retentionRules ?? []).map((rule) => [rule.id, rule]));
-    this.store.import(raw.memories ?? []);
+    this.repository.import(raw.memories ?? []);
+    this.syncReadModelFromRepository();
     for (const memory of this.store.list()) this.entities.ingest(memory);
+    if (!this.claims.size) for (const memory of this.store.list()) this.registerMemoryClaim(memory);
+  }
+
+  private syncReadModelFromRepository(): void {
+    if (this.repository instanceof InMemoryMemoryRepository) return;
+    if ((this.repository as { store?: unknown }).store === this.store) return;
+    this.store.clear();
+    this.store.import(this.repository.export());
   }
 
   private persist(): void {
@@ -2232,6 +2635,8 @@ export class MemoryService {
       maintenance: this.maintenance,
       metrics: this.metrics,
       feedback: this.feedbackEvents,
+      claims: [...this.claims.values()],
+      conflictSets: [...this.conflictSets.values()],
       retrievalProfiles: [...this.retrievalProfiles.values()],
       identityLinks: this.identities.export(),
       domainEvaluations: this.domainEvaluations,
@@ -2252,6 +2657,7 @@ export class MemoryService {
       connectorAuthSessions: [...this.connectorAuthSessions.values()],
       connectorSyncRecords: this.connectorSyncRecords,
       connectorSyncStates: [...this.connectorSyncStates.values()],
+      dreamJobs: [...this.dreamJobs.values()],
       evidencePacks: [...this.evidencePacks.values()],
       policyRules: [...this.policyRules.values()],
       retentionRules: [...this.retentionRules.values()]

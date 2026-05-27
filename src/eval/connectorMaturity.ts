@@ -115,6 +115,16 @@ interface MaturityReport {
   passed: boolean;
 }
 
+interface ConnectorMaturityOptions {
+  out?: string;
+  markdown?: string;
+  vendorContract?: string;
+  apiSpecs?: string;
+  liveSmoke?: string;
+  webhookProof?: string;
+  certification?: string;
+}
+
 const proofLevels: ConnectorProofLevel[] = [
   "manifest-only",
   "cli-config",
@@ -150,21 +160,29 @@ const providerCategory: Record<string, string> = {
 const updateRevalidationProviders = new Set(["jira", "confluence", "notion", "linear", "gitlab", "azure-devops", "asana", "clickup", "sentry", "datadog", "pagerduty", "posthog"]);
 const webhookSupportedProviders = new Set(["github", "jira", "confluence", "notion", "linear", "gitlab", "slack", "teams", "sentry", "pagerduty"]);
 
-export function generateConnectorMaturity(options: { out?: string; markdown?: string } = {}): MaturityReport {
+export function generateConnectorMaturity(options: ConnectorMaturityOptions = {}): MaturityReport {
   const catalog = cliJson<ConnectorCatalogItem[]>(["connections", "connectors", "list", "--json"]);
   const shows = new Map(catalog.map((item) => [item.provider, cliJson<ConnectorShow>(["connector", "show", item.provider, "--json"])]));
-  const vendorContract = readJson("artifacts/vendor-connectors-live.json", { passed: false, calls: [] }) as { passed?: boolean; calls?: Array<{ provider?: string; method?: string }> };
-  const apiSpecs = readJson("artifacts/vendor-api-specs.json", { passed: false, rows: [] }) as { passed?: boolean; rows?: VendorApiSpecRow[] };
-  const liveSmoke = readJson("artifacts/vendor-live-smoke.json", { providers: [] }) as { providers?: Array<{ provider: string; configured: boolean; skipped: boolean; checks?: Record<string, boolean> }> };
-  const webhookProof = readJson("artifacts/connector-webhooks.json", { rows: [] }) as { rows?: Array<{ provider?: string; passed?: boolean; checks?: Record<string, boolean> }> };
-  const certification = readJson("artifacts/connector-certification.json", { rows: [] }) as { rows?: Array<{ provider?: string; state?: string }> };
-  const rows = catalog.map((item) => maturityRow(item, shows.get(item.provider), vendorContract, apiSpecs, liveSmoke, webhookProof));
+  const artifactPaths = {
+    vendorContract: options.vendorContract ?? "artifacts/vendor-connectors-live.json",
+    apiSpecs: options.apiSpecs ?? "artifacts/vendor-api-specs.json",
+    liveSmoke: options.liveSmoke ?? "artifacts/vendor-live-smoke.json",
+    webhookProof: options.webhookProof ?? "artifacts/connector-webhooks.json",
+    certification: options.certification ?? "artifacts/connector-certification.json",
+    connectorsLive: "artifacts/connectors-live.json"
+  };
+  const vendorContract = readJson(artifactPaths.vendorContract, { passed: false, calls: [] }) as { passed?: boolean; calls?: Array<{ provider?: string; method?: string }> };
+  const apiSpecs = readJson(artifactPaths.apiSpecs, { passed: false, rows: [] }) as { passed?: boolean; rows?: VendorApiSpecRow[] };
+  const liveSmoke = readJson(artifactPaths.liveSmoke, { providers: [] }) as { providers?: Array<{ provider: string; configured: boolean; skipped: boolean; checks?: Record<string, boolean> }> };
+  const webhookProof = readJson(artifactPaths.webhookProof, { rows: [] }) as { rows?: Array<{ provider?: string; passed?: boolean; checks?: Record<string, boolean> }> };
+  const certification = readJson(artifactPaths.certification, { rows: [] }) as { rows?: Array<{ provider?: string; state?: string }> };
+  const rows = catalog.map((item) => maturityRow(item, shows.get(item.provider), vendorContract, apiSpecs, liveSmoke, webhookProof, artifactPaths));
   const report: MaturityReport = {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
     source: "connector-registry",
     proofLevels,
-    artifacts: ["artifacts/vendor-connectors-live.json", "artifacts/vendor-api-specs.json", "artifacts/vendor-live-smoke.json", "artifacts/connector-webhooks.json", "artifacts/connector-certification.json", "artifacts/connectors-live.json"],
+    artifacts: [artifactPaths.vendorContract, artifactPaths.apiSpecs, artifactPaths.liveSmoke, artifactPaths.webhookProof, artifactPaths.certification, artifactPaths.connectorsLive],
     rows,
     summary: {
       total: rows.length,
@@ -206,7 +224,13 @@ function maturityRow(
   vendorContract: { passed?: boolean; calls?: Array<{ provider?: string; method?: string }> },
   apiSpecs: { passed?: boolean; rows?: VendorApiSpecRow[] },
   liveSmoke: { providers?: Array<{ provider: string; configured: boolean; skipped: boolean; checks?: Record<string, boolean> }> },
-  webhookProof: { rows?: Array<{ provider?: string; passed?: boolean; checks?: Record<string, boolean> }> }
+  webhookProof: { rows?: Array<{ provider?: string; passed?: boolean; checks?: Record<string, boolean> }> },
+  artifactPaths: {
+    vendorContract: string;
+    apiSpecs: string;
+    liveSmoke: string;
+    webhookProof: string;
+  }
 ): MaturityRow {
   const calls = vendorContract.calls?.filter((call) => call.provider === item.provider) ?? [];
   const apiSpec = apiSpecs.rows?.find((row) => row.provider === item.provider);
@@ -262,9 +286,9 @@ function maturityRow(
     evidence: {
       docs: item.docs,
       addCommand: item.addCommand,
-      fixtureArtifact: "artifacts/vendor-connectors-live.json",
-      apiSpecArtifact: "artifacts/vendor-api-specs.json",
-      liveSmokeArtifact: "artifacts/vendor-live-smoke.json",
+      fixtureArtifact: artifactPaths.vendorContract,
+      apiSpecArtifact: artifactPaths.apiSpecs,
+      liveSmokeArtifact: artifactPaths.liveSmoke,
       verification: "npm run verify:vendor-connectors && npm run verify:vendor-api-specs && npm run verify:vendor-live && npm run connectors:webhooks"
     },
     gaps

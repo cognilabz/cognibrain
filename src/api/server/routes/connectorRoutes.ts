@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { z } from "zod";
 import { defaultService } from "../../service";
 import { connectorFeedbackSchema, connectorManifestSchema, connectorOAuthBeginSchema, connectorOAuthCallbackSchema, connectorOAuthRevokeSchema, connectorPollSchema, connectorSyncSchema, connectorTelemetrySchema, connectorWritebackSchema } from "../../serverSchemas";
-import { json, send } from "../helpers";
+import { json, send, serialize } from "../helpers";
 
 type RouteContext = {
   method: string;
@@ -13,7 +14,7 @@ type RouteContext = {
 };
 
 export async function handleConnectorRoutes(context: RouteContext): Promise<boolean> {
-  const { method, url, request, response } = context;
+  const { method, url, parts, request, response } = context;
   if (method === "GET" && url.pathname === "/connectors") {
     const kind = url.searchParams.get("kind");
     const parsedKind = kind ? connectorManifestSchema.shape.kind.parse(kind) : undefined;
@@ -28,6 +29,26 @@ export async function handleConnectorRoutes(context: RouteContext): Promise<bool
 
   if (method === "GET" && url.pathname === "/connectors/sync-records") {
     send(response, 200, defaultService.listConnectorSyncRecords(url.searchParams.get("connectorId") ?? undefined));
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/connectors/review-queue") {
+    const status = url.searchParams.get("status");
+    send(response, 200, defaultService.listConnectorReviewQueue({
+      connectorId: url.searchParams.get("connectorId") ?? undefined,
+      userId: url.searchParams.get("userId") ?? undefined,
+      status: status ? z.enum(["pending", "approved", "rejected"]).parse(status) : undefined
+    }).map(serialize));
+    return true;
+  }
+
+  if (method === "POST" && parts[0] === "connectors" && parts[1] === "review-queue" && parts[2] && parts[3] === "review") {
+    const body = z.object({
+      decision: z.enum(["approve", "reject"]),
+      reviewerId: z.string().optional(),
+      reason: z.string().optional()
+    }).parse(await json(request));
+    send(response, 200, serialize(defaultService.reviewConnectorMemory(parts[2], body)));
     return true;
   }
 

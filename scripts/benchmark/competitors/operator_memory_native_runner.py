@@ -228,6 +228,8 @@ async def run_cognee(scenario: dict[str, Any], started: float) -> dict[str, Any]
 def memory_inputs(scenario: dict[str, Any]) -> list[str]:
     if scenario["kind"] == "connector_failure":
         return [scenario["currentContent"]]
+    if scenario["kind"] == "source_deleted":
+        return [scenario["staleContent"]]
     values = [scenario["staleContent"]]
     current = scenario.get("currentContent")
     if current:

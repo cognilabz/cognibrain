@@ -14,11 +14,44 @@ import { generateConnectorCertification } from "../src/eval/connectorCertificati
 import { generateConnectorQualityReport } from "../src/eval/connectorQuality";
 import { runConnectorTransportProof } from "../src/eval/connectorTransportProof";
 import { generateConnectorWebhookProof } from "../src/eval/connectorWebhooks";
+import { runVendorConnectorVerification } from "../src/eval/vendorConnectorsLive";
+import { verifyVendorApiSpecs } from "../src/eval/vendorApiSpecs";
+import { runVendorCredentialSmoke } from "../src/eval/vendorCredentialSmoke";
 import { generateHarnessMaturity } from "../src/eval/harnessMaturity";
 import { generateOperatorOsMaturity } from "../src/eval/operatorOsMaturity";
 import { generateBenchmarkHardeningReport } from "../src/eval/benchmarkHardening";
 import { runOperatorMemoryBenchmark } from "../src/eval/operatorMemoryBenchmark";
 import { publishArenaReport } from "../src/eval/publishArena";
+
+type ConnectorBaseArtifacts = {
+  vendorContract: string;
+  apiSpecs: string;
+  liveSmoke: string;
+  webhookProof: string;
+  transport: string;
+};
+
+let connectorBaseArtifactsPromise: Promise<ConnectorBaseArtifacts> | undefined;
+
+function connectorBaseArtifacts(): Promise<ConnectorBaseArtifacts> {
+  connectorBaseArtifactsPromise ??= (async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-base-"));
+    const paths = {
+      vendorContract: join(dir, "vendor-connectors-live.json"),
+      apiSpecs: join(dir, "vendor-api-specs.json"),
+      liveSmoke: join(dir, "vendor-live-smoke.json"),
+      webhookProof: join(dir, "connector-webhooks.json"),
+      transport: join(dir, "connector-transport.json")
+    };
+    await runVendorConnectorVerification(paths.vendorContract);
+    verifyVendorApiSpecs({ input: paths.vendorContract, out: paths.apiSpecs });
+    await runVendorCredentialSmoke({ out: paths.liveSmoke });
+    generateConnectorWebhookProof({ out: paths.webhookProof });
+    await runConnectorTransportProof({ out: paths.transport });
+    return paths;
+  })();
+  return connectorBaseArtifactsPromise;
+}
 
 describe("self verification benchmark loop", () => {
   it("beats local baselines and satisfies the synthetic token-efficiency gate", () => {
@@ -166,11 +199,16 @@ describe("self verification benchmark loop", () => {
     expect(report.benchmarks.find((item) => item.dataset === "LongMemEval-S")?.questions[0].id).toBe("fixture-q1");
   });
 
-  it("generates connector proof levels and quality scores from checked artifacts", () => {
+  it("generates connector proof levels and quality scores from checked artifacts", async () => {
+    const base = await connectorBaseArtifacts();
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-maturity-"));
     const report = generateConnectorMaturity({
       out: join(dir, "connector-maturity.json"),
-      markdown: join(dir, "connector-maturity.md")
+      markdown: join(dir, "connector-maturity.md"),
+      vendorContract: base.vendorContract,
+      apiSpecs: base.apiSpecs,
+      liveSmoke: base.liveSmoke,
+      webhookProof: base.webhookProof
     });
     expect(report.passed).toBe(true);
     expect(report.proofLevels).toEqual([
@@ -192,7 +230,8 @@ describe("self verification benchmark loop", () => {
   });
 
   it("proves connector transport retry and pagination behavior", async () => {
-    const report = await runConnectorTransportProof({ out: "artifacts/connector-transport.json" });
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-transport-"));
+    const report = await runConnectorTransportProof({ out: join(dir, "connector-transport.json") });
     expect(report.passed).toBe(true);
     expect(report.checks.rateLimitBackoff).toBe(true);
     expect(report.checks.cursorPagination).toBe(true);
@@ -201,15 +240,31 @@ describe("self verification benchmark loop", () => {
     expect(report.pollEvents).toBeGreaterThanOrEqual(3);
   }, 30_000);
 
-  it("generates connector semantic quality and certification boundaries", () => {
+  it("generates connector semantic quality and certification boundaries", async () => {
+    const base = await connectorBaseArtifacts();
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-certification-"));
+    const maturityPath = join(dir, "connector-maturity.json");
+    generateConnectorMaturity({
+      out: maturityPath,
+      markdown: join(dir, "connector-maturity.md"),
+      vendorContract: base.vendorContract,
+      apiSpecs: base.apiSpecs,
+      liveSmoke: base.liveSmoke,
+      webhookProof: base.webhookProof
+    });
+    const qualityPath = join(dir, "connector-quality.json");
     const quality = generateConnectorQualityReport({
-      out: join(dir, "connector-quality.json"),
+      input: maturityPath,
+      out: qualityPath,
       markdown: join(dir, "connector-quality.md")
     });
     const certification = generateConnectorCertification({
       out: join(dir, "connector-certification.json"),
-      markdown: join(dir, "connector-certification.md")
+      markdown: join(dir, "connector-certification.md"),
+      maturityInput: maturityPath,
+      liveSmokeInput: base.liveSmoke,
+      transportInput: base.transport,
+      qualityInput: qualityPath
     });
     expect(quality.passed).toBe(true);
     expect(quality.summary.checkedCases).toBeGreaterThanOrEqual(19);
@@ -269,7 +324,9 @@ describe("self verification benchmark loop", () => {
     });
     expect(report.passed).toBe(true);
     expect(report.summary.localBaselineSuperiority).toBe(true);
+    expect(report.summary.cognibrainHasFailures).toBe(true);
     expect(report.summary.cognibrainScore).toBeGreaterThan(report.summary.bestBaselineScore);
+    expect(report.summary.cognibrainScore).toBeLessThan(1);
     expect(report.summary.marketSuperiorityClaimAllowed).toBe(false);
     expect(report.summary.marketSuperiorityBlockers.length).toBeGreaterThan(0);
     expect(readFileSync(join(dir, "operator-memory-benchmark.md"), "utf8")).toContain("Operator Memory Dream Benchmark");

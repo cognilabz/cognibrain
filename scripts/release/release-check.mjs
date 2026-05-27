@@ -14,6 +14,7 @@ const steps = [
   ["first-win demo", "npm", ["run", "demo:first-win"]],
   ["structure audit", "npm", ["run", "audit:structure"]],
   ["docs audit", "npm", ["run", "audit:docs"]],
+  ["release contract audit", "npm", ["run", "release:contract"]],
   ["Postgres verifier", "npm", ["run", "verify:postgres"]],
   ["connector compatibility", "npm", ["run", "verify:compatibility"]],
   ["connector maturity", "npm", ["run", "connectors:maturity"]],

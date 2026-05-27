@@ -5,11 +5,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, MemoryStore, ReflectionEngine, RetrievalEngine, healthReport, tokenize, extractEntities, type EngineeringMemoryKind } from "../src/core";
+import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, InMemoryMemoryRepository, MemoryStore, ReflectionEngine, RepositoryBackedStorageAdapter, RetrievalEngine, healthReport, tokenize, extractEntities, type EngineeringMemoryKind, type MemoryClaim } from "../src/core";
 import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { connectorAuthHeaders, createConnectorManifest, createPlatformIntegration, createWritebackPlan, runConnectorPoll } from "../src/connectors/sdk";
 import { MemoryService } from "../src/api/service";
+import { SQLiteMemoryRepository, sqliteRepositoryAvailable } from "../src/api/repositories";
 import { CognibrainClient, CognibrainError } from "../sdk/typescript/client";
 import { AppendOnlyLogPersistenceAdapter, CassandraCompatiblePersistenceAdapter, CassandraRemotePersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, PostgresRemotePersistenceAdapter, SQLitePersistenceAdapter, createPersistenceFromEnv, sqliteAvailable } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
@@ -153,6 +154,130 @@ describe("TypeScript memory core", () => {
     const results = new RetrievalEngine(store, { keyword: 1, semantic: 0, entity: 0, temporal: 0, trust: 0, graph: 0, access: 0 }).search({ userId: "u1", query: "cache cache Redis", limit: 2 });
     expect(results[0].memory.content).toContain("Redis");
     expect(results[0].signals.keyword).toBeGreaterThan(results[1].signals.keyword);
+  });
+
+  it("constructs MemoryService through a repository boundary instead of a hard-wired store", () => {
+    const repository = new InMemoryMemoryRepository();
+    const service = new MemoryService({ repository });
+    const memory = service.add({ userId: "u1", content: "Repository-backed service writes through the MemoryRepository contract.", source: { kind: "human", confidence: 0.96 } });
+
+    expect(repository.get(memory.id).content).toContain("MemoryRepository");
+    expect(service.storage).toBeInstanceOf(RepositoryBackedStorageAdapter);
+    expect(service.store.get(memory.id).id).toBe(memory.id);
+  });
+
+  it("runs MemoryService on a SQLiteMemoryRepository with row-level CRUD persistence", () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-sqlite-repository-"));
+    try {
+      const path = join(dir, "memory.sqlite");
+      const repository = new SQLiteMemoryRepository(path);
+      const service = new MemoryService({ repository, autoDream: { enabled: false } });
+      const created = service.add({ userId: "u1", content: "SQLite repository writes MemoryService mutations as durable rows.", source: { kind: "human", confidence: 0.96 } });
+      const updated = service.update(created.id, { content: "SQLite repository updates exactly the memory row used by MemoryService." });
+
+      expect(updated.content).toContain("updates exactly");
+      expect(new SQLiteMemoryRepository(path).get(created.id).content).toContain("updates exactly");
+
+      expect(service.delete(created.id)).toBe(true);
+      expect(new SQLiteMemoryRepository(path).list("u1").some((memory) => memory.id === created.id)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("selects current truth from claim records and explains suppressed stale claims in evidence packs", () => {
+    const service = new MemoryService();
+    const npmClaim: MemoryClaim = {
+      id: "claim-npm",
+      subject: "atlas",
+      predicate: "package_manager",
+      object: "npm",
+      qualifiers: {},
+      source: { kind: "agent", confidence: 0.55 },
+      confidence: 0.55,
+      durability: "durable",
+      sensitivity: "none",
+      scope: { userId: "u1", projectId: "atlas" }
+    };
+    const pnpmClaim: MemoryClaim = {
+      ...npmClaim,
+      id: "claim-pnpm",
+      object: "pnpm",
+      source: { kind: "reviewed_code", confidence: 0.95 },
+      confidence: 0.95
+    };
+    const oldMemory = service.add({
+      userId: "u1",
+      projectId: "atlas",
+      content: "Atlas package manager is npm.",
+      source: { kind: "agent", confidence: 0.55 },
+      metadata: { claim: npmClaim }
+    });
+    const currentMemory = service.add({
+      userId: "u1",
+      projectId: "atlas",
+      content: "Atlas package manager is pnpm.",
+      source: { kind: "reviewed_code", confidence: 0.95 },
+      metadata: { claim: pnpmClaim, engineeringKind: "review_correction" }
+    });
+
+    const oldTruth = service.currentTruthForMemory(oldMemory);
+    expect(oldTruth?.selectedMemoryId).toBe(currentMemory.id);
+    expect(oldTruth?.suppressedClaimIds.length).toBeGreaterThanOrEqual(1);
+
+    const pack = service.evidencePack({ userId: "u1", projectId: "atlas", query: "Atlas package manager", limit: 2 });
+    expect(pack.truthDecisions?.some((decision) => decision.selectedMemoryId === currentMemory.id)).toBe(true);
+    expect(JSON.stringify(pack.results)).toContain("truth state");
+  });
+
+  it("lists and resolves claim conflict sets with an operator decision", () => {
+    const service = new MemoryService();
+    const firstClaim: MemoryClaim = {
+      id: "claim-redis",
+      subject: "atlas",
+      predicate: "cache_backend",
+      object: "redis",
+      qualifiers: {},
+      source: { kind: "agent", confidence: 0.72 },
+      confidence: 0.72,
+      durability: "durable",
+      sensitivity: "none",
+      scope: { userId: "u1" }
+    };
+    const secondClaim: MemoryClaim = { ...firstClaim, id: "claim-postgres", object: "postgres", source: { kind: "human", confidence: 0.95 }, confidence: 0.95 };
+    const oldMemory = service.add({ userId: "u1", content: "Atlas cache backend is Redis.", source: { kind: "agent", confidence: 0.72 }, metadata: { claim: firstClaim } });
+    const newMemory = service.add({ userId: "u1", content: "Atlas cache backend is Postgres.", source: { kind: "human", confidence: 0.95 }, metadata: { claim: secondClaim } });
+
+    const conflict = service.listConflictSets("open")[0];
+    expect(conflict.claimIds.length).toBe(2);
+
+    const selectedClaimId = service.currentTruthForMemory(newMemory)?.selectedClaimId;
+    expect(selectedClaimId).toBeTruthy();
+    const resolved = service.resolveConflictSet(conflict.id, { selectedClaimId: selectedClaimId!, reason: "operator confirmed the migration ADR", resolvedBy: "operator" });
+    expect(resolved.status).toBe("resolved");
+    expect(service.get(newMemory.id).beliefState).toBe("active");
+    expect(service.get(oldMemory.id).beliefState).toBe("contradicted");
+  });
+
+  it("uses configurable source quality when selecting current truth", () => {
+    const service = new MemoryService({ sourceQuality: { agent: 1, human: 0.2 } });
+    const base: MemoryClaim = {
+      id: "claim-a",
+      subject: "beacon",
+      predicate: "deploy_tool",
+      object: "tool-a",
+      qualifiers: {},
+      source: { kind: "human", confidence: 0.9 },
+      confidence: 0.9,
+      durability: "durable",
+      sensitivity: "none",
+      scope: { userId: "u1" }
+    };
+    const human = service.add({ userId: "u1", content: "Beacon deploy tool is tool-a.", source: { kind: "human", confidence: 0.9 }, metadata: { claim: base } });
+    const agent = service.add({ userId: "u1", content: "Beacon deploy tool is tool-b.", source: { kind: "agent", confidence: 0.9 }, metadata: { claim: { ...base, id: "claim-b", object: "tool-b", source: { kind: "agent", confidence: 0.9 } } } });
+
+    expect(service.currentTruthForMemory(human)?.selectedMemoryId).toBe(agent.id);
   });
 
   it("uses SQLite FTS5 BM25 scores as an indexed lexical retrieval provider", () => {
@@ -500,6 +625,8 @@ describe("TypeScript memory core", () => {
     };
     const session = hook.startSession(context);
     const preTool = hook.beforeToolCall(context, { command: "pnpm test", cwd: "/repo/demo-claude-code" });
+    const blockedDecision = hook.beforeToolCallDecision(context, { command: "pnpm test", cwd: "/repo/demo-claude-code" });
+    const overrideDecision = hook.beforeToolCallDecision(context, { command: "pnpm test", cwd: "/repo/demo-claude-code" }, { overrideReason: "testing explicit override capture", overrideBy: "operator" });
     const action = hook.afterToolCall(context, {
       command: "npm test",
       cwd: "/repo/demo-claude-code",
@@ -520,15 +647,22 @@ describe("TypeScript memory core", () => {
       commandsRun: ["npm test"],
       memoryIds: [action?.id, correction?.id].filter((id): id is string => Boolean(id))
     });
+    const handoff = hook.prepareHandoff(context, { content: "Ready for handoff after patch proof.", runDream: false });
+    const release = hook.prepareRelease(context, { content: "Release candidate prepared with patch evidence.", runDream: false });
 
     expect(session.codingContextPack?.sections.some((section) => section.evidence.length > 0)).toBe(true);
     expect(preTool.procedures.some((result) => result.memory.content.includes("Before editing validation"))).toBe(true);
     expect(preTool.guard?.severity).toBe("block");
     expect(preTool.guard?.alternatives).toContain("npm test");
+    expect(blockedDecision.decision).toBe("block");
+    expect(overrideDecision.decision).toBe("warn");
+    expect(overrideDecision.overrideMemory?.tags).toContain("guard-override");
     expect(action?.tags).toEqual(expect.arrayContaining(["harness-action", "success-pattern"]));
     expect(correction?.tags).toEqual(expect.arrayContaining(["engineering-correction", "engineering:review_correction"]));
     expect(trail?.toolOutcomeIds).toContain(action?.id);
     expect(trail?.correctionIds).toContain(correction?.id);
+    expect(JSON.stringify(handoff)).toContain("harness:handoff");
+    expect(JSON.stringify(release)).toContain("harness:release_candidate");
   });
 
   it("keeps harness memory context inside the configured token budget", () => {
@@ -1606,6 +1740,36 @@ describe("TypeScript memory core", () => {
     expect(service.get(firstMemoryId).beliefState).toBe("superseded");
   });
 
+  it("uses registered source resolvers before fallback sourceRef heuristics", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.registerSourceResolver({
+      connectorId: "confluence",
+      get: (sourceRef) => ({
+        sourceRef: { ...sourceRef, version: "2", hash: "new-hash" },
+        version: "2",
+        hash: "new-hash",
+        updatedAt: "2026-05-03T00:00:00.000Z"
+      })
+    });
+    const memory = service.add({
+      userId: "u1",
+      content: "Confluence ADR-12 says cache backend is Postgres.",
+      source: { kind: "import", confidence: 0.86 },
+      sourceRef: { connectorId: "confluence", externalId: "ADR-12", version: "1", hash: "old-hash" }
+    });
+
+    const updated = service.revalidateMemory(memory.id, "u1");
+    expect(updated).toMatchObject({ status: "source_updated", connectorId: "confluence", externalId: "ADR-12", previousVersion: "1", currentVersion: "2" });
+    expect(service.get(memory.id).beliefState).toBe("needs_verification");
+
+    service.registerSourceResolver({
+      connectorId: "confluence",
+      get: (sourceRef) => ({ sourceRef, status: "missing" })
+    });
+    const missing = service.revalidateMemory(memory.id, "u1");
+    expect(missing.status).toBe("source_missing");
+  });
+
   it("resolves verification queue items and records harness lifecycle dream plans", async () => {
     const service = new MemoryService({ autoDream: { enabled: false } });
     service.registerConnectorManifest({
@@ -1655,6 +1819,55 @@ describe("TypeScript memory core", () => {
     expect(service.dreamJobStatus(job.jobId)[0].jobId).toBe(job.jobId);
   });
 
+  it("persists dream job queue state across service restarts", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "memory-dream-jobs-"));
+    try {
+      const path = join(dir, "memory.json");
+      const service = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      service.add({ userId: "u1", content: "Release dream jobs must remain inspectable after restart.", source: { kind: "human", confidence: 0.96 } });
+      const job = await service.startDreamJob({ userId: "u1", trigger: "before_release", mode: "dream", budget: "release" }, fetch, 10_000, { wait: true });
+
+      const reloaded = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      const restored = reloaded.dreamJobStatus(job.jobId)[0];
+      expect(restored.jobId).toBe(job.jobId);
+      expect(restored.status).toBe("done");
+      expect(restored.progress.memoriesEvaluated).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("cancels and retries dream jobs through the persisted job surface", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.add({ userId: "u1", content: "Release dream cancellation must keep an operator-visible job state.", source: { kind: "human", confidence: 0.96 } });
+    service.registerConnectorManifest({
+      id: "slow-jira",
+      name: "Slow Jira",
+      kind: "project_management",
+      version: "1.0.0",
+      auth: "none",
+      direction: "ingest",
+      capabilities: ["poll"],
+      defaultSourceKind: "tool",
+      metadataMapping: {},
+      poll: { endpoint: "https://example.invalid/poll" }
+    });
+    const slowFetch = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return new Response(JSON.stringify({ events: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+
+    const job = await service.startDreamJob({ userId: "u1", trigger: "before_release", mode: "dream", budget: "release", sourceRefresh: true, connectorIds: ["slow-jira"] }, slowFetch as typeof fetch);
+    const cancelled = service.cancelDreamJob(job.jobId, "operator paused release gate");
+    expect(cancelled.status).toBe("cancelled");
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(service.dreamJobStatus(job.jobId)[0].status).toBe("cancelled");
+
+    const retry = await service.retryDreamJob(job.jobId, slowFetch as typeof fetch, 10_000, { wait: true });
+    expect(retry.retryOf).toBe(job.jobId);
+    expect(retry.status).toBe("done");
+  });
+
   it("tracks connector sync state cursor metadata from poll records", async () => {
     const service = new MemoryService({ autoDream: { enabled: false } });
     service.registerConnectorManifest({
@@ -1696,6 +1909,46 @@ describe("TypeScript memory core", () => {
       sourceVersion: "v2",
       lastStatus: "applied"
     });
+  });
+
+  it("exposes connector review queue decisions as first-class memory operations", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.registerConnectorManifest({
+      id: "review-slack",
+      name: "Review Slack",
+      kind: "chat",
+      version: "1.0.0",
+      direction: "ingest",
+      capabilities: ["ingest"],
+      auth: "none",
+      defaultSourceKind: "transcript",
+      metadataMapping: {}
+    });
+    const record = service.syncConnectorEvents("review-slack", [{
+      role: "user",
+      content: "Slack decision: Atlas must use Postgres for launch notes.",
+      externalId: "msg-1",
+      timestamp: "2026-05-01T00:00:00.000Z",
+      metadata: { reviewRequired: true }
+    }], { userId: "u1", projectId: "atlas" });
+    const pending = service.listConnectorReviewQueue({ connectorId: "review-slack" });
+
+    expect(pending.map((memory) => memory.id)).toContain(record.memoryIds[0]);
+    const approved = service.reviewConnectorMemory(record.memoryIds[0], { decision: "approve", reviewerId: "operator", reason: "matches ADR" });
+    expect(approved.metadata.reviewQueue).toMatchObject({ status: "approved", reviewerId: "operator" });
+    expect(approved.beliefState).toBe("active");
+    expect(service.listConnectorReviewQueue({ connectorId: "review-slack" })).toHaveLength(0);
+
+    const second = service.syncConnectorEvents("review-slack", [{
+      role: "user",
+      content: "Slack decision: Atlas must use SQLite for launch notes.",
+      externalId: "msg-2",
+      timestamp: "2026-05-02T00:00:00.000Z",
+      metadata: { reviewRequired: true }
+    }], { userId: "u1", projectId: "atlas" });
+    const rejected = service.reviewConnectorMemory(second.memoryIds[0], { decision: "reject", reviewerId: "operator", reason: "superseded by ADR" });
+    expect(rejected.beliefState).toBe("retracted");
+    expect(rejected.trust).toBe(0);
   });
 
   it("persists connector cursor state independently from sync history replay", async () => {

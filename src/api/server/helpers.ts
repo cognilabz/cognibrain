@@ -256,16 +256,63 @@ export function authorizeRoute(method: string, pathname: string, auth: AuthStatu
   if (auth.mode !== "jwt-oidc") return { allowed: true };
   const scopes = new Set(auth.scopes ?? []);
   if (scopes.has("admin") || scopes.has("memory:admin")) return { allowed: true };
-  const needed = routeScope(method, pathname);
-  if (!needed || scopes.has(needed)) return { allowed: true };
-  return { allowed: false, reason: `Missing required scope: ${needed}` };
+  const permission = routePermission(method, pathname);
+  if (!permission) return { allowed: true };
+  const accepted = [permission.scope, ...permission.legacyScopes];
+  if (accepted.some((scope) => scopes.has(scope))) return { allowed: true };
+  return { allowed: false, reason: `Missing required scope: ${permission.scope}` };
 }
 
 export function routeScope(method: string, pathname: string): string | undefined {
+  return routePermission(method, pathname)?.scope;
+}
+
+export type RoutePermission = {
+  scope: string;
+  resource: "memory" | "graph" | "connector" | "dream" | "policy" | "security" | "ops" | "platform";
+  action: "read" | "write" | "admin";
+  legacyScopes: string[];
+};
+
+export function routePermission(method: string, pathname: string): RoutePermission | undefined {
   if (pathname === "/health" || pathname === "/auth/status" || pathname === "/openapi.json" || pathname === "/sdk/openapi") return undefined;
-  if (method === "GET") return "memory:read";
-  if (pathname.includes("/policy") || pathname.includes("/retention") || pathname.includes("/security")) return "memory:admin";
-  return "memory:write";
+  const action: RoutePermission["action"] = adminRoute(pathname) ? "admin" : method === "GET" ? "read" : "write";
+  const resource = routeResource(pathname);
+  const legacyScopes = action === "admin"
+    ? ["memory:admin"]
+    : action === "read"
+      ? ["memory:read"]
+      : ["memory:write"];
+  return {
+    scope: `${resource}:${action}`,
+    resource,
+    action,
+    legacyScopes
+  };
+}
+
+function adminRoute(pathname: string): boolean {
+  return [
+    "/policy",
+    "/retention",
+    "/security",
+    "/privacy",
+    "/compliance",
+    "/managed",
+    "/migration",
+    "/backup"
+  ].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function routeResource(pathname: string): RoutePermission["resource"] {
+  if (pathname.startsWith("/graph") || pathname.startsWith("/entities")) return "graph";
+  if (pathname.startsWith("/connectors")) return "connector";
+  if (pathname.startsWith("/dream") || pathname.startsWith("/reflection") || pathname.startsWith("/harness") || pathname.startsWith("/verification") || pathname.startsWith("/sources/revalidate") || pathname.startsWith("/maintenance/dream-due")) return "dream";
+  if (pathname.startsWith("/policy") || pathname.startsWith("/retention")) return "policy";
+  if (pathname.startsWith("/security") || pathname.startsWith("/privacy") || pathname.startsWith("/compliance")) return "security";
+  if (pathname.startsWith("/storage") || pathname.startsWith("/providers") || pathname.startsWith("/metrics") || pathname.startsWith("/maintenance") || pathname.startsWith("/translate") || pathname.startsWith("/migration") || pathname.startsWith("/backup")) return "ops";
+  if (pathname.startsWith("/managed") || pathname.startsWith("/marketplace") || pathname.startsWith("/brains") || pathname.startsWith("/sources") || pathname.startsWith("/agents") || pathname.startsWith("/personas") || pathname.startsWith("/events") || pathname.startsWith("/audit") || pathname.startsWith("/webhooks") || pathname.startsWith("/benchmarks")) return "platform";
+  return "memory";
 }
 
 export function actorScopeViolation(auth: AuthStatusReport | undefined, value: unknown): string | undefined {

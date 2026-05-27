@@ -235,7 +235,8 @@ export async function startDreamJob(service: any, input: DreamCycleInput, fetchI
       mode,
       queuedAt: new Date().toISOString(),
       progress: { connectorPolls: 0, memoriesEvaluated: 0, contradictions: 0, sourceRevalidations: 0, verificationScheduled: 0 },
-      plan
+      plan,
+      input: { ...input, mode, trigger }
     };
     service.dreamJobs.set(job.jobId, job);
     const execution = service.executeDreamJob(job, input, mode, trigger, fetchImpl, timeoutMs);

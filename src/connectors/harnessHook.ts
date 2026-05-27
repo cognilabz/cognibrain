@@ -5,6 +5,8 @@ import {
   type CodingContextPack,
   type EngineeringMemoryKind,
   type HarnessActionInput,
+  type HarnessLifecycleEventInput,
+  type HarnessLifecycleEventReport,
   type Memory,
   type MemoryInput,
   type PatchEvidenceTrail,
@@ -29,6 +31,7 @@ export interface MemoryApi {
   codingContextPack?(input: { userId: string; agentId?: string; sessionId?: string; appId?: string; orgId?: string; projectId?: string; query: string; limit?: number; tokenBudget?: number; codebaseScope?: CodebaseScope }): CodingContextPack;
   guardAction?(input: { userId: string; agentId?: string; sessionId?: string; appId?: string; orgId?: string; projectId?: string; action: string; codebaseScope?: CodebaseScope }): ActionGuardReport;
   recordHarnessAction?(input: HarnessActionInput): Memory;
+  recordHarnessLifecycleEvent?(input: HarnessLifecycleEventInput): HarnessLifecycleEventReport;
   recordCodeCorrection?(input: {
     userId: string;
     agentId?: string;
@@ -90,6 +93,15 @@ export interface HarnessPatchSummary {
   memoryIds?: string[];
 }
 
+export interface HarnessToolDecision {
+  action: string;
+  decision: "allow" | "warn" | "block";
+  procedures: SearchResult[];
+  memoryContext: string;
+  guard?: ActionGuardReport;
+  overrideMemory?: Memory;
+}
+
 export class HarnessMemoryHook {
   constructor(
     private readonly memory: MemoryApi,
@@ -138,6 +150,32 @@ export class HarnessMemoryHook {
       memoryContext: formatMemoryContext(procedures, this.options.tokenBudget ?? 900),
       guard
     };
+  }
+
+  beforeToolCallDecision(context: HarnessContext, tool: HarnessToolCall, options: { overrideReason?: string; overrideBy?: string } = {}): HarnessToolDecision {
+    const prepared = this.beforeToolCall(context, tool);
+    const decision = prepared.guard?.severity ?? "allow";
+    if (decision !== "block" || !options.overrideReason) {
+      return { ...prepared, decision };
+    }
+    const overrideMemory = this.memory.add({
+      ...scopeFields(context),
+      content: `Action guard override: ${prepared.action}. Reason: ${options.overrideReason}.`,
+      type: "feedback",
+      layer: "long_term",
+      source: { kind: "human", confidence: 0.9 },
+      tags: ["harness-action-guard", "guard-override", "engineering:review_correction"],
+      metadata: {
+        ...(context.metadata ?? {}),
+        actionGuardOverride: {
+          action: prepared.action,
+          reason: options.overrideReason,
+          overrideBy: options.overrideBy,
+          guard: prepared.guard
+        }
+      }
+    }) as Memory | undefined;
+    return { ...prepared, decision: "warn", overrideMemory };
   }
 
   afterLlmCall(context: HarnessContext, response: string): void {
@@ -222,6 +260,28 @@ export class HarnessMemoryHook {
       commandsRun: patch.commandsRun,
       memoryIds: patch.memoryIds
     });
+  }
+
+  finishSession(context: HarnessContext, event: Omit<HarnessLifecycleEventInput, "userId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId">): HarnessLifecycleEventReport | Memory | undefined {
+    const input = { ...scopeFields(context), ...event };
+    if (this.memory.recordHarnessLifecycleEvent) return this.memory.recordHarnessLifecycleEvent(input);
+    return this.memory.add({
+      ...scopeFields(context),
+      content: event.content ?? `Harness event: ${event.event}.`,
+      type: event.event === "user_corrected" ? "feedback" : "episodic",
+      layer: event.event === "user_corrected" ? "long_term" : "episodic",
+      source: { kind: event.event === "user_corrected" ? "human" : "tool", confidence: event.event === "user_corrected" ? 0.95 : 0.82 },
+      tags: ["harness-event", `harness:${event.event}`],
+      metadata: { ...(context.metadata ?? {}), harnessEvent: event }
+    }) as Memory | undefined;
+  }
+
+  prepareHandoff(context: HarnessContext, event: Partial<Omit<HarnessLifecycleEventInput, "userId" | "event">> = {}): HarnessLifecycleEventReport | Memory | undefined {
+    return this.finishSession(context, { ...event, event: "handoff", runDream: event.runDream ?? false });
+  }
+
+  prepareRelease(context: HarnessContext, event: Partial<Omit<HarnessLifecycleEventInput, "userId" | "event">> = {}): HarnessLifecycleEventReport | Memory | undefined {
+    return this.finishSession(context, { ...event, event: "release_candidate", runDream: event.runDream ?? false, forceDream: event.forceDream ?? true });
   }
 }
 

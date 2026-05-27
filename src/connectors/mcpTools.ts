@@ -62,6 +62,26 @@ export function registerMemoryMcpTools(server: McpServer, service: Parameters<ty
   const connectorSyncStateInputSchema = {
     connectorId: z.string().optional()
   };
+  const conflictListInputSchema = {
+    status: z.enum(["open", "resolved", "operator_review"]).optional()
+  };
+  const conflictResolveInputSchema = {
+    conflictSetId: z.string().min(1),
+    selectedClaimId: z.string().min(1),
+    reason: z.string().min(1),
+    resolvedBy: z.enum(["system", "operator", "source_revalidation"]).optional()
+  };
+  const connectorReviewQueueInputSchema = {
+    connectorId: z.string().optional(),
+    userId: z.string().optional(),
+    status: z.enum(["pending", "approved", "rejected"]).optional()
+  };
+  const connectorReviewDecisionInputSchema = {
+    memoryId: z.string().min(1),
+    decision: z.enum(["approve", "reject"]),
+    reviewerId: z.string().optional(),
+    reason: z.string().optional()
+  };
   const harnessLifecycleEventSchema = {
     userId: z.string().min(1),
     event: z.enum(["session_started", "context_injected", "tool_called", "tool_failed", "tool_succeeded", "user_corrected", "patch_created", "tests_failed", "tests_passed", "session_ended", "handoff", "release_candidate"]),
@@ -573,6 +593,26 @@ export function registerMemoryMcpTools(server: McpServer, service: Parameters<ty
   );
 
   server.registerTool(
+    "memory_dream_job_cancel",
+    {
+      title: "Cancel Dream Job",
+      description: "Cancel a queued or running dream job and persist the operator-visible cancellation state.",
+      inputSchema: { jobId: z.string().min(1), reason: z.string().optional() }
+    },
+    async (args) => jsonText(handlers.dreamJobCancel(args))
+  );
+
+  server.registerTool(
+    "memory_dream_job_retry",
+    {
+      title: "Retry Dream Job",
+      description: "Retry a failed or cancelled dream job using the original trigger, mode, budget, source-refresh and connector scope.",
+      inputSchema: { jobId: z.string().min(1) }
+    },
+    async (args) => jsonText(await handlers.dreamJobRetry(args))
+  );
+
+  server.registerTool(
     "memory_session_end",
     {
       title: "Prepare Session End",
@@ -620,6 +660,46 @@ export function registerMemoryMcpTools(server: McpServer, service: Parameters<ty
       inputSchema: connectorSyncStateInputSchema
     },
     async (args) => jsonText(handlers.connectorSyncState(args))
+  );
+
+  server.registerTool(
+    "memory_conflict_sets",
+    {
+      title: "List Truth Conflict Sets",
+      description: "List claim-level truth conflicts that need system or operator resolution.",
+      inputSchema: conflictListInputSchema
+    },
+    async (args) => jsonText(handlers.conflictSets(args))
+  );
+
+  server.registerTool(
+    "memory_conflict_resolve",
+    {
+      title: "Resolve Truth Conflict",
+      description: "Resolve a claim conflict set by selecting the current truth claim with an auditable reason.",
+      inputSchema: conflictResolveInputSchema
+    },
+    async (args) => jsonText(handlers.conflictResolve(args))
+  );
+
+  server.registerTool(
+    "memory_connector_review_queue",
+    {
+      title: "Connector Review Queue",
+      description: "List connector-ingested memory candidates awaiting operator approval or rejection.",
+      inputSchema: connectorReviewQueueInputSchema
+    },
+    async (args) => jsonText(handlers.connectorReviewQueue(args))
+  );
+
+  server.registerTool(
+    "memory_connector_review_decide",
+    {
+      title: "Review Connector Memory",
+      description: "Approve or reject a connector-ingested memory candidate from the review queue.",
+      inputSchema: connectorReviewDecisionInputSchema
+    },
+    async (args) => jsonText(handlers.connectorReviewDecision(args))
   );
 
   server.registerTool(

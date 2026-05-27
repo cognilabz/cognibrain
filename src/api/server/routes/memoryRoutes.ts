@@ -50,6 +50,23 @@ export async function handleMemoryRoutes(context: RouteContext): Promise<boolean
     return true;
   }
 
+  if (method === "GET" && url.pathname === "/conflicts") {
+    const status = url.searchParams.get("status");
+    const parsedStatus = status ? z.enum(["open", "resolved", "operator_review"]).parse(status) : undefined;
+    send(response, 200, defaultService.listConflictSets(parsedStatus));
+    return true;
+  }
+
+  if (method === "POST" && parts[0] === "conflicts" && parts[1] && parts[2] === "resolve") {
+    const body = z.object({
+      selectedClaimId: z.string().min(1),
+      reason: z.string().min(1),
+      resolvedBy: z.enum(["system", "operator", "source_revalidation"]).optional()
+    }).parse(await json(request));
+    send(response, 200, defaultService.resolveConflictSet(parts[1], body));
+    return true;
+  }
+
   if (method === "POST" && url.pathname === "/memories") {
     const body = memoryInputSchema.parse(await json(request));
     send(response, 201, serialize(defaultService.add(body)));

@@ -24,6 +24,7 @@ export function add(service: any, input: MemoryInput) {
       throw new Error(`Memory rejected by redaction policy: ${checked.matches.map((match) => match.detector).join(", ")}`);
     }
     const memory = service.entities.ingest(service.storage.create(checked.input));
+    service.registerMemoryClaim(memory);
     if (memory.metadata.archivedOnWrite) service.storage.archive(memory.id);
     service.metrics.memoriesAdded += 1;
     service.recordAudit("memory.write", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id });
@@ -137,6 +138,7 @@ export function get(service: any, id: string) {
 export function update(service: any, id: string, patch: Partial<MemoryInput> & { trust?: number; importance?: number }) {
     const before = service.storage.get(id);
     const memory = service.storage.update(id, patch);
+    service.registerMemoryClaim(memory);
     service.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { before, after: memory } });
     service.afterWrite(memory.userId);
     return memory;
@@ -145,6 +147,7 @@ export function update(service: any, id: string, patch: Partial<MemoryInput> & {
 export function archive(service: any, id: string) {
     const before = service.storage.get(id);
     const memory = service.storage.archive(id);
+    service.registerMemoryClaim(memory);
     service.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "archive", before, after: memory } });
     service.afterWrite(memory.userId);
     return memory;

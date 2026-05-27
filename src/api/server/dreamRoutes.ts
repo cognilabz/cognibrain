@@ -106,6 +106,17 @@ export async function handleDreamRoutes(input: {
       return true;
     }
 
+    if (method === "POST" && parts[0] === "dream" && parts[1] === "jobs" && parts[2] && parts[3] === "cancel") {
+      const body = z.object({ reason: z.string().optional() }).parse(await json(request).catch(() => ({})));
+      send(response, 202, defaultService.cancelDreamJob(parts[2], body.reason));
+      return true;
+    }
+
+    if (method === "POST" && parts[0] === "dream" && parts[1] === "jobs" && parts[2] && parts[3] === "retry") {
+      send(response, 202, await defaultService.retryDreamJob(parts[2]));
+      return true;
+    }
+
     if (method === "POST" && url.pathname === "/sources/revalidate") {
       const body = sourceRevalidationBodySchema.parse(await json(request));
       send(response, 202, body.memoryId ? defaultService.revalidateMemory(body.memoryId, body.userId) : defaultService.revalidateSourceRefs(body.userId, { connectorIds: body.connectorIds, limit: body.limit }));

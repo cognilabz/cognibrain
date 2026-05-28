@@ -25,6 +25,7 @@ const tasks = {
   "benchmark:load": cmd("npx", ["tsx", "src/eval/load.ts", "--out", "artifacts/load-benchmark.json"]),
   "benchmark:hardening": cmd("npx", ["tsx", "src/eval/benchmarkHardening.ts", "--out", "artifacts/benchmark-hardening.json", "--markdown", "artifacts/docs/benchmark-hardening.md"]),
   "benchmark:release": cmd("npx", ["tsx", "src/eval/benchmarkRelease.ts", "--out", "artifacts/public/cognicodebench-release.json", "--markdown", "artifacts/docs/cognicodebench-release.md"]),
+  "benchmark:svg": cmd("node", ["scripts/release/render-benchmark-svg.mjs"]),
   "benchmark:operator-memory": cmd("npx", ["tsx", "src/eval/operatorMemoryBenchmark.ts", "--out", "artifacts/operator-memory-benchmark.json", "--markdown", "artifacts/docs/operator-memory-benchmark.md"]),
   "benchmark:operator-memory:native": cmd("node", ["scripts/benchmark/operator-memory-native-competitors.mjs", "--out", "artifacts/operator-memory-native-competitors.json", "--markdown", "artifacts/docs/operator-memory-native-competitors.md"]),
   "benchmark:certified": cmd("npx", ["tsx", "src/eval/certified.ts"]),

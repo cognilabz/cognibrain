@@ -7,53 +7,67 @@ snapshot, not a how-to guide.
 
 ## Artifact Snapshot
 
-| Artifact | Generated | Status |
+| Artifact | Generated | Result |
 | --- | --- | --- |
-| `artifacts/cognicodebench/run.json` | 2026-05-28T09:42:09.272Z | Passed |
-| `artifacts/arena/run.json` | 2026-05-28T09:42:39.284Z | Passed |
-| `artifacts/benchmark-hardening.json` | 2026-05-28T09:43:15.120Z | Passed |
+| `artifacts/nextgen-benchmarks.json` | 2026-05-28T12:52:13.044Z | Passed |
+| `artifacts/cognicodebench/run.json` | 2026-05-28T12:52:18.714Z | Passed |
+| `artifacts/arena/run.json` | 2026-05-28T12:52:32.574Z | Passed |
+| `artifacts/answer-generation.json` | 2026-05-28T12:52:33.568Z | Passed |
+| `artifacts/leaderboard.json` | 2026-05-28T12:52:33.985Z | Passed |
+| `artifacts/benchmark-hardening.json` | 2026-05-28T12:52:34.422Z | Passed |
+| `artifacts/locomo-report.json` | 2026-05-28T12:56:23.302Z | Passed |
+| `artifacts/longmemeval-report.json` | 2026-05-28T12:59:05.579Z | Passed |
+| `artifacts/beam-report.json` | 2026-05-28T12:59:37.944Z | Passed |
+
+## Public Benchmark Datasets
+
+| Dataset | Metric | Cognibrain | Strongest local baseline |
+| --- | --- | ---: | ---: |
+| LoCoMo | Evidence recall@K | 58.7% (902/1536) | Keyword only 43.4% |
+| LongMemEval-S | Answer-session recall@K | 99.6% (498/500) | Keyword only 99.0% |
+| BEAM | Retrieval nugget score@K | 96.5% (386/400) | Keyword only 82.0% |
 
 ## CogniCodeBench
 
 | Metric | Result |
 | --- | ---: |
 | Scenarios | 1000 |
-| Correction carry-over | 1.000 |
-| Repeated mistake rate | 0.000 |
-| Procedure recall | 1.000 |
-| Patch correctness | 1.000 |
-| Evidence completeness | 1.000 |
-| Wrong-memory suppression | 1.000 |
-| Source-reference correctness | 1.000 |
-| Granular patch correctness | 1.000 |
-| Long-horizon recall | 1.000 |
+| Correction carry-over | 100.0% |
+| Repeated mistake rate | 0.0% |
+| Procedure recall | 100.0% |
+| Patch correctness | 100.0% |
+| Evidence completeness | 100.0% |
+| Wrong-memory suppression | 100.0% |
+| Source-reference correctness | 100.0% |
+| Granular patch correctness | 100.0% |
+| Long-horizon recall | 100.0% |
 
 ## Baselines
 
 | Baseline | Score | Repeated mistake rate |
 | --- | ---: | ---: |
-| No memory | 0.000 | 1.000 |
-| Raw chat history | 0.000 | 1.000 |
-| Vector only | 0.122 | 1.000 |
-| Semantic only | 0.122 | 1.000 |
-| Keyword only | 0.333 | 0.750 |
-| Graph only | 0.294 | 0.850 |
-| Temporal only | 0.139 | 0.950 |
-| Procedure only | 0.500 | 0.900 |
-| Cognibrain without temporal | 0.983 | 0.000 |
-| Cognibrain without corrections | 0.261 | 0.900 |
+| No memory | 0.0% | 100.0% |
+| Raw chat history | 0.0% | 100.0% |
+| Vector only | 12.2% | 100.0% |
+| Semantic only | 12.2% | 100.0% |
+| Keyword only | 33.3% | 75.0% |
+| Graph only | 29.4% | 85.0% |
+| Temporal only | 13.9% | 95.0% |
+| Procedure only | 50.0% | 90.0% |
+| Cognibrain without temporal | 98.3% | 0.0% |
+| Cognibrain without corrections | 26.1% | 90.0% |
 
 ## Arena
 
 | System | Proof level | Mode | Scenarios | Score |
 | --- | --- | --- | ---: | ---: |
-| Cognibrain | `same-run-full` | `full-local` | 300 | 0.9717 |
-| Mem0 | `same-run-api-shape` | `api-shape` | 300 | 0.1500 |
-| Graphiti/Zep | `same-run-api-shape` | `api-shape` | 300 | 0.6667 |
-| Zep | `same-run-api-shape` | `api-shape` | 300 | 0.6667 |
-| Cognee | `same-run-api-shape` | `api-shape` | 300 | 0.6000 |
-| LangMem | `credential-blocked` | `blocked-command` | 300 | 0.0000 |
-| GBrain | `same-run-api-shape` | `api-shape` | 300 | 0.6667 |
+| Cognibrain | `same-run-full` | `full-local` | 300 | 97.5% |
+| Graphiti/Zep | `same-run-api-shape` | `api-shape` | 300 | 66.7% |
+| Zep | `same-run-api-shape` | `api-shape` | 300 | 66.7% |
+| GBrain | `same-run-api-shape` | `api-shape` | 300 | 66.7% |
+| Cognee | `same-run-api-shape` | `api-shape` | 300 | 60.0% |
+| Mem0 | `same-run-api-shape` | `api-shape` | 300 | 15.0% |
+| LangMem | `credential-blocked` | `blocked-command` | 300 | 0.0% |
 
 ## Hardening
 
@@ -71,4 +85,4 @@ snapshot, not a how-to guide.
 Dataset: `artifacts/cognicodebench/scenarios.json`
 
 SHA-256:
-`ea86f5903464a64cb3415003b9a3faa19857e271203ee518dcc6bd368dc11868`
+`aec0cf11b1e07a11b4cc090509b36b73809d67fee19ccbe8e5667463746a17fb`

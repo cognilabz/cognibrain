@@ -76,12 +76,10 @@ npm run release:check
 npm run verify:selfhosted
 ```
 
-Maintainer-only gates live behind the internal runner:
+Maintainer-only verification gates live behind the internal runner:
 
 ```bash
-npm run internal -- benchmark:cognicode
 npm run internal -- verify:compatibility
-npm run internal -- audit:truth
 ```
 
 ## SDKs

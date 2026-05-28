@@ -34,8 +34,39 @@ export function notionTitle(properties: Record<string, unknown>): string {
   return "";
 }
 
-export function correctionLike(text: string): boolean {
-  return /\b(correction|do not|don't|dont|never|use .* instead|must not|should not)\b/i.test(text);
+export function structuredIssueEventType(labels: unknown[], issueType: unknown, fallback: "issue_decision" | "ticket_decision" = "issue_decision"): "issue_correction" | "ticket_correction" | "issue_decision" | "ticket_decision" {
+  const normalized = [...labels, issueType].map((item) => normalizeStructuredToken(String(item ?? ""))).filter(Boolean);
+  if (normalized.includes("review_correction") || normalized.includes("issue_correction") || normalized.includes("correction")) {
+    return fallback === "ticket_decision" ? "ticket_correction" : "issue_correction";
+  }
+  return fallback;
+}
+
+export function structuredDocumentEventType(labels: unknown[], fallback: "doc_decision" | "calendar_decision" = "doc_decision"): "architecture_decision" | "runbook" | "repo_policy" | "doc_decision" | "calendar_decision" {
+  const normalized = labels.map((item) => normalizeStructuredToken(String(item ?? ""))).filter(Boolean);
+  if (normalized.includes("runbook")) return "runbook";
+  if (normalized.includes("architecture_decision")) return "architecture_decision";
+  if (normalized.includes("repo_policy")) return "repo_policy";
+  return fallback;
+}
+
+export function normalizeStructuredToken(value: string): string {
+  let output = "";
+  let previousSeparator = false;
+  for (const char of value.trim().toLowerCase()) {
+    const code = char.charCodeAt(0);
+    const alphaNumeric = (code >= 48 && code <= 57) || (code >= 97 && code <= 122);
+    if (alphaNumeric) {
+      output += char;
+      previousSeparator = false;
+      continue;
+    }
+    if (!previousSeparator && output) {
+      output += "_";
+      previousSeparator = true;
+    }
+  }
+  return output.endsWith("_") ? output.slice(0, -1) : output;
 }
 
 export function htmlText(value: string): string {

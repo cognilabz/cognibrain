@@ -42,6 +42,7 @@ export async function runNextgenEvaluation() {
     content: "Atlas depends on CacheClient for cache reads.",
     entities: ["atlas", "cacheclient"],
     relations: [{ type: "depends_on", sourceEntity: "atlas", targetEntity: "cacheclient", confidence: 0.91 }],
+    metadata: { claim: { subject: "atlas", predicate: "cache-reads", object: "cacheclient", confidence: 0.97 } },
     consent: { visibility: "private", retentionUntil: "2024-01-01T00:00:00.000Z", deleteOnRequest: true },
     source: { kind: "human", confidence: 0.97 }
   });
@@ -137,6 +138,16 @@ export async function runNextgenEvaluation() {
     entities: ["command line", "launcher"],
     source: { kind: "human", confidence: 0.95 }
   });
+  const reviewedCacheReads = service.add({
+    brainId: brain.id,
+    sourceId: source.id,
+    userId: "bench",
+    orgId: "org-bench",
+    content: "Atlas uses CacheClient for cache reads.",
+    entities: ["atlas", "cacheclient"],
+    metadata: { claim: { subject: "atlas", predicate: "cache-reads", object: "cacheclient", confidence: 0.96 } },
+    source: { kind: "reviewed_code", confidence: 0.96 }
+  });
   service.add({
     brainId: brain.id,
     sourceId: source.id,
@@ -144,6 +155,8 @@ export async function runNextgenEvaluation() {
     orgId: "org-bench",
     content: "Atlas should not use CacheClient for cache reads.",
     entities: ["atlas", "cacheclient"],
+    relations: [{ type: "contradicts", targetId: reviewedCacheReads.id, confidence: 0.88 }],
+    metadata: { claim: { subject: "atlas", predicate: "cache-reads", object: "not-cacheclient", confidence: 0.32 } },
     source: { kind: "transcript", confidence: 0.32 }
   });
   service.addTrainingSample({ userId: "bench", query: "cli launcher", outcome: "accepted", signals: { keyword: 0.9, semantic: 0.7 } });

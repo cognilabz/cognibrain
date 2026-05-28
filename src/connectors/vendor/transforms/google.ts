@@ -1,5 +1,6 @@
 import type { MemoryExtractionEvent } from "../../../core";
 import { arr, obj, str } from "../http";
+import { structuredDocumentEventType } from "./helpers";
 
 export function gmailMessageItem(message: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -42,7 +43,7 @@ export function googleDriveFileEvent(item: Record<string, unknown>): MemoryExtra
     uri: str(item.url, undefined),
     timestamp: str(item.updatedAt, undefined),
     source: { kind: "import", confidence: 0.84 },
-    metadata: { vendor: "google-drive", eventType: /runbook|adr|decision/i.test(`${item.title ?? ""} ${item.description ?? ""}`) ? "architecture_decision" : "doc_decision", mimeType: item.mimeType, author: item.author, visibility: "org" }
+    metadata: { vendor: "google-drive", eventType: structuredDocumentEventType([], "doc_decision"), mimeType: item.mimeType, author: item.author, visibility: "org" }
   };
 }
 
@@ -66,6 +67,6 @@ export function googleCalendarEvent(item: Record<string, unknown>): MemoryExtrac
     uri: str(item.url, undefined),
     timestamp: str(item.start, str(item.updatedAt, undefined)),
     source: { kind: "human", confidence: 0.82 },
-    metadata: { vendor: "google-calendar", eventType: /incident|postmortem|decision|architecture/i.test(`${item.title ?? ""} ${item.description ?? ""}`) ? "architecture_decision" : "calendar_decision", calendarId: process.env.MEMORY_GOOGLE_CALENDAR_ID, organizer: item.organizer, visibility: "org" }
+    metadata: { vendor: "google-calendar", eventType: structuredDocumentEventType([], "calendar_decision"), calendarId: process.env.MEMORY_GOOGLE_CALENDAR_ID, organizer: item.organizer, visibility: "org" }
   };
 }

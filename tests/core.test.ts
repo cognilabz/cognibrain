@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { createHmac } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -483,9 +483,13 @@ describe("TypeScript memory core", () => {
 
   it("demotes low-trust contradictions during reflection", () => {
     const store = new MemoryStore();
-    store.add({ userId: "u1", content: "Mira prefers verbose reports.", source: { kind: "agent", confidence: 0.4 } });
-    store.add({ userId: "u1", content: "Mira prefers concise reports.", source: { kind: "human", confidence: 0.99 } });
-    const report = new ReflectionEngine(store).run("u1");
+    store.add({ userId: "u1", content: "Mira prefers verbose reports.", entities: ["mira"], source: { kind: "agent", confidence: 0.4 } });
+    store.add({ userId: "u1", content: "Mira prefers concise reports.", entities: ["mira"], source: { kind: "human", confidence: 0.99 } });
+    const report = new ReflectionEngine(store, {
+      contradictionDetector: {
+        classify: () => ({ label: "contradiction", confidence: 0.91, reason: "provider semantic conflict" })
+      }
+    }).run("u1");
     expect(report.contradictions.length).toBeGreaterThan(0);
     expect(store.list("u1").some((memory) => memory.trust < 0.5 || memory.archivedAt)).toBe(true);
     expect(report.lifecycle.qualityScore).toBeGreaterThan(0);
@@ -493,8 +497,8 @@ describe("TypeScript memory core", () => {
 
   it("detects multilingual contradictions and supports an external contradiction classifier", () => {
     const store = new MemoryStore();
-    store.add({ userId: "u1", content: "Mira nutzt Redis fuer Cache.", source: { kind: "agent", confidence: 0.5 } });
-    store.add({ userId: "u1", content: "Mira nutzt Postgres fuer Cache.", source: { kind: "human", confidence: 0.99 } });
+    store.add({ userId: "u1", content: "Mira nutzt Redis fuer Cache.", entities: ["mira", "cache"], source: { kind: "agent", confidence: 0.5 } });
+    store.add({ userId: "u1", content: "Mira nutzt Postgres fuer Cache.", entities: ["mira", "cache"], source: { kind: "human", confidence: 0.99 } });
 
     const report = new ReflectionEngine(store, {
       contradictionDetector: {
@@ -505,6 +509,27 @@ describe("TypeScript memory core", () => {
     expect(report.contradictions.length).toBeGreaterThan(0);
     expect(report.contradictions[0].detector).toBe("external");
     expect(report.contradictions[0].reason).toBe("external classifier conflict");
+  });
+
+  it("uses provider reflection evaluations instead of keyword claim patterns", () => {
+    const store = new MemoryStore();
+    const older = store.add({ userId: "u1", content: "Mira tends to ask for longer release notes.", source: { kind: "agent", confidence: 0.5 } });
+    const newer = store.add({ userId: "u1", content: "Mira wants short release notes.", source: { kind: "human", confidence: 0.99 } });
+
+    const report = new ReflectionEngine(store, {
+      evaluator: {
+        evaluateReflection: ({ memories }) =>
+          memories.map((memory) => ({
+            memoryId: memory.id,
+            claims: [{ key: "mira:release-note-style", value: memory.id === older.id ? "long" : "short", confidence: 0.9 }],
+            behavioralEvidence: { applies: true, theme: "release-notes", confidence: 0.8 }
+          }))
+      }
+    }).run("u1");
+
+    expect(report.contradictions.length).toBeGreaterThan(0);
+    expect(report.contradictions[0].detector).toBe("provider:reflection");
+    expect(report.created.some((memory) => memory.metadata.pattern === "release-notes")).toBe(false);
   });
 
   it("uses optional generated reflection summaries while preserving provenance", () => {
@@ -566,7 +591,15 @@ describe("TypeScript memory core", () => {
       timestamp: "2026-01-01T00:00:00.000Z",
       temporal: { lastConfirmedAt: "2026-01-01T00:00:00.000Z" }
     });
-    const report = new ReflectionEngine(store, { verificationAfterDays: 10 }).run("u1", new Date("2026-02-01T00:00:00.000Z"));
+    const report = new ReflectionEngine(store, {
+      verificationAfterDays: 10,
+      evaluator: {
+        evaluateReflection: ({ memories }) => memories.map((memory) => ({
+          memoryId: memory.id,
+          timeSensitive: { applies: true, confidence: 0.9, reason: "provider detected current deployment wording" }
+        }))
+      }
+    }).run("u1", new Date("2026-02-01T00:00:00.000Z"));
     const memory = store.list("u1")[0];
     expect(memory.temporal.verificationDueAt).toBeDefined();
     expect(report.lifecycle.actions.some((action) => action.includes("scheduled stale memory verification"))).toBe(true);
@@ -583,7 +616,14 @@ describe("TypeScript memory core", () => {
         timestamp: `2026-05-0${day}T12:00:00.000Z`
       });
     }
-    const report = new ReflectionEngine(store).run("u1", new Date("2026-05-23T00:00:00.000Z"));
+    const report = new ReflectionEngine(store, {
+      evaluator: {
+        evaluateReflection: ({ memories }) => memories.map((memory) => ({
+          memoryId: memory.id,
+          behavioralEvidence: { applies: true, theme: "mira-friday-food", confidence: 0.88 }
+        }))
+      }
+    }).run("u1", new Date("2026-05-23T00:00:00.000Z"));
     expect(report.created.some((memory) => memory.metadata.dreamJob === "temporal-summary")).toBe(true);
     expect(report.created.some((memory) => memory.metadata.dreamJob === "behavior-pattern")).toBe(true);
   });
@@ -668,6 +708,7 @@ describe("TypeScript memory core", () => {
       projectId: "demo-claude-code",
       content: "Do not use pnpm in demo-claude-code; use npm test before release.",
       kind: "repo_policy",
+      previousWrongAction: "pnpm test",
       correctAction: "npm test",
       codebase: codebaseScope
     });
@@ -982,7 +1023,7 @@ describe("TypeScript memory core", () => {
       projectId: "memory",
       content: "Before release always run npm test and npm run build.",
       source: { kind: "human", confidence: 0.93 },
-      tags: ["workflow", "release"]
+      tags: ["workflow", "release", "test"]
     });
     expect(procedure.type).toBe("procedural");
     expect(procedure.layer).toBe("procedural");
@@ -1418,19 +1459,25 @@ describe("TypeScript memory core", () => {
       entities: ["command line", "installer"],
       source: { kind: "human", confidence: 0.94 }
     });
-    service.add({
+    const reviewedRedis = service.add({
       userId: "u1",
       projectId: "p1",
       content: "Atlas should use Redis for shared cache.",
       entities: ["atlas", "redis"],
+      metadata: { claim: { subject: "atlas", predicate: "shared-cache", object: "redis", confidence: 0.98 } },
       source: { kind: "reviewed_code", confidence: 0.98 }
     });
-    service.add({
+    const transcriptRedis = service.add({
       userId: "u1",
       projectId: "p1",
       content: "Atlas should not use Redis for shared cache.",
       entities: ["atlas", "redis"],
+      metadata: { claim: { subject: "atlas", predicate: "shared-cache", object: "not-redis", confidence: 0.35 } },
+      relations: [{ type: "contradicts", targetId: reviewedRedis.id, confidence: 0.9 }],
       source: { kind: "transcript", confidence: 0.35 }
+    });
+    service.update(reviewedRedis.id, {
+      relations: [{ type: "contradicts", targetId: transcriptRedis.id, confidence: 0.9 }]
     });
 
     const expanded = service.search({ userId: "u1", query: "cli workflow", expandQuery: true, mode: "rrf" });
@@ -1603,7 +1650,16 @@ describe("TypeScript memory core", () => {
   });
 
   it("keeps inferred behavioral patterns pending until feedback approves or rejects them", () => {
-    const service = new MemoryService();
+    const service = new MemoryService({
+      intelligence: {
+        evaluator: {
+          evaluateReflection: ({ memories }) => memories.map((memory) => ({
+            memoryId: memory.id,
+            behavioralEvidence: { applies: true, theme: "mira-friday-food", confidence: 0.88 }
+          }))
+        }
+      }
+    });
     for (const day of [1, 2, 3]) {
       service.add({ userId: "u1", content: `Mira prefers Thai food Friday ${day}.`, tags: ["mira"], source: { kind: "human", confidence: 0.95 } });
     }
@@ -1649,7 +1705,19 @@ describe("TypeScript memory core", () => {
   });
 
   it("deduplicates extracted facts and links state changes additively", () => {
-    const service = new MemoryService();
+    const service = new MemoryService({
+      intelligence: {
+        extractor: {
+          extract: ({ events, scope }) => events.map((event) => ({
+            ...scope,
+            content: event.content,
+            entities: ["atlas"],
+            source: { kind: "human", confidence: 0.92 },
+            metadata: { supersedes: true }
+          }))
+        }
+      }
+    });
     service.add({ userId: "u1", content: "Atlas uses SQLite for cache.", entities: ["atlas"], source: { kind: "human", confidence: 0.95 } });
     const first = service.extract([{ role: "user", content: "Atlas now uses Redis for cache." }], { userId: "u1" });
     const second = service.extract([{ role: "user", content: "Atlas now uses Redis for cache." }], { userId: "u1" });
@@ -1659,7 +1727,20 @@ describe("TypeScript memory core", () => {
   });
 
   it("models belief revision as a supersession journey with historical validity", () => {
-    const service = new MemoryService();
+    const service = new MemoryService({
+      intelligence: {
+        extractor: {
+          extract: ({ events, scope }) => events.map((event) => ({
+            ...scope,
+            content: event.content,
+            entities: ["mira"],
+            source: { kind: "human", confidence: 0.92 },
+            timestamp: event.timestamp,
+            metadata: { supersedes: true }
+          }))
+        }
+      }
+    });
     const vienna = service.add({
       userId: "u1",
       content: "Mira lives in Vienna.",
@@ -2188,6 +2269,7 @@ describe("TypeScript memory core", () => {
       content: "target repo is /workspace/old-platform",
       source: { kind: "agent", confidence: 0.98 },
       tags: ["agent-inference"],
+      metadata: { claim: { subject: "workspace", predicate: "target-repository", object: "/workspace/old-platform", confidence: 0.98 } },
       timestamp: "2026-05-01T00:00:00.000Z"
     });
     const userCorrection = store.add({
@@ -2195,6 +2277,7 @@ describe("TypeScript memory core", () => {
       content: "target repo is /workspace/new-platform",
       source: { kind: "human", confidence: 0.72 },
       tags: ["correction"],
+      metadata: { claim: { subject: "workspace", predicate: "target-repository", object: "/workspace/new-platform", confidence: 0.72 } },
       timestamp: "2026-04-01T00:00:00.000Z"
     });
 
@@ -2351,7 +2434,10 @@ describe("TypeScript memory core", () => {
 
   it("keeps the Postgres repository driver-backed with service-state tables and optional RLS", () => {
     const source = readFileSync("src/api/repositories/postgresRepository.ts", "utf8");
-    const serviceSource = readFileSync("src/api/service.ts", "utf8");
+    const serviceSource = readdirSync("src/api/service")
+      .filter((file) => file.startsWith("memoryService") && file.endsWith(".ts"))
+      .map((file) => readFileSync(`src/api/service/${file}`, "utf8"))
+      .join("\n");
     expect(source).toContain('require("pg")');
     expect(source).not.toContain('"psql"');
     expect(source).toContain("cognibrain_repository_state");

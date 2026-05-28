@@ -44,29 +44,25 @@ Supported native managers:
 | SQLite | Local durable row store. |
 | Postgres | Team or production-like deployment. |
 
-Postgres proof is a deployment gate, not a universal claim:
+Postgres checks should be run against the target database:
 
 ```bash
 npm run internal -- verify:postgres
 ```
 
-Rerun storage checks on the target database before production claims.
+Record the resulting artifact with the deployment evidence for that target.
 
 ## Security
 
-Use API keys for local automation and JWT/OIDC where a deployment already has an identity provider. In production policy mode, unmatched policy checks default-deny.
+Use API keys for local automation and JWT/OIDC where a deployment already has an identity provider. In strict policy mode, unmatched policy checks default-deny.
 
-Recommended production posture:
+Recommended hosted posture:
 
 - Set an API key or OIDC verifier.
 - Run with DB-backed persistence.
 - Keep connector tokens in environment variables, a secret manager or the runtime-local connector config file used by the Operator UI.
-- Run `cognibrain proof` and the relevant release gates before publishing claims.
+- Keep runtime evidence with the deployment change record.
 
 ## Docker And Deploy
 
 Docker files and Kubernetes manifests are included as optional packaging under `docker/` and `deploy/`. They are not required for local usage.
-
-## Product Boundary
-
-Managed SaaS is a future product track. This repository currently describes a self-hosted open-source package and does not claim managed uptime, billing, hosted support, autoscaling or tenant-specific enterprise rollout.

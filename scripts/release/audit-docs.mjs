@@ -15,7 +15,7 @@ const canonicalDocs = [
   "docs/status.md",
   "docs/operations.md",
   "docs/reference.md",
-  "docs/claims.md"
+  "docs/evidence.md"
 ];
 const generatedDocPatterns = [
   /^docs\/benchmarks\/(?:hardening|latest-arena|landscape)\.md$/,
@@ -37,9 +37,9 @@ const files = {
   status: read("docs/status.md"),
   operations: read("docs/operations.md"),
   reference: read("docs/reference.md"),
-  claims: read("docs/claims.md")
+  evidence: read("docs/evidence.md")
 };
-const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmarks, files.integrations, files.status, files.operations, files.reference, files.claims].join("\n\n");
+const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmarks, files.integrations, files.status, files.operations, files.reference, files.evidence].join("\n\n");
 const packageJson = JSON.parse(files.package);
 const packageFiles = Array.isArray(packageJson.files) ? packageJson.files : [];
 
@@ -61,9 +61,9 @@ const checks = [
     has(files.readme, "## Public Surface"),
     has(files.readme, "Use MCP for MCP-native agents"),
     has(files.readme, "Use SDK/HTTP for product integrations and custom runtimes"),
-    has(files.readme, "Generated proof outputs are internal build artifacts"),
+    has(files.readme, "Benchmark results are documented from the checked artifacts"),
     has(files.readme, "docs/status.md"),
-    has(files.readme, "docs/claims.md")
+    has(files.readme, "docs/evidence.md")
   ]),
   check("operator CLI docs are text-first", [
     has(files.readme, "stable operator CLI"),
@@ -73,9 +73,9 @@ const checks = [
     !exists("src/cli/inkApp.mjs")
   ]),
   check("artifacts are internal outputs, not package content", [
-    has(files.benchmarks, "Generated reports are written under `artifacts/`"),
+    has(files.benchmarks, "This page records the current checked benchmark artifacts"),
     has(files.operations, "`artifacts/` is ignored by git"),
-    has(files.status, "Generated artifacts are internal CI/build outputs"),
+    has(files.status, "Generated artifacts are local review outputs under `artifacts/`"),
     !/(^|[^A-Za-z0-9_/-])public\/benchmark-arena/.test(files.dashboard),
     !/(^|[^A-Za-z0-9_/-])public\/leaderboard/.test(files.dashboard),
     packageFiles.every((path) => !path.startsWith("artifacts/")),
@@ -92,16 +92,16 @@ const checks = [
     has(files.reference, "For product integrations, use SDK/HTTP"),
     !has(files.reference, "| `/context-pack` |")
   ]),
-  check("production boundary remains honest", [
-    has(files.status, "Production Readiness Status"),
-    has(files.status, "DB-primary MemoryRepository"),
+  check("runtime status stays evidence-backed", [
+    has(files.status, "Runtime Status"),
+    has(files.status, "MemoryRepository paths for SQLite and Postgres"),
     has(files.status, "JWT/OIDC verifier"),
     has(files.status, "route-level RBAC"),
-    has(files.status, "Production policy mode default-denies"),
-    has(files.status, "0 tenant-verified live smokes and 0 production certifications"),
-    has(files.claims, "Explicit Non-Claims"),
-    has(files.claims, "does not currently claim Managed SaaS uptime"),
-    has(files.claims, "vendor-certified competitor benchmark results")
+    has(files.status, "Evidence anchor"),
+    has(files.evidence, "Evidence Register"),
+    has(files.evidence, "not a product narrative"),
+    has(files.evidence, "artifacts/cognicodebench/run.json"),
+    has(files.evidence, "artifacts/arena/run.json")
   ]),
   check("legacy plan-era docs are gone", [
     !/(plan1_|nextplan|Plan1_|Plan1)/.test(docsCorpus),

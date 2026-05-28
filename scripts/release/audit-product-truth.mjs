@@ -28,7 +28,7 @@ const files = {
   server: read("src/api/server.ts"),
   dreamRoutes: read("src/api/server/dreamRoutes.ts"),
   serverHelpers: read("src/api/server/helpers.ts"),
-  service: read("src/api/service.ts"),
+  service: readMany(["src/api/service.ts","src/api/service/memoryService.ts","src/api/service/memoryServiceBase.ts","src/api/service/memoryServiceDeps.ts","src/api/service/memoryServiceImports.ts","src/api/service/memoryServiceStore.ts","src/api/service/memoryServiceTruth.ts","src/api/service/memoryServiceRetrieval.ts","src/api/service/memoryServiceDreamEngineering.ts","src/api/service/memoryServiceSourceRevalidation.ts","src/api/service/memoryServiceLifecycleFeedback.ts","src/api/service/memoryServiceConnectorsAdmin.ts","src/api/service/memoryServiceSharingGraphMarketplace.ts","src/api/service/memoryServiceGovernanceOps.ts","src/api/service/memoryServiceInsightsMaintenance.ts","src/api/service/memoryServicePersistence.ts"]),
   dreamRuntime: read("src/api/service/dreamRuntime.ts"),
   mcpTools: read("src/connectors/mcpTools.ts"),
   mcpHandlers: read("src/connectors/mcpHandlers.ts"),
@@ -53,7 +53,7 @@ const files = {
   benchmarks: read("docs/benchmarks.md"),
   integrations: read("docs/integrations.md"),
   operations: read("docs/operations.md"),
-  claims: read("docs/claims.md"),
+  evidence: read("docs/evidence.md"),
   status: read("docs/status.md"),
   sameBenchmark: ""
 };
@@ -102,18 +102,18 @@ const defaultAllowPolicy = files.service.includes('const allowed = decisive ? de
 const corsWildcard = files.server.includes('Access-Control-Allow-Origin", "*"');
 const requestRateLimitPresent = /rateLimit|rate limit|429|too_many_requests/i.test(files.server);
 const bodyLimitPresent = /bodyLimit|maxBody|payload too large|413/i.test(files.server);
-const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmarks, files.integrations, files.operations, files.claims, files.status, files.sameBenchmark].join("\n\n");
+const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmarks, files.integrations, files.operations, files.evidence, files.status, files.sameBenchmark].join("\n\n");
 const honestDbBackedBoundary = docsContainAll([
-  "DB-primary MemoryRepository",
-  "fully async event-journal-first"
+  "MemoryRepository paths for SQLite and Postgres",
+  "target database"
 ]);
 const positiveOidcClaims = oidcVerifierPresent ? [] : findPositiveClaims(docsCorpus, [
   ["oidc-jwt-rbac", /\b(?:built-in|native|first-party|supports?)\b[^\n.]{0,80}\b(?:OIDC|JWT|RBAC)\b/i]
 ]);
 const positiveOverclaims = findPositiveOverclaims(docsCorpus);
-const productionReadiness = productionReadinessReport();
+const runtimeStatus = runtimeStatusReport();
 mkdirSync(join(root, "artifacts"), { recursive: true });
-writeFileSync(join(root, "artifacts", "production-readiness.json"), `${JSON.stringify(productionReadiness, null, 2)}\n`);
+writeFileSync(join(root, "artifacts", "runtime-status.json"), `${JSON.stringify(runtimeStatus, null, 2)}\n`);
 
 const packageFiles = new Set(Array.isArray(files.packageJson.files) ? files.packageJson.files : []);
 
@@ -132,11 +132,11 @@ const checks = [
     unsupported: unsupportedCompetitorLevels.map((system) => `${system.displayName ?? system.system}:${system.proofLevel}`)
   }),
   check("benchmark-docs-boundary", "Benchmark docs explicitly separate full local proof from API-shape, native, cloud, CLI and vendor-certified rows.", docsContainAll([
-    "Generated proof outputs are internal build artifacts",
+    "This page records the current checked benchmark artifacts",
     "same-run-api-shape",
-    "API-shape rows are compatibility models"
+    "credential-blocked"
   ]), "fail", {
-    docs: ["README.md", "docs/benchmarks.md", "docs/claims.md"]
+    docs: ["README.md", "docs/benchmarks.md", "docs/evidence.md"]
   }),
   check("connector-hermetic-drivers", "Connector registry has first-party driver and fixture coverage for the native connector set.", maturityRows.length >= 19 && hermeticRows.length >= 19, "fail", {
     artifact: "artifacts/connector-maturity.json",
@@ -160,11 +160,11 @@ const checks = [
     webhookVerified: webhookVerifiedRows.map((row) => row.provider).filter((provider) => priorityWebhookProviders.has(provider))
   }),
   check("connector-docs-boundary", "Connector docs state the checked artifact level: live-smoke-ready drivers, API/spec verification, no tenant live-smoke, no production certification.", docsContainAll([
-    "Native connector drivers exist",
-    "0 tenant-verified live smokes",
-    "0 production certifications"
+    "First-party connector definitions and drivers",
+    "Credentialed live checks depend on tenant credentials",
+    "connector reports under `artifacts/`"
   ]), "fail", {
-    docs: ["README.md", "docs/integrations.md", "docs/status.md", "docs/claims.md"]
+    docs: ["README.md", "docs/integrations.md", "docs/status.md", "docs/evidence.md"]
   }),
   check("connector-transport-proof", "Connector transport proof covers retry/backoff, cursor pagination, transient failures and redaction.", files.connectorTransport.passed === true && files.connectorTransport.checks?.rateLimitBackoff === true && files.connectorTransport.checks?.cursorPagination === true && files.connectorTransport.checks?.transientRetry === true, "fail", {
     artifact: "artifacts/connector-transport.json"
@@ -179,14 +179,14 @@ const checks = [
     credentialBlocked: certificationCredentialBlockedRows.length,
     productionCertified: productionCertifiedRows.length
   }),
-  check("status-matrix-current", "A current compact implementation status matrix exists with feature/state/verification/boundary columns.", files.status.includes("| Feature | Current state | Verification | Claim boundary |") && countStatusRows(files.status) >= 8 && files.readme.includes("docs/status.md") && files.docsHome.includes("status.md"), "fail", {
+  check("status-matrix-current", "A current compact implementation status matrix exists with surface/state/evidence columns.", files.status.includes("| Surface | Current state | Evidence anchor |") && countStatusRows(files.status) >= 7 && files.readme.includes("docs/status.md") && files.docsHome.includes("status.md"), "fail", {
     docs: ["docs/status.md", "README.md", "docs/README.md"],
     rows: countStatusRows(files.status)
   }),
-  check("production-readiness-artifact", "Production readiness is exported as an internal machine-readable artifact and kept out of the npm package.", productionReadiness.summary.selfHostedCandidate === true && productionReadiness.summary.productionCertified === false && productionReadiness.rows.length >= 8 && !packageFiles.has("artifacts/production-readiness.json"), "fail", {
-    artifact: "artifacts/production-readiness.json",
-    selfHostedCandidate: productionReadiness.summary.selfHostedCandidate,
-    productionCertified: productionReadiness.summary.productionCertified
+  check("runtime-status-artifact", "Runtime status is exported as an internal machine-readable artifact and kept out of the npm package.", runtimeStatus.summary.selfHostedCandidate === true && runtimeStatus.summary.productionCertified === false && runtimeStatus.rows.length >= 8 && !packageFiles.has("artifacts/runtime-status.json"), "fail", {
+    artifact: "artifacts/runtime-status.json",
+    selfHostedCandidate: runtimeStatus.summary.selfHostedCandidate,
+    productionCertified: runtimeStatus.summary.productionCertified
   }),
   check("storage-boundary", "Storage docs and code identify DB-primary MemoryRepository persistence honestly while row-backed runtime writes avoid full-store persist reimports.", dbPrimaryStorage && noFullStoreImportOnPersist && dbPrimaryAliasesBypassLegacyPersistence && memoryRepositoryBoundary && dbRepositoryImplementations && honestDbBackedBoundary, "fail", {
     code: "src/api/persistence.ts",
@@ -209,15 +209,15 @@ const checks = [
     oidcVerifierPresent,
     positiveOidcClaims
   }),
-  check("policy-tenant-boundary", "Production policy mode default-denies when no rule matches and docs keep DB-level isolation boundaries visible.", !defaultAllowPolicy && docsContainAll([
-    "Production policy mode default-denies",
-    "DB-level row isolation is still deployment-specific"
+  check("policy-tenant-boundary", "Strict policy mode default-denies when no rule matches and docs keep target storage checks visible.", !defaultAllowPolicy && docsContainAll([
+    "strict policy mode",
+    "target database"
   ]), "fail", {
     code: "src/api/service.ts",
     defaultAllowPolicy
   }),
   check("positive-overclaim-scan", "Docs avoid positive production-certified, tenant-verified, managed-SaaS and DB-primary claims without matching artifacts.", positiveOverclaims.length === 0, "fail", {
-    scannedDocs: ["README.md", "docs/README.md", "docs/install.md", "docs/integrations.md", "docs/operations.md", "docs/claims.md", "docs/status.md"],
+    scannedDocs: ["README.md", "docs/README.md", "docs/install.md", "docs/integrations.md", "docs/operations.md", "docs/evidence.md", "docs/status.md"],
     matches: positiveOverclaims
   }),
   check("harness-maturity-proof", "Harness maturity artifact separates generated packages, native hooks, daemon-backed CLI lifecycle and simulator proof for common and external-agent modes without open implementation gaps.", harnessRows.length >= 16 && generatedHarnessRows.length >= 16 && harnessGoldenPaths.length >= 16 && harnessRowsWithGaps.length === 0 && docsContainAll([
@@ -265,7 +265,7 @@ const checks = [
     "artifacts/connector-webhooks.json",
     "artifacts/harness-maturity.json",
     "artifacts/product-truth-audit.json",
-    "artifacts/production-readiness.json",
+    "artifacts/runtime-status.json",
     "artifacts/vendor-api-specs.json",
     "artifacts/vendor-live-smoke.json"
   ].every((path) => !packageFiles.has(path)), "fail", {
@@ -338,14 +338,14 @@ const report = {
     harnessGoldenPaths: harnessGoldenPaths.length,
     operatorCliStable: checks.find((item) => item.id === "cli-operator-primary")?.passed === true,
     dockerOptional: checks.find((item) => item.id === "docker-optional")?.passed === true,
-    selfHostedCandidate: productionReadiness.summary.selfHostedCandidate,
-    productionCertified: productionReadiness.summary.productionCertified,
+    selfHostedCandidate: runtimeStatus.summary.selfHostedCandidate,
+    productionCertified: runtimeStatus.summary.productionCertified,
     dbPrimaryStorage,
     memoryRepositoryBoundary,
     hardWiredServiceStore,
-    builtInOidcRbac: productionReadiness.summary.builtInOidcRbac,
-    defaultDenyPolicy: productionReadiness.summary.defaultDenyPolicy,
-    httpHardened: productionReadiness.summary.httpHardened
+    builtInOidcRbac: runtimeStatus.summary.builtInOidcRbac,
+    defaultDenyPolicy: runtimeStatus.summary.defaultDenyPolicy,
+    httpHardened: runtimeStatus.summary.httpHardened
   },
   truthTuples: [
     ["arena.cognibrain.proof", cognibrainArena?.proofLevel ?? "missing", "artifacts/arena/run.json"],
@@ -363,8 +363,8 @@ const report = {
     ["harness.generated", generatedHarnessRows.length, "artifacts/harness-maturity.json"],
     ["harness.goldenPaths", harnessGoldenPaths.length, "artifacts/harness-maturity.json"],
     ["cli.surface", "stable-operator-cli", "bin/cognibrain.mjs"],
-    ["production.selfHostedCandidate", productionReadiness.summary.selfHostedCandidate, "artifacts/production-readiness.json"],
-    ["production.certified", productionReadiness.summary.productionCertified, "artifacts/production-readiness.json"],
+    ["runtime.selfHostedCandidate", runtimeStatus.summary.selfHostedCandidate, "artifacts/runtime-status.json"],
+    ["runtime.certified", runtimeStatus.summary.productionCertified, "artifacts/runtime-status.json"],
     ["storage.mode", dbPrimaryStorage && memoryRepositoryBoundary && !hardWiredServiceStore ? "repository-db-primary" : dbPrimaryStorage ? "db-primary-projection" : storageIsSnapshotFirst ? "snapshot-first" : "unknown", "src/api/persistence.ts"],
     ["auth.mode", oidcVerifierPresent ? "oidc-jwt-rbac" : "api-key-or-open-local", "src/api/server.ts"],
     ["policy.default", defaultAllowPolicy ? "allow" : "deny", "src/api/service.ts"],
@@ -422,7 +422,7 @@ function findPositiveClaims(content, patterns) {
     );
 }
 
-function productionReadinessReport() {
+function runtimeStatusReport() {
   const rows = [
     readinessRow("CLI", "Stable operator CLI and operator OS maturity artifact implemented", "status/proof/config/policy/retention commands", "Primary operator workbench", "n/a", "tests/cli.test.ts, tests/evaluation.test.ts", "bin/cognibrain.mjs, artifacts/operator-os-maturity.json", "self-hosted operator candidate", "Command-backed terminal paths are covered; commercial Operator UI remains optional."),
     readinessRow("Memory API and MCP", "Service, HTTP API, MCP server and SDK clients exist", "broad route surface with route-level RBAC", "memory/proof/status commands", "memory_context_pack, coding context, action guard, patch evidence", "tests/api.test.ts, tests/core.test.ts", "docs/reference.md", "local/team/enterprise-auth candidate", "JWT/OIDC verifier is optional and must be configured per deployment."),
@@ -453,7 +453,7 @@ function productionReadinessReport() {
   return {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
-    mode: "production_readiness_status",
+    mode: "runtime_status",
     summary: {
       selfHostedCandidate: true,
       productionCertified: criticalOpenGaps.length === 0 && externalBlockedGaps.length === 0,

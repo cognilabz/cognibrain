@@ -4,7 +4,7 @@ import { codebaseScopeMatches, getEngineeringMetadata } from "./engineeringMemor
 import { activateGraph } from "./graphReasoning";
 import { clamp, MemoryStore } from "./store";
 import { cosineLike, estimateTokens, keywordCoverage, tokenize } from "./text";
-import type { LexicalScoreProvider, Memory, RetrievalWeights, SearchOptions, SearchResult } from "./types";
+import type { LexicalScoreProvider, Memory, MemoryClaim, RetrievalWeights, SearchOptions, SearchResult } from "./types";
 
 const STALE_DAYS = 30;
 const INJECTION_CONFIDENCE_THRESHOLD = 0.5;
@@ -266,7 +266,7 @@ function deterministicQueryExpansions(query: string): string[] {
   for (const group of groups) {
     const matched = group.find((term) => lower.includes(term));
     if (!matched) continue;
-    for (const term of group) expansions.add(query.replace(new RegExp(escapeRegExp(matched), "i"), term));
+    for (const term of group) expansions.add(replaceCaseInsensitiveOnce(query, matched, term));
     expansions.add(`${query} ${group.join(" ")}`);
   }
   return [...expansions];
@@ -310,16 +310,26 @@ function applyContradictionDecisions(results: SearchResult[]): SearchResult[] {
 }
 
 function isLikelyContradiction(a: Memory, b: Memory): boolean {
-  if (a.relations.some((relation) => relation.type === "contradicts" && (relation.targetId === b.id || (relation.targetEntity && b.entities.includes(relation.targetEntity))))) return true;
-  if (b.relations.some((relation) => relation.type === "contradicts" && (relation.targetId === a.id || (relation.targetEntity && a.entities.includes(relation.targetEntity))))) return true;
-  if (!a.entities.some((entity) => b.entities.includes(entity))) return false;
-  const left = a.content.toLowerCase();
-  const right = b.content.toLowerCase();
-  return (/\b(no|not|never|does not|should not|without|nicht|kein)\b/.test(left) && /\b(should|does|has|uses|with|use|is|always)\b/.test(right)) || (/\b(no|not|never|does not|should not|without|nicht|kein)\b/.test(right) && /\b(should|does|has|uses|with|use|is|always)\b/.test(left));
+  if (hasContradictionRelation(a, b) || hasContradictionRelation(b, a)) return true;
+  const left = structuredClaim(a);
+  const right = structuredClaim(b);
+  return Boolean(left && right && left.subject === right.subject && left.predicate === right.predicate && left.object !== right.object);
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function hasContradictionRelation(source: Memory, target: Memory): boolean {
+  return source.relations.some((relation) => relation.type === "contradicts" && (relation.targetId === target.id || (relation.targetEntity && target.entities.includes(relation.targetEntity))));
+}
+
+function structuredClaim(memory: Memory): Pick<MemoryClaim, "subject" | "predicate" | "object"> | undefined {
+  const claim = memory.metadata.claim as Partial<MemoryClaim> | undefined;
+  if (typeof claim?.subject !== "string" || typeof claim.predicate !== "string" || typeof claim.object !== "string") return undefined;
+  return { subject: claim.subject.trim().toLowerCase(), predicate: claim.predicate.trim().toLowerCase(), object: claim.object.trim().toLowerCase() };
+}
+
+function replaceCaseInsensitiveOnce(value: string, search: string, replacement: string): string {
+  const index = value.toLowerCase().indexOf(search.toLowerCase());
+  if (index < 0) return value;
+  return `${value.slice(0, index)}${replacement}${value.slice(index + search.length)}`;
 }
 
 function temporalAllows(memory: Memory, constraint: { after?: Date; before?: Date }): boolean {
@@ -546,16 +556,24 @@ function relevanceEvidence(result: SearchResult): number {
 }
 
 function isSuppressedContradiction(result: SearchResult, all: SearchResult[]): boolean {
-  const text = result.memory.content.toLowerCase();
-  if (!text.includes("never confirmed") && !text.includes("transcript")) return false;
+  if (!hasSuppressionEvidence(result.memory)) return false;
   const entities = new Set(result.memory.entities);
   return all.some((other) => {
     if (other.memory.id === result.memory.id) return false;
     if (other.memory.trust <= result.memory.trust) return false;
     if (!other.memory.entities.some((entity) => entities.has(entity))) return false;
-    const otherText = other.memory.content.toLowerCase();
-    return otherText.includes("confirmed") || otherText.includes("does not") || otherText.includes("correction");
+    return hasContradictionRelation(result.memory, other.memory) || hasContradictionRelation(other.memory, result.memory) || claimConflicts(result.memory, other.memory);
   });
+}
+
+function hasSuppressionEvidence(memory: Memory): boolean {
+  return memory.tags.includes("needs-review") || memory.beliefState === "needs_verification" || Boolean(memory.metadata.needsVerification);
+}
+
+function claimConflicts(a: Memory, b: Memory): boolean {
+  const left = structuredClaim(a);
+  const right = structuredClaim(b);
+  return Boolean(left && right && left.subject === right.subject && left.predicate === right.predicate && left.object !== right.object);
 }
 
 export function citationFor(memory: Memory): string {

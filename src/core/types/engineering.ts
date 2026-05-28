@@ -55,6 +55,21 @@ export interface EngineeringMemoryMetadata {
   verificationDueAt?: Date | string;
 }
 
+export interface EngineeringMemoryClassification {
+  kind?: EngineeringMemoryKind;
+  confidence?: number;
+  previousWrongAction?: string;
+  correctAction?: string;
+  forbiddenAction?: string;
+  command?: string;
+  successPattern?: string;
+  reason?: string;
+}
+
+export interface EngineeringMemoryClassifier {
+  classifyEngineering(input: { content: string; metadata?: Record<string, unknown>; now: Date }): EngineeringMemoryClassification;
+}
+
 export interface CodingContextPack {
   schemaVersion: "1.0";
   id: string;

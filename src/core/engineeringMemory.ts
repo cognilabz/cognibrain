@@ -3,6 +3,7 @@ import type {
   ActionGuardReport,
   CodebaseScope,
   CodingContextPack,
+  EngineeringMemoryClassifier,
   EngineeringMemoryKind,
   EngineeringMemoryMetadata,
   Memory,
@@ -39,28 +40,19 @@ export function isEngineeringMemoryKind(value: unknown): value is EngineeringMem
   return typeof value === "string" && ENGINEERING_KINDS.includes(value as EngineeringMemoryKind);
 }
 
-export function classifyEngineeringMemory(content: string, metadata: Record<string, unknown> = {}): EngineeringMemoryKind | undefined {
+export function classifyEngineeringMemory(content: string, metadata: Record<string, unknown> = {}, classifier?: EngineeringMemoryClassifier): EngineeringMemoryKind | undefined {
   const requestedKind = (metadata.engineeringKind ?? (metadata.engineering as { kind?: unknown } | undefined)?.kind) as unknown;
   if (isEngineeringMemoryKind(requestedKind)) return requestedKind;
-  const lower = content.toLowerCase();
   const action = metadata.action as { command?: unknown; tests?: unknown } | undefined;
-  if (action?.command || Array.isArray(action?.tests) || /\b(exit code|tests? failed|tests? passed|command executed|tool call)\b/.test(lower)) return "tool_outcome";
-  if (/\b(do not|don't|dont|never|forbidden|must not|should not|nicht|niemals|verboten)\b/.test(lower)) {
-    if (/\bgenerated|generated file|\.generated\.|dist\/|build\/|vendor\/|lockfile\b/.test(lower)) return "generated_file_rule";
-    return "forbidden_action";
-  }
-  if (/\b(correction|review|reviewer|wrong|incorrect|instead|should have|use .* instead|korrigiert|falsch)\b/.test(lower)) return "review_correction";
-  if (/\b(adr|architecture|decision|lives in|belongs in|folder|directory|layer|boundary|module)\b/.test(lower)) return "architecture_decision";
-  if (/\b(migrat|deprecated|renamed|moved from|moved to|before .* now|formerly|vor migration|jetzt)\b/.test(lower)) return "migration_note";
-  if (/\b(test command|run npm test|vitest|jest|pytest|go test|e2e|unit test|integration test)\b/.test(lower)) return "test_strategy";
-  if (/\b(dependency|package|library|import|use .+ package|do not add|npm install|pip install|go get)\b/.test(lower)) return "dependency_rule";
-  if (/\b(repo policy|repository policy|always use|never use|use npm|use pnpm|branch rule|project rule)\b/.test(lower)) return "repo_policy";
-  if (/\b(always|before|after|when|if|workflow|procedure|checklist|run|verify)\b/.test(lower)) return "procedure";
+  if (action?.command || Array.isArray(action?.tests)) return "tool_outcome";
+  const providerKind = classifier?.classifyEngineering({ content, metadata, now: new Date() }).kind;
+  if (isEngineeringMemoryKind(providerKind)) return providerKind;
   return undefined;
 }
 
-export function withEngineeringMemoryMetadata(input: MemoryInput): MemoryInput {
-  const kind = classifyEngineeringMemory(input.content, input.metadata ?? {});
+export function withEngineeringMemoryMetadata(input: MemoryInput, classifier?: EngineeringMemoryClassifier): MemoryInput {
+  const providerDecision = classifier?.classifyEngineering({ content: input.content, metadata: input.metadata ?? {}, now: new Date() });
+  const kind = classifyEngineeringMemory(input.content, input.metadata ?? {}, providerDecision?.kind ? undefined : classifier) ?? providerDecision?.kind;
   if (!kind) return input;
   const existing = (input.metadata?.engineering ?? {}) as Partial<EngineeringMemoryMetadata>;
   const now = new Date();
@@ -68,12 +60,12 @@ export function withEngineeringMemoryMetadata(input: MemoryInput): MemoryInput {
   const engineering: EngineeringMemoryMetadata = {
     kind,
     codebase,
-    confidence: existing.confidence ?? input.confidence ?? input.source?.confidence ?? 0.76,
+    confidence: existing.confidence ?? providerDecision?.confidence ?? input.confidence ?? input.source?.confidence ?? 0.76,
     correctionOfMemoryId: existing.correctionOfMemoryId ?? stringMetadata(input.metadata, "correctionOfMemoryId"),
-    previousWrongAction: existing.previousWrongAction ?? stringMetadata(input.metadata, "previousWrongAction") ?? inferPreviousWrongAction(input.content),
-    correctAction: existing.correctAction ?? stringMetadata(input.metadata, "correctAction") ?? inferCorrectAction(input.content),
-    forbiddenAction: existing.forbiddenAction ?? stringMetadata(input.metadata, "forbiddenAction") ?? inferForbiddenAction(input.content),
-    command: existing.command ?? stringMetadata(input.metadata, "command") ?? commandFromAction(input.metadata),
+    previousWrongAction: existing.previousWrongAction ?? stringMetadata(input.metadata, "previousWrongAction") ?? providerDecision?.previousWrongAction,
+    correctAction: existing.correctAction ?? stringMetadata(input.metadata, "correctAction") ?? providerDecision?.correctAction,
+    forbiddenAction: existing.forbiddenAction ?? stringMetadata(input.metadata, "forbiddenAction") ?? providerDecision?.forbiddenAction,
+    command: existing.command ?? stringMetadata(input.metadata, "command") ?? providerDecision?.command ?? commandFromAction(input.metadata),
     cwd: existing.cwd ?? stringMetadata(input.metadata, "cwd"),
     envRequirements: existing.envRequirements ?? stringArrayMetadata(input.metadata, "envRequirements"),
     environmentHints: existing.environmentHints ?? stringArrayMetadata(input.metadata, "environmentHints"),
@@ -82,7 +74,7 @@ export function withEngineeringMemoryMetadata(input: MemoryInput): MemoryInput {
     outputSummary: existing.outputSummary ?? stringMetadata(input.metadata, "outputSummary"),
     failureReason: existing.failureReason ?? stringMetadata(input.metadata, "failureReason"),
     successReason: existing.successReason ?? stringMetadata(input.metadata, "successReason"),
-    successPattern: existing.successPattern ?? stringMetadata(input.metadata, "successPattern") ?? inferSuccessPattern(input.content),
+    successPattern: existing.successPattern ?? stringMetadata(input.metadata, "successPattern") ?? providerDecision?.successPattern,
     filesChanged: existing.filesChanged ?? stringArrayMetadata(input.metadata, "filesChanged"),
     filesTouched: existing.filesTouched ?? stringArrayMetadata(input.metadata, "filesTouched"),
     testOutputSummary: existing.testOutputSummary ?? stringMetadata(input.metadata, "testOutputSummary"),
@@ -215,16 +207,15 @@ export function buildCodingContextPackFromResults(input: {
 }
 
 export function evaluateForbiddenAction(input: { userId: string; action: string; results: SearchResult[] }): ActionGuardReport {
-  const action = input.action.toLowerCase();
+  const action = normalizeComparableAction(input.action);
   const blockedBy: ActionGuardReport["blockedBy"] = [];
   const warnings: string[] = [];
   const alternatives = new Set<string>();
   for (const result of input.results) {
     const engineering = getEngineeringMetadata(result.memory);
     if (!engineering) continue;
-    const content = result.memory.content.toLowerCase();
-    const forbidden = engineering.forbiddenAction?.toLowerCase();
-    const relevant = forbidden ? action.includes(forbidden) || forbidden.includes(action) || overlaps(action, forbidden) || overlaps(action, content) : overlaps(action, content);
+    const forbidden = engineering.forbiddenAction ? normalizeComparableAction(engineering.forbiddenAction) : undefined;
+    const relevant = forbidden ? actionPhraseMatches(action, forbidden) : explicitEngineeringActionMatches(action, engineering);
     if (!relevant) continue;
     if (engineering.kind === "forbidden_action" || engineering.kind === "generated_file_rule") {
       blockedBy.push({ memoryId: result.memory.id, kind: engineering.kind, reason: engineering.forbiddenAction ?? result.memory.content });
@@ -364,9 +355,9 @@ function deriveCodebaseScope(input: MemoryInput): CodebaseScope {
     packageName: stringMetadata(metadata, "packageName"),
     workspace: stringMetadata(metadata, "workspace"),
     directory: currentPath ? directoryOf(currentPath) : stringMetadata(metadata, "directory"),
-    filePattern: stringMetadata(metadata, "filePattern") ?? inferFilePattern(input.content, currentPath),
-    language: stringMetadata(metadata, "language") ?? inferLanguage(input.content, currentPath),
-    framework: stringMetadata(metadata, "framework") ?? inferFramework(input.content),
+    filePattern: stringMetadata(metadata, "filePattern") ?? inferFilePattern(currentPath),
+    language: stringMetadata(metadata, "language") ?? inferLanguage(currentPath),
+    framework: stringMetadata(metadata, "framework"),
     harness: input.agentId ?? input.appId ?? stringMetadata(metadata, "harness"),
     currentPath,
     commitRange: stringMetadata(metadata, "commitRange")
@@ -392,8 +383,7 @@ function engineeringEntities(content: string, engineering: EngineeringMemoryMeta
     engineering.codebase.filePattern,
     engineering.codebase.language,
     engineering.codebase.framework,
-    engineering.command?.split(/\s+/)[0],
-    ...extractPathLikeEntities(content)
+    firstCommandToken(engineering.command)
   ].filter((value): value is string => typeof value === "string" && value.length > 1);
 }
 
@@ -417,70 +407,95 @@ function commandFromAction(metadata: Record<string, unknown> | undefined): strin
   return typeof action?.command === "string" ? action.command : undefined;
 }
 
-function inferPreviousWrongAction(content: string): string | undefined {
-  return content.match(/\b(?:not|don't|dont|never|instead of|wrongly)\s+([^.;]+)/i)?.[1]?.trim();
-}
-
-function inferCorrectAction(content: string): string | undefined {
-  return content.match(/\b(?:use|run|do|put|place)\s+([^.;]+?)\s+(?:instead|rather than|now|for this repo)\b/i)?.[0]?.trim()
-    ?? content.match(/\binstead[, ]+\s*([^.;]+)/i)?.[1]?.trim()
-    ?? content.match(/\bshould\s+([^.;]+)/i)?.[1]?.trim();
-}
-
-function inferForbiddenAction(content: string): string | undefined {
-  return content.match(/\b(?:do not|don't|dont|never|must not|should not)\s+([^.;]+)/i)?.[1]?.trim();
-}
-
-function inferSuccessPattern(content: string): string | undefined {
-  return content.match(/\b(?:passed|works|success|green)\b[^.;]*/i)?.[0]?.trim();
-}
-
-function inferFilePattern(content: string, currentPath?: string): string | undefined {
-  if (currentPath) return currentPath.includes("/") ? currentPath.replace(/^.*\//, "**/") : currentPath;
-  const match = content.match(/([A-Za-z0-9_.-]+\/[A-Za-z0-9_./*-]+|\*\*\/[A-Za-z0-9_.*-]+)/);
-  return match?.[1];
-}
-
-function inferLanguage(content: string, currentPath?: string): string | undefined {
-  const value = `${content} ${currentPath ?? ""}`.toLowerCase();
-  if (/\btypescript|\.tsx?|node\b/.test(value)) return "typescript";
-  if (/\bpython|fastapi|pytest|\.py\b/.test(value)) return "python";
-  if (/\bgo test|golang|\.go\b/.test(value)) return "go";
-  if (/\breact|\.jsx?|\.tsx\b/.test(value)) return "react";
+function inferFilePattern(currentPath?: string): string | undefined {
+  if (currentPath) {
+    const lastSlash = currentPath.lastIndexOf("/");
+    return lastSlash >= 0 ? `**/${currentPath.slice(lastSlash + 1)}` : currentPath;
+  }
   return undefined;
 }
 
-function inferFramework(content: string): string | undefined {
-  const value = content.toLowerCase();
-  if (/\bfastapi\b/.test(value)) return "fastapi";
-  if (/\breact\b/.test(value)) return "react";
-  if (/\bnext\.?js\b/.test(value)) return "nextjs";
-  if (/\bexpress\b/.test(value)) return "express";
+function inferLanguage(currentPath?: string): string | undefined {
+  const value = currentPath?.toLowerCase() ?? "";
+  if (value.endsWith(".ts") || value.endsWith(".tsx")) return "typescript";
+  if (value.endsWith(".py")) return "python";
+  if (value.endsWith(".go")) return "go";
+  if (value.endsWith(".jsx") || value.endsWith(".js")) return "javascript";
   return undefined;
 }
 
-function extractPathLikeEntities(content: string): string[] {
-  return [...content.matchAll(/\b(?:src|app|tests?|packages|services|cmd|internal|docs|fixtures)\/[A-Za-z0-9_./*-]+/g)].map((match) => match[0].toLowerCase());
+function firstCommandToken(command?: string): string | undefined {
+  const trimmed = command?.trim();
+  if (!trimmed) return undefined;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (isWhitespace(trimmed.charCodeAt(index))) return trimmed.slice(0, index);
+  }
+  return trimmed;
 }
 
 function directoryOf(path: string): string | undefined {
   if (!path.includes("/")) return undefined;
-  return path.replace(/\/[^/]*$/, "");
+  const lastSlash = path.lastIndexOf("/");
+  return lastSlash > 0 ? path.slice(0, lastSlash) : undefined;
 }
 
 function filePatternMatches(path: string, pattern: string): boolean {
   if (pattern.startsWith("**/")) return path.endsWith(pattern.slice(3));
-  if (pattern.includes("*")) {
-    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-    return new RegExp(`^${escaped}$`).test(path);
-  }
+  if (pattern.includes("*")) return wildcardMatch(path, pattern);
   return path.includes(pattern);
 }
 
-function overlaps(left: string, right: string): boolean {
-  const leftTokens = new Set(left.split(/\W+/).filter((token) => token.length > 2));
-  const rightTokens = new Set(right.split(/\W+/).filter((token) => token.length > 2));
-  return [...leftTokens].some((token) => rightTokens.has(token));
+function wildcardMatch(value: string, pattern: string): boolean {
+  const parts = pattern.split("*");
+  if (!parts.length) return value === pattern;
+  let cursor = 0;
+  if (parts[0] && !value.startsWith(parts[0])) return false;
+  cursor = parts[0]?.length ?? 0;
+  for (const part of parts.slice(1, -1)) {
+    if (!part) continue;
+    const index = value.indexOf(part, cursor);
+    if (index < 0) return false;
+    cursor = index + part.length;
+  }
+  const tail = parts.at(-1) ?? "";
+  return tail ? value.endsWith(tail) : true;
+}
+
+function explicitEngineeringActionMatches(action: string, engineering: EngineeringMemoryMetadata): boolean {
+  return [
+    engineering.command,
+    engineering.correctAction,
+    engineering.successPattern,
+    engineering.previousWrongAction
+  ].some((candidate) => candidate ? actionPhraseMatches(action, normalizeComparableAction(candidate)) : false);
+}
+
+function actionPhraseMatches(left: string, right: string): boolean {
+  return Boolean(left && right && (left === right || left.includes(right) || right.includes(left)));
+}
+
+function normalizeComparableAction(value: string): string {
+  return collapseWhitespace(value.toLowerCase()).trim();
+}
+
+function collapseWhitespace(value: string): string {
+  let output = "";
+  let previousWasWhitespace = false;
+  for (const char of value) {
+    const whitespace = isWhitespace(char.charCodeAt(0));
+    if (whitespace) {
+      if (!previousWasWhitespace) output += " ";
+      previousWasWhitespace = true;
+      continue;
+    }
+    output += char;
+    previousWasWhitespace = false;
+  }
+  return output;
+}
+
+function isWhitespace(code: number): boolean {
+  return code === 9 || code === 10 || code === 11 || code === 12 || code === 13 || code === 32;
 }
 
 function plusDays(date: Date, days: number): Date {

@@ -1,6 +1,5 @@
 import type { MemoryExtractionEvent } from "../../../core";
 import { arr, obj, str } from "../http";
-import { correctionLike } from "./helpers";
 
 export function asanaTaskItem(task: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -16,7 +15,6 @@ export function asanaTaskItem(task: Record<string, unknown>): Record<string, unk
 }
 
 export function asanaTaskEvent(item: Record<string, unknown>): MemoryExtractionEvent & { externalId?: string } {
-  const text = `${item.title ?? ""} ${item.notes ?? ""}`;
   return {
     role: "tool",
     content: `Asana task ${str(item.title, "Untitled task")}: ${str(item.notes, "")}`,
@@ -24,7 +22,7 @@ export function asanaTaskEvent(item: Record<string, unknown>): MemoryExtractionE
     uri: str(item.url, undefined),
     timestamp: str(item.updatedAt, undefined),
     source: { kind: "import", confidence: 0.87 },
-    metadata: { vendor: "asana", eventType: correctionLike(text) ? "issue_correction" : "issue_decision", workspace: process.env.MEMORY_ASANA_WORKSPACE, project: item.project, completed: item.completed, assignee: item.assignee, visibility: "org" }
+    metadata: { vendor: "asana", eventType: "issue_decision", workspace: process.env.MEMORY_ASANA_WORKSPACE, project: item.project, completed: item.completed, assignee: item.assignee, visibility: "org" }
   };
 }
 
@@ -41,7 +39,6 @@ export function clickUpTaskItem(task: Record<string, unknown>): Record<string, u
 }
 
 export function clickUpTaskEvent(item: Record<string, unknown>): MemoryExtractionEvent & { externalId?: string } {
-  const text = `${item.title ?? ""} ${item.text ?? ""}`;
   return {
     role: "tool",
     content: `ClickUp task ${str(item.title, "Untitled task")}: ${str(item.text, "")}`,
@@ -49,6 +46,6 @@ export function clickUpTaskEvent(item: Record<string, unknown>): MemoryExtractio
     uri: str(item.url, undefined),
     timestamp: str(item.updatedAt, undefined),
     source: { kind: "import", confidence: 0.86 },
-    metadata: { vendor: "clickup", eventType: correctionLike(text) ? "issue_correction" : "issue_decision", workspace: process.env.MEMORY_CLICKUP_WORKSPACE_ID, list: process.env.MEMORY_CLICKUP_LIST_ID ?? process.env.MEMORY_CLICKUP_SPACE_ID, status: item.status, assignee: item.assignee, visibility: "org" }
+    metadata: { vendor: "clickup", eventType: "issue_decision", workspace: process.env.MEMORY_CLICKUP_WORKSPACE_ID, list: process.env.MEMORY_CLICKUP_LIST_ID ?? process.env.MEMORY_CLICKUP_SPACE_ID, status: item.status, assignee: item.assignee, visibility: "org" }
   };
 }

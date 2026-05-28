@@ -6,10 +6,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from typing import Any, Iterator, Mapping
+from typing import Any, Iterator, Mapping, Union
 
 
-JSON = dict[str, Any] | list[Any] | str | int | float | bool | None
+JSON = Union[dict[str, Any], list[Any], str, int, float, bool, None]
 
 
 class CognibrainError(Exception):

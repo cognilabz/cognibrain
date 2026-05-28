@@ -113,6 +113,7 @@ export const API_ROUTE_CONTRACTS: ApiRouteContract[] = [
   route("/managed/tenants", ["GET", "POST"], experimental, "platform"),
   route("/managed/control-plane", ["GET"], experimental, "platform"),
   route("/connectors", ["GET", "POST"], candidate, "connector"),
+  route("/connectors/config", ["GET", "POST", "PUT"], candidate, "connector"),
   route("/connectors/sync-records", ["GET"], candidate, "connector"),
   route("/connectors/review-queue", ["GET"], candidate, "connector"),
   route("/connectors/review-queue/{memoryId}/review", ["POST"], candidate, "connector"),

@@ -1,6 +1,6 @@
 import type { MemoryExtractionEvent } from "../../../core";
 import { arr, obj, str } from "../http";
-import { adfText, correctionLike, htmlText, jiraBrowseUrl, notionTitle } from "./helpers";
+import { adfText, htmlText, jiraBrowseUrl, notionTitle, structuredDocumentEventType, structuredIssueEventType } from "./helpers";
 
 export function jiraIssueItem(issue: Record<string, unknown>): Record<string, unknown> {
   const fields = obj(issue.fields);
@@ -45,7 +45,7 @@ export function jiraIssueEvents(item: Record<string, unknown>): Array<MemoryExtr
     source: { kind: "import", confidence: 0.9 },
     metadata: {
       vendor: "jira",
-      eventType: correctionLike(`${item.title ?? ""} ${latestText}`) ? "issue_correction" : "issue_decision",
+      eventType: structuredIssueEventType(labels, item.issueType, "issue_decision"),
       project: process.env.MEMORY_JIRA_PROJECT,
       status: item.status,
       assignee: item.assignee,
@@ -90,7 +90,7 @@ export function confluencePageEvent(item: Record<string, unknown>): MemoryExtrac
     source: { kind: "import", confidence: 0.88 },
     metadata: {
       vendor: "confluence",
-      eventType: /runbook/i.test(`${item.title ?? ""} ${text}`) ? "runbook" : "architecture_decision",
+      eventType: structuredDocumentEventType(arr(item.labels), "doc_decision"),
       space: item.space,
       version: String(item.version ?? ""),
       labels: item.labels,
@@ -125,7 +125,7 @@ export function notionPageEvent(item: Record<string, unknown>): MemoryExtraction
     source: { kind: "import", confidence: 0.86 },
     metadata: {
       vendor: "notion",
-      eventType: /adr|decision|architecture/i.test(str(item.title, "")) ? "architecture_decision" : "doc_decision",
+      eventType: structuredDocumentEventType([], "doc_decision"),
       workspace: item.workspace,
       archived: item.archived,
       author: item.author,
@@ -172,7 +172,7 @@ export function linearIssueEvents(item: Record<string, unknown>): Array<MemoryEx
     source: { kind: "import", confidence: 0.89 },
     metadata: {
       vendor: "linear",
-      eventType: correctionLike(`${item.title ?? ""} ${latestText}`) ? "issue_correction" : "issue_decision",
+      eventType: structuredIssueEventType(arr(item.labels), undefined, "issue_decision"),
       identifier,
       status: item.status,
       assignee: item.assignee,

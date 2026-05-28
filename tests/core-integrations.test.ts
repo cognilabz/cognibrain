@@ -1230,7 +1230,20 @@ describe("TypeScript memory core integrations", () => {
   });
 
   it("stores engineering corrections, guards forbidden actions, and builds patch evidence", () => {
-    const service = new MemoryService({ autoDream: { enabled: false } });
+    const service = new MemoryService({
+      autoDream: { enabled: false },
+      intelligence: {
+        engineeringClassifier: {
+          classifyEngineering: () => ({
+            kind: "generated_file_rule",
+            confidence: 0.91,
+            correctAction: "npm test",
+            forbiddenAction: "pnpm test",
+            command: "npm test"
+          })
+        }
+      }
+    });
     const wrong = service.recordHarnessAction({
       userId: "dev",
       agentId: "codex",

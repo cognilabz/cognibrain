@@ -140,6 +140,7 @@ function verifyHarnessGoldenPath(): HarnessGoldenPathRun {
     projectId: repo,
     content: "Do not use pnpm in demo-claude-code; use npm test before release and do not edit generated files.",
     kind: "repo_policy",
+    previousWrongAction: "pnpm test",
     correctAction: "npm test",
     codebase: codebaseScope
   });

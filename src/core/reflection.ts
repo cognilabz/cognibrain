@@ -1,4 +1,4 @@
-import type { ContradictionDetector, Memory, ReflectionReport, ReflectionSummarizer } from "./types";
+import type { ContradictionDetector, Memory, MemoryClaim, ReflectionEvaluator, ReflectionMemoryEvaluation, ReflectionReport, ReflectionSummarizer } from "./types";
 import { tokenize } from "./text";
 import { clamp, MemoryStore } from "./store";
 import { DEFAULT_LIFECYCLE_POLICY, normalizeLifecyclePolicy, type LifecyclePolicy } from "./config";
@@ -7,28 +7,31 @@ export class ReflectionEngine {
   private readonly policy: LifecyclePolicy;
   private readonly contradictionDetector?: ContradictionDetector;
   private readonly summarizer?: ReflectionSummarizer;
+  private readonly evaluator?: ReflectionEvaluator;
 
   constructor(
     private readonly store: MemoryStore,
-    options: Partial<LifecyclePolicy> & { contradictionDetector?: ContradictionDetector; summarizer?: ReflectionSummarizer } = DEFAULT_LIFECYCLE_POLICY
+    options: Partial<LifecyclePolicy> & { contradictionDetector?: ContradictionDetector; summarizer?: ReflectionSummarizer; evaluator?: ReflectionEvaluator } = DEFAULT_LIFECYCLE_POLICY
   ) {
     this.policy = normalizeLifecyclePolicy(options);
     this.contradictionDetector = options.contradictionDetector;
     this.summarizer = options.summarizer;
+    this.evaluator = options.evaluator;
   }
 
   run(userId: string, now = new Date()): ReflectionReport {
     const memories = this.store.list(userId).filter((memory) => !memory.archivedAt);
-    const contradictions = this.resolveContradictions(memories);
+    const evaluations = this.evaluateMemories(memories, now);
+    const contradictions = this.resolveContradictions(memories, evaluations);
     const faded = this.fadeLowUtility(memories, now);
-    const stale = this.scheduleStalenessReview(this.activeMemories(userId), now);
+    const stale = this.scheduleStalenessReview(this.activeMemories(userId), now, evaluations);
     const created = [
       ...this.summarizeClusters(userId, this.activeMemories(userId), now),
       ...this.summarizeTemporalPeriods(userId, this.activeMemories(userId), now),
-      ...this.extractBehavioralPatterns(userId, this.activeMemories(userId), now)
+      ...this.extractBehavioralPatterns(userId, this.activeMemories(userId), now, evaluations)
     ];
     const revalidatedPatterns = this.revalidateBehavioralPatterns(this.activeMemories(userId), now);
-    const reorganized = this.reorganizeMemories(this.activeMemories(userId), now);
+    const reorganized = this.reorganizeMemories(this.activeMemories(userId), now, evaluations);
     const activeAfter = this.activeMemories(userId);
     const evaluation = evaluateMemoryQuality(activeAfter, now);
     const demoted = uniqueMemories([...contradictions.map((item) => item.demoted), ...faded.demoted]);
@@ -59,6 +62,11 @@ export class ReflectionEngine {
 
   private activeMemories(userId: string): Memory[] {
     return this.store.list(userId).filter((memory) => !memory.archivedAt);
+  }
+
+  private evaluateMemories(memories: Memory[], now: Date): Map<string, ReflectionMemoryEvaluation> {
+    const evaluations = this.evaluator?.evaluateReflection({ memories, now }) ?? [];
+    return new Map(evaluations.map((evaluation) => [evaluation.memoryId, evaluation]));
   }
 
   private fadeLowUtility(memories: Memory[], now: Date): { demoted: Memory[]; faded: Memory[]; archived: Memory[] } {
@@ -94,13 +102,14 @@ export class ReflectionEngine {
     return { demoted: uniqueMemories(demoted), faded, archived };
   }
 
-  private scheduleStalenessReview(memories: Memory[], now: Date): Memory[] {
+  private scheduleStalenessReview(memories: Memory[], now: Date, evaluations: Map<string, ReflectionMemoryEvaluation>): Memory[] {
     const scheduled: Memory[] = [];
     for (const memory of memories) {
       if (memory.pinned || memory.archivedAt || memory.temporal.verificationDueAt) continue;
       const lastConfirmed = memory.temporal.lastConfirmedAt ? new Date(memory.temporal.lastConfirmedAt) : memory.createdAt;
       const ageDays = (now.getTime() - lastConfirmed.getTime()) / 86_400_000;
-      const hasCurrentLanguage = /\b(current|currently|now|active|latest|today|tomorrow|yesterday)\b/i.test(memory.content);
+      const timeSensitive = evaluations.get(memory.id)?.timeSensitive;
+      const hasCurrentLanguage = Boolean(timeSensitive?.applies && (timeSensitive.confidence ?? 0) >= 0.65);
       const hasContradictionMarker = typeof memory.metadata.contradiction === "string";
       if ((hasCurrentLanguage && ageDays > this.policy.verificationAfterDays) || hasContradictionMarker) {
         scheduled.push(
@@ -112,7 +121,7 @@ export class ReflectionEngine {
             },
             metadata: {
               staleness: {
-                reason: hasContradictionMarker ? "contradiction-marker" : "time-sensitive-language",
+                reason: hasContradictionMarker ? "contradiction-marker" : (timeSensitive?.reason ?? "provider time-sensitive evaluation"),
                 scheduledAt: now.toISOString()
               }
             }
@@ -123,10 +132,10 @@ export class ReflectionEngine {
     return scheduled;
   }
 
-  private resolveContradictions(memories: Memory[]): ReflectionReport["contradictions"] {
+  private resolveContradictions(memories: Memory[], evaluations: Map<string, ReflectionMemoryEvaluation>): ReflectionReport["contradictions"] {
     const buckets = new Map<string, Array<{ memory: Memory; claim: ContradictionClaim }>>();
     for (const memory of memories) {
-      for (const claim of contradictionClaims(memory.content)) {
+      for (const claim of contradictionClaims(memory, evaluations.get(memory.id))) {
         const group = buckets.get(claim.key) ?? [];
         group.push({ memory, claim });
         buckets.set(claim.key, group);
@@ -263,13 +272,13 @@ export class ReflectionEngine {
     return created;
   }
 
-  private extractBehavioralPatterns(userId: string, memories: Memory[], now: Date): Memory[] {
+  private extractBehavioralPatterns(userId: string, memories: Memory[], now: Date, evaluations: Map<string, ReflectionMemoryEvaluation>): Memory[] {
     const groups = new Map<string, Memory[]>();
     for (const memory of memories) {
       if (memory.layer === "reflection" || memory.archivedAt) continue;
-      const content = memory.content.toLowerCase();
-      if (!/\b(prefers|orders|uses|runs|chooses|likes|asks|works)\b/.test(content)) continue;
-      const theme = pickTheme(memory);
+      const behavioral = evaluations.get(memory.id)?.behavioralEvidence;
+      if (!behavioral?.applies || (behavioral.confidence ?? 0) < 0.65) continue;
+      const theme = behavioral.theme ?? pickTheme(memory);
       if (!theme) continue;
       const group = groups.get(theme) ?? [];
       group.push(memory);
@@ -331,16 +340,19 @@ export class ReflectionEngine {
     return updated;
   }
 
-  private reorganizeMemories(memories: Memory[], now: Date): Memory[] {
+  private reorganizeMemories(memories: Memory[], now: Date, evaluations: Map<string, ReflectionMemoryEvaluation>): Memory[] {
     const reorganized: Memory[] = [];
     for (const memory of memories) {
       if (memory.pinned || memory.layer === "reflection") continue;
       const lowerTags = new Set(memory.tags.map((tag) => tag.toLowerCase()));
-      const content = memory.content.toLowerCase();
+      const organization = evaluations.get(memory.id)?.organization;
       const patch: Partial<Pick<Memory, "type" | "layer" | "metadata">> = {};
-      if ((lowerTags.has("procedure") || lowerTags.has("workflow") || /\b(run|verify|use|call|start|deploy)\b/.test(content)) && memory.layer !== "procedural") {
+      if ((lowerTags.has("procedure") || lowerTags.has("workflow")) && memory.layer !== "procedural") {
         patch.layer = "procedural";
         patch.type = "procedural";
+      } else if (organization && (organization.confidence ?? 0) >= 0.75 && (organization.layer || organization.type)) {
+        if (organization.layer && organization.layer !== memory.layer) patch.layer = organization.layer;
+        if (organization.type && organization.type !== memory.type) patch.type = organization.type;
       } else if (memory.source.kind === "transcript" && memory.layer !== "working") {
         patch.layer = "working";
         patch.type = "episodic";
@@ -406,7 +418,7 @@ export class ReflectionEngine {
 function pickTheme(memory: Memory): string | undefined {
   return [...memory.tags, ...memory.entities, ...tokenize(memory.content)]
     .map((token) => token.toLowerCase().replace(/[^a-z0-9_-]/g, ""))
-    .find((token) => token.length > 3 && !["project", "memory", "should", "would", "could"].includes(token));
+    .find((token) => token.length > 3);
 }
 
 interface ContradictionClaim {
@@ -417,84 +429,31 @@ interface ContradictionClaim {
   confidence: number;
 }
 
-const CLAIM_PATTERNS: Array<{
-  label: string;
-  detector: string;
-  pattern: RegExp;
-  key: (match: RegExpMatchArray, normalized: string) => string;
-  value: (match: RegExpMatchArray) => string;
-  confidence: number;
-}> = [
-  {
-    label: "preference",
-    detector: "pattern:preference-multilingual",
-    pattern: /\b(?:prefers?|likes?|bevorzugt|mag)\s+([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,3})/i,
-    key: (match, normalized) => `${subjectBefore(normalized, match[0])}:preference`,
-    value: (match) => normalizeClaimValue(match[1]),
-    confidence: 0.78
-  },
-  {
-    label: "tooling",
-    detector: "pattern:tooling-multilingual",
-    pattern: /\b(?:uses?|should use|must use|nutzt|verwendet|benutzt|soll(?:te)? nutzen|muss nutzen|soll(?:te)? verwenden|muss verwenden)\s+([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,3})/i,
-    key: (match, normalized) => `${subjectBefore(normalized, match[0])}:uses`,
-    value: (match) => normalizeClaimValue(match[1]),
-    confidence: 0.82
-  },
-  {
-    label: "runtime",
-    detector: "pattern:runtime-multilingual",
-    pattern: /\b(?:runs on|läuft auf|laeuft auf)\s+([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,2})/i,
-    key: (match, normalized) => `${subjectBefore(normalized, match[0])}:runs-on`,
-    value: (match) => normalizeClaimValue(match[1]),
-    confidence: 0.82
-  },
-  {
-    label: "target repository",
-    detector: "pattern:target-repo-multilingual",
-    pattern: /\b(?:target repo is|target repository is|ziel repo ist|zielrepository ist|arbeitsrepo ist)\s+([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,2})/i,
-    key: () => "workspace:target-repository",
-    value: (match) => normalizeClaimValue(match[1]),
-    confidence: 0.86
-  },
-  {
-    label: "health",
-    detector: "pattern:health-negation-multilingual",
-    pattern: /(?<!not )\b(?:has|have|hat)\s+(?:kein(?:e|en|er|es)?\s+)?([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,2})/i,
-    key: (match, normalized) => `health:${normalizeClaimValue(match[1]).replace(/\b(?:pain|issue|problem|schmerz|schmerzen|problem)\b/g, "").trim()}`,
-    value: (match) => (/kein|keine|keinen|keiner|keines|does not|do not|no\b/i.test(match[0]) ? "absent" : "present"),
-    confidence: 0.74
-  },
-  {
-    label: "health",
-    detector: "pattern:health-negation-multilingual",
-    pattern: /\b(?:does not have|do not have|has no|have no|ohne)\s+([a-z0-9äöüß_./-]+(?:\s+[a-z0-9äöüß_./-]+){0,2})/i,
-    key: (match) => `health:${normalizeClaimValue(match[1]).replace(/\b(?:pain|issue|problem|schmerz|schmerzen|problem)\b/g, "").trim()}`,
-    value: () => "absent",
-    confidence: 0.82
-  }
-];
-
-function contradictionClaims(content: string): ContradictionClaim[] {
-  const normalized = content.toLowerCase().replace(/\s+/g, " ").trim();
+function contradictionClaims(memory: Memory, evaluation?: ReflectionMemoryEvaluation): ContradictionClaim[] {
   const claims: ContradictionClaim[] = [];
-  for (const rule of CLAIM_PATTERNS) {
-    const match = normalized.match(rule.pattern);
-    if (!match) continue;
-    const key = rule.key(match, normalized).replace(/\s+/g, " ").trim();
-    const value = rule.value(match).replace(/\s+/g, " ").trim();
+  const structured = memory.metadata.claim as MemoryClaim | undefined;
+  if (structured?.subject && structured.predicate && structured.object) {
+    claims.push({
+      key: `${structured.subject}:${structured.predicate}`.replace(/\s+/g, " ").trim().toLowerCase(),
+      value: String(structured.object).replace(/\s+/g, " ").trim().toLowerCase(),
+      label: "structured-claim",
+      detector: "metadata:claim",
+      confidence: structured.confidence ?? memory.confidence ?? memory.source.confidence
+    });
+  }
+  for (const claim of evaluation?.claims ?? []) {
+    const key = claim.key.replace(/\s+/g, " ").trim().toLowerCase();
+    const value = claim.value.replace(/\s+/g, " ").trim().toLowerCase();
     if (!key || !value) continue;
-    claims.push({ key, value, label: rule.label, detector: rule.detector, confidence: rule.confidence });
+    claims.push({
+      key,
+      value,
+      label: claim.label ?? "provider-claim",
+      detector: "provider:reflection",
+      confidence: claim.confidence ?? 0.68
+    });
   }
   return claims;
-}
-
-function subjectBefore(normalized: string, phrase: string): string {
-  return normalized.split(phrase)[0].split(/\s+/).filter(Boolean).slice(-5).join(" ") || "user";
-}
-
-function normalizeClaimValue(value: string): string {
-  return tokenize(value).join(" ") || value.toLowerCase().trim();
 }
 
 function evidenceWeight(memory: Memory): number {
@@ -504,15 +463,14 @@ function evidenceWeight(memory: Memory): number {
 
 function sourceQuality(memory: Memory): number {
   const tags = new Set(memory.tags.map((tag) => tag.toLowerCase()));
-  const metadata = JSON.stringify(memory.metadata ?? {}).toLowerCase();
   const connectorId = memory.provenance.sourceRef?.connectorId?.toLowerCase() ?? "";
-  const content = memory.content.toLowerCase();
   const sourceKind = memory.source.kind;
-  if (sourceKind === "human" && (tags.has("correction") || tags.has("engineering-correction") || tags.has("user-correction") || metadata.includes("correction"))) return 1;
-  if ((connectorId.includes("github") || connectorId.includes("gitlab") || connectorId.includes("azure")) && /\b(review|requested changes|changes requested|pull request|merge request)\b/.test(`${content} ${metadata}`)) return 0.92;
-  if (sourceKind === "tool" && (tags.has("harness-action") || tags.has("tests") || tags.has("test-failure") || tags.has("success-pattern") || /\b(ci|test|tests|pipeline|benchmark|exitcode|exit code)\b/.test(`${content} ${metadata}`))) return 0.88;
+  const engineeringKind = (memory.metadata.engineering as { kind?: string } | undefined)?.kind;
+  if (sourceKind === "human" && (tags.has("correction") || tags.has("engineering-correction") || tags.has("user-correction") || engineeringKind === "review_correction")) return 1;
+  if (connectorId.includes("github") || connectorId.includes("gitlab") || connectorId.includes("azure")) return 0.92;
+  if (sourceKind === "tool" && (tags.has("harness-action") || tags.has("tests") || tags.has("test-failure") || tags.has("success-pattern") || engineeringKind === "tool_outcome")) return 0.88;
   if (sourceKind === "reviewed_code") return 0.86;
-  if ((connectorId.includes("confluence") || connectorId.includes("notion") || connectorId.includes("docs")) && /\b(adr|architecture decision|spec|decision)\b/.test(`${content} ${metadata}`)) return 0.82;
+  if (connectorId.includes("confluence") || connectorId.includes("notion") || connectorId.includes("docs")) return 0.82;
   if (/\b(jira|linear|asana|clickup)\b/.test(connectorId)) return 0.74;
   if (/\b(slack|discord|teams)\b/.test(connectorId)) return 0.64;
   if (sourceKind === "human") return 0.78;

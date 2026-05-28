@@ -1,45 +1,74 @@
-# Benchmarks
+# Benchmark Results
 
-Cognibrain includes benchmark and proof tools for maintainers. The benchmark commands write ignored local reports under `artifacts/`.
+This page records the current checked benchmark artifacts. It is a results
+snapshot, not a how-to guide.
 
-## Common Gates
+![Benchmark result charts](assets/benchmark-results.svg)
 
-```bash
-npm run internal -- benchmark:cognicode
-npm run internal -- benchmark:arena
-npm run internal -- benchmark:certified
-npm run internal -- benchmark:hardening
-npm run internal -- audit:truth
-```
+## Artifact Snapshot
 
-## What The Benchmarks Cover
+| Artifact | Generated | Status |
+| --- | --- | --- |
+| `artifacts/cognicodebench/run.json` | 2026-05-28T09:42:09.272Z | Passed |
+| `artifacts/arena/run.json` | 2026-05-28T09:42:39.284Z | Passed |
+| `artifacts/benchmark-hardening.json` | 2026-05-28T09:43:15.120Z | Passed |
 
-| Suite | Purpose |
+## CogniCodeBench
+
+| Metric | Result |
+| --- | ---: |
+| Scenarios | 1000 |
+| Correction carry-over | 1.000 |
+| Repeated mistake rate | 0.000 |
+| Procedure recall | 1.000 |
+| Patch correctness | 1.000 |
+| Evidence completeness | 1.000 |
+| Wrong-memory suppression | 1.000 |
+| Source-reference correctness | 1.000 |
+| Granular patch correctness | 1.000 |
+| Long-horizon recall | 1.000 |
+
+## Baselines
+
+| Baseline | Score | Repeated mistake rate |
+| --- | ---: | ---: |
+| No memory | 0.000 | 1.000 |
+| Raw chat history | 0.000 | 1.000 |
+| Vector only | 0.122 | 1.000 |
+| Semantic only | 0.122 | 1.000 |
+| Keyword only | 0.333 | 0.750 |
+| Graph only | 0.294 | 0.850 |
+| Temporal only | 0.139 | 0.950 |
+| Procedure only | 0.500 | 0.900 |
+| Cognibrain without temporal | 0.983 | 0.000 |
+| Cognibrain without corrections | 0.261 | 0.900 |
+
+## Arena
+
+| System | Proof level | Mode | Scenarios | Score |
+| --- | --- | --- | ---: | ---: |
+| Cognibrain | `same-run-full` | `full-local` | 300 | 0.9717 |
+| Mem0 | `same-run-api-shape` | `api-shape` | 300 | 0.1500 |
+| Graphiti/Zep | `same-run-api-shape` | `api-shape` | 300 | 0.6667 |
+| Zep | `same-run-api-shape` | `api-shape` | 300 | 0.6667 |
+| Cognee | `same-run-api-shape` | `api-shape` | 300 | 0.6000 |
+| LangMem | `credential-blocked` | `blocked-command` | 300 | 0.0000 |
+| GBrain | `same-run-api-shape` | `api-shape` | 300 | 0.6667 |
+
+## Hardening
+
+| Check | Result |
 | --- | --- |
-| CogniCodeBench | Synthetic coding-agent scenarios for correction carry-over, stale-rule suppression and connector noise. |
-| Benchmark Arena | Same scenario stream across Cognibrain and configured comparison systems. |
-| Hardening | Scenario hashing, schema checks, fixture coverage and competitor-run boundaries. |
-| Connector gates | Native connector transforms, API/spec coverage, webhook transport and credential-smoke readiness. |
+| Scenario dataset present | Pass |
+| Scenario schema present | Pass |
+| Dataset hash present | Pass |
+| Scenario generation pinned | Pass |
+| Real-repo track present | Pass |
+| Real-repo workflows present | Pass |
+| Competitor proof levels bounded | Pass |
+| Native competitor path exists | Pass |
 
-## Proof Levels
+Dataset: `artifacts/cognicodebench/scenarios.json`
 
-| Level | Meaning |
-| --- | --- |
-| `same-run-full` | Cognibrain ran locally in this repository. |
-| `same-run-native` | A native runner for another system ran locally in the same benchmark pass. |
-| `same-run-cloud-api` | A configured cloud API runner executed in the same benchmark pass. |
-| `same-run-cli` | A configured vendor CLI ran in the same benchmark pass. |
-| `same-run-api-shape` | Compatibility model only; not a vendor-certified result. |
-| `credential-blocked` | The code path exists, but live credentials are required for stronger proof. |
-
-Benchmark claims should state the proof level. Synthetic scenarios are useful for regression control; they are not a guarantee for every customer repo.
-
-## Publishing Artifacts
-
-Maintainers can regenerate local HTML/JSON outputs:
-
-```bash
-npm run internal -- leaderboard:publish
-```
-
-Generated reports are written under `artifacts/` and are not committed as public docs.
+SHA-256:
+`ea86f5903464a64cb3415003b9a3faa19857e271203ee518dcc6bd368dc11868`

@@ -1,5 +1,5 @@
 import { buildPatchEvidenceTrail, citationFor, evaluateForbiddenAction, getEngineeringMetadata, type ActionGuardReport, type CodebaseScope, type EngineeringMemoryKind, type Memory, type MemoryInput, type PatchEvidenceTrail, type SearchResult } from "../../core";
-import { clamp01, codingActionOverlap, contentHash, inferCorrectActionFromCorrection, inferCorrectionKind, inferForbiddenActionFromCorrection, repoPolicyFromCorrection, safeGet } from "./helpers";
+import { clamp01, contentHash, inferCorrectActionFromCorrection, inferCorrectionKind, inferForbiddenActionFromCorrection, normalizeActionPhrase, repoPolicyFromCorrection, safeGet } from "./helpers";
 
 export function recordCodeCorrection(service: any, input: {
     userId: string;
@@ -18,7 +18,8 @@ export function recordCodeCorrection(service: any, input: {
     timestamp?: Date | string;
     evidenceIds?: string[];
   }): Memory {
-    const kind = input.kind ?? inferCorrectionKind(input.content);
+    const providerDecision = input.kind ? undefined : service.defaultEngineeringClassifier?.classifyEngineering({ content: input.content, metadata: { codebase: input.codebase, evidenceIds: input.evidenceIds }, now: new Date() });
+    const kind = input.kind ?? providerDecision?.kind ?? inferCorrectionKind(input.content);
     const previous = input.previousMemoryId ? safeGet(service.store, input.previousMemoryId) : undefined;
     const memory = service.add({
       userId: input.userId,
@@ -45,8 +46,11 @@ export function recordCodeCorrection(service: any, input: {
           codebase: input.codebase ?? { repo: input.projectId },
           correctionOfMemoryId: previous?.id,
           previousWrongAction: input.previousWrongAction ?? previous?.content,
-          correctAction: input.correctAction,
-          confidence: 0.9,
+          correctAction: input.correctAction ?? providerDecision?.correctAction,
+          forbiddenAction: providerDecision?.forbiddenAction,
+          command: providerDecision?.command,
+          successPattern: providerDecision?.successPattern,
+          confidence: providerDecision?.confidence ?? 0.9,
           evidenceIds: input.evidenceIds ?? []
         }
       }
@@ -90,9 +94,10 @@ export function derivedCorrectionMemories(service: any, input: {
     const codebase = input.codebase ?? { repo: input.projectId };
     const source = input.source ?? { kind: "reviewed_code" as const, confidence: 0.88 };
     const timestamp = input.timestamp ?? new Date().toISOString();
-    const correctAction = input.correctAction ?? inferCorrectActionFromCorrection(input.content);
+    const providerDecision = service.defaultEngineeringClassifier?.classifyEngineering({ content: input.content, metadata: { codebase: input.codebase, evidenceIds: input.evidenceIds }, now: new Date() });
+    const correctAction = input.correctAction ?? providerDecision?.correctAction ?? inferCorrectActionFromCorrection(input.content);
     const previousWrongAction = input.previousWrongAction ?? (previous ? getEngineeringMetadata(previous)?.command : undefined) ?? previous?.content;
-    const forbiddenAction = inferForbiddenActionFromCorrection(input.content, previousWrongAction);
+    const forbiddenAction = providerDecision?.forbiddenAction ?? inferForbiddenActionFromCorrection(input.content, previousWrongAction);
     const scope = {
       userId: input.userId,
       agentId: input.agentId,
@@ -107,10 +112,11 @@ export function derivedCorrectionMemories(service: any, input: {
     };
     const derived: MemoryInput[] = [];
 
-    if (repoPolicyFromCorrection(input.content, correctAction) && primaryKind !== "repo_policy") {
+    const repoPolicy = providerDecision?.kind === "repo_policy" ? normalizeActionPhrase(input.content) : repoPolicyFromCorrection(input.content, correctAction);
+    if (repoPolicy && primaryKind !== "repo_policy") {
       derived.push({
         ...scope,
-        content: `Repo policy${codebase.repo ? ` for ${codebase.repo}` : ""}: ${repoPolicyFromCorrection(input.content, correctAction)}`,
+        content: `Repo policy${codebase.repo ? ` for ${codebase.repo}` : ""}: ${repoPolicy}`,
         type: "project",
         layer: "long_term",
         source,
@@ -135,7 +141,7 @@ export function derivedCorrectionMemories(service: any, input: {
       });
     }
 
-    if (/\bgenerated|generated file|\.generated\.|dist\/|build\/|vendor\/|lockfile\b/i.test(input.content) && primaryKind !== "generated_file_rule") {
+    if (providerDecision?.kind === "generated_file_rule" && primaryKind !== "generated_file_rule") {
       derived.push({
         ...scope,
         content: `Generated-file rule${codebase.repo ? ` for ${codebase.repo}` : ""}: do not edit generated files unless the generator is part of the task.`,
@@ -193,7 +199,7 @@ export function guardAction(service: any, input: {
       .filter((memory) => !existingIds.has(memory.id))
       .filter((memory) => {
         const engineering = getEngineeringMetadata(memory);
-        return Boolean(engineering && ["forbidden_action", "generated_file_rule", "repo_policy", "procedure", "test_strategy"].includes(engineering.kind) && codingActionOverlap(input.action, memory.content));
+        return Boolean(engineering && ["forbidden_action", "generated_file_rule", "repo_policy", "procedure", "test_strategy"].includes(engineering.kind) && engineeringActionMatches(input.action, engineering));
       })
       .map((memory) => ({
         memory,
@@ -207,6 +213,21 @@ export function guardAction(service: any, input: {
     service.recordAudit(report.allowed ? "search.run" : "policy.violation", { userId: input.userId, metadata: { resource: "action-guard", action: input.action, allowed: report.allowed, evidenceIds: report.evidenceIds } });
     return report;
   }
+
+function engineeringActionMatches(action: string, engineering: NonNullable<ReturnType<typeof getEngineeringMetadata>>): boolean {
+  const normalizedAction = normalizeActionPhrase(action.toLowerCase());
+  return [
+    engineering.forbiddenAction,
+    engineering.command,
+    engineering.correctAction,
+    engineering.successPattern,
+    engineering.previousWrongAction
+  ].some((candidate) => {
+    if (!candidate) return false;
+    const normalizedCandidate = normalizeActionPhrase(candidate.toLowerCase());
+    return normalizedCandidate === normalizedAction || normalizedCandidate.includes(normalizedAction) || normalizedAction.includes(normalizedCandidate);
+  });
+}
 
 export function patchEvidenceTrail(service: any, input: {
     userId: string;

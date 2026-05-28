@@ -7,13 +7,14 @@ const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 describe("cognibrain Python SDK", () => {
   it("passes the stdlib Python client contract tests", () => {
-    const result = spawnSync("python3", ["-m", "unittest", "discover", "-s", "sdk/python/tests"], {
+    const result = spawnSync("python3", ["sdk/python/tests/test_cognibrain_client.py"], {
       cwd: root,
-      encoding: "utf8"
+      encoding: "utf8",
+      env: { ...process.env, PYTHONPATH: resolve(root, "sdk/python") }
     });
     const output = `${result.stdout}\n${result.stderr}`;
 
-    expect(result.status).toBe(0);
+    expect(result.status, output).toBe(0);
     expect(output).toContain("OK");
   });
 });

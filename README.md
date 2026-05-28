@@ -114,28 +114,12 @@ python3 -m unittest discover -s tests
 
 See [docs/integrations.md](docs/integrations.md) and [sdk/python/README.md](sdk/python/README.md).
 
-## Benchmarks And Proof
+## Benchmarks
 
-Generated proof outputs are internal build artifacts. They are written under `artifacts/`, ignored by git and excluded from the npm package.
-
-Maintainers can run the internal gates through the compact runner:
-
-```bash
-npm run internal -- benchmark:cognicode
-npm run internal -- benchmark:arena
-npm run internal -- verify:compatibility
-npm run proof
-```
-
-Benchmark claims are bounded by proof level. `same-run-full` means Cognibrain executed locally. `same-run-native`, `same-run-cloud-api` and `same-run-cli` require configured external runners. `same-run-api-shape` is compatibility modeling, not vendor certification.
-
-## Production Boundary
-
-Cognibrain is a self-hosted production candidate, not a managed SaaS product.
-
-Implemented boundaries include DB-primary MemoryRepository paths for SQLite/Postgres memory rows, row mirrors for service state, backup/compaction snapshots, API-key/Bearer auth, optional JWT/OIDC verifier, route-level RBAC, actor scopes and production policy mode that default-denies when no rule matches. The remaining storage hardening boundary is a fully async event-journal-first runtime across every service domain.
-
-This repository does not claim managed SaaS uptime, billing, hosted support, autoscaling, deployment-specific SSO rollout, tenant-verified connector live smokes or production-certified connector rows. See [docs/status.md](docs/status.md) and [docs/claims.md](docs/claims.md).
+Benchmark results are documented from the checked artifacts under
+`artifacts/`. The public benchmark page shows the current result rows, proof
+levels and dataset hash; it does not describe benchmark execution as product
+evidence.
 
 ## Development
 
@@ -181,5 +165,5 @@ npm run internal -- <task>
 - [Connectors, SDKs and community adapters](docs/integrations.md)
 - [Operations guide](docs/operations.md)
 - [Benchmarks](docs/benchmarks.md)
-- [Production status](docs/status.md)
-- [Claims and evidence](docs/claims.md)
+- [Runtime status](docs/status.md)
+- [Evidence register](docs/evidence.md)

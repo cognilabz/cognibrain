@@ -224,6 +224,7 @@ function runHarnessGoldenPath(harness: string): HarnessGoldenPathRun {
     projectId: repo,
     content: `Do not use pnpm in ${repo}; use npm test and do not edit generated files.`,
     kind: "repo_policy",
+    previousWrongAction: "pnpm test",
     correctAction: "npm test",
     codebase: codebaseScope
   });

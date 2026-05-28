@@ -391,7 +391,7 @@ function runScenario(scenario: CogniCodeScenario): CogniCodeScenarioResult {
     agentId: "review-simulator",
     projectId: scenario.repoSeed.name,
     previousMemoryId: wrong.id,
-    previousWrongAction: scenario.wrongAction.command ?? scenario.wrongAction.filesChanged?.join(", "),
+    previousWrongAction: scenario.expected.blockedAction ?? scenario.wrongAction.command ?? scenario.wrongAction.filesChanged?.join(", "),
     correctAction: scenario.correction.correctAction,
     content: scenario.correction.content,
     kind: scenario.correction.memoryKind,

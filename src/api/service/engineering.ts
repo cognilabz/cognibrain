@@ -48,8 +48,7 @@ export function linkStateChange(input: MemoryInput, existing: Memory[]): MemoryI
   if (!subject) return input;
   const prior = existing.find((memory) => !memory.archivedAt && memory.entities.includes(subject) && memory.content !== input.content);
   if (!prior) return input;
-  const lower = input.content.toLowerCase();
-  const relationType = /\b(no longer|instead|now|currently|nicht mehr|jetzt)\b/.test(lower) ? "supersedes" : undefined;
+  const relationType = input.metadata?.supersedes === true || input.relations?.some((relation) => relation.type === "supersedes") ? "supersedes" : undefined;
   if (!relationType) return input;
   return {
     ...input,
@@ -66,6 +65,8 @@ export function providerFromEnv(): NonNullable<MemoryServiceOptions["intelligenc
     verifier: provider,
     contradictionDetector: provider,
     summarizer: provider,
+    evaluator: provider,
+    engineeringClassifier: provider,
     extractor: provider,
     queryExpander: provider,
     translator: provider
@@ -73,66 +74,53 @@ export function providerFromEnv(): NonNullable<MemoryServiceOptions["intelligenc
 }
 
 export function inferCorrectionKind(content: string): EngineeringMemoryKind {
-  const lower = content.toLowerCase();
-  if (/\b(do not|don't|dont|never|must not|should not)\b.*\b(generated|\.generated\.|dist\/|build\/|vendor\/)\b/.test(lower)) return "generated_file_rule";
-  if (/\b(use npm|don't use pnpm|dont use pnpm|never use pnpm|always use|repo policy|repository policy)\b/.test(lower)) return "repo_policy";
-  if (/\b(validation|architecture|belongs in|lives in|layer|directory|folder|adr)\b/.test(lower)) return "architecture_decision";
-  if (/\b(test|vitest|jest|pytest|go test|e2e)\b/.test(lower)) return "test_strategy";
-  if (/\b(dependency|package|library|import)\b/.test(lower)) return "dependency_rule";
-  if (/\b(migrat|deprecated|moved|renamed|now uses|formerly)\b/.test(lower)) return "migration_note";
-  if (/\b(do not|don't|dont|never|must not|should not)\b/.test(lower)) return "forbidden_action";
+  void content;
   return "review_correction";
 }
 
 export function inferCorrectActionFromCorrection(content: string): string | undefined {
-  const patterns = [
-    /\buse\s+([^.;]+?)\s+instead\b/i,
-    /\binstead[, ]+\s*([^.;]+)/i,
-    /\bshould\s+(?:use|run|call)\s+([^.;]+)/i,
-    /\brun\s+([^.;]+?)\s+(?:before|after|for|when|instead)\b/i
-  ];
-  for (const pattern of patterns) {
-    const match = content.match(pattern)?.[1]?.trim();
-    if (match) return normalizeActionPhrase(match);
-  }
-  const command = content.match(/\b(?:npm|pnpm|yarn|pytest|go test|make)\b[^.;]*/i)?.[0]?.trim();
-  return command ? normalizeActionPhrase(command) : undefined;
+  void content;
+  return undefined;
 }
 
 export function inferForbiddenActionFromCorrection(content: string, previousWrongAction?: string): string | undefined {
+  void content;
   if (previousWrongAction && previousWrongAction.length < 120) return normalizeActionPhrase(previousWrongAction);
-  const match = content.match(/\b(?:do not|don't|dont|never|must not|should not)\s+([^.;]+)/i)?.[1]?.trim();
-  if (!match) return undefined;
-  return normalizeActionPhrase(match.replace(/\b(?:in this repo|for this repo|here)\b/gi, "").trim());
+  return undefined;
 }
 
 export function repoPolicyFromCorrection(content: string, correctAction?: string): string | undefined {
-  const lower = content.toLowerCase();
-  if (!/\b(repo|repository|always|never|do not|don't|dont|must|should|use|instead|policy|pnpm|npm|pytest|go test|generated)\b/.test(lower)) return undefined;
-  const trimmed = content.trim().replace(/\s+/g, " ");
-  if (trimmed.length <= 180) return trimmed.endsWith(".") ? trimmed : `${trimmed}.`;
-  return correctAction ? `use ${correctAction} for matching changes.` : `${trimmed.slice(0, 177)}...`;
+  void content;
+  return correctAction ? `Use ${correctAction} for matching changes.` : undefined;
 }
 
 export function normalizeActionPhrase(value: string): string {
-  return value.replace(/\s+/g, " ").replace(/[.]+$/, "").trim();
+  const collapsed = collapseWhitespace(value).trim();
+  let end = collapsed.length;
+  while (end > 0 && collapsed[end - 1] === ".") end -= 1;
+  return collapsed.slice(0, end);
 }
 
 export function codingActionOverlap(action: string, content: string): boolean {
-  const actionTokens = new Set(action.toLowerCase().split(/\W+/).filter((token) => token.length > 2));
-  const contentTokens = new Set(content.toLowerCase().split(/\W+/).filter((token) => token.length > 2));
-  return [...actionTokens].some((token) => contentTokens.has(token));
+  const normalizedAction = normalizeActionPhrase(action.toLowerCase());
+  const normalizedContent = normalizeActionPhrase(content.toLowerCase());
+  return Boolean(
+    normalizedAction &&
+    normalizedContent &&
+    (normalizedAction === normalizedContent || normalizedAction.includes(normalizedContent) || normalizedContent.includes(normalizedAction))
+  );
 }
 
 export function withProceduralMetadata(input: MemoryInput): MemoryInput {
-  const content = input.content.toLowerCase();
   const tags = new Set((input.tags ?? []).map((tag) => tag.toLowerCase()));
+  const engineeringKind = (input.metadata?.engineering as { kind?: unknown } | undefined)?.kind;
   const looksProcedural =
     input.type === "procedural" ||
     input.layer === "procedural" ||
+    engineeringKind === "procedure" ||
+    engineeringKind === "test_strategy" ||
     tags.has("procedure") ||
-    tags.has("workflow") ||
-    /\b(always|before|after|when|if|run|verify|deploy|release|test|checklist|procedure|workflow|must|should)\b/.test(content);
+    tags.has("workflow");
   if (!looksProcedural) return input;
   const previous = input.metadata?.procedure as Partial<ProceduralMemoryMetadata> | undefined;
   const tests = Array.isArray((input.metadata?.action as { tests?: unknown } | undefined)?.tests)
@@ -175,12 +163,27 @@ export function withProceduralMetadata(input: MemoryInput): MemoryInput {
 
 export function inferProcedureTriggers(content: string, tags: string[]): string[] {
   const triggers = new Set<string>();
-  const lower = content.toLowerCase();
-  if (/\brelease|deploy|ship\b/.test(lower) || tags.includes("release")) triggers.add("before release or deploy work");
-  if (/\btest|verify|ci|build\b/.test(lower) || tags.includes("test")) triggers.add("before validation or CI-sensitive changes");
-  if (/\bpr|pull request|merge\b/.test(lower)) triggers.add("before pull-request or merge workflows");
-  if (/\bwhen\s+([^,.]+)/i.test(content)) triggers.add(content.match(/\bwhen\s+([^,.]+)/i)?.[1]?.trim() ?? "conditional workflow");
-  if (/\bif\s+([^,.]+)/i.test(content)) triggers.add(content.match(/\bif\s+([^,.]+)/i)?.[1]?.trim() ?? "conditional workflow");
+  void content;
+  if (tags.includes("release")) triggers.add("before release or deploy work");
+  if (tags.includes("test")) triggers.add("before validation or CI-sensitive changes");
+  if (tags.includes("pull-request") || tags.includes("pr")) triggers.add("before pull-request or merge workflows");
   if (!triggers.size) triggers.add("matching workflow intent");
   return [...triggers];
+}
+
+function collapseWhitespace(value: string): string {
+  let output = "";
+  let previousWasWhitespace = false;
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    const whitespace = code === 9 || code === 10 || code === 11 || code === 12 || code === 13 || code === 32;
+    if (whitespace) {
+      if (!previousWasWhitespace) output += " ";
+      previousWasWhitespace = true;
+      continue;
+    }
+    output += char;
+    previousWasWhitespace = false;
+  }
+  return output;
 }

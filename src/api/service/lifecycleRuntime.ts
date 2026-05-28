@@ -93,7 +93,7 @@ export function recordHarnessAction(service: any, input: HarnessActionInput): Me
         ...(passed.length && !failed.length && (input.exitCode ?? 0) === 0 ? ["success-pattern"] : []),
         ...(input.errorFixed ? ["fix"] : [])
       ],
-      entities: [...(input.filesChanged ?? []), ...(input.command ? [input.command.split(/\s+/)[0]] : [])],
+      entities: [...(input.filesChanged ?? []), ...(input.command ? [firstCommandToken(input.command)] : [])],
       temporal: { eventAt: input.timestamp ?? new Date().toISOString(), lastConfirmedAt: failed.length ? undefined : new Date().toISOString(), verificationDueAt: failed.length ? new Date(Date.now() + 7 * 86_400_000).toISOString() : undefined },
       metadata: {
         action: {
@@ -169,7 +169,7 @@ export function recordHarnessLifecycleEvent(service: any, input: HarnessLifecycl
         ...(input.event === "user_corrected" ? ["engineering-correction", "correction"] : []),
         ...(input.event === "release_candidate" ? ["release"] : [])
       ],
-      entities: [...(input.filesChanged ?? []), ...(input.command ? [input.command.split(/\s+/)[0]] : [])],
+      entities: [...(input.filesChanged ?? []), ...(input.command ? [firstCommandToken(input.command)] : [])],
       temporal: { eventAt: timestamp },
       metadata: {
         harnessEvent: {
@@ -287,3 +287,12 @@ export function recordInjectionFeedback(service: any, event: InjectionFeedbackEv
     service.persist();
     return { event: { ...event, timestamp }, updatedMemories, trainingSample, learnedProfile };
   }
+
+function firstCommandToken(command: string): string {
+  const trimmed = command.trim();
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const code = trimmed.charCodeAt(index);
+    if (code === 9 || code === 10 || code === 11 || code === 12 || code === 13 || code === 32) return trimmed.slice(0, index);
+  }
+  return trimmed;
+}

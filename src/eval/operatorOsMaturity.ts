@@ -40,7 +40,7 @@ const surfaces = [
   surface("Logs", ["cognibrain service logs", "cognibrain doctor --publish"], ["service logs", "doctor --publish"], ["bin/cognibrain.mjs"]),
   surface("Policies", ["cognibrain memory policy-rule", "cognibrain memory policy-evaluate"], ["policy", "retention"], ["src/cli/memctl.ts", "src/api/server.ts"]),
   surface("Retention", ["cognibrain memory retention-rule", "cognibrain memory retention-enforce"], ["retention", "compliance"], ["src/cli/memctl.ts", "src/api/server.ts"]),
-  surface("Docs", ["cognibrain proof", "npm run internal -- audit:docs"], ["docs/status.md", "docs/claims.md"], ["scripts/release/audit-docs.mjs"])
+  surface("Docs", ["cognibrain proof", "npm run internal -- audit:docs"], ["Runtime Status", "Evidence Register"], ["scripts/release/audit-docs.mjs"])
 ];
 
 export function generateOperatorOsMaturity(options: { out?: string; markdown?: string } = {}): OperatorOsReport {
@@ -56,7 +56,7 @@ export function generateOperatorOsMaturity(options: { out?: string; markdown?: s
     internalRunner: read("scripts/internal/run-task.mjs"),
     cliTests: read("tests/cli.test.ts"),
     evalTests: read("tests/evaluation.test.ts"),
-    docs: [read("docs/status.md"), read("docs/claims.md"), read("docs/operations.md")].join("\n")
+    docs: [read("docs/status.md"), read("docs/evidence.md"), read("docs/operations.md")].join("\n")
   };
   const all = Object.values(files).join("\n");
   const rows = surfaces.map((item) => operatorRow(item, files, all));

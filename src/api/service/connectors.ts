@@ -4,7 +4,8 @@ import type { ConnectorWritebackOperation } from "../service";
 
 export function connectorReviewRequired(manifest: ConnectorManifest, event: MemoryExtractionEvent & { externalId?: string }): boolean {
   if (event.metadata?.reviewRequired === true) return true;
-  if (manifest.kind === "chat" && /\b(decision|decided|approved|must|should)\b/i.test(event.content)) return true;
+  const eventType = normalizeConnectorEventType(typeof event.metadata?.eventType === "string" ? event.metadata.eventType : "");
+  if (manifest.kind === "chat" && ["chat_decision", "pr_decision", "issue_decision"].includes(eventType)) return true;
   return false;
 }
 
@@ -16,15 +17,15 @@ export function connectorEventVisibility(event: MemoryExtractionEvent & { extern
 }
 
 export function connectorEventTags(manifest: ConnectorManifest, event: MemoryExtractionEvent & { externalId?: string }): string[] {
-  const eventType = typeof event.metadata?.eventType === "string" ? event.metadata.eventType : "";
+  const eventType = normalizeConnectorEventType(typeof event.metadata?.eventType === "string" ? event.metadata.eventType : "");
   const tags = [manifest.id, manifest.kind];
   for (const provider of ["github", "slack", "discord", "jira", "confluence", "notion", "linear", "gitlab", "azure-devops", "teams", "gmail", "google-drive", "google-calendar", "asana", "clickup", "sentry", "datadog", "pagerduty", "posthog"]) {
     if (manifest.id.includes(provider)) tags.push(provider);
   }
-  if (/pr[_-]?decision/i.test(eventType) || /\bPR\b.*\b(decision|approved|merged)\b/i.test(event.content)) tags.push("pr-decision", "connector-decision");
-  if (/test[_-]?failure|actions[_-]?failure/i.test(eventType) || /\b(test|actions?)\b.*\b(failed|failure)\b/i.test(event.content)) tags.push("test-failure", "harness-action");
-  if (/issue[_-]?correction|ticket[_-]?correction|review[_-]?correction/i.test(eventType) || /\b(correction|do not|use .* instead)\b/i.test(event.content)) tags.push("engineering-correction", "connector-correction");
-  if (/architecture[_-]?decision|runbook|repo[_-]?policy/i.test(eventType) || /\b(ADR|architecture decision|runbook|repo policy)\b/i.test(event.content)) tags.push("architecture-decision", "repo-policy");
+  if (eventType === "pr_decision") tags.push("pr-decision", "connector-decision");
+  if (eventType === "test_failure" || eventType === "actions_failure") tags.push("test-failure", "harness-action");
+  if (eventType === "issue_correction" || eventType === "ticket_correction" || eventType === "review_correction") tags.push("engineering-correction", "connector-correction");
+  if (eventType === "architecture_decision" || eventType === "runbook" || eventType === "repo_policy") tags.push("architecture-decision", "repo-policy");
   if (connectorReviewRequired(manifest, event)) tags.push("memory-candidate", "review-required");
   return [...new Set(tags)];
 }
@@ -92,4 +93,23 @@ export function connectorWritebackOperations(kind: ConnectorManifest["kind"]): C
 
 export function interpolateConnectorEndpoint(endpoint: string, target: Record<string, unknown>): string {
   return endpoint.replace(/\{([a-zA-Z0-9_.-]+)\}/g, (_, key: string) => encodeURIComponent(String(target[key] ?? "")));
+}
+
+function normalizeConnectorEventType(value: string): string {
+  let output = "";
+  let previousSeparator = false;
+  for (const char of value.trim().toLowerCase()) {
+    const code = char.charCodeAt(0);
+    const alphaNumeric = (code >= 48 && code <= 57) || (code >= 97 && code <= 122);
+    if (alphaNumeric) {
+      output += char;
+      previousSeparator = false;
+      continue;
+    }
+    if (!previousSeparator && output) {
+      output += "_";
+      previousSeparator = true;
+    }
+  }
+  return output.endsWith("_") ? output.slice(0, -1) : output;
 }

@@ -41,7 +41,7 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
     packageJson: read("package.json"),
     postgres: read("src/api/repositories/postgresRepository.ts"),
     persistenceFactory: read("src/api/persistence/factory.ts"),
-    service: read("src/api/service.ts"),
+    service: readMany(["src/api/service.ts","src/api/service/memoryService.ts","src/api/service/memoryServiceBase.ts","src/api/service/memoryServiceDeps.ts","src/api/service/memoryServiceImports.ts","src/api/service/memoryServiceStore.ts","src/api/service/memoryServiceTruth.ts","src/api/service/memoryServiceRetrieval.ts","src/api/service/memoryServiceDreamEngineering.ts","src/api/service/memoryServiceSourceRevalidation.ts","src/api/service/memoryServiceLifecycleFeedback.ts","src/api/service/memoryServiceConnectorsAdmin.ts","src/api/service/memoryServiceSharingGraphMarketplace.ts","src/api/service/memoryServiceGovernanceOps.ts","src/api/service/memoryServiceInsightsMaintenance.ts","src/api/service/memoryServicePersistence.ts"]),
     server: read("src/api/server.ts"),
     helpers: read("src/api/server/helpers.ts"),
     serverSchemas: read("src/api/serverSchemas.ts"),
@@ -275,6 +275,10 @@ ${rows}
 
 function read(path: string): string {
   return existsSync(path) ? readFileSync(path, "utf8") : "";
+}
+
+function readMany(paths: string[]): string {
+  return paths.map((path) => read(path)).join("\n");
 }
 
 function cliOptions(argv: string[]): { out?: string; markdown?: string } {

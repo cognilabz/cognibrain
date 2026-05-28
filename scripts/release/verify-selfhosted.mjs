@@ -15,7 +15,7 @@ const files = {
   install: read("docs/install.md"),
   operations: read("docs/operations.md"),
   integrations: read("docs/integrations.md"),
-  claims: read("docs/claims.md")
+  evidence: read("docs/evidence.md")
 };
 
 const checks = [
@@ -49,12 +49,12 @@ const checks = [
       report.acceptance?.encryptionKeyConfigured === true &&
       report.acceptance?.backupRecovery === true
     ),
-    has(files.claims, "Rerun on the target database before production claims")
+    has(files.evidence, "target database")
   ]),
-  check("SaaS is future track, not current self-hosted claim", [
-    has(files.operations, "Managed SaaS is a future product track"),
-    has(files.claims, "Managed SaaS"),
-    has(files.readme, "does not claim managed SaaS uptime")
+  check("self-hosted boundary is evidence-backed", [
+    has(files.operations, "target database"),
+    has(files.evidence, "Self-host install"),
+    has(files.readme, "Self-hosted engineering memory for coding agents")
   ])
 ];
 

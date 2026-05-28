@@ -124,6 +124,40 @@ export interface ReflectionSummarizer {
   };
 }
 
+export interface ReflectionEvaluationClaim {
+  key: string;
+  value: string;
+  label?: string;
+  confidence?: number;
+  reason?: string;
+}
+
+export interface ReflectionMemoryEvaluation {
+  memoryId: string;
+  claims?: ReflectionEvaluationClaim[];
+  timeSensitive?: {
+    applies: boolean;
+    confidence?: number;
+    reason?: string;
+  };
+  behavioralEvidence?: {
+    applies: boolean;
+    theme?: string;
+    confidence?: number;
+    reason?: string;
+  };
+  organization?: {
+    layer?: Memory["layer"];
+    type?: Memory["type"];
+    confidence?: number;
+    reason?: string;
+  };
+}
+
+export interface ReflectionEvaluator {
+  evaluateReflection(input: { memories: Memory[]; now: Date }): ReflectionMemoryEvaluation[];
+}
+
 export interface MemoryExtractor {
   extract(input: {
     events: MemoryExtractionEvent[];

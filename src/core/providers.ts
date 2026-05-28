@@ -3,12 +3,15 @@ import type {
   ContextReranker,
   ContextVerifier,
   ContradictionDetector,
+  EngineeringMemoryClassifier,
+  EngineeringMemoryKind,
   Memory,
   MemoryExtractionEvent,
   MemoryExtractor,
   MemoryInput,
   MemoryScope,
   QueryExpander,
+  ReflectionEvaluator,
   ReflectionSummarizer,
   SearchResult,
   SourceKind,
@@ -21,9 +24,9 @@ export interface JsonCommandProviderOptions {
   timeoutMs?: number;
 }
 
-type ProviderTask = "contradiction" | "rerank" | "verify" | "summarize" | "extract" | "expand" | "translate";
+type ProviderTask = "contradiction" | "rerank" | "verify" | "summarize" | "reflect" | "engineering" | "extract" | "expand" | "translate";
 
-export class JsonCommandMemoryIntelligence implements ContradictionDetector, ContextReranker, ContextVerifier, ReflectionSummarizer, MemoryExtractor, QueryExpander, TranslationProvider {
+export class JsonCommandMemoryIntelligence implements ContradictionDetector, ContextReranker, ContextVerifier, ReflectionSummarizer, ReflectionEvaluator, EngineeringMemoryClassifier, MemoryExtractor, QueryExpander, TranslationProvider {
   constructor(private readonly options: JsonCommandProviderOptions) {}
 
   classify(input: { a: Memory; b: Memory; key?: string }) {
@@ -89,6 +92,33 @@ export class JsonCommandMemoryIntelligence implements ContradictionDetector, Con
         provider: "json-command",
         ...(isRecord(output.metadata) ? output.metadata : {})
       }
+    };
+  }
+
+  evaluateReflection(input: { memories: Memory[]; now: Date }) {
+    const output = this.call("reflect", {
+      now: input.now.toISOString(),
+      memories: input.memories.map(memoryForProvider)
+    });
+    const evaluations = Array.isArray(output.evaluations) ? output.evaluations : [];
+    return evaluations.flatMap((item) => normalizeReflectionEvaluation(item));
+  }
+
+  classifyEngineering(input: { content: string; metadata?: Record<string, unknown>; now: Date }) {
+    const output = this.call("engineering", {
+      content: input.content,
+      metadata: input.metadata ?? {},
+      now: input.now.toISOString()
+    });
+    return {
+      kind: validEngineeringKind(output.kind),
+      confidence: boundedNumber(output.confidence, 0.68),
+      previousWrongAction: stringField(output.previousWrongAction),
+      correctAction: stringField(output.correctAction),
+      forbiddenAction: stringField(output.forbiddenAction),
+      command: stringField(output.command),
+      successPattern: stringField(output.successPattern),
+      reason: stringField(output.reason)
     };
   }
 
@@ -172,6 +202,46 @@ function normalizeProviderMemory(item: unknown, scope: Partial<MemoryScope> & Pi
   ];
 }
 
+function normalizeReflectionEvaluation(item: unknown): ReturnType<ReflectionEvaluator["evaluateReflection"]> {
+  if (!isRecord(item) || typeof item.memoryId !== "string" || !item.memoryId.trim()) return [];
+  const claims = Array.isArray(item.claims)
+    ? item.claims.flatMap((claim) => {
+        if (!isRecord(claim) || typeof claim.key !== "string" || typeof claim.value !== "string") return [];
+        return [{
+          key: claim.key.slice(0, 160),
+          value: claim.value.slice(0, 160),
+          label: stringField(claim.label),
+          confidence: boundedNumber(claim.confidence, 0.68),
+          reason: stringField(claim.reason)
+        }];
+      })
+    : undefined;
+  const timeSensitive = isRecord(item.timeSensitive)
+    ? {
+        applies: item.timeSensitive.applies === true,
+        confidence: boundedNumber(item.timeSensitive.confidence, 0.68),
+        reason: stringField(item.timeSensitive.reason)
+      }
+    : undefined;
+  const behavioralEvidence = isRecord(item.behavioralEvidence)
+    ? {
+        applies: item.behavioralEvidence.applies === true,
+        theme: stringField(item.behavioralEvidence.theme),
+        confidence: boundedNumber(item.behavioralEvidence.confidence, 0.68),
+        reason: stringField(item.behavioralEvidence.reason)
+      }
+    : undefined;
+  const organization = isRecord(item.organization)
+    ? {
+        layer: validLayer(item.organization.layer),
+        type: validMemoryType(item.organization.type),
+        confidence: boundedNumber(item.organization.confidence, 0.68),
+        reason: stringField(item.organization.reason)
+      }
+    : undefined;
+  return [{ memoryId: item.memoryId, claims, timeSensitive, behavioralEvidence, organization }];
+}
+
 export function createJsonCommandIntelligenceFromEnv(): JsonCommandMemoryIntelligence | undefined {
   const command = process.env.MEMORY_INTELLIGENCE_COMMAND;
   if (!command) return undefined;
@@ -220,6 +290,10 @@ function boundedNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
 }
 
+function stringField(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 500) : undefined;
+}
+
 function isRecord(value: unknown): value is Record<string, any> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -234,6 +308,21 @@ function validLayer(value: unknown): MemoryInput["layer"] {
 
 function validSourceKind(value: unknown): SourceKind {
   return value === "human" || value === "reviewed_code" || value === "tool" || value === "agent" || value === "transcript" || value === "import" ? value : "agent";
+}
+
+function validEngineeringKind(value: unknown): EngineeringMemoryKind | undefined {
+  return value === "repo_policy" ||
+    value === "architecture_decision" ||
+    value === "review_correction" ||
+    value === "tool_outcome" ||
+    value === "procedure" ||
+    value === "forbidden_action" ||
+    value === "migration_note" ||
+    value === "test_strategy" ||
+    value === "dependency_rule" ||
+    value === "generated_file_rule"
+    ? value
+    : undefined;
 }
 
 function validRelationType(value: unknown): NonNullable<MemoryInput["relations"]>[number]["type"] {

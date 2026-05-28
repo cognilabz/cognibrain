@@ -469,14 +469,15 @@ async function doctor(doctorArgs) {
     add("harness package templates", harnessTemplates.ok, harnessTemplates.detail);
     const harnessGenerated = harnessGeneratedHealth();
     add("harness generated configs", harnessGenerated.ok, harnessGenerated.detail, harnessGenerated.ok ? "ok" : "warn");
-    const productionDocs = [
+    const publicDocs = [
       "docs/README.md",
       "docs/install.md",
       "docs/operations.md",
       "docs/reference.md",
-      "docs/claims.md"
+      "docs/evidence.md",
+      "docs/benchmarks.md"
     ].filter((path) => existsSync(join(root, path)));
-    add("production docs", productionDocs.length === 5, productionDocs.length === 5 ? "docs/operations.md and docs/claims.md" : "missing production docs");
+    add("public docs", publicDocs.length === 6, publicDocs.length === 6 ? "docs/evidence.md and docs/benchmarks.md" : "missing public docs");
     const connectorProof = connectorProofHealth();
     add("connector proof levels", connectorProof.ok, connectorProof.detail, connectorProof.level);
   }

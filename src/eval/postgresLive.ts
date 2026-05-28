@@ -242,30 +242,38 @@ console.log(JSON.stringify(artifact, null, 2));
 if (!artifact.passed) process.exit(1);
 
 function ensurePostgresContainer(): { runtime: "apple-container" | "docker"; reused: boolean } {
+  let appleContainerFailure = "";
   if (commandExists("container")) {
-    run("container", ["system", "start"], { allowFailure: true });
-    const inspected = inspectAppleContainer(containerName);
-    if (inspected.exists) {
-      if (!inspected.running) run("container", ["start", containerName]);
-      return { runtime: "apple-container", reused: true };
+    const systemStart = run("container", ["system", "start"], { allowFailure: true });
+    if (systemStart.status === 0) {
+      const inspected = inspectAppleContainer(containerName);
+      if (inspected.exists) {
+        const started = inspected.running ? { status: 0, stdout: "", stderr: "" } : run("container", ["start", containerName], { allowFailure: true });
+        if (started.status === 0) return { runtime: "apple-container", reused: true };
+        appleContainerFailure = started.stderr || started.stdout;
+      } else {
+        cleanupLegacyPostgresContainers("apple-container");
+        const launched = run("container", [
+          "run",
+          "-d",
+          "--name",
+          containerName,
+          "-e",
+          "POSTGRES_PASSWORD=cognibrain",
+          "-e",
+          "POSTGRES_USER=cognibrain",
+          "-e",
+          "POSTGRES_DB=cognibrain",
+          "-p",
+          "55432:5432",
+          image
+        ], { allowFailure: true });
+        if (launched.status === 0) return { runtime: "apple-container", reused: false };
+        appleContainerFailure = launched.stderr || launched.stdout;
+      }
+    } else {
+      appleContainerFailure = systemStart.stderr || systemStart.stdout;
     }
-    cleanupLegacyPostgresContainers("apple-container");
-    run("container", [
-      "run",
-      "-d",
-      "--name",
-      containerName,
-      "-e",
-      "POSTGRES_PASSWORD=cognibrain",
-      "-e",
-      "POSTGRES_USER=cognibrain",
-      "-e",
-      "POSTGRES_DB=cognibrain",
-      "-p",
-      "55432:5432",
-      image
-    ]);
-    return { runtime: "apple-container", reused: false };
   }
   if (commandExists("docker")) {
     const inspected = run("docker", ["inspect", containerName], { allowFailure: true });
@@ -291,7 +299,7 @@ function ensurePostgresContainer(): { runtime: "apple-container" | "docker"; reu
     ]);
     return { runtime: "docker", reused: false };
   }
-  throw new Error("No supported local container runtime found for Postgres live verification.");
+  throw new Error(`No supported local container runtime found for Postgres live verification.${appleContainerFailure ? ` Apple container failed: ${appleContainerFailure.trim()}` : ""}`);
 }
 
 function cleanupLegacyPostgresContainers(runtime: "apple-container" | "docker"): void {

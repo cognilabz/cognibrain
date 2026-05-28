@@ -11,7 +11,7 @@ export function add(service: any, input: MemoryInput) {
     const personaConsent = agentPersona?.privacyDefault ? { visibility: agentPersona.privacyDefault } : undefined;
     const scopedInput = { ...input, consent: { ...personaConsent, ...sourceDefaultConsent, ...(input.consent ?? {}) } };
     const enriched = service.applyDomainEnrichment(scopedInput);
-    const engineeringized = withEngineeringMemoryMetadata(enriched);
+    const engineeringized = withEngineeringMemoryMetadata(enriched, service.defaultEngineeringClassifier);
     const proceduralized = withProceduralMetadata(engineeringized);
     service.ensureScopedAccess(proceduralized);
     const writeDecision = service.evaluatePolicy("write", proceduralized);
@@ -68,21 +68,22 @@ export function extract(service: any, events: MemoryExtractionEvent[], scope: Pi
     const episode = service.createEpisode({ scope: scope as MemoryScope, events: normalizedEvents });
     const existing = service.store.list(scope.userId) as Memory[];
     const failures = ruleExtractionFailures(normalizedEvents);
-    const ruleInputs = extractAddOnlyMemories(normalizedEvents, scope).map((input: MemoryInput) => markExtractionStage(input, "rules"));
-    const needsProvider = Boolean(service.defaultExtractor && (ruleInputs.length === 0 || failures.length > 0 || normalizedEvents.some((event) => event.mediaType && !["text", "code", "document"].includes(event.mediaType) && !hasLocalMediaExtraction(event))));
+    const needsProvider = Boolean(service.defaultExtractor);
     const providerInputs = needsProvider ? service.defaultExtractor?.extract({ events: normalizedEvents, scope, existing, now: new Date() }).map((input: MemoryInput) => markExtractionStage({ ...scope, ...input }, "provider")) ?? [] : [];
+    const ruleInputs = providerInputs.length ? [] : extractAddOnlyMemories(normalizedEvents, scope).map((input: MemoryInput) => markExtractionStage(input, "rules"));
     const stages: ExtractionReport["stages"] = [
-      { stage: "rules", inputEvents: normalizedEvents.length, extracted: ruleInputs.length, confidence: extractionConfidence(normalizedEvents, ruleInputs.length), reason: "single-pass add-only rules" },
       ...(needsProvider
-        ? [{ stage: "provider" as const, inputEvents: normalizedEvents.length, extracted: providerInputs.length, confidence: providerInputs.length ? 0.78 : 0.2, reason: providerInputs.length ? "fallback extractor produced candidate memories" : "fallback extractor returned no candidates" }]
-        : [])
+        ? [{ stage: "provider" as const, inputEvents: normalizedEvents.length, extracted: providerInputs.length, confidence: providerInputs.length ? 0.78 : 0.2, reason: providerInputs.length ? "provider extractor produced candidate memories" : "provider extractor returned no candidates" }]
+        : []),
+      { stage: "rules", inputEvents: normalizedEvents.length, extracted: ruleInputs.length, confidence: extractionConfidence(normalizedEvents, ruleInputs.length), reason: providerInputs.length ? "skipped because provider extraction succeeded" : "deterministic fallback rules" }
     ];
     const claims: MemoryClaim[] = [];
     const durabilityDecisions: DurabilityDecision[] = [];
     const classifiedInputs = [...ruleInputs, ...providerInputs].flatMap((input) => {
       const event = syntheticExtractionEvent(input);
-      const claim = (input.metadata?.claim as MemoryClaim | undefined) ?? extractClaim(input.content, event, scope, input.source, input.entities ?? []);
-      const decision = (input.metadata?.durabilityDecision as DurabilityDecision | undefined) ?? classifyDurability(input.content, event, claim);
+      const providerStage = (input.metadata?.extraction as { stage?: unknown } | undefined)?.stage === "provider";
+      const claim = (input.metadata?.claim as MemoryClaim | undefined) ?? (providerStage ? providerClaim(input, event, scope) : extractClaim(input.content, event, scope, input.source, input.entities ?? []));
+      const decision = (input.metadata?.durabilityDecision as DurabilityDecision | undefined) ?? (providerStage ? providerDurability(input, claim) : classifyDurability(input.content, event, claim));
       claims.push(claim);
       durabilityDecisions.push(decision);
       if (decision.action === "ignore" || decision.action === "ask_user") return [];
@@ -177,3 +178,46 @@ export function ingestMedia(service: any, event: MemoryExtractionEvent, scope: P
       : media;
     return service.extract([normalized], scope);
   }
+
+function providerClaim(input: MemoryInput, event: MemoryExtractionEvent, scope: Partial<MemoryScope> & Pick<MemoryScope, "userId">): MemoryClaim {
+  const source = input.source ?? event.source ?? { kind: "agent" as const, confidence: input.confidence ?? 0.62 };
+  return {
+    id: `claim_${contentHash(`${input.content}:${input.timestamp ?? ""}`).slice(2, 14)}`,
+    subject: input.entities?.[0] ?? input.projectId ?? input.agentId ?? "provider-memory",
+    predicate: "provider_extracted",
+    object: input.content,
+    qualifiers: {
+      role: event.role,
+      ...(event.mediaType ? { mediaType: event.mediaType } : {}),
+      ...(event.language ? { language: event.language } : {})
+    },
+    time: event.timestamp,
+    source,
+    confidence: input.confidence ?? source.confidence,
+    durability: "durable",
+    sensitivity: "none",
+    scope: {
+      userId: scope.userId,
+      brainId: scope.brainId,
+      sourceId: scope.sourceId,
+      agentId: scope.agentId,
+      sessionId: scope.sessionId,
+      appId: scope.appId,
+      orgId: scope.orgId,
+      projectId: scope.projectId,
+      deviceId: scope.deviceId,
+      runId: scope.runId
+    }
+  };
+}
+
+function providerDurability(input: MemoryInput, claim: MemoryClaim): DurabilityDecision {
+  return {
+    contentPreview: input.content.length > 120 ? `${input.content.slice(0, 117)}...` : input.content,
+    action: input.layer === "working" ? "working_memory" : "store",
+    reason: "provider extraction supplied durable memory candidate",
+    durability: input.layer === "working" ? "session_only" : "durable",
+    sensitivity: claim.sensitivity,
+    confidence: input.confidence ?? claim.confidence
+  };
+}

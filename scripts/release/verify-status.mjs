@@ -12,7 +12,7 @@ const packageFiles = Array.isArray(packageJson.files) ? packageJson.files : [];
 const files = {
   readme: read("README.md"),
   docsHome: read("docs/README.md"),
-  claims: read("docs/claims.md"),
+  evidence: read("docs/evidence.md"),
   status: read("docs/status.md"),
   benchmarks: read("docs/benchmarks.md"),
   reference: read("docs/reference.md"),
@@ -30,33 +30,33 @@ const checks = [
     exists("docs/status.md"),
     exists("docs/operations.md"),
     exists("docs/reference.md"),
-    exists("docs/claims.md"),
-    has(files.docsHome, "Claim Boundary")
+    exists("docs/evidence.md"),
+    has(files.docsHome, "Documentation Standard")
   ]),
-  check("claim-to-test mapping is present", [
-    has(files.claims, "| Claim ID | Claim | Evidence gate | Evidence | Boundary |"),
-    countClaimRows(files.claims) >= 8,
-    has(files.claims, "CB-COGNICODE"),
-    has(files.claims, "CB-ARENA"),
-    has(files.claims, "CB-PRODUCTION-STATUS"),
-    has(files.claims, "CB-STORAGE-BOUNDARY"),
-    has(files.claims, "Explicit Non-Claims"),
-    has(files.readme, "docs/claims.md"),
+  check("evidence register is present", [
+    has(files.evidence, "| Area | Evidence anchor | Notes |"),
+    countEvidenceRows(files.evidence) >= 8,
+    has(files.evidence, "CogniCodeBench"),
+    has(files.evidence, "Arena"),
+    has(files.status, "Runtime Status"),
+    has(files.evidence, "Storage boundary"),
+    has(files.evidence, "not a product narrative"),
+    has(files.readme, "docs/evidence.md"),
     has(files.readme, "docs/status.md")
   ]),
-  check("marketing claims are bounded by evidence", [
+  check("public docs are bounded by evidence", [
     has(files.readme, "Self-hosted engineering memory for coding agents"),
     has(files.readme, "Stop fixing the same agent mistake twice"),
-    has(files.readme, "Generated proof outputs are internal build artifacts"),
-    has(files.claims, "does not currently claim Managed SaaS uptime"),
-    has(files.benchmarks, "The benchmark commands write ignored local reports under `artifacts/`"),
+    has(files.readme, "Benchmark results are documented from the checked artifacts"),
+    has(files.evidence, "not a product narrative"),
+    has(files.benchmarks, "This page records the current checked benchmark artifacts"),
     has(files.benchmarks, "same-run-api-shape"),
-    has(files.benchmarks, "same-run-native"),
-    has(files.status, "Production Readiness Status"),
-    has(files.status, "DB-primary MemoryRepository"),
+    has(files.benchmarks, "credential-blocked"),
+    has(files.status, "Runtime Status"),
+    has(files.status, "MemoryRepository paths for SQLite and Postgres"),
     has(files.status, "JWT/OIDC verifier"),
-    has(files.status, "Production policy mode default-denies"),
-    has(files.status, "Generated artifacts are internal CI/build outputs"),
+    has(files.status, "route-level RBAC"),
+    has(files.status, "Generated artifacts are local review outputs"),
     has(files.integrations, "MCP first for agents"),
     has(files.reference, "For MCP-native agents, use MCP")
   ]),
@@ -85,8 +85,8 @@ function check(name, assertions) {
   return { name, passed: failed.length === 0, failed };
 }
 
-function countClaimRows(content) {
-  return content.split(/\r?\n/).filter((line) => /^\| CB-/.test(line)).length;
+function countEvidenceRows(content) {
+  return content.split(/\r?\n/).filter((line) => /^\| [A-Za-z]/.test(line)).length;
 }
 
 function writeReport(items) {

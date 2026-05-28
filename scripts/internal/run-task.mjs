@@ -20,6 +20,7 @@ const tasks = {
   "benchmark:arena:publish": cmd("npx", ["tsx", "src/eval/publishArena.ts", "--input", "artifacts/arena/run.json", "--out", "artifacts/public/benchmark-arena", "--markdown", "artifacts/docs/latest-arena.md"]),
   "benchmark:competitors:native": cmd("node", ["scripts/benchmark/benchmark-native-competitors.mjs"]),
   "benchmark:beam:500k": cmd("npx", ["tsx", "src/eval/beam.ts", "--split", "500K", "--top-k", "20", "--out", "artifacts/beam-500k-report.json"]),
+  "benchmark:beam:1m": cmd("npx", ["tsx", "src/eval/beam.ts", "--split", "1M", "--top-k", "20", "--out", "artifacts/beam-1m-report.json"]),
   "benchmark:market": cmd("npx", ["tsx", "src/eval/marketGate.ts"]),
   "benchmark:answer-generation": cmd("npx", ["tsx", "src/eval/answerGeneration.ts", "--out", "artifacts/answer-generation.json"]),
   "benchmark:load": cmd("npx", ["tsx", "src/eval/load.ts", "--out", "artifacts/load-benchmark.json"]),

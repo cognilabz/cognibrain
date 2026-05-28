@@ -9,13 +9,17 @@ const artifacts = {
   arena: readJson("artifacts/arena/run.json"),
   locomo: readJson("artifacts/locomo-report.json"),
   longmemeval: readJson("artifacts/longmemeval-report.json"),
-  beam: readJson("artifacts/beam-report.json")
+  beam100k: readJson("artifacts/beam-report.json"),
+  beam500k: readJson("artifacts/beam-500k-report.json"),
+  beam1m: readJson("artifacts/beam-1m-report.json")
 };
 
 const publicBenchmarks = [
   publicRow("LoCoMo", artifacts.locomo),
   publicRow("LongMemEval-S", artifacts.longmemeval),
-  publicRow("BEAM", artifacts.beam)
+  publicRow("BEAM 100K", artifacts.beam100k),
+  publicRow("BEAM 500K", artifacts.beam500k),
+  publicRow("BEAM 1M", artifacts.beam1m)
 ].filter(Boolean);
 
 const arenaRows = [...(artifacts.arena?.leaderboard ?? [])].map((row) => ({
@@ -68,7 +72,10 @@ function baselineScore(name) {
 
 function renderSvg(sections) {
   const width = 1180;
-  const height = 1390;
+  const publicHeight = 82 + sections.publicBenchmarks.length * 62 + 34;
+  const arenaHeight = 82 + sections.arenaRows.length * 40 + 34;
+  const ablationHeight = 82 + sections.ablationRows.length * 40 + 34;
+  const height = 128 + publicHeight + 26 + arenaHeight + 26 + ablationHeight + 36;
   const margin = 36;
   const axis = { x: 260, width: 760 };
   let y = 128;
@@ -200,7 +207,13 @@ function formatLabel(value) {
 
 function generatedAtSummary() {
   const date = shortDate(artifacts.arena?.generatedAt ?? artifacts.cognicode?.generatedAt ?? new Date().toISOString());
-  const publicTimes = [artifacts.locomo?.generatedAt, artifacts.longmemeval?.generatedAt, artifacts.beam?.generatedAt].filter(Boolean).map(shortClock);
+  const publicTimes = [
+    artifacts.locomo?.generatedAt,
+    artifacts.longmemeval?.generatedAt,
+    artifacts.beam100k?.generatedAt,
+    artifacts.beam500k?.generatedAt,
+    artifacts.beam1m?.generatedAt
+  ].filter(Boolean).map(shortClock);
   return `${date} UTC; public datasets ${range(publicTimes)}, arena ${shortClock(artifacts.arena?.generatedAt)}, cognicode ${shortClock(artifacts.cognicode?.generatedAt)}`;
 }
 

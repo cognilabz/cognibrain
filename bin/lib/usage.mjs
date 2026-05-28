@@ -16,7 +16,7 @@ Usage:
   cognibrain doctor [--publish] [--fix] [--no-start]
       Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
   cognibrain start [--dashboard] | dev [--dashboard] | dashboard | status | stop
-      Manage the local API runtime; the web dashboard is optional and starts only with dashboard opt-in
+      Manage the local API runtime; the commercial Operator UI starts only with dashboard opt-in
   cognibrain proof|truth [--json] [--no-refresh]
       Render the code-first truth workbench from benchmark, connector, CLI, and packaging artifacts
   cognibrain service [plan|status] [--platform linux|macos|windows] [--json]
@@ -26,7 +26,7 @@ Usage:
   cognibrain service start|stop|restart|uninstall|logs
       Control or inspect the installed native service from the CLI
   cognibrain memories [list|status] [--json]
-      CLI memory workbench with recent memories, health, maintenance, and dashboard-equivalent memory actions
+      CLI memory workbench with recent memories, health, maintenance, and Operator UI-equivalent memory actions
   cognibrain memories <add|search|coding-context|evidence-pack|why-used|graph|timeline|dream|marketplace|...>
       Run any memory operation from the CLI; equivalent to cognibrain memory <subcommand>
   cognibrain context|guard|outcome|correction|patch-evidence|session-end|handoff|release-prepare|dream-plan|source-revalidate|conflicts|health --json

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { spawn } from "node:child_process";
 import { z } from "zod";
 import { defaultService } from "../service";
 import type { DreamCycleTrigger } from "../../core";
@@ -67,6 +68,12 @@ const harnessLifecycleEventBodySchema = z.object({
   budget: dreamBudgetSchema.optional(),
   sourceRefresh: z.boolean().optional(),
   connectorIds: z.array(z.string()).optional()
+});
+const harnessExecuteBodySchema = z.object({
+  userId: z.string().min(1),
+  command: z.string().min(1).max(2000).refine((value) => !/[\r\n]/.test(value), "command must be a single line"),
+  cwd: z.string().min(1).optional(),
+  timeoutMs: z.number().int().positive().max(120_000).optional()
 });
 
 export async function handleDreamRoutes(input: {
@@ -140,6 +147,32 @@ export async function handleDreamRoutes(input: {
       return true;
     }
 
+    if (method === "POST" && url.pathname === "/harness/execute") {
+      const body = harnessExecuteBodySchema.parse(await json(request));
+      if (!allowedHarnessCommand(body.command)) {
+        send(response, 400, { error: "Only Cognibrain harness commands can be executed from the Operator UI." });
+        return true;
+      }
+      const result = await executeHarnessCommand(body.command, {
+        cwd: body.cwd ?? process.cwd(),
+        timeoutMs: body.timeoutMs ?? 30_000
+      });
+      const event = defaultService.recordHarnessLifecycleEvent({
+        userId: body.userId,
+        event: result.exitCode === 0 ? "tool_succeeded" : "tool_failed",
+        command: body.command,
+        cwd: result.cwd,
+        exitCode: result.exitCode ?? undefined,
+        durationMs: result.durationMs,
+        outputSummary: summarizeHarnessOutput(result.stdout, result.stderr),
+        failureReason: result.exitCode === 0 ? undefined : result.timedOut ? "Command timed out." : result.stderr || result.stdout || "Command failed.",
+        successReason: result.exitCode === 0 ? "Command completed successfully." : undefined,
+        metadata: { source: "operator-ui", timedOut: result.timedOut }
+      });
+      send(response, 202, { ...result, event: serializeHarnessLifecycleEvent(event) });
+      return true;
+    }
+
     if (method === "POST" && (url.pathname === "/harness/session-end" || url.pathname === "/harness/handoff-prepare" || url.pathname === "/harness/release-prepare")) {
       const body = dreamCycleBodySchema.parse(await json(request));
       const trigger: DreamCycleTrigger = url.pathname === "/harness/session-end" ? "harness_session_end" : url.pathname === "/harness/handoff-prepare" ? "harness_handoff" : "before_release";
@@ -187,4 +220,85 @@ export async function handleDreamRoutes(input: {
       return true;
     }
   return false;
+}
+
+type HarnessExecutionResult = {
+  command: string;
+  cwd: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+};
+
+function allowedHarnessCommand(command: string): boolean {
+  const trimmed = command.trim();
+  return [
+    "npx cognibrain",
+    "npm run setup",
+    "npm run mcp",
+    "npm run skill:install",
+    "node bin/cognibrain.mjs",
+    `${process.execPath} bin/cognibrain.mjs`
+  ].some((prefix) => trimmed === prefix || trimmed.startsWith(`${prefix} `));
+}
+
+function executeHarnessCommand(command: string, options: { cwd: string; timeoutMs: number }): Promise<HarnessExecutionResult> {
+  const started = Date.now();
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    const child = spawn(command, {
+      cwd: options.cwd,
+      shell: true,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, options.timeoutMs);
+    child.stdout?.on("data", (chunk) => {
+      stdout = appendBounded(stdout, String(chunk));
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr = appendBounded(stderr, String(chunk));
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({
+        command,
+        cwd: options.cwd,
+        exitCode: timedOut ? null : code,
+        timedOut,
+        durationMs: Date.now() - started,
+        stdout,
+        stderr
+      });
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({
+        command,
+        cwd: options.cwd,
+        exitCode: 1,
+        timedOut,
+        durationMs: Date.now() - started,
+        stdout,
+        stderr: appendBounded(stderr, error.message)
+      });
+    });
+  });
+}
+
+function appendBounded(current: string, chunk: string): string {
+  const next = current + chunk;
+  return next.length > 40_000 ? next.slice(-40_000) : next;
+}
+
+function summarizeHarnessOutput(stdout: string, stderr: string): string {
+  const text = `${stdout}\n${stderr}`.trim().replace(/\s+/g, " ");
+  return text.length > 600 ? `${text.slice(0, 597)}...` : text;
 }

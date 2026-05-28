@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHmac, createSign, generateKeyPairSync } from "node:crypto";
+import { mkdtempSync, readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { server } from "../src/api/server";
+import { externalVendorConfigured, vendorEnv } from "../src/connectors/vendorConfig";
 
 async function listen(): Promise<string> {
   await new Promise<void>((resolve) => {
@@ -63,6 +67,11 @@ describe("cognibrain HTTP API contract", () => {
     delete process.env.MEMORY_POLICY_MODE;
     delete process.env.MEMORY_SECURITY_MODE;
     delete process.env.MEMORY_PRODUCTION_MODE;
+    delete process.env.MEMORY_CONNECTOR_CONFIG_PATH;
+    delete process.env.MEMORY_GITHUB_REPO;
+    delete process.env.MEMORY_GITHUB_TOKEN;
+    delete process.env.GITHUB_TOKEN;
+    delete process.env.GH_TOKEN;
   });
 
   it("accepts governed marketplace module metadata over HTTP", async () => {
@@ -139,6 +148,78 @@ describe("cognibrain HTTP API contract", () => {
     expect(body.createdMemories[0]?.tags).toContain("connector-feedback");
   });
 
+  it("stores connector runtime config with redacted readback", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-config-"));
+    process.env.MEMORY_CONNECTOR_CONFIG_PATH = join(dir, "connector-config.json");
+    delete process.env.GITHUB_TOKEN;
+    delete process.env.GH_TOKEN;
+    const baseUrl = await listen();
+
+    const save = await fetch(`${baseUrl}/connectors/config`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        values: {
+          MEMORY_GITHUB_REPO: "cognilabz/cognibrain",
+          MEMORY_GITHUB_TOKEN: "secret-token-for-test"
+        }
+      })
+    });
+    expect(save.status).toBe(202);
+    const saveBody = (await save.json()) as { keys: Array<{ key: string; source: string; valueRef?: string }> };
+    expect(saveBody.keys.find((item) => item.key === "MEMORY_GITHUB_TOKEN")?.valueRef).toBe("file:MEMORY_GITHUB_TOKEN");
+    expect(JSON.stringify(saveBody)).not.toContain("secret-token-for-test");
+
+    const configFile = readFileSync(process.env.MEMORY_CONNECTOR_CONFIG_PATH, "utf8");
+    expect(configFile).toContain("secret-token-for-test");
+    expect(vendorEnv(process.env, "MEMORY_GITHUB_TOKEN")).toBe("secret-token-for-test");
+    expect(externalVendorConfigured("github", process.env)).toEqual({ configured: true, missing: [] });
+
+    const summary = await fetch(`${baseUrl}/connectors/config?provider=github`);
+    expect(summary.status).toBe(200);
+    const summaryBody = (await summary.json()) as { keys: Array<{ key: string; aliases: string[]; source: string; configured: boolean; valueRef?: string }> };
+    expect(summaryBody.keys.map((item) => item.key)).toEqual(["MEMORY_GITHUB_REPO", "MEMORY_GITHUB_TOKEN"]);
+    expect(summaryBody.keys.find((item) => item.key === "MEMORY_GITHUB_TOKEN")?.aliases).toEqual(["GITHUB_TOKEN", "GH_TOKEN"]);
+    expect(summaryBody.keys.find((item) => item.key === "MEMORY_GITHUB_REPO")).toMatchObject({ configured: true, source: "file" });
+    expect(JSON.stringify(summaryBody)).not.toContain("secret-token-for-test");
+
+    process.env.GH_TOKEN = "secret-env-token-for-test";
+    const aliasSummary = await fetch(`${baseUrl}/connectors/config?provider=github`);
+    expect(aliasSummary.status).toBe(200);
+    const aliasBody = (await aliasSummary.json()) as { keys: Array<{ key: string; source: string; valueRef?: string }> };
+    expect(aliasBody.keys.find((item) => item.key === "MEMORY_GITHUB_TOKEN")).toMatchObject({ source: "env", valueRef: "env:GH_TOKEN" });
+
+    const datadogSummary = await fetch(`${baseUrl}/connectors/config?provider=datadog`);
+    expect(datadogSummary.status).toBe(200);
+    const datadogBody = (await datadogSummary.json()) as { keys: Array<{ key: string }> };
+    expect(datadogBody.keys.map((item) => item.key)).toEqual(["MEMORY_DATADOG_API_KEY", "MEMORY_DATADOG_APP_KEY", "MEMORY_DATADOG_SITE"]);
+  });
+
+  it("executes allowlisted harness commands and rejects arbitrary shell", async () => {
+    const baseUrl = await listen();
+    const denied = await fetch(`${baseUrl}/harness/execute`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId: "api-harness-user", command: "rm -rf /tmp/nope" })
+    });
+    expect(denied.status).toBe(400);
+
+    const executed = await fetch(`${baseUrl}/harness/execute`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "api-harness-user",
+        command: "node bin/cognibrain.mjs help",
+        timeoutMs: 10_000
+      })
+    });
+    expect(executed.status).toBe(202);
+    const body = (await executed.json()) as { exitCode: number; stdout: string; event?: { eventMemory?: { tags?: string[] } } };
+    expect(body.exitCode).toBe(0);
+    expect(body.stdout).toContain("cognibrain");
+    expect(body.event?.eventMemory?.tags).toContain("harness-event");
+  });
+
   it("archives memories over HTTP while preserving audit history", async () => {
     const baseUrl = await listen();
     const create = await fetch(`${baseUrl}/memories`, {
@@ -170,6 +251,42 @@ describe("cognibrain HTTP API contract", () => {
     expect(chain.events.some((event) => event.journalType === "memory.archived")).toBe(true);
     expect(chain.events.every((event) => event.hash)).toBe(true);
     expect(chain.replay.memories[memory.id]?.archived).toBe(true);
+  });
+
+  it("updates memory content, tags, trust, and consent over HTTP", async () => {
+    const baseUrl = await listen();
+    const create = await fetch(`${baseUrl}/memories`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "api-crud-user",
+        content: "CRUD update starts here.",
+        source: { kind: "human", confidence: 0.8 },
+        tags: ["before"]
+      })
+    });
+    expect(create.status).toBe(201);
+    const memory = (await create.json()) as { id: string };
+
+    const patch = await fetch(`${baseUrl}/memories/${memory.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: "CRUD update reached the API.", tags: ["after"], trust: 0.77 })
+    });
+    expect(patch.status).toBe(200);
+    const patched = (await patch.json()) as { content: string; tags: string[]; trust: number };
+    expect(patched.content).toBe("CRUD update reached the API.");
+    expect(patched.tags).toEqual(["after"]);
+    expect(patched.trust).toBe(0.77);
+
+    const consent = await fetch(`${baseUrl}/memories/${memory.id}/consent`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ visibility: "org" })
+    });
+    expect(consent.status).toBe(202);
+    const consentBody = (await consent.json()) as { consent?: { visibility?: string } };
+    expect(consentBody.consent?.visibility).toBe("org");
   });
 
   it("protects non-health routes when API keys are configured", async () => {

@@ -137,6 +137,7 @@ export const API_ROUTE_CONTRACTS: ApiRouteContract[] = [
   route("/dream/jobs/{id}/retry", ["POST"], candidate, "dream"),
   route("/sources/revalidate", ["POST"], candidate, "dream"),
   route("/harness/events", ["POST"], stable, "dream"),
+  route("/harness/execute", ["POST"], experimental, "dream"),
   route("/harness/session-end", ["POST"], candidate, "dream"),
   route("/harness/handoff-prepare", ["POST"], candidate, "dream"),
   route("/harness/release-prepare", ["POST"], candidate, "dream"),

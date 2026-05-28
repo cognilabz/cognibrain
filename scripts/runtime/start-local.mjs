@@ -12,9 +12,11 @@ const defaultDbPath = process.env.MEMORY_DB_PATH ?? join(runtimeRoot, ".memory-h
 const stateDir = join(runtimeRoot, ".cognibrain");
 const statePath = join(stateDir, "local-runtime.json");
 const apiStartPort = Number(process.env.PORT ?? 8787);
-const uiStartPort = Number(process.env.VITE_PORT ?? 5173);
+const uiStartPort = Number(process.env.NEXT_PORT ?? 5173);
 const args = new Set(process.argv.slice(2));
 const withDashboard = args.has("--dashboard") || args.has("--with-dashboard") || process.env.COGNIBRAIN_DASHBOARD === "true";
+const operatorUiPath = join(root, "operator-ui");
+const dashboardConfigPath = join(operatorUiPath, "next.config.mjs");
 
 if (args.has("--status")) {
   await printStatus();
@@ -29,7 +31,8 @@ if (args.has("--status")) {
 async function startDaemon() {
   mkdirSync(stateDir, { recursive: true });
   const tsx = requireExecutable("tsx");
-  const vite = withDashboard ? requireExecutable("vite") : null;
+  const next = withDashboard ? requireExecutable("next") : null;
+  if (withDashboard) requireCommercialOperatorUi();
   const current = readState();
   if (current && isAlive(current.api?.pid) && (!withDashboard || isAlive(current.ui?.pid))) {
     console.log(withDashboard && current.ui?.url ? `cognibrain already running: ${current.api.url} and ${current.ui.url}` : `cognibrain API already running: ${current.api.url}`);
@@ -57,10 +60,10 @@ async function startDaemon() {
   if (withDashboard) {
     uiPort = await findOpenPort(uiStartPort);
     const uiLog = openSync(join(stateDir, "dashboard.log"), "a");
-    ui = spawn(vite, ["--host", "127.0.0.1", "--port", String(uiPort), "--strictPort"], {
+    ui = spawn(next, ["dev", operatorUiPath, "-H", "127.0.0.1", "-p", String(uiPort)], {
       cwd: root,
       detached: true,
-      env: { ...process.env, NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, VITE_API_URL: process.env.VITE_API_URL ?? `http://127.0.0.1:${apiPort}` },
+      env: { ...process.env, NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? `http://127.0.0.1:${apiPort}` },
       stdio: ["ignore", uiLog, uiLog]
     });
     ui.unref();
@@ -77,7 +80,7 @@ async function startDaemon() {
   };
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
   await waitForUrl(`${state.api.url}/health`, 8_000);
-  if (state.ui?.url) await waitForUrl(state.ui.url, 8_000);
+  if (state.ui?.url) await waitForUrl(state.ui.url, 20_000);
   console.log(`cognibrain API: ${state.api.url}`);
   console.log(state.ui?.url ? `cognibrain UI:  ${state.ui.url}` : "cognibrain UI:  optional; run cognibrain dashboard");
   console.log(`runtime state:   ${statePath}`);
@@ -85,7 +88,8 @@ async function startDaemon() {
 
 async function startForeground() {
   const tsx = requireExecutable("tsx");
-  const vite = withDashboard ? requireExecutable("vite") : null;
+  const next = withDashboard ? requireExecutable("next") : null;
+  if (withDashboard) requireCommercialOperatorUi();
   const apiPort = await findOpenPort(apiStartPort);
   const api = spawn(tsx, ["src/api/server.ts"], {
     cwd: root,
@@ -103,9 +107,9 @@ async function startForeground() {
   let uiPort = null;
   if (withDashboard) {
     uiPort = await findOpenPort(uiStartPort);
-    ui = spawn(vite, ["--host", "127.0.0.1", "--port", String(uiPort), "--strictPort"], {
+    ui = spawn(next, ["dev", operatorUiPath, "-H", "127.0.0.1", "-p", String(uiPort)], {
       cwd: root,
-      env: { ...process.env, NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, VITE_API_URL: process.env.VITE_API_URL ?? `http://127.0.0.1:${apiPort}` },
+      env: { ...process.env, NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? `http://127.0.0.1:${apiPort}` },
       stdio: "inherit"
     });
   }
@@ -131,6 +135,13 @@ function stopRuntime() {
   }
   rmSync(statePath, { force: true });
   console.log("Stopped cognibrain local runtime.");
+}
+
+function requireCommercialOperatorUi() {
+  if (existsSync(dashboardConfigPath)) return;
+  console.error("Cognibrain Operator UI is a commercial add-on and is not included in the OSS package.");
+  console.error("Install or mount the licensed operator-ui add-on, then run with --dashboard again.");
+  process.exit(2);
 }
 
 async function printStatus() {

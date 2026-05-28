@@ -29,7 +29,7 @@ const rootMarkdown = ["README.md", "CONTRIBUTING.md", "SECURITY.md"];
 const files = {
   readme: read("README.md"),
   docsHome: read("docs/README.md"),
-  dashboard: read("src/dashboard/main.tsx"),
+  dashboard: exists("operator-ui/src/main.tsx") ? read("operator-ui/src/main.tsx") : "",
   package: read("package.json"),
   install: read("docs/install.md"),
   benchmarks: read("docs/benchmarks.md"),
@@ -47,7 +47,7 @@ const checks = [
   check("documentation is compact and canonical", [
     canonicalDocs.every(exists),
     rootMarkdown.every(exists),
-    markdownDocs.every((path) => canonicalDocs.includes(path) || path.startsWith("docs/schemas/")),
+    markdownDocs.every((path) => canonicalDocs.includes(path) || path.startsWith("docs/schemas/") || path.startsWith("docs/adr/")),
     generatedDocPatterns.every((pattern) => !markdownDocs.some((path) => pattern.test(path))),
     !exists("PRODUCT.md"),
     !exists("DESIGN.md"),
@@ -79,6 +79,7 @@ const checks = [
     !/(^|[^A-Za-z0-9_/-])public\/benchmark-arena/.test(files.dashboard),
     !/(^|[^A-Za-z0-9_/-])public\/leaderboard/.test(files.dashboard),
     packageFiles.every((path) => !path.startsWith("artifacts/")),
+    packageFiles.every((path) => !path.startsWith("operator-ui")),
     !packageFiles.includes("public/benchmark-arena/"),
     !packageFiles.includes("public/leaderboard/")
   ]),

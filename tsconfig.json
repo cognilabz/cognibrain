@@ -15,5 +15,5 @@
     "declaration": true,
     "noEmit": true
   },
-  "include": ["src", "tests", "vite.config.ts"]
+  "include": ["src", "operator-ui/src", "operator-ui/app", "operator-ui/next.config.mjs", "tests", "vitest.config.ts"]
 }

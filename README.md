@@ -44,7 +44,8 @@ npm install
 ./bin/cognibrain.mjs doctor --fix
 ```
 
-The dashboard is optional:
+The browser Operator UI is an optional commercial add-on. It is not included in
+the MIT npm package; licensed checkouts can start it with:
 
 ```bash
 npx cognibrain dashboard
@@ -156,7 +157,8 @@ npm run internal -- <task>
 | Path | Purpose |
 | --- | --- |
 | `bin/` | Public CLI entrypoints. |
-| `src/` | Product source: API, MCP/connectors, core memory logic, CLI commands, dashboard and eval code. |
+| `src/` | Product source: API, MCP/connectors, core memory logic, CLI commands and eval code. |
+| `operator-ui/` | Separately licensed commercial Operator UI add-on; excluded from the OSS npm package. |
 | `src/api/` | HTTP server, service runtime and persistence adapters. |
 | `src/connectors/` | MCP server, connector registry and connector tooling. |
 | `src/core/` | Memory model, retrieval, graph, policy and storage logic. |

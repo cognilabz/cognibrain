@@ -3,6 +3,8 @@ import { z } from "zod";
 import { defaultService } from "../../service";
 import { connectorFeedbackSchema, connectorManifestSchema, connectorOAuthBeginSchema, connectorOAuthCallbackSchema, connectorOAuthRevokeSchema, connectorPollSchema, connectorSyncSchema, connectorTelemetrySchema, connectorWritebackSchema } from "../../serverSchemas";
 import { json, send, serialize } from "../helpers";
+import { connectorConfigSummary, upsertConnectorConfigValues } from "../../../connectors/localConnectorConfig";
+import { requiredVendorEnv } from "../../../connectors/vendorConfig";
 
 type RouteContext = {
   method: string;
@@ -12,6 +14,7 @@ type RouteContext = {
   response: ServerResponse;
   auth?: { statusReport: Record<string, unknown> };
 };
+const vendorProviderSchema = z.enum(["github", "slack", "discord", "jira", "confluence", "notion", "linear", "gitlab", "azure-devops", "teams", "gmail", "google-drive", "google-calendar", "asana", "clickup", "sentry", "datadog", "pagerduty", "posthog"]);
 
 export async function handleConnectorRoutes(context: RouteContext): Promise<boolean> {
   const { method, url, parts, request, response } = context;
@@ -54,6 +57,21 @@ export async function handleConnectorRoutes(context: RouteContext): Promise<bool
 
   if (method === "GET" && url.pathname === "/connectors/health") {
     send(response, 200, defaultService.connectorHealth(url.searchParams.get("connectorId") ?? undefined));
+    return true;
+  }
+
+  if (method === "GET" && url.pathname === "/connectors/config") {
+    const provider = url.searchParams.get("provider");
+    const keys = provider
+      ? requiredVendorEnv(vendorProviderSchema.parse(provider))
+      : [...new Set(defaultService.listConnectorManifests().flatMap((manifest) => manifest.vendor?.requiredEnv ?? []))];
+    send(response, 200, connectorConfigSummary(keys));
+    return true;
+  }
+
+  if ((method === "POST" || method === "PUT") && url.pathname === "/connectors/config") {
+    const body = z.object({ values: z.record(z.string()) }).parse(await json(request));
+    send(response, 202, upsertConnectorConfigValues(body.values));
     return true;
   }
 

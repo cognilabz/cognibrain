@@ -60,7 +60,7 @@ Recommended production posture:
 
 - Set an API key or OIDC verifier.
 - Run with DB-backed persistence.
-- Keep connector tokens in environment variables or a secret manager.
+- Keep connector tokens in environment variables, a secret manager or the runtime-local connector config file used by the Operator UI.
 - Run `cognibrain proof` and the relevant release gates before publishing claims.
 
 ## Docker And Deploy

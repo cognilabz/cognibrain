@@ -14,6 +14,7 @@
 | CB-PRODUCTION-STATUS | Current production readiness is explicit. | `npm run internal -- audit:truth` | `docs/status.md`, release scripts, server source | Cognibrain is a self-hosted production candidate, not a managed/enterprise SaaS. |
 | CB-STORAGE-BOUNDARY | DB-primary MemoryRepository paths exist for SQLite/Postgres memory rows with service-state row mirrors and snapshots retained as backup/compaction artifacts. | `npm run internal -- verify:postgres`, `npm test -- tests/core.test.ts` | `src/api/persistence/`, `src/api/repositories/` | Fully async event-journal-first runtime across every service domain remains a hardening boundary. Rerun on the target database before production claims. |
 | CB-PACKAGING | Generated artifacts and local runtime state are not packaged. | `npm pack --dry-run`, `npm run internal -- audit:docs` | `package.json`, `.gitignore`, release audits | Generated outputs remain local/internal. |
+| CB-OPERATOR-UI-COMMERCIAL | The browser Operator UI is a separately licensed opt-in add-on, not part of the MIT package. | `npm pack --dry-run`, `npm run internal -- audit:docs` | `operator-ui/LICENSE.md`, `package.json`, `scripts/operator-ui/start-commercial-ui.mjs` | The open-source CLI remains the default operator surface. |
 | CB-DOCKER-OPTIONAL | Docker files are optional deployment packaging. | `npm run internal -- audit:truth` | `docker/`, `deploy/`, `docs/operations.md` | The CLI remains the primary control plane. |
 
 ## Explicit Non-Claims

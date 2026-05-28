@@ -1,6 +1,6 @@
 # Install And Setup
 
-Cognibrain runs as a local/self-hosted API with a stable operator CLI. The dashboard is optional.
+Cognibrain runs as a local/self-hosted API with a stable operator CLI. The browser Operator UI is optional and separately licensed.
 
 ## Requirements
 
@@ -45,7 +45,8 @@ npx cognibrain status
 npx cognibrain stop
 ```
 
-The dashboard starts only when requested:
+The commercial Operator UI starts only when requested and only from a checkout
+or deployment that includes the licensed `operator-ui/` add-on:
 
 ```bash
 npx cognibrain dashboard
@@ -81,4 +82,4 @@ Common environment variables:
 | `MEMORY_OIDC_ISSUER` | Optional JWT/OIDC issuer. |
 | `MEMORY_OIDC_AUDIENCE` | Optional JWT/OIDC audience. |
 
-Secrets should be stored in the environment or a secret manager, not committed connector config.
+Secrets should be stored in the environment, a secret manager or the runtime-local connector config file used by the Operator UI. Do not commit connector secrets or copy them into docs, issues or support bundles.

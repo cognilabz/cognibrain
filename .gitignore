@@ -24,6 +24,7 @@ venv/
 .memory-harness.json
 .cognibrain/
 artifacts/*
+operator-ui/.next/
 public/benchmark-arena/
 public/leaderboard/
 data/benchmarks/locomo/*.json

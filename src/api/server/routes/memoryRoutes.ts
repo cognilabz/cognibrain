@@ -12,6 +12,10 @@ type RouteContext = {
   response: ServerResponse;
   auth?: { statusReport: Record<string, unknown> };
 };
+const memoryPatchSchema = memoryInputSchema.partial().extend({
+  trust: z.number().min(0).max(1).optional(),
+  importance: z.number().min(0).max(1).optional()
+});
 
 export async function handleMemoryRoutes(context: RouteContext): Promise<boolean> {
   const { method, url, parts, request, response } = context;
@@ -136,7 +140,7 @@ export async function handleMemoryRoutes(context: RouteContext): Promise<boolean
       return true;
     }
     if (method === "PATCH") {
-      send(response, 200, serialize(defaultService.update(parts[1], memoryInputSchema.partial().parse(await json(request)))));
+      send(response, 200, serialize(defaultService.update(parts[1], memoryPatchSchema.parse(await json(request)))));
       return true;
     }
     if (method === "POST" && parts[2] === "consent") {

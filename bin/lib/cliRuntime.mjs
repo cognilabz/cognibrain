@@ -1084,7 +1084,7 @@ async function cliHomeData() {
     dashboard: {
       optional: true,
       command: "cognibrain dashboard",
-      note: "The web dashboard is opt-in; every operator surface is reachable from this CLI."
+      note: "The commercial Operator UI is opt-in; every operator surface is reachable from this CLI."
     },
     commands: [
       "cognibrain",

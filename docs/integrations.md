@@ -19,7 +19,7 @@ cognibrain connections add slack --set channelId=C123 --token-env MEMORY_SLACK_T
 cognibrain connections add storage-postgres --url-env MEMORY_POSTGRES_URL
 ```
 
-Connector configs store identifiers, URLs and `env:` references. Secrets stay in the environment.
+Connector configs store identifiers, URLs and `env:` references. Secrets should stay in the environment, a secret manager or the runtime-local connector config file. Environment variables take precedence over the local file. The Operator UI can write the local file for trusted self-hosted deployments and only reads it back in redacted form.
 
 ## Connector Maturity Matrix
 
@@ -52,7 +52,7 @@ cognibrain sdk platform acme-tracker --kind issue_tracker --direction ingest --a
 The scaffold includes a manifest, TypeScript adapter entrypoint, env example and README. A good community adapter should:
 
 - Map external records to durable memory fields.
-- Keep secrets in environment variables.
+- Keep secrets in environment variables, a secret manager or the runtime-local connector config file.
 - Provide a dry-run or preview path.
 - Include a small fixture and smoke test.
 - Document rate limits and required scopes.

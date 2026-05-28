@@ -1,4 +1,5 @@
 import type { ConnectorManifest, ConnectorSyncRecord, MemoryExtractionEvent } from "../core";
+import { connectorConfigAliases, connectorConfigValue } from "./localConnectorConfig";
 
 export type ExternalVendorProvider =
   | "github"
@@ -100,25 +101,15 @@ export function externalVendorConfigured(provider: ExternalVendorProvider, env: 
 }
 
 export function vendorEnv(env: NodeJS.ProcessEnv, key: string): string | undefined {
-  if (key === "MEMORY_SLACK_TOKEN") return env.MEMORY_SLACK_TOKEN || env.MEMORY_SLACK_BOT_TOKEN;
-  if (key === "MEMORY_DISCORD_BOT_TOKEN") return env.MEMORY_DISCORD_BOT_TOKEN || env.MEMORY_DISCORD_TOKEN;
-  if (key === "MEMORY_GITHUB_TOKEN") return env.MEMORY_GITHUB_TOKEN || env.GITHUB_TOKEN || env.GH_TOKEN;
-  if (key === "MEMORY_JIRA_API_TOKEN") return env.MEMORY_JIRA_API_TOKEN || env.JIRA_API_TOKEN;
-  if (key === "MEMORY_CONFLUENCE_API_TOKEN") return env.MEMORY_CONFLUENCE_API_TOKEN || env.CONFLUENCE_API_TOKEN || env.MEMORY_JIRA_API_TOKEN;
-  if (key === "MEMORY_NOTION_TOKEN") return env.MEMORY_NOTION_TOKEN || env.NOTION_TOKEN;
-  if (key === "MEMORY_LINEAR_API_KEY") return env.MEMORY_LINEAR_API_KEY || env.LINEAR_API_KEY;
-  if (key === "MEMORY_GITLAB_TOKEN") return env.MEMORY_GITLAB_TOKEN || env.GITLAB_TOKEN;
-  if (key === "MEMORY_AZURE_DEVOPS_TOKEN") return env.MEMORY_AZURE_DEVOPS_TOKEN || env.AZURE_DEVOPS_EXT_PAT;
-  if (key === "MEMORY_TEAMS_TOKEN") return env.MEMORY_TEAMS_TOKEN || env.MICROSOFT_GRAPH_TOKEN;
-  if (key === "MEMORY_GOOGLE_TOKEN") return env.MEMORY_GOOGLE_TOKEN || env.GOOGLE_OAUTH_TOKEN;
-  if (key === "MEMORY_ASANA_TOKEN") return env.MEMORY_ASANA_TOKEN || env.ASANA_ACCESS_TOKEN;
-  if (key === "MEMORY_CLICKUP_TOKEN") return env.MEMORY_CLICKUP_TOKEN || env.CLICKUP_API_TOKEN;
-  if (key === "MEMORY_SENTRY_TOKEN") return env.MEMORY_SENTRY_TOKEN || env.SENTRY_AUTH_TOKEN;
-  if (key === "MEMORY_DATADOG_API_KEY") return env.MEMORY_DATADOG_API_KEY || env.DD_API_KEY || env.DATADOG_API_KEY;
-  if (key === "MEMORY_DATADOG_APP_KEY") return env.MEMORY_DATADOG_APP_KEY || env.DD_APP_KEY || env.DATADOG_APP_KEY;
-  if (key === "MEMORY_PAGERDUTY_TOKEN") return env.MEMORY_PAGERDUTY_TOKEN || env.PAGERDUTY_TOKEN;
-  if (key === "MEMORY_POSTHOG_TOKEN") return env.MEMORY_POSTHOG_TOKEN || env.POSTHOG_PERSONAL_API_KEY;
-  return env[key];
+  for (const alias of vendorEnvAliases(key)) {
+    const value = env[alias] || connectorConfigValue(alias, env);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+export function vendorEnvAliases(key: string): string[] {
+  return connectorConfigAliases(key);
 }
 
 export function requiredVendorEnv(provider: ExternalVendorProvider): string[] {

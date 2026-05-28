@@ -502,21 +502,21 @@ export const connectorManifestSchema = z.object({
   privacyPolicy: z.enum(["personal", "project", "team", "never_store"]).optional(),
   list: z
     .object({
-      endpoint: z.string().url().optional(),
+      endpoint: z.string().min(1).optional(),
       method: z.enum(["GET", "POST"]).optional(),
       authRef: z.string().optional()
     })
     .optional(),
   poll: z
     .object({
-      endpoint: z.string().url().optional(),
+      endpoint: z.string().min(1).optional(),
       method: z.enum(["GET", "POST"]).optional(),
       authRef: z.string().optional()
     })
     .optional(),
   writeback: z
     .object({
-      endpoint: z.string().url().optional(),
+      endpoint: z.string().min(1).optional(),
       method: z.enum(["POST", "PUT", "PATCH"]).optional(),
       authRef: z.string().optional(),
       operations: z.array(z.enum(["tag", "comment", "status", "summary", "memory_link"])).optional()
@@ -532,6 +532,14 @@ export const connectorManifestSchema = z.object({
       redirectUri: z.string().url().optional(),
       refreshUrl: z.string().url().optional(),
       revokeUrl: z.string().url().optional()
+    })
+    .optional(),
+  vendor: z
+    .object({
+      provider: z.enum(["github", "slack", "discord", "jira", "confluence", "notion", "linear", "gitlab", "azure-devops", "teams", "gmail", "google-drive", "google-calendar", "asana", "clickup", "sentry", "datadog", "pagerduty", "posthog"]),
+      docsUrl: z.string().url(),
+      requiredEnv: z.array(z.string().min(1)),
+      realSmokeEnv: z.array(z.string().min(1)).optional()
     })
     .optional()
 });

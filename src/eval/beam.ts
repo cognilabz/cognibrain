@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { MemoryStore, cosineLike, estimateTokens, keywordCoverage, tokenize } from "../core";
+import { MemoryStore, conceptScore, cosineLike, estimateTokens, extractEntities, keywordCoverage, tokenize } from "../core";
 import type { BenchmarkResult, Memory } from "../core";
 import { keywordOnly, recencyOnly, vectorOnly, type Retriever } from "./baselines";
 
@@ -40,6 +40,13 @@ interface BeamDetail {
   retrieved: string[];
   score: number;
   passed: boolean;
+  judge: {
+    mode: "abstention" | "rubric_support";
+    threshold: number;
+    evidenceSupport: number;
+    entitySupport: number;
+    weakness?: string;
+  };
 }
 
 interface BeamResult extends BenchmarkResult {
@@ -48,6 +55,8 @@ interface BeamResult extends BenchmarkResult {
   split: string;
   topK: number;
   questionTypes: Record<string, { correct: number; total: number; accuracy: number }>;
+  weaknesses: Array<{ category: string; accuracy: number; gapToBestCategory: number; recommendation: string }>;
+  judge: { kind: "deterministic-rubric-support"; threshold: number; notes: string[] };
   details: BeamDetail[];
 }
 
@@ -167,7 +176,6 @@ function evaluateBeamMemoryRetriever(
 }
 
 function beamSearch(query: string, memories: Memory[], limit: number): Memory[] {
-  if (shouldReturnNoEvidence(query)) return [];
   const queryTokens = tokenize(query);
   const queryEntities = new Set(queryTokens);
   return memories
@@ -178,11 +186,9 @@ function beamSearch(query: string, memories: Memory[], limit: number): Memory[] 
       const entityHits = memory.entities.filter((entity) => queryEntities.has(entity)).length;
       const entity = memory.entities.length ? Math.min(1, entityHits / Math.min(4, memory.entities.length)) : 0;
       const trust = memory.trust * memory.importance;
-      const sourceIndex = String(memory.metadata.sourceIndex ?? "");
-      const sourceIndexBoost = queryTokens.some((token) => sourceIndex.includes(token)) ? 0.05 : 0;
       return {
         memory,
-        score: semantic * 0.36 + keyword * 0.38 + entity * 0.12 + trust * 0.09 + sourceIndexBoost
+        score: semantic * 0.38 + keyword * 0.34 + entity * 0.14 + trust * 0.08
       };
     })
     .filter((item) => item.score > 0.08)
@@ -191,46 +197,66 @@ function beamSearch(query: string, memories: Memory[], limit: number): Memory[] 
     .map((item) => item.memory);
 }
 
-function shouldReturnNoEvidence(query: string): boolean {
-  const normalized = query.toLowerCase();
-  if (normalized.includes("how many specific")) return false;
-  return NO_EVIDENCE_PATTERNS.some((pattern) => pattern.test(normalized));
-}
-
 function scoreBeamQuestion(question: BeamQuestion, memories: Memory[], expansionIndex?: Map<string, string[]>): BeamDetail {
   const retrievedText = memories
     .flatMap((memory) => expansionIndex?.get(memory.id) ?? [memory.content])
     .join("\n");
   const retrieved = memories.map((memory) => String(memory.metadata.sourceIndex ?? memory.metadata.turnIndex ?? memory.id));
   const expected = nuggetTexts(question);
-  const score = question.abstention ? abstentionScore(question.question, retrievedText) : bestNuggetScore(expected, retrievedText);
+  const judged = question.abstention ? abstentionScore(question.question, retrievedText, memories.length) : bestNuggetScore(expected, retrievedText);
   return {
     id: question.id,
     category: question.category,
     question: question.question,
     expected,
     retrieved,
-    score,
-    passed: score >= 0.5
+    score: judged.score,
+    passed: judged.score >= judged.threshold,
+    judge: {
+      mode: question.abstention ? "abstention" : "rubric_support",
+      threshold: judged.threshold,
+      evidenceSupport: judged.evidenceSupport,
+      entitySupport: judged.entitySupport,
+      weakness: judged.weakness
+    }
   };
 }
 
-function bestNuggetScore(expected: string[], retrievedText: string): number {
+function bestNuggetScore(expected: string[], retrievedText: string): { score: number; threshold: number; evidenceSupport: number; entitySupport: number; weakness?: string } {
   const retrieved = new Set(tokenize(retrievedText));
-  return expected.reduce((best, nugget) => {
+  let best = { score: 0, threshold: 0.62, evidenceSupport: 0, entitySupport: 0, weakness: "missing rubric support" as string | undefined };
+  for (const nugget of expected) {
     const tokens = tokenize(nugget).filter((token) => !QUESTION_NOISE.has(token));
-    if (tokens.length === 0) return best;
-    const hits = tokens.filter((token) => retrieved.has(token)).length;
-    return Math.max(best, hits / tokens.length);
-  }, 0);
+    if (!tokens.length) continue;
+    const tokenSupport = tokens.filter((token) => retrieved.has(token)).length / tokens.length;
+    const semanticSupport = conceptScore(retrievedText, [nugget]).score;
+    const expectedEntities = extractEntities(nugget);
+    const retrievedEntities = new Set(extractEntities(retrievedText));
+    const entitySupport = expectedEntities.length ? expectedEntities.filter((entity) => retrievedEntities.has(entity)).length / expectedEntities.length : tokenSupport;
+    const evidenceSupport = Math.max(tokenSupport, semanticSupport);
+    const score = evidenceSupport * 0.72 + entitySupport * 0.28;
+    if (score > best.score) {
+      best = { score, threshold: 0.62, evidenceSupport, entitySupport, weakness: weaknessFor(score, evidenceSupport, entitySupport) };
+    }
+  }
+  return best;
 }
 
-function abstentionScore(question: string, retrievedText: string): number {
+function abstentionScore(question: string, retrievedText: string, retrievedCount: number): { score: number; threshold: number; evidenceSupport: number; entitySupport: number; weakness?: string } {
   const questionTokens = new Set(tokenize(question).filter((token) => !QUESTION_NOISE.has(token)));
-  if (questionTokens.size === 0) return 1;
+  if (questionTokens.size === 0 || retrievedCount === 0) return { score: 1, threshold: 0.72, evidenceSupport: 0, entitySupport: 0 };
   const retrieved = new Set(tokenize(retrievedText));
   const hits = [...questionTokens].filter((token) => retrieved.has(token)).length;
-  return hits / questionTokens.size < 0.35 ? 1 : 0;
+  const evidenceSupport = hits / questionTokens.size;
+  const entitySupport = conceptScore(retrievedText, [question]).score;
+  const unsupported = 1 - Math.max(evidenceSupport, entitySupport);
+  return {
+    score: unsupported,
+    threshold: 0.72,
+    evidenceSupport,
+    entitySupport,
+    weakness: unsupported >= 0.72 ? undefined : "retrieved plausible evidence for an unanswerable question"
+  };
 }
 
 function nuggetTexts(question: BeamQuestion): string[] {
@@ -262,8 +288,47 @@ function finalizeBeamResult(name: string, details: BeamDetail[], started: number
     meanTokens,
     meanLatencyMs: (performance.now() - started) / Math.max(1, details.length),
     questionTypes,
+    weaknesses: beamWeaknesses(questionTypes),
+    judge: {
+      kind: "deterministic-rubric-support",
+      threshold: 0.62,
+      notes: [
+        "Answerable questions require rubric support from retrieved evidence instead of exact expected-string matches.",
+        "Abstention questions are scored by unsupported-evidence behavior; the retriever does not receive hard-coded unanswerable phrase patterns."
+      ]
+    },
     details
   };
+}
+
+function weaknessFor(score: number, evidenceSupport: number, entitySupport: number): string | undefined {
+  if (score >= 0.62) return undefined;
+  if (entitySupport < 0.35) return "missing named entity or source-specific evidence";
+  if (evidenceSupport < 0.45) return "retrieved context weakly supports rubric";
+  return "partial rubric support below threshold";
+}
+
+function beamWeaknesses(questionTypes: BeamResult["questionTypes"]): BeamResult["weaknesses"] {
+  const entries = Object.entries(questionTypes);
+  const best = Math.max(...entries.map(([, value]) => value.accuracy), 0);
+  return entries
+    .map(([category, value]) => ({
+      category,
+      accuracy: value.accuracy,
+      gapToBestCategory: Math.max(0, best - value.accuracy),
+      recommendation: recommendationForBeamCategory(category, value.accuracy, best)
+    }))
+    .filter((item) => item.gapToBestCategory >= 0.05 || item.accuracy < 0.9)
+    .sort((a, b) => b.gapToBestCategory - a.gapToBestCategory || a.accuracy - b.accuracy);
+}
+
+function recommendationForBeamCategory(category: string, accuracy: number, best: number): string {
+  if (category === "abstention") return "Improve unsupported-question detection and require stronger source support before retrieving context.";
+  if (category === "information_extraction") return "Improve entity anchoring and exact evidence localization for factual lookup questions.";
+  if (category === "temporal_reasoning") return "Improve temporal normalization and event-order evidence retrieval.";
+  if (category === "multi_session_reasoning") return "Improve cross-session evidence stitching and reduce distractor context.";
+  if (best - accuracy >= 0.05) return "Inspect failed cases for missing rubric evidence and category-specific distractors.";
+  return "Monitor category; no large weakness relative to the current split.";
 }
 
 function extractQuestions(row: BeamRow): BeamQuestion[] {
@@ -280,7 +345,7 @@ function extractQuestions(row: BeamRow): BeamQuestion[] {
         rubric: Array.isArray(record.rubric) ? record.rubric.map(String) : [],
         abstention:
           category === "abstention" ||
-          String(record.ideal_response ?? "").toLowerCase().includes("no information") ||
+          conceptScore(String(record.ideal_response ?? ""), ["no answer is available in the provided conversation", "the chat does not contain enough information"]).score >= 0.52 ||
           String(record.why_unanswerable ?? "").length > 0
       };
     })
@@ -387,51 +452,6 @@ const QUESTION_NOISE = new Set([
   "detail",
   "details"
 ]);
-
-const NO_EVIDENCE_PATTERNS = [
-  /\bspecific\b/,
-  /\bagenda\b/,
-  /\batmosphere\b/,
-  /\bqualifications?\b/,
-  /\breaction\b/,
-  /\brationale\b/,
-  /\bbesides\b/,
-  /\bbeyond\b/,
-  /terms and conditions/,
-  /reasons behind/,
-  /emotional reaction/,
-  /format of/,
-  /recipe or ingredients/,
-  /key points/,
-  /what was discussed/,
-  /format and duration/,
-  /can you tell me about my background/,
-  /what topics or skills/,
-  /what mindfulness techniques/,
-  /how did .* influence/,
-  /provide details about/,
-  /react emotionally/,
-  /can you tell me more about .*background/,
-  /professional background/,
-  /profession or background/,
-  /contact (information|details)/,
-  /main discussion points/,
-  /main points covered/,
-  /exact format and duration/,
-  /motivation for preferring/,
-  /detailed steps/,
-  /exact steps involved/,
-  /feedback or reactions/,
-  /exact common mistakes/,
-  /relationship history/,
-  /content or theme/,
-  /detailed criteria/,
-  /exact tax-loss/,
-  /exact recipe changes/,
-  /names and backgrounds/,
-  /technical specifications and advanced features/,
-  /content or key takeaways/
-];
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = new Map<string, string>();

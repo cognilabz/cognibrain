@@ -118,12 +118,12 @@ function synonymEntities(text: string): string[] {
   const tokens = tokenize(text);
   const entities: string[] = [];
   for (const token of tokens) {
-    if (["repository", "api", "cli", "database", "memory", "function", "class", "module", "package"].includes(token)) {
-      entities.push(token);
-    }
+    if (PROMOTABLE_ENTITY_TOKENS.has(token)) entities.push(token);
   }
   return entities;
 }
+
+const PROMOTABLE_ENTITY_TOKENS = new Set(["repository", "api", "cli", "database", "memory", "function", "class", "module", "package"]);
 
 const GENERIC_ENTITY_TOKENS = new Set([
   "agent",

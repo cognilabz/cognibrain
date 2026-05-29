@@ -22,6 +22,19 @@ const publicBenchmarks = [
   publicRow("BEAM 1M", artifacts.beam1m)
 ].filter(Boolean);
 
+const diagnosticRows = [
+  {
+    label: "CogniCode integrity",
+    value: artifacts.cognicode?.diagnostics?.integrity?.score,
+    detail: `overfit risk ${artifacts.cognicode?.diagnostics?.integrity?.overfitRisk ?? "n/a"}`,
+    kind: "comparison"
+  },
+  ...cognicodeWeaknessRows(),
+  ...beamWeaknessRows("BEAM 100K", artifacts.beam100k),
+  ...beamWeaknessRows("BEAM 500K", artifacts.beam500k),
+  ...beamWeaknessRows("BEAM 1M", artifacts.beam1m)
+].filter((row) => Number.isFinite(Number(row.value)));
+
 const arenaRows = [...(artifacts.arena?.leaderboard ?? [])].map((row) => ({
   label: row.system,
   value: Number(row.score ?? 0),
@@ -41,7 +54,7 @@ const ablationRows = [
   { label: "No memory", value: baselineScore("no_memory"), detail: "baseline" }
 ].filter((row) => Number.isFinite(Number(row.value)));
 
-const svg = renderSvg({ publicBenchmarks, arenaRows, ablationRows });
+const svg = renderSvg({ publicBenchmarks, diagnosticRows, arenaRows, ablationRows });
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, `${svg}\n`);
 
@@ -70,12 +83,32 @@ function baselineScore(name) {
   return artifacts.cognicode?.baselines?.find((baseline) => baseline.name === name)?.score;
 }
 
+function cognicodeWeaknessRows() {
+  const severityScore = { high: 0.25, medium: 0.5, low: 0.75 };
+  return (artifacts.cognicode?.diagnostics?.weaknesses ?? []).slice(0, 3).map((weakness) => ({
+    label: `CogniCode ${weakness.area}`,
+    value: severityScore[weakness.severity] ?? 0.5,
+    detail: `${weakness.severity} severity`,
+    kind: "blocked"
+  }));
+}
+
+function beamWeaknessRows(label, report) {
+  return (report?.ours?.weaknesses ?? []).slice(0, 2).map((weakness) => ({
+    label: `${label} ${formatLabel(weakness.category)}`,
+    value: Number(weakness.accuracy ?? 0),
+    detail: `gap ${(Number(weakness.gapToBestCategory ?? 0) * 100).toFixed(1)}pp`,
+    kind: "blocked"
+  }));
+}
+
 function renderSvg(sections) {
   const width = 1180;
   const publicHeight = 82 + sections.publicBenchmarks.length * 62 + 34;
+  const diagnosticHeight = 82 + sections.diagnosticRows.length * 40 + 34;
   const arenaHeight = 82 + sections.arenaRows.length * 40 + 34;
   const ablationHeight = 82 + sections.ablationRows.length * 40 + 34;
-  const height = 128 + publicHeight + 26 + arenaHeight + 26 + ablationHeight + 36;
+  const height = 128 + publicHeight + 26 + diagnosticHeight + 26 + arenaHeight + 26 + ablationHeight + 36;
   const margin = 36;
   const axis = { x: 260, width: 760 };
   let y = 128;
@@ -117,6 +150,17 @@ function renderSvg(sections) {
     axis,
     rows: sections.publicBenchmarks,
     rowRenderer: renderPublicRow
+  });
+
+  y = renderPanel(parts, {
+    x: margin,
+    y: y + 26,
+    width: width - margin * 2,
+    title: "Benchmark Integrity And Weaknesses",
+    note: "Lower bars identify overfit risk or weak categories that should drive the next improvement loop.",
+    axis,
+    rows: sections.diagnosticRows,
+    rowRenderer: renderSingleBarRow
   });
 
   y = renderPanel(parts, {
@@ -206,7 +250,16 @@ function formatLabel(value) {
 }
 
 function generatedAtSummary() {
-  const date = shortDate(artifacts.arena?.generatedAt ?? artifacts.cognicode?.generatedAt ?? new Date().toISOString());
+  const allTimes = [
+    artifacts.arena?.generatedAt,
+    artifacts.cognicode?.generatedAt,
+    artifacts.locomo?.generatedAt,
+    artifacts.longmemeval?.generatedAt,
+    artifacts.beam100k?.generatedAt,
+    artifacts.beam500k?.generatedAt,
+    artifacts.beam1m?.generatedAt
+  ].filter(Boolean);
+  const date = shortDate(newestIso(allTimes) ?? new Date().toISOString());
   const publicTimes = [
     artifacts.locomo?.generatedAt,
     artifacts.longmemeval?.generatedAt,
@@ -215,6 +268,13 @@ function generatedAtSummary() {
     artifacts.beam1m?.generatedAt
   ].filter(Boolean).map(shortClock);
   return `${date} UTC; public datasets ${range(publicTimes)}, arena ${shortClock(artifacts.arena?.generatedAt)}, cognicode ${shortClock(artifacts.cognicode?.generatedAt)}`;
+}
+
+function newestIso(values) {
+  return values
+    .map((value) => new Date(value))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime())[0]?.toISOString();
 }
 
 function shortDate(value) {

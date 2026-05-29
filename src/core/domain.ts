@@ -1,5 +1,6 @@
 import type { LifecyclePolicy } from "./config";
 import type { RedactionPolicy } from "./privacy";
+import { domainTagFor } from "./semantic";
 import type { DomainEvaluationCase, MemoryInput, RetrievalWeights } from "./types";
 
 export interface DomainModule {
@@ -44,7 +45,7 @@ export const CODING_DOMAIN_MODULE: DomainModule = {
     }
   ],
   enrich(input) {
-    const extraTags = /(?:api|cli|function|class|test|repo|package|endpoint|import)/i.test(input.content) ? ["coding"] : [];
+    const extraTags = domainTagFor(input.content, "coding");
     return { ...input, tags: [...(input.tags ?? []), ...extraTags] };
   }
 };
@@ -62,7 +63,7 @@ export const RESEARCH_DOMAIN_MODULE: DomainModule = {
   retrievalWeights: { semantic: 0.3, trust: 0.24, temporal: 0.12 },
   aliases: { paper: ["publication", "study"], citation: ["source", "reference"] },
   enrich(input) {
-    return /(?:paper|study|citation|source|doi|arxiv)/i.test(input.content) ? { ...input, tags: [...(input.tags ?? []), "research"] } : input;
+    return { ...input, tags: [...(input.tags ?? []), ...domainTagFor(input.content, "research")] };
   }
 };
 
@@ -73,7 +74,7 @@ export const LEGAL_DOMAIN_MODULE: DomainModule = {
   redactionPolicy: { mode: "redact" },
   aliases: { contract: ["agreement", "clause"], regulation: ["law", "statute"] },
   enrich(input) {
-    return /(?:contract|clause|regulation|statute|gdpr|policy)/i.test(input.content) ? { ...input, tags: [...(input.tags ?? []), "legal"] } : input;
+    return { ...input, tags: [...(input.tags ?? []), ...domainTagFor(input.content, "legal")] };
   }
 };
 
@@ -83,7 +84,7 @@ export const FINANCE_DOMAIN_MODULE: DomainModule = {
   retrievalWeights: { trust: 0.28, temporal: 0.2, entity: 0.2 },
   aliases: { invoice: ["bill", "payment"], revenue: ["arr", "mrr"] },
   enrich(input) {
-    return /(?:invoice|revenue|payment|forecast|budget|audit)/i.test(input.content) ? { ...input, tags: [...(input.tags ?? []), "finance"] } : input;
+    return { ...input, tags: [...(input.tags ?? []), ...domainTagFor(input.content, "finance")] };
   }
 };
 
@@ -112,9 +113,7 @@ export const SALES_DOMAIN_MODULE: DomainModule = {
     }
   ],
   enrich(input) {
-    return /(?:account|customer|prospect|client|opportunity|deal|pipeline|renewal|champion|buyer|sponsor|sales)/i.test(input.content)
-      ? { ...input, tags: [...(input.tags ?? []), "sales"] }
-      : input;
+    return { ...input, tags: [...(input.tags ?? []), ...domainTagFor(input.content, "sales")] };
   }
 };
 
@@ -143,9 +142,7 @@ export const SUPPORT_DOMAIN_MODULE: DomainModule = {
     }
   ],
   enrich(input) {
-    return /(?:support|ticket|case|issue|incident|outage|escalation|sla|customer|requester)/i.test(input.content)
-      ? { ...input, tags: [...(input.tags ?? []), "support"] }
-      : input;
+    return { ...input, tags: [...(input.tags ?? []), ...domainTagFor(input.content, "support")] };
   }
 };
 
@@ -157,7 +154,7 @@ export const HEALTHCARE_DOMAIN_MODULE: DomainModule = {
   lifecyclePolicy: { archiveAfterDays: 45, fadeAfterDays: 21 },
   aliases: { patient: ["member", "subject"], medication: ["medicine", "drug"] },
   enrich(input) {
-    return /(?:patient|diagnosis|medication|treatment|clinic|hipaa)/i.test(input.content) ? { ...input, tags: [...(input.tags ?? []), "healthcare"] } : input;
+    return { ...input, tags: [...(input.tags ?? []), ...domainTagFor(input.content, "healthcare")] };
   }
 };
 
@@ -168,7 +165,7 @@ export const SECURITY_DOMAIN_MODULE: DomainModule = {
   redactionPolicy: { mode: "redact" },
   aliases: { incident: ["alert", "finding"], vulnerability: ["cve", "weakness"] },
   enrich(input) {
-    return /(?:incident|alert|vulnerability|cve|secret|token|iam)/i.test(input.content) ? { ...input, tags: [...(input.tags ?? []), "security"] } : input;
+    return { ...input, tags: [...(input.tags ?? []), ...domainTagFor(input.content, "security")] };
   }
 };
 

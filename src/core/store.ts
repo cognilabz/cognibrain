@@ -1,6 +1,7 @@
 import type { BeliefState, Memory, MemoryInput, MemoryScope, Provenance } from "./types";
 import { extractEntities, tokenize, unique } from "./text";
 import { DEFAULT_CONSENT } from "./config";
+import { relationHintsFromSemantics } from "./semantic";
 
 const DEFAULT_SOURCE: Provenance = {
   kind: "agent",
@@ -269,13 +270,7 @@ function uniqueRelations(relations: Memory["relations"]): Memory["relations"] {
 }
 
 function relationHints(content: string, entities: string[]): Memory["relations"] {
-  const lower = content.toLowerCase();
-  const relations: Memory["relations"] = [];
-  const targets = entities.slice(0, 4);
-  if (/\b(imports?|from)\b/.test(lower)) for (const targetEntity of targets) relations.push({ type: "imports", targetEntity, confidence: 0.6 });
-  if (/\b(calls?|endpoint|api|request)\b/.test(lower)) for (const targetEntity of targets) relations.push({ type: "calls", targetEntity, confidence: 0.6 });
-  if (/\b(depends on|requires|uses)\b/.test(lower)) for (const targetEntity of targets) relations.push({ type: "depends_on", targetEntity, confidence: 0.6 });
-  return relations;
+  return relationHintsFromSemantics(content, entities);
 }
 
 function makeId(): string {

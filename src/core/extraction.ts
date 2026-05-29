@@ -1,4 +1,5 @@
 import { extractEntities, unique } from "./text";
+import { bestConceptMatch, durabilityDecision, relationHintsFromSemantics } from "./semantic";
 import type { DurabilityDecision, MemoryClaim, MemoryExtractionEvent, MemoryInput, MemoryRelation, MemoryScope, Provenance } from "./types";
 
 export interface ExtractionOptions {
@@ -67,7 +68,7 @@ export function extractClaim(content: string, event: MemoryExtractionEvent, scop
   const sensitivity = sensitivityFor(trimmed);
   const durability = durabilityFor(trimmed, event, sensitivity);
   const subject = cleanupClaimPart(match?.[1] ?? entities[0] ?? source.kind);
-  const predicate = normalizePredicate(match?.[2] ?? (event.role === "tool" ? "executed" : lower.includes("confirmed") ? "confirmed" : "mentions"));
+  const predicate = normalizePredicate(match?.[2] ?? (event.role === "tool" ? "executed" : bestConceptMatch(lower, [{ id: "confirmed", examples: ["confirmed", "verified", "passed validation"], threshold: 0.62 }]) ? "confirmed" : "mentions"));
   const object = cleanupClaimPart(match?.[3] ?? trimmed);
   return {
     id: claimId(trimmed, event.timestamp),
@@ -104,19 +105,7 @@ export function classifyDurability(content: string, event: MemoryExtractionEvent
   const text = content.trim();
   const lower = text.toLowerCase();
   const sensitivity = claim.sensitivity;
-  if (sensitivity === "secret") {
-    return { contentPreview: preview(text), action: "ask_user", reason: "potential secret requires redaction policy or explicit operator approval", durability: "ask_user", sensitivity, confidence: 0.9 };
-  }
-  if (/^(thanks|thank you|ok|okay|cool|great|sounds good|ja|nein|danke)\b/i.test(lower) || text.length < 8) {
-    return { contentPreview: preview(text), action: "ignore", reason: "smalltalk or acknowledgement is not durable memory", durability: "ephemeral", sensitivity, confidence: 0.88 };
-  }
-  if (/\b(temporary|for this session|nur diese session|scratch|draft only|working note)\b/i.test(lower)) {
-    return { contentPreview: preview(text), action: "working_memory", reason: "explicitly marked as temporary or session-scoped", durability: "session_only", sensitivity, confidence: 0.82 };
-  }
-  if (event.role === "assistant" && !/\b(confirmed|verified|requires|uses|prefers|decision|must|should|fix|resolved)\b/i.test(lower)) {
-    return { contentPreview: preview(text), action: "session_only", reason: "assistant output without durable confirmation stays out of long-term memory", durability: "session_only", sensitivity, confidence: 0.72 };
-  }
-  return { contentPreview: preview(text), action: "store", reason: "durable fact or tool evidence", durability: "durable", sensitivity, confidence: 0.86 };
+  return { contentPreview: preview(text), ...durabilityDecision(lower, event, sensitivity) };
 }
 
 function splitFacts(content: string): string[] {
@@ -136,10 +125,7 @@ function sourceForRole(role: MemoryExtractionEvent["role"]): Provenance {
 
 function durabilityFor(content: string, event: MemoryExtractionEvent, sensitivity: MemoryClaim["sensitivity"]): MemoryClaim["durability"] {
   if (sensitivity === "secret") return "ask_user";
-  if (/^(thanks|thank you|ok|okay|cool|great|sounds good|ja|nein|danke)\b/i.test(content.trim())) return "ephemeral";
-  if (/\b(temporary|for this session|nur diese session|scratch|draft only|working note)\b/i.test(content)) return "session_only";
-  if (event.role === "assistant" && !/\b(confirmed|verified|requires|uses|prefers|decision|must|should|fix|resolved)\b/i.test(content)) return "session_only";
-  return "durable";
+  return durabilityDecision(content, event, sensitivity).durability;
 }
 
 function sensitivityFor(content: string): MemoryClaim["sensitivity"] {
@@ -171,17 +157,5 @@ function preview(content: string): string {
 }
 
 function relationHints(content: string, entities: string[], role: MemoryExtractionEvent["role"]): MemoryRelation[] {
-  const lower = content.toLowerCase();
-  const relations: MemoryRelation[] = [];
-  if (role === "tool") relations.push({ type: "executed_by", targetEntity: "tool", confidence: 0.8 });
-  if (role === "assistant") relations.push({ type: "suggested_by", targetEntity: "agent", confidence: 0.7 });
-  if (/\b(imports?|from)\b/.test(lower)) pushEntityRelations(relations, "imports", entities);
-  if (/\b(calls?|request|endpoint|api)\b/.test(lower)) pushEntityRelations(relations, "calls", entities);
-  if (/\b(depends on|requires|uses)\b/.test(lower)) pushEntityRelations(relations, "depends_on", entities);
-  if (/\b(confirms?|verified|passed)\b/.test(lower)) pushEntityRelations(relations, "confirmed_by", entities);
-  return relations;
-}
-
-function pushEntityRelations(relations: MemoryRelation[], type: MemoryRelation["type"], entities: string[]): void {
-  for (const entity of entities.slice(0, 4)) relations.push({ type, targetEntity: entity, confidence: 0.65 });
+  return relationHintsFromSemantics(content, entities, role);
 }

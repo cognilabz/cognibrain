@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import {
   externalVendorConfigured,
   externalVendorProvider,
@@ -9,17 +8,13 @@ import {
 } from "../../connectors/vendorConnectors";
 import type { ConnectorWritebackInput } from "../service";
 import type {
-  ConnectorAuthSession,
   ConnectorManifest,
   ConnectorSyncRecord,
   ConnectorSyncState,
   Memory,
   ExtractionReport,
   MemoryExtractionEvent,
-  MemoryInput,
-  FeedbackKind,
-  HarnessActionInput,
-  ProviderAdapterStatus
+  MemoryInput
 } from "../../core";
 import {
   connectorAdapterRequest,
@@ -33,6 +28,20 @@ import {
   safeGet,
   validateConnectorManifest
 } from "./helpers";
+export {
+  beginConnectorOAuth,
+  completeConnectorOAuth,
+  connectorAuthStatus,
+  ReferenceOnlyTokenSecretStore,
+  refreshConnectorOAuth,
+  revokeConnectorAuth,
+  type TokenSecretStore
+} from "./connectorOAuthRuntime";
+export {
+  providerStatus,
+  recordConnectorFeedback,
+  recordConnectorTelemetry
+} from "./connectorFeedbackRuntime";
 
 export interface ConnectorHealthItem {
   connectorId: string;
@@ -55,39 +64,6 @@ export interface ConnectorListResult {
   items: Array<Record<string, unknown>>;
   responseStatusCode?: number;
   error?: string;
-}
-
-export interface TokenSecretStore {
-  storeToken(input: { connectorId: string; tokenKind: "access" | "refresh"; tokenHash: string; expiresAt?: string }): { secretRef: string; tokenHash: string; expiresAt?: string };
-  refreshToken(input: { connectorId: string; refreshTokenRef: string; refreshTokenHash?: string; manifest: ConnectorManifest }): { secretRef: string; tokenHash: string; expiresAt?: string; refreshSecretRef?: string; refreshTokenHash?: string };
-  revokeToken(input: { connectorId: string; secretRef?: string; tokenHash?: string; manifest?: ConnectorManifest }): { revokedRef?: string; revokedHash?: string };
-}
-
-export class ReferenceOnlyTokenSecretStore implements TokenSecretStore {
-  storeToken(input: { connectorId: string; tokenKind: "access" | "refresh"; tokenHash: string; expiresAt?: string }) {
-    const secretRef = `secret://oauth/${input.connectorId}/${input.tokenKind}/${input.tokenHash.slice(0, 18)}`;
-    return { secretRef, tokenHash: input.tokenHash, expiresAt: input.expiresAt };
-  }
-
-  refreshToken(input: { connectorId: string; refreshTokenRef: string; refreshTokenHash?: string; manifest: ConnectorManifest }) {
-    const tokenHash = contentHash(`${input.connectorId}:${input.refreshTokenRef}:${Date.now()}`).slice(2);
-    const refreshTokenHash = input.refreshTokenHash ?? contentHash(`${input.refreshTokenRef}:refresh`).slice(2);
-    return {
-      secretRef: `secret://oauth/${input.connectorId}/access/${tokenHash.slice(0, 18)}`,
-      tokenHash,
-      expiresAt: new Date(Date.now() + Number(process.env.MEMORY_OAUTH_REFRESH_EXPIRES_IN_MS ?? 3_600_000)).toISOString(),
-      refreshSecretRef: input.refreshTokenRef,
-      refreshTokenHash
-    };
-  }
-
-  revokeToken(input: { connectorId: string; secretRef?: string; tokenHash?: string }) {
-    return { revokedRef: input.secretRef, revokedHash: input.tokenHash };
-  }
-}
-
-function tokenSecretStore(service: any): TokenSecretStore {
-  return service.tokenSecretStore ?? new ReferenceOnlyTokenSecretStore();
 }
 
 function appendConnectorSyncRecord(service: any, record: ConnectorSyncRecord): ConnectorSyncRecord {
@@ -126,224 +102,6 @@ export function registerConnectorManifest(service: any, input: Omit<ConnectorMan
     service.persist();
     return manifest;
   }
-
-export function beginConnectorOAuth(service: any, connectorId: string, input: { redirectUri?: string; scopes?: string[]; stateSalt?: string } = {}): ConnectorAuthSession {
-    const manifest = service.connectorManifests.get(connectorId);
-    if (!manifest) throw new Error(`Connector manifest not found: ${connectorId}`);
-    if (manifest.auth !== "oauth") throw new Error(`Connector ${connectorId} does not use OAuth`);
-    if (!manifest.oauth?.authorizeUrl) throw new Error(`Connector ${connectorId} is missing oauth.authorizeUrl`);
-    const now = new Date().toISOString();
-    const redirectUri = input.redirectUri ?? manifest.oauth.redirectUri;
-    const scopes = input.scopes ?? manifest.oauth.scopes ?? [];
-    const state = contentHash(`${connectorId}:${now}:${input.stateSalt ?? ""}`).slice(2, 26);
-    const authorizeUrl = new URL(manifest.oauth.authorizeUrl);
-    authorizeUrl.searchParams.set("response_type", "code");
-    authorizeUrl.searchParams.set("client_id", resolveSecretRef(manifest.oauth.clientIdRef) ?? manifest.oauth.clientIdRef ?? `${connectorId}-client`);
-    authorizeUrl.searchParams.set("state", state);
-    if (redirectUri) authorizeUrl.searchParams.set("redirect_uri", redirectUri);
-    if (scopes.length) authorizeUrl.searchParams.set("scope", scopes.join(" "));
-    const session: ConnectorAuthSession = {
-      id: `auth_${contentHash(`${connectorId}:${state}`).slice(2, 14)}`,
-      connectorId,
-      state,
-      status: "pending",
-      authorizeUrl: authorizeUrl.toString(),
-      redirectUri,
-      scopes,
-      createdAt: now,
-      updatedAt: now,
-      expiresAt: new Date(Date.now() + 10 * 60_000).toISOString()
-    };
-    service.connectorAuthSessions.set(session.id, session);
-    service.recordAudit("connector.auth", { metadata: { connectorId, sessionId: session.id, status: session.status, scopes } });
-    service.persist();
-    return session;
-  }
-
-export function completeConnectorOAuth(service: any, input: { connectorId: string; state: string; code?: string; tokenRef?: string; error?: string }): ConnectorAuthSession {
-    const session = [...service.connectorAuthSessions.values()].find((item) => item.connectorId === input.connectorId && item.state === input.state);
-    if (!session) throw new Error(`OAuth session not found for connector ${input.connectorId}`);
-    const now = new Date().toISOString();
-    const manifest = service.connectorManifests.get(input.connectorId);
-    const exchanged = !input.error && !input.tokenRef && input.code && manifest?.oauth?.tokenUrl && manifest.oauth.clientSecretRef
-      ? exchangeOAuthCode(manifest, session, input.code)
-      : undefined;
-    const accessSecret = exchanged ? tokenSecretStore(service).storeToken({ connectorId: input.connectorId, tokenKind: "access", tokenHash: exchanged.tokenHash, expiresAt: exchanged.accessTokenExpiresAt }) : undefined;
-    const refreshSecret = exchanged?.refreshTokenHash ? tokenSecretStore(service).storeToken({ connectorId: input.connectorId, tokenKind: "refresh", tokenHash: exchanged.refreshTokenHash }) : undefined;
-    const tokenRef = input.tokenRef ?? accessSecret?.secretRef ?? (input.code ? `oauth://${input.connectorId}/${contentHash(input.code).slice(2, 12)}` : undefined);
-    const updated: ConnectorAuthSession = {
-      ...session,
-      status: input.error ? "failed" : "authorized",
-      tokenRef,
-      refreshTokenRef: refreshSecret?.secretRef,
-      tokenHash: accessSecret?.tokenHash ?? exchanged?.tokenHash ?? (input.code || tokenRef ? contentHash(`${input.code ?? ""}:${tokenRef ?? ""}`).slice(2) : undefined),
-      refreshTokenHash: refreshSecret?.tokenHash ?? exchanged?.refreshTokenHash,
-      accessTokenExpiresAt: accessSecret?.expiresAt ?? exchanged?.accessTokenExpiresAt,
-      error: input.error,
-      updatedAt: now
-    };
-    service.connectorAuthSessions.set(session.id, updated);
-    if (manifest && updated.status === "authorized" && tokenRef) {
-      const next: ConnectorManifest = {
-        ...manifest,
-        updatedAt: now,
-        list: manifest.list ? { ...manifest.list, authRef: manifest.list.authRef ?? tokenRef } : manifest.list,
-        poll: manifest.poll ? { ...manifest.poll, authRef: manifest.poll.authRef ?? tokenRef } : manifest.poll,
-        writeback: manifest.writeback ? { ...manifest.writeback, authRef: manifest.writeback.authRef ?? tokenRef } : manifest.writeback
-      };
-      service.connectorManifests.set(next.id, next);
-    }
-    service.recordAudit("connector.auth", { metadata: { connectorId: input.connectorId, sessionId: session.id, status: updated.status, tokenRef: updated.tokenRef } });
-    service.persist();
-    return updated;
-  }
-
-export function revokeConnectorAuth(service: any, connectorId: string, actorId = "system"): ConnectorAuthSession[] {
-    const now = new Date().toISOString();
-    const revoked: ConnectorAuthSession[] = [];
-    for (const session of service.connectorAuthSessions.values()) {
-      if (session.connectorId !== connectorId || session.status === "revoked") continue;
-      const manifest = service.connectorManifests.get(connectorId);
-      const accessRevoke = tokenSecretStore(service).revokeToken({ connectorId, secretRef: session.tokenRef, tokenHash: session.tokenHash, manifest });
-      const refreshRevoke = tokenSecretStore(service).revokeToken({ connectorId, secretRef: session.refreshTokenRef, tokenHash: session.refreshTokenHash, manifest });
-      const updated: ConnectorAuthSession = {
-        ...session,
-        status: "revoked",
-        tokenRef: undefined,
-        refreshTokenRef: undefined,
-        revokedAt: now,
-        updatedAt: now,
-        error: undefined,
-        metadata: { ...(session.metadata ?? {}), revokedRefs: [accessRevoke.revokedRef, refreshRevoke.revokedRef].filter(Boolean) }
-      };
-      service.connectorAuthSessions.set(session.id, updated);
-      revoked.push(updated);
-    }
-    const manifest = service.connectorManifests.get(connectorId);
-    if (manifest) {
-      service.connectorManifests.set(connectorId, {
-        ...manifest,
-        updatedAt: now,
-        list: manifest.list ? { ...manifest.list, authRef: undefined } : manifest.list,
-        poll: manifest.poll ? { ...manifest.poll, authRef: undefined } : manifest.poll,
-        writeback: manifest.writeback ? { ...manifest.writeback, authRef: undefined } : manifest.writeback
-      });
-    }
-    service.recordAudit("connector.auth", { actorId, metadata: { connectorId, status: "revoked", sessions: revoked.length } });
-    service.persist();
-    return revoked;
-  }
-
-export function refreshConnectorOAuth(service: any, connectorId: string): ConnectorAuthSession {
-    const manifest = service.connectorManifests.get(connectorId);
-    if (!manifest) throw new Error(`Connector manifest not found: ${connectorId}`);
-    const session = [...service.connectorAuthSessions.values()]
-      .filter((item: ConnectorAuthSession) => item.connectorId === connectorId && item.status === "authorized" && item.refreshTokenRef)
-      .sort((a: ConnectorAuthSession, b: ConnectorAuthSession) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
-    if (!session) throw new Error(`No refreshable OAuth session for connector ${connectorId}`);
-    const refreshed = tokenSecretStore(service).refreshToken({ connectorId, refreshTokenRef: session.refreshTokenRef!, refreshTokenHash: session.refreshTokenHash, manifest });
-    const now = new Date().toISOString();
-    const updated: ConnectorAuthSession = {
-      ...session,
-      tokenRef: refreshed.secretRef,
-      tokenHash: refreshed.tokenHash,
-      refreshTokenRef: refreshed.refreshSecretRef ?? session.refreshTokenRef,
-      refreshTokenHash: refreshed.refreshTokenHash ?? session.refreshTokenHash,
-      accessTokenExpiresAt: refreshed.expiresAt,
-      updatedAt: now,
-      metadata: { ...(session.metadata ?? {}), secretRef: refreshed.secretRef, refreshedAt: now }
-    };
-    service.connectorAuthSessions.set(session.id, updated);
-    service.recordAudit("connector.auth", { metadata: { connectorId, sessionId: session.id, status: "refreshed", secretRef: updated.tokenRef } });
-    service.persist();
-    return updated;
-  }
-
-export function connectorAuthStatus(service: any, connectorId?: string): ConnectorAuthSession[] {
-    return [...service.connectorAuthSessions.values()]
-      .filter((session) => !connectorId || session.connectorId === connectorId)
-      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
-  }
-
-function exchangeOAuthCode(manifest: ConnectorManifest, session: ConnectorAuthSession, code: string): {
-  tokenRef: string;
-  refreshTokenRef?: string;
-  tokenHash: string;
-  refreshTokenHash?: string;
-  accessTokenExpiresAt?: string;
-} {
-    if (!manifest.oauth?.tokenUrl) throw new Error(`Connector ${manifest.id} is missing oauth.tokenUrl`);
-    const clientId = resolveSecretRef(manifest.oauth.clientIdRef) ?? manifest.oauth.clientIdRef;
-    const clientSecret = resolveSecretRef(manifest.oauth.clientSecretRef);
-    if (!clientSecret) throw new Error(`Connector ${manifest.id} is missing resolvable oauth.clientSecretRef`);
-    const exchange = JSON.parse(execFileSync(process.execPath, ["-e", OAUTH_EXCHANGE_WORKER], {
-      encoding: "utf8",
-      input: JSON.stringify({
-        tokenUrl: manifest.oauth.tokenUrl,
-        code,
-        redirectUri: session.redirectUri,
-        clientId,
-        clientSecret
-      }),
-      timeout: Number(process.env.MEMORY_OAUTH_EXCHANGE_TIMEOUT_MS ?? 10_000),
-      maxBuffer: 1_000_000
-    })) as { accessTokenHash: string; refreshTokenHash?: string; expiresIn?: number };
-    const suffix = exchange.accessTokenHash.slice(0, 18);
-    const refreshSuffix = exchange.refreshTokenHash?.slice(0, 18);
-    return {
-      tokenRef: `secret://oauth/${manifest.id}/access/${suffix}`,
-      refreshTokenRef: refreshSuffix ? `secret://oauth/${manifest.id}/refresh/${refreshSuffix}` : undefined,
-      tokenHash: exchange.accessTokenHash,
-      refreshTokenHash: exchange.refreshTokenHash,
-      accessTokenExpiresAt: exchange.expiresIn ? new Date(Date.now() + exchange.expiresIn * 1000).toISOString() : undefined
-    };
-  }
-
-function resolveSecretRef(ref?: string): string | undefined {
-    if (!ref) return undefined;
-    if (ref.startsWith("env:")) return process.env[ref.slice(4)];
-    if (ref.startsWith("secret://")) {
-      const envName = `MEMORY_SECRET_${ref.slice("secret://".length).replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "").toUpperCase()}`;
-      return process.env[envName];
-    }
-    return undefined;
-  }
-
-const OAUTH_EXCHANGE_WORKER = `
-const { createHash } = require("node:crypto");
-let input = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => input += chunk);
-process.stdin.on("end", async () => {
-  try {
-    const request = JSON.parse(input || "{}");
-    const body = new URLSearchParams();
-    body.set("grant_type", "authorization_code");
-    body.set("code", request.code);
-    if (request.redirectUri) body.set("redirect_uri", request.redirectUri);
-    if (request.clientId) body.set("client_id", request.clientId);
-    if (request.clientSecret) body.set("client_secret", request.clientSecret);
-    const response = await fetch(request.tokenUrl, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
-      body
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error_description || payload.error || "OAuth token exchange failed");
-    const accessToken = payload.access_token;
-    if (typeof accessToken !== "string" || !accessToken) throw new Error("OAuth token endpoint did not return access_token");
-    const hash = (value) => createHash("sha256").update(String(value)).digest("hex");
-    process.stdout.write(JSON.stringify({
-      accessTokenHash: hash(accessToken),
-      refreshTokenHash: typeof payload.refresh_token === "string" && payload.refresh_token ? hash(payload.refresh_token) : undefined,
-      expiresIn: Number.isFinite(Number(payload.expires_in)) ? Number(payload.expires_in) : undefined
-    }));
-  } catch (error) {
-    process.stderr.write(error && error.stack ? error.stack : String(error));
-    process.exit(1);
-  }
-});
-`;
 
 export function listConnectorManifests(service: any, kind?: ConnectorManifest["kind"]): ConnectorManifest[] {
     return [...service.connectorManifests.values()]
@@ -686,141 +444,3 @@ export function connectorSyncState(service: any, connectorId?: string): Connecto
         };
       });
   }
-
-export function providerStatus(service: any): ProviderAdapterStatus {
-    return {
-      active: Boolean(service.defaultExtractor || service.defaultSummarizer || service.defaultVerifier || service.defaultReranker || service.defaultQueryExpander || service.defaultTranslator),
-      command: process.env.MEMORY_INTELLIGENCE_COMMAND,
-      timeoutMs: Number(process.env.MEMORY_INTELLIGENCE_TIMEOUT_MS ?? 3500),
-      tasks: ["contradiction", "rerank", "verify", "summarize", "extract", "expand", "translate"],
-      fallback: "deterministic"
-    };
-  }
-
-export function recordConnectorFeedback(service: any, input: {
-    connectorId: string;
-    userId: string;
-    kind: "accepted_change" | "rejected_suggestion" | "failing_test" | "user_correction";
-    content: string;
-    memoryIds?: string[];
-    externalId?: string;
-    metadata?: Record<string, unknown>;
-  }) {
-    const manifest = service.connectorManifests.get(input.connectorId);
-    if (!manifest) throw new Error(`Connector manifest not found: ${input.connectorId}`);
-    const feedbackKind: FeedbackKind = input.kind === "accepted_change" ? "helpful" : input.kind === "failing_test" ? "stale" : "wrong";
-    const updatedMemories = (input.memoryIds ?? [])
-      .filter((memoryId) => Boolean(safeGet(service.store, memoryId)))
-      .map((memoryId) => service.feedback({ memoryId, userId: input.userId, kind: feedbackKind, note: input.content }));
-    const feedbackMemory = service.add({
-      userId: input.userId,
-      content: input.content,
-      type: "feedback",
-      source: { kind: "tool", confidence: input.kind === "accepted_change" ? 0.86 : 0.72 },
-      tags: ["connector-feedback", input.kind, input.connectorId],
-      metadata: { connectorId: input.connectorId, externalId: input.externalId, feedbackKind, ...(input.metadata ?? {}) }
-    });
-    const record: ConnectorSyncRecord = {
-      id: `sync_${contentHash(`${input.connectorId}:feedback:${Date.now()}:${service.connectorSyncRecords.length}`).slice(2)}`,
-      connectorId: input.connectorId,
-      direction: "ingest",
-      status: "applied",
-      memoryIds: [feedbackMemory.id, ...updatedMemories.map((memory) => memory.id)],
-      externalIds: input.externalId ? [input.externalId] : [],
-      timestamp: new Date().toISOString(),
-      operation: "memory_link",
-      payload: { feedbackAdapter: input.kind, feedbackKind, updated: updatedMemories.length }
-    };
-    appendConnectorSyncRecord(service, record);
-    service.recordAudit("connector.sync", { userId: input.userId, metadata: { connectorId: input.connectorId, status: record.status, feedbackAdapter: input.kind, memories: record.memoryIds.length } });
-    service.persist();
-    return { record, feedbackMemory, updatedMemories };
-}
-
-export function recordConnectorTelemetry(service: any, input: {
-    connectorId: string;
-    harnessId?: string;
-    userId: string;
-    kind: "accepted_suggestion" | "rejected_suggestion" | "context_pack_feedback" | "tool_outcome";
-    content?: string;
-    query?: string;
-    memoryIds?: string[];
-    acceptedMemoryIds?: string[];
-    rejectedMemoryIds?: string[];
-    command?: string;
-    filesChanged?: string[];
-    tests?: HarnessActionInput["tests"];
-    externalId?: string;
-    metadata?: Record<string, unknown>;
-  }) {
-    const manifest = service.connectorManifests.get(input.connectorId);
-    if (!manifest) throw new Error(`Connector manifest not found: ${input.connectorId}`);
-    const createdMemories: Memory[] = [];
-    const reports: Record<string, unknown>[] = [];
-    if (input.kind === "tool_outcome") {
-      const action = service.recordHarnessAction({
-        userId: input.userId,
-        agentId: input.harnessId,
-        appId: typeof input.metadata?.appId === "string" ? input.metadata.appId : undefined,
-        orgId: typeof input.metadata?.orgId === "string" ? input.metadata.orgId : undefined,
-        projectId: typeof input.metadata?.projectId === "string" ? input.metadata.projectId : undefined,
-        command: input.command ?? input.content,
-        cwd: typeof input.metadata?.cwd === "string" ? input.metadata.cwd : undefined,
-        envRequirements: Array.isArray(input.metadata?.envRequirements) ? input.metadata.envRequirements.filter((item): item is string => typeof item === "string") : undefined,
-        environmentHints: Array.isArray(input.metadata?.environmentHints) ? input.metadata.environmentHints.filter((item): item is string => typeof item === "string") : undefined,
-        exitCode: typeof input.metadata?.exitCode === "number" ? input.metadata.exitCode : undefined,
-        durationMs: typeof input.metadata?.durationMs === "number" ? input.metadata.durationMs : undefined,
-        outputSummary: typeof input.metadata?.outputSummary === "string" ? input.metadata.outputSummary : undefined,
-        failureReason: typeof input.metadata?.failureReason === "string" ? input.metadata.failureReason : undefined,
-        successReason: typeof input.metadata?.successReason === "string" ? input.metadata.successReason : undefined,
-        evidencePackId: typeof input.metadata?.evidencePackId === "string" ? input.metadata.evidencePackId : undefined,
-        filesChanged: input.filesChanged,
-        filesTouched: Array.isArray(input.metadata?.filesTouched) ? input.metadata.filesTouched.filter((item): item is string => typeof item === "string") : input.filesChanged,
-        tests: input.tests,
-        content: input.content,
-        timestamp: new Date().toISOString()
-      });
-      createdMemories.push(action);
-      reports.push({ kind: "harness-action", memoryId: action.id });
-    } else if (input.kind === "context_pack_feedback" && input.query && input.memoryIds?.length) {
-      const outcome = input.rejectedMemoryIds?.length && !input.acceptedMemoryIds?.length ? "rejected" : "accepted";
-      const report = service.recordInjectionFeedback({
-        userId: input.userId,
-        query: input.query,
-        injectedMemoryIds: input.memoryIds,
-        acceptedMemoryIds: input.acceptedMemoryIds,
-        rejectedMemoryIds: input.rejectedMemoryIds,
-        outcome,
-        note: input.content,
-        timestamp: new Date().toISOString()
-      });
-      reports.push({ kind: "injection-feedback", trainingSample: report.trainingSample, updated: report.updatedMemories.map((memory: Memory) => memory.id) });
-    } else {
-      const feedback = service.recordConnectorFeedback({
-        connectorId: input.connectorId,
-        userId: input.userId,
-        kind: input.kind === "accepted_suggestion" ? "accepted_change" : "rejected_suggestion",
-        content: input.content ?? `${input.harnessId ?? input.connectorId} ${input.kind}`,
-        memoryIds: input.memoryIds,
-        externalId: input.externalId,
-        metadata: { harnessId: input.harnessId, telemetryKind: input.kind, ...(input.metadata ?? {}) }
-      });
-      createdMemories.push(feedback.feedbackMemory, ...feedback.updatedMemories);
-      reports.push({ kind: "connector-feedback", recordId: feedback.record.id, memoryIds: feedback.record.memoryIds });
-    }
-    const record: ConnectorSyncRecord = {
-      id: `sync_${contentHash(`${input.connectorId}:telemetry:${Date.now()}:${service.connectorSyncRecords.length}`).slice(2)}`,
-      connectorId: input.connectorId,
-      direction: "ingest",
-      status: "applied",
-      memoryIds: createdMemories.map((memory) => memory.id),
-      externalIds: input.externalId ? [input.externalId] : [],
-      timestamp: new Date().toISOString(),
-      operation: "memory_link",
-      payload: { telemetryKind: input.kind, harnessId: input.harnessId, reports, metadata: input.metadata ?? {} }
-    };
-    appendConnectorSyncRecord(service, record);
-    service.recordAudit("connector.sync", { userId: input.userId, metadata: { connectorId: input.connectorId, telemetryKind: input.kind, harnessId: input.harnessId, memories: record.memoryIds.length } });
-    service.persist();
-    return { record, createdMemories, reports };
-}

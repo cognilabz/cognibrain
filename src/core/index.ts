@@ -5,6 +5,7 @@ export * from "./retrieval";
 export * from "./reflection";
 export * from "./health";
 export * from "./text";
+export * from "./semantic";
 export * from "./config";
 export * from "./extraction";
 export * from "./domain";

@@ -10,16 +10,16 @@ snapshot, not a how-to guide.
 | Artifact | Generated | Result |
 | --- | --- | --- |
 | `artifacts/nextgen-benchmarks.json` | 2026-05-28T12:52:13.044Z | Passed |
-| `artifacts/cognicodebench/run.json` | 2026-05-28T12:52:18.714Z | Passed |
+| `artifacts/cognicodebench/run.json` | 2026-05-29T06:52:11.071Z | Passed |
 | `artifacts/arena/run.json` | 2026-05-28T12:52:32.574Z | Passed |
 | `artifacts/answer-generation.json` | 2026-05-28T12:52:33.568Z | Passed |
 | `artifacts/leaderboard.json` | 2026-05-28T12:52:33.985Z | Passed |
 | `artifacts/benchmark-hardening.json` | 2026-05-28T12:52:34.422Z | Passed |
 | `artifacts/locomo-report.json` | 2026-05-28T12:56:23.302Z | Passed |
 | `artifacts/longmemeval-report.json` | 2026-05-28T12:59:05.579Z | Passed |
-| `artifacts/beam-report.json` | 2026-05-28T12:59:37.944Z | Passed |
-| `artifacts/beam-500k-report.json` | 2026-05-28T13:25:02.636Z | Passed |
-| `artifacts/beam-1m-report.json` | 2026-05-28T13:30:39.115Z | Passed |
+| `artifacts/beam-report.json` | 2026-05-29T06:54:33.618Z | Passed |
+| `artifacts/beam-500k-report.json` | 2026-05-29T07:00:53.320Z | Passed |
+| `artifacts/beam-1m-report.json` | 2026-05-29T07:12:40.727Z | Passed |
 
 ## Public Benchmark Datasets
 
@@ -27,9 +27,32 @@ snapshot, not a how-to guide.
 | --- | --- | ---: | ---: |
 | LoCoMo | Evidence recall@K | 58.7% (902/1536) | Keyword only 43.4% |
 | LongMemEval-S | Answer-session recall@K | 99.6% (498/500) | Keyword only 99.0% |
-| BEAM 100K | Retrieval nugget score@K | 96.5% (386/400) | Keyword only 82.0% |
-| BEAM 500K | Retrieval nugget score@K | 97.7% (684/700) | Keyword only 79.1% |
-| BEAM 1M | Retrieval nugget score@K | 94.6% (662/700) | Keyword only 82.1% |
+| BEAM 100K | Retrieval nugget score@K | 45.3% (181/400) | Keyword only 27.8% |
+| BEAM 500K | Retrieval nugget score@K | 44.0% (308/700) | Keyword only 22.4% |
+| BEAM 1M | Retrieval nugget score@K | 50.3% (352/700) | Keyword only 27.6% |
+
+## Benchmark Integrity
+
+| Signal | Result |
+| --- | --- |
+| CogniCodeBench integrity score | 45.0% |
+| CogniCodeBench overfit risk | Medium |
+| Scenario leakage | High severity |
+| Patch realism | Medium severity |
+| Baseline separation | Medium severity |
+
+## BEAM Weaknesses
+
+| Split | Weakest categories | Improvement signal |
+| --- | --- | --- |
+| 100K | Abstention 0.0%, instruction following 10.0%, temporal reasoning 20.0% | Add unsupported-question gating, stronger instruction-evidence scoring, and temporal normalization. |
+| 500K | Abstention 0.0%, temporal reasoning 18.6%, knowledge update 24.3% | Reduce plausible-but-unsupported retrieval and improve fresh fact/version evidence. |
+| 1M | Abstention 0.0%, temporal reasoning 21.4%, knowledge update 24.3% | Treat abstention and temporal/freshness retrieval as the next benchmark-driven workstream. |
+
+## Claim Boundaries
+
+Benchmark claims on this page are limited to the checked artifacts listed above.
+Older or stronger rows are not carried forward without a current artifact.
 
 ## CogniCodeBench
 
@@ -45,6 +68,11 @@ snapshot, not a how-to guide.
 | Source-reference correctness | 100.0% |
 | Granular patch correctness | 100.0% |
 | Long-horizon recall | 100.0% |
+
+Diagnostics: integrity 45.0%, overfit risk medium. The current run flags
+scenario leakage, generated patch realism, and baseline separation as benchmark
+design weaknesses to fix before using CogniCodeBench as a standalone quality
+claim.
 
 ## Baselines
 

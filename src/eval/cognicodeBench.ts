@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { MemoryService } from "../api/service";
+import { conceptScore, tokenize } from "../core";
 import type { BeliefState, CodebaseScope, EngineeringMemoryKind, SourceKind } from "../core";
 import { buildCogniCodeScenarioSet, type CogniCodeNoiseMemory, type CogniCodePatchModel, type CogniCodeScenarioFactoryOptions, type CogniCodeScenarioFactorySummary, type CogniCodeSessionEvent, type CogniCodeSourceRef } from "./cognicode/scenarioFactory";
 
@@ -156,6 +157,14 @@ export interface CogniCodeBenchReport {
     granular: boolean;
     averageExpectedFiles: number;
     averageForbiddenFiles: number;
+  };
+  diagnostics: {
+    integrity: {
+      score: number;
+      overfitRisk: "low" | "medium" | "high";
+      signals: string[];
+    };
+    weaknesses: Array<{ area: string; severity: "low" | "medium" | "high"; evidence: string; recommendation: string }>;
   };
   baselines: Array<{ name: string; score: number; correctionCarryoverRate: number; repeatedMistakeRate: number; scenarioCount: number; measured: boolean; notes: string[] }>;
   ablation: Record<string, { score: number; deltaFromFull: number; notes: string[] }>;
@@ -345,6 +354,7 @@ export function runCogniCodeBench(options: CogniCodeScenarioFactoryOptions & { o
     staleRatio: scenarioSet.summary.staleRatio,
     horizon: scenarioSet.summary.horizon,
     patchEvaluation: patchEvaluationSummary(scenarios),
+    diagnostics: benchmarkDiagnostics(scenarios, results, baselines, metrics),
     baselines,
     ablation: { cognibrain_full: { score: round(fullScore), deltaFromFull: 0, notes: ["Full engineering memory with corrections, temporal state, graph evidence, and action outcomes."] }, ...ablation },
     generation: { scenariosPath, scenariosWritten },
@@ -613,7 +623,7 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
       break;
     case "keyword_only":
       checks.correctionRecalled = command || forbidden || dependency;
-      checks.procedureRecalled = command || scenario.expected.command.includes("test");
+      checks.procedureRecalled = command || conceptScore(scenario.expected.command, ["test command", "run tests", "verify"]).score >= 0.45;
       checks.wrongActionSuppressed = forbidden || command;
       checks.patchCorrect = command || forbidden;
       checks.evidenceComplete = false;
@@ -648,7 +658,7 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
       checks.correctionRecalled = command || scenario.expected.referencedKinds.includes("procedure");
       checks.procedureRecalled = true;
       checks.wrongActionSuppressed = command || forbidden && !hard;
-      checks.patchCorrect = command || scenario.expected.command.includes("test");
+      checks.patchCorrect = command || conceptScore(scenario.expected.command, ["test command", "run tests", "verify"]).score >= 0.45;
       checks.evidenceComplete = false;
       checks.staleSuppressed = !stale;
       break;
@@ -662,7 +672,7 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
       break;
     case "cognibrain_without_corrections":
       checks.correctionRecalled = false;
-      checks.procedureRecalled = command || scenario.expected.command.includes("test");
+      checks.procedureRecalled = command || conceptScore(scenario.expected.command, ["test command", "run tests", "verify"]).score >= 0.45;
       checks.wrongActionSuppressed = command && !forbidden;
       checks.patchCorrect = command || dependency;
       checks.evidenceComplete = false;
@@ -706,6 +716,77 @@ function patchEvaluationSummary(scenarios: CogniCodeScenario[]): CogniCodeBenchR
     averageExpectedFiles: average(expectedFiles),
     averageForbiddenFiles: average(forbiddenFiles)
   };
+}
+
+function benchmarkDiagnostics(
+  scenarios: CogniCodeScenario[],
+  results: CogniCodeScenarioResult[],
+  baselines: CogniCodeBenchReport["baselines"],
+  metrics: CogniCodeBenchReport["metrics"]
+): CogniCodeBenchReport["diagnostics"] {
+  const expectedLeakage = average(scenarios.map((scenario) => scenarioLeakageScore(scenario)));
+  const bestBaseline = Math.max(...baselines.map((baseline) => baseline.score), 0);
+  const fullScore = average(results.map((result) => result.score));
+  const generatedPatchHarness = results.length ? 1 : 0;
+  const integrityScore = round(Math.max(0, 1 - expectedLeakage * 0.45 - generatedPatchHarness * 0.25));
+  const weaknesses: CogniCodeBenchReport["diagnostics"]["weaknesses"] = [];
+  if (expectedLeakage > 0.35) {
+    weaknesses.push({
+      area: "scenario leakage",
+      severity: expectedLeakage > 0.55 ? "high" : "medium",
+      evidence: `Average next-task overlap with expected command/files is ${round(expectedLeakage)}`,
+      recommendation: "Add hidden expected actions and evaluate proposed patches without exposing command/file labels to the harness."
+    });
+  }
+  if (generatedPatchHarness) {
+    weaknesses.push({
+      area: "patch realism",
+      severity: "medium",
+      evidence: "The benchmark currently records the expected command and files into patch evidence instead of executing an independent patch planner.",
+      recommendation: "Add an agent- or LLM-generated patch proposal stage and score it against hidden expected diffs."
+    });
+  }
+  if (fullScore - bestBaseline < 0.1) {
+    weaknesses.push({
+      area: "baseline separation",
+      severity: "medium",
+      evidence: `Full score is only ${round(fullScore - bestBaseline)} above the strongest baseline.`,
+      recommendation: "Increase adversarial distractors and report categories where simpler baselines remain close."
+    });
+  }
+  if (metrics.repeatedMistakeRate > 0.02) {
+    weaknesses.push({
+      area: "wrong-action suppression",
+      severity: "high",
+      evidence: `Repeated mistake rate is ${metrics.repeatedMistakeRate}`,
+      recommendation: "Improve guard precision and stale wrong-action suppression before using this row as a release signal."
+    });
+  }
+  return {
+    integrity: {
+      score: integrityScore,
+      overfitRisk: integrityScore < 0.45 ? "high" : integrityScore < 0.75 ? "medium" : "low",
+      signals: [
+        `expectedLeakage=${round(expectedLeakage)}`,
+        `generatedPatchHarness=${Boolean(generatedPatchHarness)}`,
+        `bestBaseline=${round(bestBaseline)}`,
+        `fullScore=${round(fullScore)}`
+      ]
+    },
+    weaknesses
+  };
+}
+
+function scenarioLeakageScore(scenario: CogniCodeScenario): number {
+  const hidden = tokenize([scenario.expected.command, ...scenario.expected.filesChanged, scenario.expected.blockedAction ?? ""].join(" "));
+  if (!hidden.length) return 0;
+  const visible = tokenize([scenario.nextTask, scenario.correction.content, scenario.correction.correctAction].join(" "));
+  return keywordOverlap(hidden, visible);
+}
+
+function keywordOverlap(query: string[], content: string[]): number {
+  const contentSet = new Set(content);
+  return query.filter((token) => contentSet.has(token)).length / query.length;
 }
 
 function seededRandom(seed: string): () => number {

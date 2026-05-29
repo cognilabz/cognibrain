@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { createJsonCommandIntelligenceFromEnv } from "../../core/providers";
 import type { RedactionPolicy } from "../../core/privacy";
-import { DOMAIN_MODULES, citationFor, normalizeRetrievalWeights, type MemoryStore } from "../../core";
+import { DOMAIN_MODULES, citationFor, conceptScore, normalizeRetrievalWeights, type MemoryStore } from "../../core";
 import type { ConnectorWritebackInput, ConnectorWritebackOperation, ContextEnrichmentInput, MemoryServiceOptions } from "../service";
 import type {
   AdaptiveDreamPolicyReport,
@@ -107,7 +107,7 @@ export function codingActionOverlap(action: string, content: string): boolean {
   return Boolean(
     normalizedAction &&
     normalizedContent &&
-    (normalizedAction === normalizedContent || normalizedAction.includes(normalizedContent) || normalizedContent.includes(normalizedAction))
+    conceptScore(normalizedAction, [normalizedContent]).score >= 0.82
   );
 }
 
@@ -163,10 +163,10 @@ export function withProceduralMetadata(input: MemoryInput): MemoryInput {
 
 export function inferProcedureTriggers(content: string, tags: string[]): string[] {
   const triggers = new Set<string>();
-  void content;
-  if (tags.includes("release")) triggers.add("before release or deploy work");
-  if (tags.includes("test")) triggers.add("before validation or CI-sensitive changes");
-  if (tags.includes("pull-request") || tags.includes("pr")) triggers.add("before pull-request or merge workflows");
+  const signal = `${content} ${tags.join(" ")}`;
+  if (conceptScore(signal, ["release", "deploy production rollback migration"]).score >= 0.4) triggers.add("before release or deploy work");
+  if (conceptScore(signal, ["test", "validation ci build verify"]).score >= 0.4) triggers.add("before validation or CI-sensitive changes");
+  if (conceptScore(signal, ["pull request", "pr merge code review"]).score >= 0.4) triggers.add("before pull-request or merge workflows");
   if (!triggers.size) triggers.add("matching workflow intent");
   return [...triggers];
 }

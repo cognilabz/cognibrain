@@ -1,4 +1,4 @@
-import { buildCodingContextPackFromResults, buildPatchEvidenceTrail, citationFor, engineeringQueryWeights, normalizeRetrievalWeights, type CodingContextPack, type EngineeringMemoryKind, type EvidencePack, type FederatedSearchReport, type Memory, type MemoryRouteReport, type PolicyDecision, type QueryIntentReport, type RetrievalProfile, type SearchOptions, type SearchResult } from "../../core";
+import { bestConceptMatch, buildCodingContextPackFromResults, buildPatchEvidenceTrail, citationFor, engineeringQueryWeights, normalizeRetrievalWeights, type CodingContextPack, type EngineeringMemoryKind, type EvidencePack, type FederatedSearchReport, type Memory, type MemoryRouteReport, type PolicyDecision, type QueryIntentReport, type RetrievalProfile, type SearchOptions, type SearchResult } from "../../core";
 import { buildQueryPlan, contentHash, evidenceDate, rollingAverage, roundMetric, uniqueStrings } from "./helpers";
 
 export function search(service: any, options: SearchOptions): SearchResult[] {
@@ -147,13 +147,16 @@ function applyRiskAwareInjection(result: SearchResult, query: string): SearchRes
   }
 
 function classifyRetrievalRisk(query: string): NonNullable<SearchResult["risk"]>["riskLevel"] {
-    const normalized = query.toLowerCase();
-    if (/\b(delete|remove|drop|destroy|wipe|truncate|reset|rm -rf|force push)\b/.test(normalized)) return "destructive";
-    if (/\b(release|deploy|production|prod|rollback|migration|incident|pagerduty)\b/.test(normalized)) return "release-critical";
-    if (/\b(security|secret|credential|token|billing|payment|compliance)\b/.test(normalized)) return "high";
-    if (/\b(test|build|merge|publish|connector|oauth)\b/.test(normalized)) return "medium";
-    return "low";
+    const match = bestConceptMatch(query, RETRIEVAL_RISK_CONCEPTS);
+    return (match?.id as NonNullable<SearchResult["risk"]>["riskLevel"] | undefined) ?? "low";
   }
+
+const RETRIEVAL_RISK_CONCEPTS = [
+  { id: "destructive", examples: ["delete data", "remove records", "drop database", "destroy resource", "wipe state", "truncate table", "reset history", "force push branch"], threshold: 0.5 },
+  { id: "release-critical", examples: ["release deploy production", "rollback migration", "incident pagerduty", "ship prod change"], threshold: 0.5 },
+  { id: "high", examples: ["security secret credential token", "billing payment compliance", "private regulated data"], threshold: 0.5 },
+  { id: "medium", examples: ["run tests", "build artifact", "merge branch", "publish package", "connector oauth setup"], threshold: 0.5 }
+];
 
 export function routeMemory(service: any, options: SearchOptions): MemoryRouteReport {
     const selectedScopes: MemoryRouteReport["selectedScopes"] = [{ kind: "user", id: options.userId, reason: "request user is always the base memory scope" }];

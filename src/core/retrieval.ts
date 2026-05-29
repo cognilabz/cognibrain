@@ -3,6 +3,7 @@ import { cosineVector, embeddingsDisabled } from "./embeddings";
 import { codebaseScopeMatches, getEngineeringMetadata } from "./engineeringMemory";
 import { activateGraph } from "./graphReasoning";
 import { clamp, MemoryStore } from "./store";
+import { bestConceptMatch, conceptScore } from "./semantic";
 import { cosineLike, estimateTokens, keywordCoverage, tokenize } from "./text";
 import type { LexicalScoreProvider, Memory, MemoryClaim, RetrievalWeights, SearchOptions, SearchResult } from "./types";
 
@@ -251,23 +252,22 @@ function queryVariants(options: SearchOptions): string[] {
 }
 
 function deterministicQueryExpansions(query: string): string[] {
-  const lower = query.toLowerCase();
   const groups = [
-    ["cli", "command line", "terminal", "shell"],
-    ["ui", "dashboard", "frontend", "operator console"],
-    ["bug", "issue", "defect", "regression"],
-    ["memory", "recall", "context", "knowledge"],
-    ["auth", "login", "session", "identity"],
-    ["database", "storage", "persistence", "store"],
-    ["sync", "replay", "offline", "replication"],
-    ["release", "launch", "deployment", "ship"]
+    { id: "cli", examples: ["cli", "command line", "terminal", "shell"] },
+    { id: "ui", examples: ["ui", "dashboard", "frontend", "operator console"] },
+    { id: "bug", examples: ["bug", "issue", "defect", "regression"] },
+    { id: "memory", examples: ["memory", "recall", "context", "knowledge"] },
+    { id: "auth", examples: ["auth", "login", "session", "identity"] },
+    { id: "database", examples: ["database", "storage", "persistence", "store"] },
+    { id: "sync", examples: ["sync", "replay", "offline", "replication"] },
+    { id: "release", examples: ["release", "launch", "deployment", "ship"] }
   ];
   const expansions = new Set<string>();
   for (const group of groups) {
-    const matched = group.find((term) => lower.includes(term));
-    if (!matched) continue;
-    for (const term of group) expansions.add(replaceCaseInsensitiveOnce(query, matched, term));
-    expansions.add(`${query} ${group.join(" ")}`);
+    const matched = bestConceptMatch(query, [{ id: group.id, examples: group.examples, threshold: 0.72 }]);
+    if (!matched?.matchedExample) continue;
+    for (const term of group.examples) expansions.add(replaceCaseInsensitiveOnce(query, matched.matchedExample, term));
+    expansions.add(`${query} ${group.examples.join(" ")}`);
   }
   return [...expansions];
 }
@@ -341,7 +341,7 @@ function temporalAllows(memory: Memory, constraint: { after?: Date; before?: Dat
 }
 
 function entityMatchesQuery(entity: string, queryEntities: Set<string>, queryText: string): boolean {
-  if (queryEntities.has(entity) || queryText.includes(entity)) return true;
+  if (queryEntities.has(entity) || conceptScore(queryText, [entity]).score >= 0.9) return true;
   const entityTokens = tokenize(entity);
   return entityTokens.length === 1 && queryEntities.has(entityTokens[0]);
 }

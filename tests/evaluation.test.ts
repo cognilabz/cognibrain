@@ -134,6 +134,62 @@ describe("self verification benchmark loop", () => {
     expect(report.ours.correct).toBe(1);
   });
 
+  it("can score BEAM fixtures through a harness evidence judge", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "open-memory-beam-provider-"));
+    const datasetPath = join(dir, "beam.json");
+    writeFileSync(
+      datasetPath,
+      JSON.stringify([
+        {
+          conversation_id: "beam-provider-fixture-1",
+          conversation_seed: { category: "Coding", id: 1, title: "Provider Fixture" },
+          chat: [[{ role: "user", content: "I decided to use Redis for the cache layer.", index: "1,1" }]],
+          probing_questions:
+            "{'information_extraction': [{'question': 'Which technology did I choose for the cache layer?', 'ideal_response': 'The user chose Redis for the cache layer.', 'rubric': ['Redis', 'cache layer']}]}"
+        }
+      ])
+    );
+    const report = await runBeamBenchmark({
+      datasetPath,
+      maxConversations: 1,
+      topK: 2,
+      outputPath: join(dir, "report.json"),
+      evidenceJudge: {
+        judgeEvidence: ({ results }) => ({
+          answerable: results.length > 0,
+          confidence: 0.94,
+          reason: "harness fixture judge"
+        })
+      }
+    });
+    expect(report.ours.correct).toBe(1);
+    expect(report.ours.judge.kind).toBe("provider-evidence-support");
+  });
+
+  it("fails BEAM provider-required runs instead of silently using a deterministic judge", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "open-memory-beam-require-provider-"));
+    const datasetPath = join(dir, "beam.json");
+    writeFileSync(
+      datasetPath,
+      JSON.stringify([
+        {
+          conversation_id: "beam-require-provider-fixture-1",
+          conversation_seed: { category: "Coding", id: 1, title: "Require Provider Fixture" },
+          chat: [[{ role: "user", content: "I decided to use Redis for the cache layer.", index: "1,1" }]],
+          probing_questions:
+            "{'information_extraction': [{'question': 'Which technology did I choose for the cache layer?', 'ideal_response': 'The user chose Redis for the cache layer.', 'rubric': ['Redis', 'cache layer']}]}"
+        }
+      ])
+    );
+    await expect(runBeamBenchmark({
+      datasetPath,
+      maxConversations: 1,
+      topK: 2,
+      outputPath: join(dir, "report.json"),
+      requireEvidenceJudge: true
+    })).rejects.toThrow(/evidence judge is required/i);
+  });
+
   it("imports directly comparable competitor artifacts for the market gate", () => {
     const dir = mkdtempSync(join(tmpdir(), "open-memory-market-"));
     const locomoPath = join(dir, "locomo.json");

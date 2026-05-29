@@ -108,6 +108,23 @@ export interface ContextReranker {
   rerank(input: { query: string; results: SearchResult[]; now: Date }): SearchResult[];
 }
 
+export interface EvidenceJudgement {
+  answerable: boolean;
+  confidence: number;
+  reason?: string;
+  requiredEvidence?: string[];
+  decisions?: Array<{
+    id: string;
+    decision?: SearchResult["decision"];
+    confidence?: number;
+    reason?: string;
+  }>;
+}
+
+export interface ContextEvidenceJudge {
+  judgeEvidence(input: { query: string; results: SearchResult[]; now: Date }): EvidenceJudgement;
+}
+
 export interface ContradictionDetector {
   classify(input: { a: Memory; b: Memory; key?: string }): {
     label: "entailment" | "neutral" | "contradiction";

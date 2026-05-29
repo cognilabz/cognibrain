@@ -5,7 +5,7 @@ import { activateGraph } from "./graphReasoning";
 import { clamp, MemoryStore } from "./store";
 import { bestConceptMatch, conceptScore } from "./semantic";
 import { cosineLike, estimateTokens, keywordCoverage, tokenize } from "./text";
-import type { LexicalScoreProvider, Memory, MemoryClaim, RetrievalWeights, SearchOptions, SearchResult } from "./types";
+import type { EvidenceJudgement, LexicalScoreProvider, Memory, MemoryClaim, RetrievalWeights, SearchOptions, SearchResult } from "./types";
 
 const STALE_DAYS = 30;
 const INJECTION_CONFIDENCE_THRESHOLD = 0.5;
@@ -74,7 +74,8 @@ export class RetrievalEngine {
     const reranked = options.reranker ? options.reranker.rerank({ query: options.query, results, now }) : heuristicRerank(options.query, results);
     const contradicted = applyContradictionDecisions(reranked);
     const verified = options.verifier ? options.verifier.verify({ query: options.query, results: contradicted, now }) : heuristicVerify(options.query, contradicted);
-    const calibrated = calibrateResults(verified);
+    const evidenceJudged = options.evidenceJudge ? applyEvidenceJudgement(options.evidenceJudge.judgeEvidence({ query: options.query, results: verified, now }), verified) : verified;
+    const calibrated = calibrateResults(evidenceJudged);
 
     for (const result of calibrated) this.store.markAccessed(result.memory.id);
     return calibrated;
@@ -85,6 +86,7 @@ export class RetrievalEngine {
     let spent = 0;
     for (const result of results) {
       if (result.decision === "exclude") continue;
+      if (result.unsafeToInject) continue;
       if ((result.confidence ?? 1) < INJECTION_CONFIDENCE_THRESHOLD) continue;
       const stale = result.stale ? " stale=true" : "";
       const decision = result.decision && result.decision !== "include" ? ` decision=${result.decision}` : "";
@@ -229,6 +231,26 @@ export class RetrievalEngine {
     }
     return boosts;
   }
+}
+
+function applyEvidenceJudgement(judgement: EvidenceJudgement, results: SearchResult[]): SearchResult[] {
+  const decisions = new Map((judgement.decisions ?? []).map((decision) => [decision.id, decision]));
+  return results.map((result) => {
+    const decision = decisions.get(result.memory.id);
+    const providerDecision = decision?.decision ?? (judgement.answerable ? undefined : "exclude");
+    return {
+      ...result,
+      confidence: decision?.confidence ?? result.confidence,
+      decision: providerDecision ?? result.decision,
+      unsafeToInject: result.unsafeToInject || !judgement.answerable,
+      evidence: judgement,
+      explanation: [
+        ...(result.explanation ?? []),
+        `provider evidence: ${judgement.answerable ? "answerable" : "not answerable"}${judgement.reason ? ` ${judgement.reason}` : ""}`,
+        ...(decision?.reason ? [`provider evidence memory: ${decision.reason}`] : [])
+      ]
+    };
+  });
 }
 
 function parseTemporalConstraint(query: string, now: Date): { after?: Date; before?: Date } {

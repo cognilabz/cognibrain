@@ -32,6 +32,7 @@ export function search(service: any, options: SearchOptions): SearchResult[] {
       weights: options.weights ?? profile?.weights ?? intent.recommendedWeights,
       reranker: effectiveOptions.reranker ?? service.defaultReranker,
       verifier: effectiveOptions.verifier ?? service.defaultVerifier,
+      evidenceJudge: effectiveOptions.evidenceJudge ?? service.defaultEvidenceJudge,
       lexicalProvider: effectiveOptions.lexicalProvider ?? service.lexicalProviderForPersistence()
     });
     const plannedResults = (rawResults as SearchResult[])
@@ -223,6 +224,18 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
       contradicted: includedResults.filter((result) => result.memory.beliefState === "contradicted" || result.contradiction).length
     };
     const truthDecisions = includedResults.map((result) => service.currentTruthForMemory(result.memory)).filter(Boolean);
+    const evidenceJudgement = results.find((result) => result.evidence)?.evidence;
+    const evidenceVerdict = evidenceJudgement
+      ? {
+          answerable: evidenceJudgement.answerable,
+          confidence: evidenceJudgement.confidence,
+          reason: evidenceJudgement.reason,
+          requiredEvidence: evidenceJudgement.requiredEvidence,
+          injected: includedResults.length,
+          blockedMemoryIds: results.filter((result) => result.decision === "exclude" || result.unsafeToInject).map((result) => result.memory.id),
+          reviewMemoryIds: results.filter((result) => result.decision === "review").map((result) => result.memory.id)
+        }
+      : undefined;
     const hash = contentHash(JSON.stringify({
       query: options.query,
       userId: options.userId,
@@ -257,6 +270,7 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
       tokenBudget,
       hash,
       context,
+      evidenceVerdict,
       results: includedResults.map((result) => {
         const policyDecision = policyDecisions.find((decision) => decision.memoryId === result.memory.id);
         const truthDecision = service.currentTruthForMemory(result.memory);
@@ -338,6 +352,8 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
               : "retrieval decision excluded this memory"
             : (result.confidence ?? 1) < 0.5
               ? "calibrated confidence below injection threshold"
+            : result.unsafeToInject
+              ? "unsafe-to-inject result kept outside the context body"
               : "token budget or reranking kept this memory outside the context body",
           decision: result.decision,
           policyDecision: policyDecisions.find((decision) => decision.memoryId === result.memory.id),

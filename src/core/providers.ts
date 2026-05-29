@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import type {
   ContextReranker,
+  ContextEvidenceJudge,
   ContextVerifier,
   ContradictionDetector,
   EngineeringMemoryClassifier,
@@ -24,9 +25,9 @@ export interface JsonCommandProviderOptions {
   timeoutMs?: number;
 }
 
-type ProviderTask = "contradiction" | "rerank" | "verify" | "summarize" | "reflect" | "engineering" | "extract" | "expand" | "translate";
+type ProviderTask = "contradiction" | "rerank" | "verify" | "evidence" | "summarize" | "reflect" | "engineering" | "extract" | "expand" | "translate";
 
-export class JsonCommandMemoryIntelligence implements ContradictionDetector, ContextReranker, ContextVerifier, ReflectionSummarizer, ReflectionEvaluator, EngineeringMemoryClassifier, MemoryExtractor, QueryExpander, TranslationProvider {
+export class JsonCommandMemoryIntelligence implements ContradictionDetector, ContextReranker, ContextVerifier, ContextEvidenceJudge, ReflectionSummarizer, ReflectionEvaluator, EngineeringMemoryClassifier, MemoryExtractor, QueryExpander, TranslationProvider {
   constructor(private readonly options: JsonCommandProviderOptions) {}
 
   classify(input: { a: Memory; b: Memory; key?: string }) {
@@ -77,6 +78,32 @@ export class JsonCommandMemoryIntelligence implements ContradictionDetector, Con
         explanation: [...(result.explanation ?? []), `provider verify: ${decision.reason ?? decision.decision}`]
       };
     });
+  }
+
+  judgeEvidence(input: { query: string; results: SearchResult[]; now: Date }) {
+    const output = this.call("evidence", {
+      query: input.query,
+      now: input.now.toISOString(),
+      results: input.results.map(resultForProvider)
+    });
+    const decisions = Array.isArray(output.decisions)
+      ? output.decisions.flatMap((item) => {
+          if (!isRecord(item) || typeof item.id !== "string") return [];
+          return [{
+            id: item.id,
+            decision: item.decision === "exclude" || item.decision === "warn" || item.decision === "review" ? item.decision : item.decision === "include" ? "include" : undefined,
+            confidence: typeof item.confidence === "number" ? boundedNumber(item.confidence, 0.5) : undefined,
+            reason: stringField(item.reason)
+          }];
+        })
+      : undefined;
+    return {
+      answerable: output.answerable === true,
+      confidence: boundedNumber(output.confidence, output.answerable === true ? 0.72 : 0.62),
+      reason: stringField(output.reason) ?? "provider evidence judgement",
+      requiredEvidence: Array.isArray(output.requiredEvidence) ? output.requiredEvidence.filter((item): item is string => typeof item === "string").slice(0, 8) : undefined,
+      decisions
+    };
   }
 
   summarize(input: { theme: string; memories: Memory[]; now: Date }) {

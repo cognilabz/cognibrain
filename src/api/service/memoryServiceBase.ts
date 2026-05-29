@@ -111,6 +111,7 @@ export class MemoryServiceBase {
     });
     this.defaultReranker = provider.reranker;
     this.defaultVerifier = provider.verifier;
+    this.defaultEvidenceJudge = provider.evidenceJudge;
     this.defaultExtractor = provider.extractor;
     this.defaultSummarizer = provider.summarizer;
     this.defaultQueryExpander = provider.queryExpander;
@@ -124,6 +125,7 @@ export class MemoryServiceBase {
 
   protected readonly defaultReranker?: SearchOptions["reranker"];
   protected readonly defaultVerifier?: SearchOptions["verifier"];
+  protected readonly defaultEvidenceJudge?: SearchOptions["evidenceJudge"];
   protected readonly defaultExtractor?: MemoryExtractor;
   protected readonly defaultSummarizer?: ReflectionSummarizer;
   protected readonly defaultQueryExpander?: QueryExpander;

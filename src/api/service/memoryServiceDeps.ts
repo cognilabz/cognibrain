@@ -63,6 +63,7 @@ export interface MemoryServiceOptions {
   intelligence?: {
     reranker?: SearchOptions["reranker"];
     verifier?: SearchOptions["verifier"];
+    evidenceJudge?: SearchOptions["evidenceJudge"];
     contradictionDetector?: ContradictionDetector;
     summarizer?: ReflectionSummarizer;
     evaluator?: ReflectionEvaluator;
@@ -177,5 +178,4 @@ export function memoryStoreForRepository(repository: MemoryRepository): MemorySt
   store.import(repository.export());
   return store;
 }
-
 

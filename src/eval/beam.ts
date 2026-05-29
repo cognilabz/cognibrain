@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { MemoryStore, conceptScore, cosineLike, estimateTokens, extractEntities, keywordCoverage, tokenize } from "../core";
-import type { BenchmarkResult, Memory } from "../core";
+import { createJsonCommandIntelligenceFromEnv } from "../core/providers";
+import type { BenchmarkResult, ContextEvidenceJudge, Memory, SearchResult } from "../core";
 import { keywordOnly, recencyOnly, vectorOnly, type Retriever } from "./baselines";
 
 const BEAM_ROWS_URL = "https://datasets-server.huggingface.co/rows";
@@ -13,6 +14,8 @@ interface BeamRunOptions {
   maxQuestions?: number;
   topK: number;
   outputPath: string;
+  evidenceJudge?: ContextEvidenceJudge;
+  requireEvidenceJudge?: boolean;
 }
 
 interface BeamRow {
@@ -56,7 +59,7 @@ interface BeamResult extends BenchmarkResult {
   topK: number;
   questionTypes: Record<string, { correct: number; total: number; accuracy: number }>;
   weaknesses: Array<{ category: string; accuracy: number; gapToBestCategory: number; recommendation: string }>;
-  judge: { kind: "deterministic-rubric-support"; threshold: number; notes: string[] };
+  judge: { kind: "provider-evidence-support" | "deterministic-rubric-support"; threshold: number; notes: string[] };
   details: BeamDetail[];
 }
 
@@ -67,7 +70,9 @@ export async function runBeamBenchmark(options: Partial<BeamRunOptions> = {}) {
     maxConversations: options.maxConversations,
     maxQuestions: options.maxQuestions,
     topK: options.topK ?? 20,
-    outputPath: options.outputPath ?? "artifacts/beam-report.json"
+    outputPath: options.outputPath ?? "artifacts/beam-report.json",
+    evidenceJudge: options.evidenceJudge,
+    requireEvidenceJudge: options.requireEvidenceJudge
   };
   const rows = await ensureDataset(resolved);
   const selectedRows = resolved.maxConversations ? rows.slice(0, resolved.maxConversations) : rows;
@@ -79,12 +84,17 @@ export async function runBeamBenchmark(options: Partial<BeamRunOptions> = {}) {
   const memories = store.list();
   const byUser = groupMemoriesByUser(memories);
   const expansionIndex = buildBeamExpansionIndex(memories, 4);
+  const evidenceJudge = resolved.evidenceJudge ?? createJsonCommandIntelligenceFromEnv();
+  if (resolved.requireEvidenceJudge && !evidenceJudge) {
+    throw new Error("BEAM evidence judge is required but MEMORY_INTELLIGENCE_COMMAND is not configured");
+  }
   const ours = evaluateBeamRetriever(
     "cognibrain",
     selectedQuestions,
     (question, userId, limit) => beamSearch(question, byUser.get(userId) ?? [], limit),
     resolved,
-    expansionIndex
+    expansionIndex,
+    evidenceJudge
   );
   const baselines = [
     evaluateBeamMemoryRetriever("vector-only", selectedQuestions, memories, vectorOnly, resolved),
@@ -104,7 +114,16 @@ export async function runBeamBenchmark(options: Partial<BeamRunOptions> = {}) {
       paper: "https://arxiv.org/abs/2510.27246",
       metric: "Retrieval nugget score@K against BEAM ideal responses and rubrics"
     },
-    config: resolved,
+    config: {
+      split: resolved.split,
+      datasetPath: resolved.datasetPath,
+      maxConversations: resolved.maxConversations,
+      maxQuestions: resolved.maxQuestions,
+      topK: resolved.topK,
+      outputPath: resolved.outputPath,
+      evidenceJudgeRequired: Boolean(resolved.requireEvidenceJudge),
+      evidenceJudgeConfigured: Boolean(evidenceJudge)
+    },
     ours,
     baselines
   };
@@ -149,14 +168,15 @@ function evaluateBeamRetriever(
   questions: BeamQuestion[],
   retriever: (query: string, userId: string, limit: number) => Memory[],
   options: BeamRunOptions,
-  expansionIndex?: Map<string, string[]>
+  expansionIndex?: Map<string, string[]>,
+  evidenceJudge?: ContextEvidenceJudge
 ): BeamResult {
   const started = performance.now();
   const details = questions.map((question) => {
     const results = retriever(question.question, question.conversationId, options.topK);
-    return scoreBeamQuestion(question, results, expansionIndex);
+    return scoreBeamQuestion(question, results, expansionIndex, evidenceJudge);
   });
-  return finalizeBeamResult(name, details, started, options);
+  return finalizeBeamResult(name, details, started, options, Boolean(evidenceJudge));
 }
 
 function evaluateBeamMemoryRetriever(
@@ -172,7 +192,7 @@ function evaluateBeamMemoryRetriever(
     const retriever = factory(byUser.get(question.conversationId) ?? []);
     return scoreBeamQuestion(question, retriever(question.question, options.topK));
   });
-  return finalizeBeamResult(name, details, started, options);
+  return finalizeBeamResult(name, details, started, options, false);
 }
 
 function beamSearch(query: string, memories: Memory[], limit: number): Memory[] {
@@ -197,13 +217,17 @@ function beamSearch(query: string, memories: Memory[], limit: number): Memory[] 
     .map((item) => item.memory);
 }
 
-function scoreBeamQuestion(question: BeamQuestion, memories: Memory[], expansionIndex?: Map<string, string[]>): BeamDetail {
+function scoreBeamQuestion(question: BeamQuestion, memories: Memory[], expansionIndex?: Map<string, string[]>, evidenceJudge?: ContextEvidenceJudge): BeamDetail {
   const retrievedText = memories
     .flatMap((memory) => expansionIndex?.get(memory.id) ?? [memory.content])
     .join("\n");
   const retrieved = memories.map((memory) => String(memory.metadata.sourceIndex ?? memory.metadata.turnIndex ?? memory.id));
   const expected = nuggetTexts(question);
-  const judged = question.abstention ? abstentionScore(question.question, retrievedText, memories.length) : bestNuggetScore(expected, retrievedText);
+  const judged = evidenceJudge
+    ? providerBeamScore(evidenceJudge, question, memories, expected)
+    : question.abstention
+      ? abstentionScore(question.question, retrievedText, memories.length)
+      : bestNuggetScore(expected, retrievedText);
   return {
     id: question.id,
     category: question.category,
@@ -219,6 +243,33 @@ function scoreBeamQuestion(question: BeamQuestion, memories: Memory[], expansion
       entitySupport: judged.entitySupport,
       weakness: judged.weakness
     }
+  };
+}
+
+function providerBeamScore(evidenceJudge: ContextEvidenceJudge, question: BeamQuestion, memories: Memory[], expected: string[]): { score: number; threshold: number; evidenceSupport: number; entitySupport: number; weakness?: string } {
+  const query = question.abstention
+    ? `Can the retrieved evidence answer this question? Question: ${question.question}`
+    : `Does the retrieved evidence support the expected answer rubric? Question: ${question.question}\nExpected answer/rubric:\n${expected.join("\n")}`;
+  const judgement = evidenceJudge.judgeEvidence({ query, results: memories.map(memoryAsSearchResult), now: new Date() });
+  const supports = question.abstention ? !judgement.answerable : judgement.answerable;
+  const confidence = Math.max(0, Math.min(1, judgement.confidence));
+  return {
+    score: supports ? confidence : 1 - confidence,
+    threshold: 0.72,
+    evidenceSupport: judgement.answerable ? confidence : 1 - confidence,
+    entitySupport: confidence,
+    weakness: supports ? undefined : judgement.reason ?? "provider judged retrieved evidence insufficient"
+  };
+}
+
+function memoryAsSearchResult(memory: Memory): SearchResult {
+  return {
+    memory,
+    score: 1,
+    decision: "include",
+    signals: { semantic: 1, keyword: 1, entity: 1, temporal: 1, trust: memory.trust, graph: 0 },
+    citation: `beam:${String(memory.metadata.sourceIndex ?? memory.metadata.turnIndex ?? memory.id)}`,
+    stale: false
   };
 }
 
@@ -263,7 +314,7 @@ function nuggetTexts(question: BeamQuestion): string[] {
   return [question.idealResponse, ...question.rubric].filter(Boolean);
 }
 
-function finalizeBeamResult(name: string, details: BeamDetail[], started: number, options: BeamRunOptions): BeamResult {
+function finalizeBeamResult(name: string, details: BeamDetail[], started: number, options: BeamRunOptions, providerDriven: boolean): BeamResult {
   const correct = details.filter((detail) => detail.passed).length;
   const questionTypes: BeamResult["questionTypes"] = {};
   for (const detail of details) {
@@ -290,12 +341,17 @@ function finalizeBeamResult(name: string, details: BeamDetail[], started: number
     questionTypes,
     weaknesses: beamWeaknesses(questionTypes),
     judge: {
-      kind: "deterministic-rubric-support",
-      threshold: 0.62,
-      notes: [
-        "Answerable questions require rubric support from retrieved evidence instead of exact expected-string matches.",
-        "Abstention questions are scored by unsupported-evidence behavior; the retriever does not receive hard-coded unanswerable phrase patterns."
-      ]
+      kind: providerDriven ? "provider-evidence-support" : "deterministic-rubric-support",
+      threshold: providerDriven ? 0.72 : 0.62,
+      notes: providerDriven
+        ? [
+            "Answerability and rubric support are judged by the configured MEMORY_INTELLIGENCE_COMMAND evidence task.",
+            "The benchmark harness passes retrieved memories and expected rubric context to the provider; no category-specific regex is used for the provider path."
+          ]
+        : [
+            "Answerable questions require rubric support from retrieved evidence instead of exact expected-string matches.",
+            "Abstention questions are scored by unsupported-evidence behavior; the retriever does not receive hard-coded unanswerable phrase patterns."
+          ]
     },
     details
   };
@@ -454,18 +510,32 @@ const QUESTION_NOISE = new Set([
 ]);
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const args = new Map<string, string>();
-  for (let index = 2; index < process.argv.length; index += 2) {
-    args.set(process.argv[index], process.argv[index + 1]);
-  }
+  const args = parseCliArgs(process.argv.slice(2));
   const report = await runBeamBenchmark({
     split: (args.get("--split") as BeamRunOptions["split"]) ?? undefined,
     datasetPath: args.get("--dataset") ?? undefined,
     maxConversations: args.has("--max-conversations") ? Number(args.get("--max-conversations")) : undefined,
     maxQuestions: args.has("--max-questions") ? Number(args.get("--max-questions")) : undefined,
     topK: args.has("--top-k") ? Number(args.get("--top-k")) : undefined,
-    outputPath: args.get("--out") ?? undefined
+    outputPath: args.get("--out") ?? undefined,
+    requireEvidenceJudge: args.has("--require-evidence-judge")
   });
   console.log(JSON.stringify(report, null, 2));
   process.exit(report.passed ? 0 : 1);
+}
+
+function parseCliArgs(argv: string[]): Map<string, string> {
+  const args = new Map<string, string>();
+  for (let index = 0; index < argv.length; index += 1) {
+    const key = argv[index];
+    if (!key.startsWith("--")) continue;
+    const next = argv[index + 1];
+    if (next && !next.startsWith("--")) {
+      args.set(key, next);
+      index += 1;
+    } else {
+      args.set(key, "true");
+    }
+  }
+  return args;
 }

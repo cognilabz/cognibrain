@@ -85,10 +85,31 @@ function retrievalCalibrationSuite(): SuiteScore {
   const high = results.find((result) => result.memory.id !== weak.id);
   const low = results.find((result) => result.memory.id === weak.id);
   const pack = service.evidencePack({ userId: "calibration", query: "Atlas deployment tests", limit: 2, tokenBudget: 500 });
+  const harnessService = new MemoryService({
+    intelligence: {
+      evidenceJudge: {
+        judgeEvidence: ({ results }) => ({
+          answerable: true,
+          confidence: 0.95,
+          reason: "harness review gate",
+          decisions: results.map((result) => ({ id: result.memory.id, decision: "review", confidence: 0.95, reason: "operator review required" }))
+        })
+      }
+    }
+  });
+  const reviewed = harnessService.add({ userId: "calibration", content: "Atlas deployment reviewed gate requires operator approval before injection.", entities: ["atlas", "deployment"], source: { kind: "reviewed_code", confidence: 0.99 } });
+  const harnessPack = harnessService.evidencePack({ userId: "calibration", query: "Atlas deployment reviewed gate", limit: 1, tokenBudget: 500 });
   const details = [
     { id: "confidence-field", passed: typeof high?.confidence === "number" && high.confidence > 0.5, score: high?.confidence ?? 0, expected: ["confidence>0.5"], actual: String(high?.confidence ?? "missing") },
     { id: "unsafe-threshold", passed: Boolean(low?.unsafeToInject && (low.confidence ?? 1) < 0.5), score: low?.unsafeToInject ? 1 : 0, expected: ["unsafe low-confidence"], actual: JSON.stringify({ confidence: low?.confidence, unsafeToInject: low?.unsafeToInject }) },
-    { id: "context-exclusion", passed: !pack.context.includes(weak.id), score: pack.context.includes(weak.id) ? 0 : 1, expected: ["weak memory excluded"], actual: pack.context }
+    { id: "context-exclusion", passed: !pack.context.includes(weak.id), score: pack.context.includes(weak.id) ? 0 : 1, expected: ["weak memory excluded"], actual: pack.context },
+    {
+      id: "harness-review-not-injected",
+      passed: !harnessPack.context.includes(reviewed.id) && Boolean(harnessPack.evidenceVerdict?.reviewMemoryIds.includes(reviewed.id)),
+      score: !harnessPack.context.includes(reviewed.id) && harnessPack.evidenceVerdict?.reviewMemoryIds.includes(reviewed.id) ? 1 : 0,
+      expected: ["reviewed memory excluded", "evidence verdict retained"],
+      actual: JSON.stringify({ context: harnessPack.context, evidenceVerdict: harnessPack.evidenceVerdict })
+    }
   ];
   return finalizeSuite("retrieval-calibration", details);
 }

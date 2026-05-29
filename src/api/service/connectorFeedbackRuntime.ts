@@ -3,10 +3,10 @@ import { contentHash, firstString, safeGet } from "./helpers";
 
 export function providerStatus(service: any): ProviderAdapterStatus {
   return {
-    active: Boolean(service.defaultExtractor || service.defaultSummarizer || service.defaultVerifier || service.defaultReranker || service.defaultQueryExpander || service.defaultTranslator),
+    active: Boolean(service.defaultExtractor || service.defaultSummarizer || service.defaultVerifier || service.defaultEvidenceJudge || service.defaultReranker || service.defaultQueryExpander || service.defaultTranslator),
     command: process.env.MEMORY_INTELLIGENCE_COMMAND,
     timeoutMs: Number(process.env.MEMORY_INTELLIGENCE_TIMEOUT_MS ?? 3500),
-    tasks: ["contradiction", "rerank", "verify", "summarize", "extract", "expand", "translate"],
+    tasks: ["contradiction", "rerank", "verify", "evidence", "summarize", "extract", "expand", "translate"],
     fallback: "deterministic"
   };
 }

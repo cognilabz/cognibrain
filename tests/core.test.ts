@@ -560,26 +560,108 @@ describe("TypeScript memory core", () => {
       const input = JSON.parse(fs.readFileSync(0, "utf8"));
       if (input.task === "rerank") console.log(JSON.stringify({ ranking: input.results.map((item) => item.id).reverse() }));
       if (input.task === "verify") console.log(JSON.stringify({ decisions: [{ id: input.results[0].id, decision: "warn", reason: "provider warning" }] }));
+      if (input.task === "evidence") console.log(JSON.stringify({ answerable: false, confidence: 0.91, reason: "provider found no sufficient evidence" }));
       if (input.task === "contradiction") console.log(JSON.stringify({ label: "contradiction", confidence: 0.88, reason: "provider contradiction" }));
       if (input.task === "summarize") console.log(JSON.stringify({ content: "Atlas provider summary from external intelligence.", confidence: 0.81 }));
       if (input.task === "translate") console.log(JSON.stringify({ translated: "Atlas memory provider translation.", confidence: 0.82 }));
     `;
     const provider = new JsonCommandMemoryIntelligence({ command: process.execPath, args: ["-e", script] });
     const service = new MemoryService({
-      intelligence: { reranker: provider, verifier: provider, contradictionDetector: provider, summarizer: provider, translator: provider }
+      intelligence: { reranker: provider, verifier: provider, evidenceJudge: provider, contradictionDetector: provider, summarizer: provider, translator: provider }
     });
     service.add({ userId: "u1", content: "Atlas first cache note.", tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
     service.add({ userId: "u1", content: "Atlas second cache note.", tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
     service.add({ userId: "u1", content: "Atlas third cache note.", tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
 
     const search = service.search({ userId: "u1", query: "Atlas cache", limit: 2 });
-    expect(search[0].decision).toBe("warn");
+    expect(search[0].decision).toBe("exclude");
     expect(search[0].explanation?.join(" ")).toContain("provider verify");
+    expect(search[0].explanation?.join(" ")).toContain("provider evidence");
+    expect(search[0].evidence?.answerable).toBe(false);
 
     const report = service.dream("u1");
     expect(report.contradictions[0]?.reason).toBe("provider contradiction");
     expect(report.created.some((memory) => memory.content.includes("provider summary"))).toBe(true);
     expect(service.translateText("Atlas Speicher", "de").translated).toBe("Atlas memory provider translation.");
+  });
+
+  it("uses harness evidence judgement to suppress unsupported retrieval without static query rules", () => {
+    const service = new MemoryService({
+      intelligence: {
+        evidenceJudge: {
+          judgeEvidence: ({ results }) => ({
+            answerable: false,
+            confidence: 0.93,
+            reason: "harness judge did not find source-grounded support",
+            decisions: results.map((result) => ({ id: result.memory.id, decision: "exclude", confidence: 0.93, reason: "insufficient source support" }))
+          })
+        }
+      }
+    });
+    service.add({ userId: "u1", content: "Atlas dashboard has a deployment note.", source: { kind: "human", confidence: 0.95 } });
+
+    const results = service.search({ userId: "u1", query: "What was the exact customer feedback on the dashboard?", limit: 1 });
+    expect(results[0].decision).toBe("exclude");
+    expect(results[0].unsafeToInject).toBe(true);
+    expect(results[0].evidence).toMatchObject({ answerable: false, confidence: 0.93 });
+    expect(results[0].explanation?.join(" ")).toContain("insufficient source support");
+
+    const pack = service.evidencePack({ userId: "u1", query: "What was the exact customer feedback on the dashboard?", limit: 1 });
+    expect(pack.evidenceVerdict).toMatchObject({ answerable: false, confidence: 0.93, injected: 0 });
+    expect(pack.evidenceVerdict?.blockedMemoryIds).toContain(results[0].memory.id);
+  });
+
+  it("keeps harness-reviewed evidence out of injected context until approved", () => {
+    const service = new MemoryService({
+      intelligence: {
+        evidenceJudge: {
+          judgeEvidence: ({ results }) => ({
+            answerable: true,
+            confidence: 0.96,
+            reason: "harness requires human review before injection",
+            decisions: results.map((result) => ({ id: result.memory.id, decision: "review", confidence: 0.96, reason: "needs operator approval" }))
+          })
+        }
+      }
+    });
+    const memory = service.add({ userId: "u1", content: "Atlas release uses the reviewed deployment gate.", entities: ["atlas", "release"], source: { kind: "reviewed_code", confidence: 0.99 } });
+
+    const results = service.search({ userId: "u1", query: "Atlas release deployment gate", limit: 1 });
+    expect(results[0]).toMatchObject({ decision: "review", unsafeToInject: true });
+
+    const pack = service.evidencePack({ userId: "u1", query: "Atlas release deployment gate", limit: 1, tokenBudget: 500 });
+    expect(pack.context).not.toContain(memory.id);
+    expect(pack.results).toHaveLength(0);
+    expect(pack.evidenceVerdict).toMatchObject({ answerable: true, injected: 0 });
+    expect(pack.evidenceVerdict?.reviewMemoryIds).toContain(memory.id);
+    expect(pack.excludedResults?.find((result) => result.memoryId === memory.id)?.reason).toContain("unsafe-to-inject");
+  });
+
+  it("keeps unsafe harness-reviewed engineering memories out of coding context packs", () => {
+    const service = new MemoryService({
+      intelligence: {
+        evidenceJudge: {
+          judgeEvidence: ({ results }) => ({
+            answerable: true,
+            confidence: 0.95,
+            reason: "harness review gate",
+            decisions: results.map((result) => ({ id: result.memory.id, decision: "review", confidence: 0.95, reason: "operator review required" }))
+          })
+        }
+      }
+    });
+    const memory = service.add({
+      userId: "dev",
+      projectId: "atlas",
+      content: "Atlas repo policy says use npm test before release.",
+      source: { kind: "reviewed_code", confidence: 0.98 },
+      tags: ["engineering-memory", "engineering:repo_policy"],
+      metadata: { engineering: { kind: "repo_policy", codebase: { repo: "atlas" }, confidence: 0.95 } }
+    });
+
+    const pack = service.codingContextPack({ userId: "dev", projectId: "atlas", query: "Atlas release test policy", codebaseScope: { repo: "atlas" }, tokenBudget: 500 });
+    expect(pack.context).not.toContain(memory.id);
+    expect(pack.excludedStaleRules.find((item) => item.memoryId === memory.id)?.reason).toContain("unsafe");
   });
 
   it("schedules verification for time-sensitive stale memories", () => {

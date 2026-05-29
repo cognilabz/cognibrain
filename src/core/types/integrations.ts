@@ -315,7 +315,7 @@ export interface ProviderAdapterStatus {
   active: boolean;
   command?: string;
   timeoutMs: number;
-  tasks: Array<"contradiction" | "rerank" | "verify" | "summarize" | "extract" | "expand" | "translate">;
+  tasks: Array<"contradiction" | "rerank" | "verify" | "evidence" | "summarize" | "extract" | "expand" | "translate">;
   fallback: "deterministic";
 }
 

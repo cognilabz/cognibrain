@@ -63,6 +63,7 @@ export function providerFromEnv(): NonNullable<MemoryServiceOptions["intelligenc
   return {
     reranker: provider,
     verifier: provider,
+    evidenceJudge: provider,
     contradictionDetector: provider,
     summarizer: provider,
     evaluator: provider,

@@ -1,7 +1,7 @@
 import type { BeliefState, ConsentPolicy, FeedbackKind, MemoryAuditEvent, MemoryLayer, MemoryPolicyRule, MemoryProvenance, MemoryRelation, MemorySchemaVersion, MemoryScope, MemoryType, PolicyDecision, Provenance, QueryIntent, QueryPlan, RelationType, RetrievalMode, SourceKind, SourceRef, TemporalMetadata } from "./base";
 import type { CodebaseScope, EngineeringMemoryKind } from "./engineering";
 import type { CurrentTruthDecision } from "./extraction";
-import type { ContextReranker, ContextVerifier, RetrievalProfile, RetrievalWeights } from "./retrieval";
+import type { ContextEvidenceJudge, ContextReranker, ContextVerifier, EvidenceJudgement, RetrievalProfile, RetrievalWeights } from "./retrieval";
 
 export interface MemoryInput {
   brainId?: string;
@@ -102,6 +102,7 @@ export interface SearchOptions {
   profileId?: string;
   verifier?: ContextVerifier;
   reranker?: ContextReranker;
+  evidenceJudge?: ContextEvidenceJudge;
   embeddingProvider?: EmbeddingProvider;
   disableEmbeddings?: boolean;
   lexicalProvider?: LexicalScoreProvider;
@@ -204,6 +205,7 @@ export interface SearchResult {
     reason: string;
     conflictSetId?: string;
   };
+  evidence?: EvidenceJudgement;
   risk?: {
     riskLevel: "low" | "medium" | "high" | "release-critical" | "destructive";
     warnings: string[];
@@ -227,6 +229,15 @@ export interface EvidencePack {
   tokenBudget: number;
   hash?: string;
   context: string;
+  evidenceVerdict?: {
+    answerable: boolean;
+    confidence: number;
+    reason?: string;
+    requiredEvidence?: string[];
+    injected: number;
+    blockedMemoryIds: string[];
+    reviewMemoryIds: string[];
+  };
   results: Array<{
     memoryId: string;
     content: string;

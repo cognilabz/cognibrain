@@ -167,7 +167,7 @@ export function buildCodingContextPackFromResults(input: {
       excludedStaleRules.push({ memoryId: result.memory.id, reason: `high-impact ${engineering.kind} requires revalidation before injection`, kind: engineering.kind });
       continue;
     }
-    if (result.unsafeToInject && result.decision === "review") {
+    if (result.unsafeToInject) {
       excludedStaleRules.push({ memoryId: result.memory.id, reason: "unsafe to inject without review", kind: engineering.kind });
       continue;
     }

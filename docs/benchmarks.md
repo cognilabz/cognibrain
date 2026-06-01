@@ -9,12 +9,14 @@ snapshot, not a how-to guide.
 
 | Artifact | Generated | Result |
 | --- | --- | --- |
-| `artifacts/nextgen-benchmarks.json` | 2026-05-28T12:52:13.044Z | Passed |
-| `artifacts/cognicodebench/run.json` | 2026-05-29T06:52:11.071Z | Passed |
-| `artifacts/arena/run.json` | 2026-05-28T12:52:32.574Z | Passed |
-| `artifacts/answer-generation.json` | 2026-05-28T12:52:33.568Z | Passed |
-| `artifacts/leaderboard.json` | 2026-05-28T12:52:33.985Z | Passed |
-| `artifacts/benchmark-hardening.json` | 2026-05-28T12:52:34.422Z | Passed |
+| `artifacts/nextgen-benchmarks.json` | 2026-06-01T08:58:18.770Z | Passed |
+| `artifacts/cognicodebench/run.json` | 2026-06-01T08:58:41.688Z | Passed |
+| `artifacts/arena/run.json` | 2026-06-01T09:01:21.781Z | Passed |
+| `artifacts/arena/native-competitors.json` | 2026-06-01T08:53:30.159Z | Passed |
+| `artifacts/answer-generation.json` | 2026-06-01T09:01:23.340Z | Passed |
+| `artifacts/leaderboard.json` | 2026-06-01T09:01:23.630Z | Passed |
+| `artifacts/benchmark-hardening.json` | 2026-06-01T09:01:30.207Z | Passed |
+| `artifacts/external-hard-summary.json` | 2026-06-01T10:07:13.482Z | Passed |
 | `artifacts/locomo-report.json` | 2026-05-28T12:56:23.302Z | Passed |
 | `artifacts/longmemeval-report.json` | 2026-05-28T12:59:05.579Z | Passed |
 | `artifacts/beam-report.json` | 2026-05-29T06:54:33.618Z | Passed |
@@ -94,12 +96,39 @@ claim.
 | System | Proof level | Mode | Scenarios | Score |
 | --- | --- | --- | ---: | ---: |
 | Cognibrain | `same-run-full` | `full-local` | 300 | 97.5% |
+| LangMem | `same-run-native` | `native-command` | 300 | 66.7% |
 | Graphiti/Zep | `same-run-api-shape` | `api-shape` | 300 | 66.7% |
 | Zep | `same-run-api-shape` | `api-shape` | 300 | 66.7% |
 | GBrain | `same-run-api-shape` | `api-shape` | 300 | 66.7% |
 | Cognee | `same-run-api-shape` | `api-shape` | 300 | 60.0% |
+| Basic Memory | `same-run-api-shape` | `api-shape` | 300 | 60.0% |
 | Mem0 | `same-run-api-shape` | `api-shape` | 300 | 15.0% |
-| LangMem | `credential-blocked` | `blocked-command` | 300 | 0.0% |
+
+## Native Competitor Smoke
+
+| System | Proof level | Mode | Scenarios | Score | Repeated mistake rate |
+| --- | --- | --- | ---: | ---: | ---: |
+| Cognibrain | `same-run-full` | `full-local` | 30 | 96.7% | 0.0% |
+| Mem0 | `same-run-native` | `native-command` | 30 | 66.7% | 100.0% |
+| LangMem | `same-run-native` | `native-command` | 30 | 66.7% | 100.0% |
+| GBrain | `same-run-cli` | `cli-command` | 30 | 66.7% | 100.0% |
+| Basic Memory | `same-run-native` | `native-command` | 30 | 66.7% | 100.0% |
+| Graphiti/Zep | `credential-blocked` | `blocked-command` | 30 | 0.0% | 100.0% |
+| Cognee | `credential-blocked` | `blocked-command` | 30 | 0.0% | 100.0% |
+
+## External Hard
+
+This diagnostic run uses public datasets with stricter retrieval budgets than
+the default snapshot. It is intended to expose weak margins, not to replace the
+standard artifact rows above.
+
+| Dataset | Metric | Cognibrain | Strongest baseline | Gap |
+| --- | --- | ---: | ---: | ---: |
+| LoCoMo | Evidence recall@1, no summaries | 35.7% | Keyword only 32.2% | +3.6% |
+| LongMemEval-S | Answer-session recall@1 | 75.4% | Keyword only 74.2% | +1.2% |
+| BEAM 100K | Retrieval nugget score@5 | 26.8% | Keyword only 12.0% | +14.8% |
+| BEAM 500K | Retrieval nugget score@5 | 22.1% | Keyword only 4.7% | +17.4% |
+| BEAM 1M | Retrieval nugget score@5 | 25.6% | Keyword only 10.0% | +15.6% |
 
 ## Hardening
 
@@ -117,4 +146,4 @@ claim.
 Dataset: `artifacts/cognicodebench/scenarios.json`
 
 SHA-256:
-`aec0cf11b1e07a11b4cc090509b36b73809d67fee19ccbe8e5667463746a17fb`
+`73bda620cb66a2db11bc0d12326d03e7323e90f17931309be462159067f2368e`

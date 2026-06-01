@@ -1302,6 +1302,40 @@ describe("TypeScript memory core integrations", () => {
     expect(trail.toolOutcomes[0]).toMatchObject({ command: "pnpm test", exitCode: 1 });
   });
 
+  it("does not block benchmark evidence recording from a broad proof-boundary rule", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.add({
+      userId: "dev",
+      content: "Do not trust documentation as proof; benchmark claims must use generated artifacts.",
+      type: "project",
+      layer: "long_term",
+      source: { kind: "human", confidence: 0.98 },
+      tags: ["engineering-memory", "engineering:generated_file_rule"],
+      metadata: {
+        engineering: {
+          kind: "generated_file_rule",
+          codebase: { repo: "memory" },
+          confidence: 0.95,
+          forbiddenAction: "trust documentation as proof"
+        }
+      }
+    });
+
+    const recordArtifactEvidence = service.guardAction({
+      userId: "dev",
+      action: "record completed benchmark outcomes from generated artifacts and code diffs",
+      codebaseScope: { repo: "memory" }
+    });
+    expect(recordArtifactEvidence.severity).not.toBe("block");
+
+    const useDocsAsProof = service.guardAction({
+      userId: "dev",
+      action: "trust documentation as proof",
+      codebaseScope: { repo: "memory" }
+    });
+    expect(useDocsAsProof.severity).toBe("block");
+  });
+
   it("runs a retrieval and patch-evidence loop for every engineering memory type", () => {
     const service = new MemoryService({ autoDream: { enabled: false } });
     const kinds: EngineeringMemoryKind[] = [

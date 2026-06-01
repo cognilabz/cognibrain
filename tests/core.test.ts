@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, InMemoryMemoryRepository, MemoryStore, ReflectionEngine, RepositoryBackedStorageAdapter, RetrievalEngine, healthReport, tokenize, extractEntities, type EngineeringMemoryKind, type MemoryClaim } from "../src/core";
 import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
@@ -15,6 +16,7 @@ import { PostgresMemoryRepository, SQLiteMemoryRepository, sqliteRepositoryAvail
 import { CognibrainClient, CognibrainError } from "../sdk/typescript/client";
 import { AppendOnlyLogPersistenceAdapter, CassandraCompatiblePersistenceAdapter, CassandraRemotePersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, PostgresRemotePersistenceAdapter, SQLitePersistenceAdapter, createPersistenceFromEnv, sqliteAvailable } from "../src/api/persistence";
 import { createMemoryToolHandlers } from "../src/connectors/mcpHandlers";
+import { registerMemoryMcpTools } from "../src/connectors/mcpTools";
 import { buildLeaderboardArtifact, validateLeaderboardArtifact } from "../src/eval/leaderboard";
 import { publishLeaderboardArtifact } from "../src/eval/publishLeaderboard";
 import { runNextgenBenchmarkSuites } from "../src/eval/nextgenBenchmarks";
@@ -935,6 +937,18 @@ describe("TypeScript memory core", () => {
 
     const maintenance = handlers.maintenance();
     expect(maintenance.enabled).toBe(false);
+  });
+
+  it("publishes MCP tool annotations for host safety hints", () => {
+    const server = new McpServer({ name: "test-cognibrain", version: "0.0.0" });
+    registerMemoryMcpTools(server, new MemoryService());
+    const tools = (server as unknown as { _registeredTools: Record<string, { annotations: unknown }> })._registeredTools;
+
+    expect(tools.memory_search.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
+    expect(tools.memory_action_guard.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
+    expect(tools.memory_add.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false });
+    expect(tools.memory_dream.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: false });
+    expect(tools.memory_source_revalidate.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, openWorldHint: true });
   });
 
   it("exports evidence packs that explain why memories were used", () => {

@@ -471,11 +471,23 @@ function explicitEngineeringActionMatches(action: string, engineering: Engineeri
 }
 
 function actionPhraseMatches(left: string, right: string): boolean {
-  return Boolean(left && right && (left === right || left.includes(right) || right.includes(left)));
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftTokens = actionTokens(left);
+  const rightTokens = actionTokens(right);
+  const shorter = Math.min(leftTokens.length, rightTokens.length);
+  if (shorter < 2) return false;
+  if (left.includes(right) || right.includes(left)) return true;
+  const overlap = rightTokens.filter((token) => leftTokens.includes(token)).length;
+  return overlap / Math.max(1, rightTokens.length) >= 0.8 && overlap >= 2;
 }
 
 function normalizeComparableAction(value: string): string {
   return collapseWhitespace(value.toLowerCase()).trim();
+}
+
+function actionTokens(value: string): string[] {
+  return normalizeComparableAction(value).split(/\W+/).filter((token) => token.length > 2);
 }
 
 function collapseWhitespace(value: string): string {

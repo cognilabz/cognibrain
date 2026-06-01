@@ -5,7 +5,7 @@ import { MemoryService } from "../api/service";
 import type { CogniCodeScenario } from "./cognicodeBench";
 import { buildCogniCodeScenarioSet, type CogniCodeScenarioFactoryOptions, type CogniCodeScenarioFactorySummary } from "./cognicode/scenarioFactory";
 
-type MemorySystemId = "cognibrain" | "mem0" | "graphiti" | "zep" | "cognee" | "langmem" | "gbrain";
+type MemorySystemId = "cognibrain" | "mem0" | "graphiti" | "zep" | "cognee" | "langmem" | "gbrain" | "basicmemory";
 type ProofLevel =
   | "local-baseline"
   | "public-claim-only"
@@ -135,7 +135,7 @@ interface ArenaReport {
 export async function runBenchmarkArena(options: { systems?: string[]; benchmark?: string; out?: string } & CogniCodeScenarioFactoryOptions = {}): Promise<ArenaReport> {
   const scenarioSet = loadScenarios(options);
   const scenarios = scenarioSet.scenarios;
-  const requested = normalizeSystems(options.systems ?? ["cognibrain", "mem0", "graphiti", "cognee", "langmem", "gbrain"]);
+  const requested = normalizeSystems(options.systems ?? ["cognibrain", "mem0", "graphiti", "cognee", "langmem", "gbrain", "basicmemory"]);
   const adapters = requested.map(createAdapter);
   const systems: ArenaSystemResult[] = [];
 
@@ -250,6 +250,16 @@ function createAdapter(id: MemorySystemId): BenchmarkSystemAdapter {
       proofLevel: "same-run-api-shape",
       capabilities: { corrections: true, procedure: true, guard: false, patchEvidence: false, citations: true, temporal: true, graph: true },
       gaps: ["graph recall without self-hosted install wizard proof", "no vendor connector writeback verifier"]
+    },
+    basicmemory: {
+      displayName: "Basic Memory",
+      proofLevel: "same-run-api-shape",
+      capabilities: { corrections: true, procedure: true, guard: false, patchEvidence: false, citations: true, temporal: false, graph: true },
+      gaps: [
+        "local-first Markdown/MCP memory, not a typed pre-tool action guard",
+        "no Cognibrain-style patch evidence trail for commands/files",
+        "graph and search are note-centered rather than coding-action lifecycle-centered"
+      ]
     }
   };
   return externalAdapter(id, profiles[id]) ?? new ProfileAdapter(id, profiles[id]);
@@ -597,7 +607,7 @@ function autoNativeAdapter(id: Exclude<MemorySystemId, "cognibrain">, profile: C
       adapterMode: "cloud-command"
     });
   }
-  if (["mem0", "graphiti", "cognee", "langmem"].includes(id) && existsSync(".cognibrain/native-runners/competitors-venv/bin/python") && existsSync("scripts/benchmark/competitors/native-python-runner.mjs")) {
+  if (["mem0", "graphiti", "cognee", "langmem", "basicmemory"].includes(id) && existsSync(".cognibrain/native-runners/competitors-venv/bin/python") && existsSync("scripts/benchmark/competitors/native-python-runner.mjs")) {
     const proofLevel = id === "graphiti" || id === "cognee" ? "credential-blocked" : "same-run-native";
     return new CommandRunnerAdapter(id, profile, {
       command: `${process.execPath} scripts/benchmark/competitors/native-python-runner.mjs --system ${id}`,
@@ -706,7 +716,8 @@ function normalizeSystems(systems: string[]): MemorySystemId[] {
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean)
     .map((item) => item === "graphiti/zep" ? "graphiti" : item)
-    .filter((item): item is MemorySystemId => ["cognibrain", "mem0", "graphiti", "zep", "cognee", "langmem", "gbrain"].includes(item));
+    .map((item) => ["basic-memory", "basic_memory"].includes(item) ? "basicmemory" : item)
+    .filter((item): item is MemorySystemId => ["cognibrain", "mem0", "graphiti", "zep", "cognee", "langmem", "gbrain", "basicmemory"].includes(item));
 }
 
 function cliOptions(argv: string[]): { systems?: string[]; benchmark?: string; out?: string } & CogniCodeScenarioFactoryOptions {

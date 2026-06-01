@@ -1,9 +1,18 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod/v4";
 import { createMemoryToolHandlers, jsonText } from "./mcpHandlers";
 
 export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Parameters<typeof createMemoryToolHandlers>[0] | Record<string, any>): void {
   const handlers = serviceOrHandlers && "contextPack" in serviceOrHandlers ? serviceOrHandlers : createMemoryToolHandlers(serviceOrHandlers as Parameters<typeof createMemoryToolHandlers>[0]);
+  const registerTool: McpServer["registerTool"] = (name: any, config: any, cb: any) =>
+    server.registerTool(name, {
+      ...config,
+      annotations: {
+        ...memoryToolAnnotations(name),
+        ...config.annotations
+      }
+    }, cb) as any;
   const engineeringKindSchema = z.enum(["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "forbidden_action", "migration_note", "test_strategy", "dependency_rule", "generated_file_rule"]);
   const codebaseScopeSchema = z.object({
     org: z.string().optional(),
@@ -111,7 +120,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     connectorIds: z.array(z.string()).optional()
   };
 
-  server.registerTool(
+  registerTool(
     "memory_add",
     {
       title: "Add Memory",
@@ -137,7 +146,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.add(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_search",
     {
       title: "Search Memories",
@@ -157,7 +166,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.search(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_context_pack",
     {
       title: "Build Context Pack",
@@ -178,7 +187,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.contextPack(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_evidence_pack",
     {
       title: "Export Evidence Pack",
@@ -200,7 +209,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.evidencePack(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_coding_context_pack",
     {
       title: "Build Coding Context Pack",
@@ -222,7 +231,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.codingContextPack(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_code_correction",
     {
       title: "Record Code Correction",
@@ -246,7 +255,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.codeCorrection(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_action_guard",
     {
       title: "Guard Coding Action",
@@ -265,7 +274,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.actionGuard(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_patch_evidence",
     {
       title: "Build Patch Evidence Trail",
@@ -287,7 +296,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.patchEvidence(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_policy_check",
     {
       title: "Check Memory Policy",
@@ -302,7 +311,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.policyCheck(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_retention_review",
     {
       title: "Review Retention",
@@ -315,7 +324,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.retentionReview(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_verify_claim",
     {
       title: "Verify Claim",
@@ -336,7 +345,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.verifyClaim(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_graph_path",
     {
       title: "Find Memory Graph Path",
@@ -353,7 +362,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.graphPath(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_graph_query",
     {
       title: "Query Memory Graph",
@@ -366,7 +375,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.graphQuery(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_graph_activation",
     {
       title: "Activate Memory Graph",
@@ -382,7 +391,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.graphActivation(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_graph_activate",
     {
       title: "Activate Memory Graph",
@@ -398,7 +407,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.graphActivation(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_explain_connection",
     {
       title: "Explain Memory Connection",
@@ -415,7 +424,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.explainConnection(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_procedure_recall",
     {
       title: "Recall Procedures",
@@ -435,7 +444,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.procedureRecall(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_action_record",
     {
       title: "Record Agent Action",
@@ -470,7 +479,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.actionRecord(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_action_outcome",
     {
       title: "Record Agent Action Outcome",
@@ -505,7 +514,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.actionOutcome(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_list",
     {
       title: "List Memories",
@@ -518,7 +527,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.list(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_reflect",
     {
       title: "Reflect Memories",
@@ -530,7 +539,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.reflect(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_dream",
     {
       title: "Dream Memory Lifecycle",
@@ -542,7 +551,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.dream(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_dream_plan",
     {
       title: "Plan Dream Cycle",
@@ -552,7 +561,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.dreamPlan(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_dream_due",
     {
       title: "Check Dream Due",
@@ -562,7 +571,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.dreamDue(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_dream_run",
     {
       title: "Run Scoped Dream Cycle",
@@ -572,7 +581,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(await handlers.dreamRun(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_dream_job_start",
     {
       title: "Start Dream Job",
@@ -582,7 +591,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(await handlers.dreamJobStart(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_dream_job_status",
     {
       title: "Dream Job Status",
@@ -592,7 +601,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.dreamJobStatus(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_dream_job_cancel",
     {
       title: "Cancel Dream Job",
@@ -602,7 +611,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.dreamJobCancel(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_dream_job_retry",
     {
       title: "Retry Dream Job",
@@ -612,7 +621,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(await handlers.dreamJobRetry(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_session_end",
     {
       title: "Prepare Session End",
@@ -622,7 +631,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.sessionEnd(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_handoff_prepare",
     {
       title: "Prepare Handoff",
@@ -632,7 +641,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.handoffPrepare(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_release_prepare",
     {
       title: "Prepare Release",
@@ -642,7 +651,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.releasePrepare(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_source_revalidate",
     {
       title: "Revalidate SourceRefs",
@@ -652,7 +661,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.revalidateSourceRefs(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_connector_sync_state",
     {
       title: "Connector Sync State",
@@ -662,7 +671,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.connectorSyncState(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_conflict_sets",
     {
       title: "List Truth Conflict Sets",
@@ -672,7 +681,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.conflictSets(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_conflict_resolve",
     {
       title: "Resolve Truth Conflict",
@@ -682,7 +691,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.conflictResolve(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_connector_review_queue",
     {
       title: "Connector Review Queue",
@@ -692,7 +701,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.connectorReviewQueue(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_connector_review_decide",
     {
       title: "Review Connector Memory",
@@ -702,7 +711,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.connectorReviewDecision(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_verification_resolve",
     {
       title: "Resolve Verification Queue",
@@ -712,7 +721,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.resolveVerification(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_harness_event",
     {
       title: "Record Harness Lifecycle Event",
@@ -722,7 +731,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.harnessEvent(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_health",
     {
       title: "Memory Health",
@@ -734,7 +743,7 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
     async (args) => jsonText(handlers.health(args))
   );
 
-  server.registerTool(
+  registerTool(
     "memory_maintenance_status",
     {
       title: "Memory Maintenance Status",
@@ -774,4 +783,54 @@ export function registerMemoryMcpTools(server: McpServer, serviceOrHandlers?: Pa
       ]
     })
   );
+}
+
+function memoryToolAnnotations(name: string): ToolAnnotations {
+  const base: ToolAnnotations = { openWorldHint: false };
+  const readOnly = new Set([
+    "memory_search",
+    "memory_context_pack",
+    "memory_evidence_pack",
+    "memory_coding_context_pack",
+    "memory_action_guard",
+    "memory_policy_check",
+    "memory_retention_review",
+    "memory_verify_claim",
+    "memory_graph_path",
+    "memory_graph_query",
+    "memory_graph_activation",
+    "memory_graph_activate",
+    "memory_explain_connection",
+    "memory_procedure_recall",
+    "memory_list",
+    "memory_dream_plan",
+    "memory_dream_due",
+    "memory_dream_job_status",
+    "memory_connector_sync_state",
+    "memory_conflict_sets",
+    "memory_connector_review_queue",
+    "memory_health",
+    "memory_maintenance_status"
+  ]);
+  const additiveWrites = new Set([
+    "memory_add",
+    "memory_code_correction",
+    "memory_patch_evidence",
+    "memory_action_record",
+    "memory_action_outcome",
+    "memory_harness_event"
+  ]);
+  const externalRevalidation = new Set([
+    "memory_source_revalidate",
+    "memory_verification_resolve"
+  ]);
+
+  if (readOnly.has(name)) return { ...base, readOnlyHint: true };
+  if (additiveWrites.has(name)) {
+    return { ...base, readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+  }
+  if (externalRevalidation.has(name)) {
+    return { ...base, openWorldHint: true, readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+  }
+  return { ...base, readOnlyHint: false, destructiveHint: true, idempotentHint: false };
 }

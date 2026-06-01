@@ -46,6 +46,7 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
     helpers: read("src/api/server/helpers.ts"),
     serverSchemas: read("src/api/serverSchemas.ts"),
     connectors: read("src/api/service/connectorRuntime.ts"),
+    connectorOAuth: read("src/api/service/connectorOAuthRuntime.ts"),
     marketplace: read("src/api/service/marketplace.ts"),
     dreamTypes: read("src/core/types/dream.ts"),
     dreamRuntime: read("src/api/service/dreamRuntime.ts"),
@@ -137,10 +138,10 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
       ["tests/core.test.ts", "releaseBlockers"]
     ]),
     check("connectors.oauth-secret-store", "connectors", "OAuth code exchange, refresh and revoke use TokenSecretStore refs and hashes only.", files, [
-      ["src/api/service/connectorRuntime.ts", "TokenSecretStore"],
-      ["src/api/service/connectorRuntime.ts", "refreshConnectorOAuth"],
-      ["src/api/service/connectorRuntime.ts", "revokeToken"],
-      ["src/api/service/connectorRuntime.ts", "secretRef"],
+      ["src/api/service/connectorOAuthRuntime.ts", "TokenSecretStore"],
+      ["src/api/service/connectorOAuthRuntime.ts", "refreshConnectorOAuth"],
+      ["src/api/service/connectorOAuthRuntime.ts", "revokeToken"],
+      ["src/api/service/connectorOAuthRuntime.ts", "secretRef"],
       ["tests/core-integrations.test.ts", "raw-access-token"],
       ["tests/core-integrations.test.ts", "refreshConnectorOAuth"]
     ]),
@@ -229,6 +230,7 @@ function keyForPath(path: string): string {
     helpers: "src/api/server/helpers.ts",
     serverSchemas: "src/api/serverSchemas.ts",
     connectors: "src/api/service/connectorRuntime.ts",
+    connectorOAuth: "src/api/service/connectorOAuthRuntime.ts",
     marketplace: "src/api/service/marketplace.ts",
     dreamTypes: "src/core/types/dream.ts",
     dreamRuntime: "src/api/service/dreamRuntime.ts",

@@ -7,6 +7,8 @@ import importlib.metadata
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -27,6 +29,8 @@ def main() -> int:
             output = run_mem0(scenario, started)
         elif args.system == "langmem":
             output = run_langmem(scenario, started)
+        elif args.system == "basicmemory":
+            output = run_basicmemory(scenario, started)
         elif args.system in ("graphiti", "zep"):
             output = asyncio.run(run_graphiti(scenario, started, args.system))
         elif args.system == "cognee":
@@ -135,6 +139,75 @@ def run_langmem(scenario: dict[str, Any], started: float) -> dict[str, Any]:
             "store": "langgraph.store.memory.InMemoryStore",
             "created": str(created),
             "search": compact(found),
+        },
+    }
+
+
+def run_basicmemory(scenario: dict[str, Any], started: float) -> dict[str, Any]:
+    """Run the same scenario through Basic Memory's local CLI/MCP-backed path."""
+    version_value = version("basic-memory")
+    if not version_value:
+        return blocked("basicmemory", started, "basic-memory package is not installed in the native competitor venv")
+
+    runner_root = native_root() / "basicmemory" / slug(scenario["id"])
+    config_dir = runner_root / "config"
+    project_home = runner_root / "home"
+    if runner_root.exists():
+        shutil.rmtree(runner_root)
+    config_dir.mkdir(parents=True, exist_ok=True)
+    project_home.mkdir(parents=True, exist_ok=True)
+
+    env = {
+        **os.environ,
+        "BASIC_MEMORY_CONFIG_DIR": str(config_dir),
+        "BASIC_MEMORY_ENV": "test",
+        "BASIC_MEMORY_NO_PROMOS": "1",
+        "BASIC_MEMORY_LOG_LEVEL": "ERROR",
+        "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "false",
+    }
+    env.pop("BASIC_MEMORY_HOME", None)
+
+    title = f"CogniCode {scenario['id']}"
+    content = basicmemory_note_text(scenario)
+    commands = [
+        cli_command(["project", "add", "arena", str(project_home), "--default", "--local"], env),
+        cli_command(["tool", "write-note", "--title", title, "--folder", "cognicode", "--content", content, "--project", "arena", "--local"], env),
+        cli_command(["tool", "search-notes", f"{scenario['nextTask']} {scenario['correction']['correctAction']}", "--project", "arena", "--local", "--page-size", "5"], env),
+        cli_command(["tool", "build-context", "memory://arena/cognicode/*", "--project", "arena", "--local", "--depth", "2"], env),
+    ]
+    failed = [entry for entry in commands if entry["status"] != 0]
+    if failed:
+        return {
+            "proofLevel": "credential-blocked",
+            "adapterMode": "blocked-command",
+            "checks": empty_checks(),
+            "capabilityGaps": ["Basic Memory CLI runner failed before completing write/search/context"],
+            "latencyMs": elapsed_ms(started),
+            "evidence": {
+                "runner": "basic-memory-cli",
+                "package": f"basic-memory=={version_value}",
+                "commands": commands,
+            },
+        }
+
+    haystack = "\n".join([content, *(entry["stdout"] for entry in commands)]).lower()
+    checks = score_haystack(scenario, haystack, has_evidence=True, has_guard=False)
+    return {
+        "proofLevel": "same-run-native",
+        "adapterMode": "native-command",
+        "checks": checks,
+        "capabilityGaps": [
+            "Basic Memory run used the real local CLI/MCP/API path with an isolated SQLite-backed project",
+            "Basic Memory stores durable Markdown notes and graph context, but this adapter found no typed pre-tool action guard",
+            "Basic Memory does not emit Cognibrain Patch Evidence Trail objects for commands/files",
+        ],
+        "latencyMs": elapsed_ms(started),
+        "evidence": {
+            "runner": "basic-memory-cli",
+            "package": f"basic-memory=={version_value}",
+            "projectHome": str(project_home),
+            "configDir": str(config_dir),
+            "commands": commands,
         },
     }
 
@@ -257,6 +330,27 @@ def scenario_memory_text(scenario: dict[str, Any]) -> str:
     )
 
 
+def basicmemory_note_text(scenario: dict[str, Any]) -> str:
+    expected = scenario["expected"]
+    return "\n".join(
+        [
+            f"# CogniCode {scenario['id']}",
+            "",
+            "## Observations",
+            f"- [repository] {scenario['repoSeed']['name']}",
+            f"- [correction] {scenario['correction']['content']}",
+            f"- [correct_action] {scenario['correction']['correctAction']}",
+            f"- [expected_command] {expected['command']}",
+            f"- [expected_files] {', '.join(expected['filesChanged'])}",
+            f"- [wrong_action] {scenario['wrongAction'].get('command') or scenario['wrongAction']['reason']}",
+            "",
+            "## Relations",
+            "- applies_to [[CogniCode Arena]]",
+            "- relates_to [[Patch Evidence]]",
+        ]
+    )
+
+
 def score_haystack(scenario: dict[str, Any], haystack: str, *, has_evidence: bool, has_guard: bool) -> dict[str, bool]:
     correction = scenario["correction"]
     expected = scenario["expected"]
@@ -295,6 +389,7 @@ def package_versions(system: str) -> dict[str, str | None]:
         "graphiti": ["graphiti-core", "kuzu"],
         "zep": ["graphiti-core", "kuzu"],
         "cognee": ["cognee"],
+        "basicmemory": ["basic-memory"],
     }.get(system, [])
     return {name: version(name) for name in names}
 
@@ -340,6 +435,22 @@ def version(package: str) -> str | None:
         return importlib.metadata.version(package)
     except importlib.metadata.PackageNotFoundError:
         return None
+
+
+def cli_command(args: list[str], env: dict[str, str]) -> dict[str, Any]:
+    result = subprocess.run(
+        [sys.executable, "-m", "basic_memory.cli.main", *args],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=int(os.environ.get("MEMORY_ARENA_BASICMEMORY_CLI_TIMEOUT_MS", "30000")) / 1000,
+    )
+    return {
+        "argv": ["python", "-m", "basic_memory.cli.main", *args],
+        "status": result.returncode,
+        "stdout": compact(result.stdout, 3000),
+        "stderr": compact(result.stderr, 2000),
+    }
 
 
 if __name__ == "__main__":

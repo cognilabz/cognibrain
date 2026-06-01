@@ -8,7 +8,7 @@ const arenaArgs = [
   "tsx",
   "src/eval/arena.ts",
   "--systems",
-  "cognibrain,mem0,graphiti,zep,cognee,langmem,gbrain",
+  "cognibrain,mem0,graphiti,zep,cognee,langmem,gbrain,basicmemory",
   "--benchmark",
   "cognicode",
   "--count",

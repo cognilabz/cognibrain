@@ -17,6 +17,7 @@ const installations = {
   graphiti: pythonPackageStatus("graphiti-core"),
   cognee: pythonPackageStatus("cognee"),
   langmem: pythonPackageStatus("langmem"),
+  basicmemory: pythonPackageStatus("basic-memory"),
   gbrain: installGBrain()
 };
 
@@ -31,6 +32,8 @@ const env = {
   MEMORY_ARENA_COGNEE_PROOF_LEVEL: "credential-blocked",
   MEMORY_ARENA_LANGMEM_COMMAND: `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "native-python-runner.mjs")} --system langmem`,
   MEMORY_ARENA_LANGMEM_PROOF_LEVEL: "same-run-native",
+  MEMORY_ARENA_BASICMEMORY_COMMAND: `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "native-python-runner.mjs")} --system basicmemory`,
+  MEMORY_ARENA_BASICMEMORY_PROOF_LEVEL: "same-run-native",
   MEMORY_ARENA_GBRAIN_COMMAND: `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "gbrain-runner.mjs")}`,
   MEMORY_ARENA_GBRAIN_PROOF_LEVEL: "same-run-cli",
   MEMORY_ARENA_GBRAIN_REPO: gbrainRepo,
@@ -46,7 +49,7 @@ if (process.env.MEM0_API_KEY || process.env.MEMORY_ARENA_MEM0_API_KEY) {
   if (process.env.MEM0_BASE_URL) env.MEMORY_ARENA_MEM0_BASE_URL = process.env.MEM0_BASE_URL;
 }
 
-const arena = spawnSync("npx", ["tsx", "src/eval/arena.ts", "--systems", "cognibrain,mem0,graphiti,cognee,langmem,gbrain", "--benchmark", "cognicode", "--count", count, "--out", "artifacts/arena/run.json"], {
+const arena = spawnSync("npx", ["tsx", "src/eval/arena.ts", "--systems", "cognibrain,mem0,graphiti,cognee,langmem,gbrain,basicmemory", "--benchmark", "cognicode", "--count", count, "--out", "artifacts/arena/run.json"], {
   cwd: root,
   env,
   encoding: "utf8",
@@ -97,7 +100,8 @@ function installPythonCompetitors() {
     "graphiti-core[kuzu]==0.29.1",
     "langmem==0.0.30",
     "cognee==1.1.0",
-    "fastembed==0.7.3"
+    "basic-memory==0.21.5",
+    "fastembed==0.8.0"
   ];
   const install = spawnSync("uv", ["pip", "install", "--python", pythonBin, ...packages], {
     cwd: root,

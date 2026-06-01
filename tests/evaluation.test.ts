@@ -24,6 +24,7 @@ import { generateBenchmarkRelease } from "../src/eval/benchmarkRelease";
 import { generatePlanGapAudit } from "../src/eval/planGaps";
 import { runOperatorMemoryBenchmark } from "../src/eval/operatorMemoryBenchmark";
 import { publishArenaReport } from "../src/eval/publishArena";
+import { runBenchmarkArena } from "../src/eval/arena";
 import { CLI_COMMAND_CONTRACTS, MEMCTL_COMMAND_CONTRACTS } from "../src/api/releaseContract";
 
 type ConnectorBaseArtifacts = {
@@ -496,6 +497,21 @@ describe("self verification benchmark loop", () => {
       expect(report.summary.marketSuperiorityBlockers.some((item) => item.includes("Graphiti"))).toBe(true);
     } finally {
       process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND = previous;
+    }
+  });
+
+  it("includes Basic Memory in the Arena competitor matrix with bounded proof", async () => {
+    const previous = process.env.MEMORY_ARENA_AUTO_NATIVE;
+    try {
+      process.env.MEMORY_ARENA_AUTO_NATIVE = "false";
+      const report = await runBenchmarkArena({ systems: ["basicmemory"], count: 2 });
+      const basicMemory = report.systems.find((system) => system.system === "basicmemory");
+      expect(basicMemory?.displayName).toBe("Basic Memory");
+      expect(basicMemory?.proofLevel).toBe("same-run-api-shape");
+      expect(basicMemory?.capabilityGaps.join(" ")).toContain("pre-tool action guard");
+      expect(basicMemory?.score).toBeGreaterThan(0);
+    } finally {
+      process.env.MEMORY_ARENA_AUTO_NATIVE = previous;
     }
   });
 

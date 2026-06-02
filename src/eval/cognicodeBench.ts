@@ -420,15 +420,16 @@ function runScenario(scenario: CogniCodeScenario): CogniCodeScenarioResult {
     memoryIds: [...new Set([...context.sections.flatMap((section) => section.evidence.map((item) => item.memoryId)), correction.id, wrong.id, ...connectorMemoryIds])]
   });
   const referencedKinds = new Set(context.sections.flatMap((section) => section.evidence.map((item) => item.kind).filter((kind): kind is EngineeringMemoryKind => Boolean(kind))));
+  const contextMemoryIds = new Set(context.sections.flatMap((section) => section.evidence.map((item) => item.memoryId)));
   const updatedWrong = service.get(wrong.id);
   const patchChecks = evaluatePatchModel(scenario);
   const checks = {
-    correctionRecalled: context.context.includes(correction.id) || context.context.includes(scenario.correction.correctAction) || context.context.includes(scenario.correction.content),
+    correctionRecalled: contextMemoryIds.has(correction.id) || trail.correctionIds.includes(correction.id),
     procedureRecalled: scenario.expected.referencedKinds.some((kind) => referencedKinds.has(kind)) && context.sections.length > 0,
     wrongActionSuppressed: updatedWrong.beliefState === "superseded" && (!scenario.expected.blockedAction || guard.severity === "block" || guard.severity === "warn"),
     patchCorrect: scenario.expected.filesChanged.every((file) => trail.summary.filesChanged.includes(file)) && trail.summary.commandsRun.includes(scenario.expected.command),
     evidenceComplete: trail.memoryIds.includes(correction.id) && trail.toolOutcomeIds.includes(wrong.id),
-    staleSuppressed: !staleMemory || !context.context.includes(staleMemory.id) || context.excludedStaleRules.some((item) => item.memoryId === staleMemory.id),
+    staleSuppressed: !staleMemory || !contextMemoryIds.has(staleMemory.id) || context.excludedStaleRules.some((item) => item.memoryId === staleMemory.id) || trail.excludedStaleRules.some((item) => item.memoryId === staleMemory.id),
     sourceRefCorrect: !scenario.sourceRef || connectorMemoryIds.length === (scenario.connectorEvents ?? []).length && scenario.connectorEvents?.every((event) => event.sourceRef?.connectorId === scenario.sourceRef?.connectorId) === true,
     patchGranularCorrect: Object.values(patchChecks).every(Boolean),
     longHorizonRecall: !scenario.horizon || scenario.horizon.taskSession > scenario.horizon.correctionSession && scenario.horizon.horizonLength >= 1

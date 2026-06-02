@@ -22,6 +22,9 @@ const files = {
   vendorApiSpecs: readJson("artifacts/vendor-api-specs.json", { rows: [], summary: {} }),
   vendorLive: readJson("artifacts/vendor-live-smoke.json", { liveRequested: false, writebackEnabled: false, providers: [] }),
   postgresLive: readJson("artifacts/postgres-live.json", { acceptance: {} }),
+  realworldProtocol: readJson("artifacts/realworld-benchmark-protocol.json", { currentArtifacts: [], leaderboardEligibleArtifacts: [] }),
+  realworldBlackbox: readJson("artifacts/realworld-blackbox.json", { systems: [], manifestHash: "", eligibilityGate: {}, leaderboardEligible: true }),
+  arenaSource: read("src/eval/arena.ts"),
   releaseCheck: read("scripts/release/release-check.mjs"),
   internalRunner: read("scripts/internal/run-task.mjs"),
   cli: readMany(["bin/cognibrain.mjs", "bin/lib/render.mjs"]),
@@ -103,6 +106,16 @@ const corsWildcard = files.server.includes('Access-Control-Allow-Origin", "*"');
 const requestRateLimitPresent = /rateLimit|rate limit|429|too_many_requests/i.test(files.server);
 const bodyLimitPresent = /bodyLimit|maxBody|payload too large|413/i.test(files.server);
 const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmarks, files.integrations, files.operations, files.evidence, files.status, files.sameBenchmark].join("\n\n");
+const realworldArtifacts = Array.isArray(files.realworldProtocol.currentArtifacts) ? files.realworldProtocol.currentArtifacts : [];
+const realworldEligibleArtifacts = Array.isArray(files.realworldProtocol.leaderboardEligibleArtifacts) ? files.realworldProtocol.leaderboardEligibleArtifacts : [];
+const realworldAllClassified = realworldArtifacts.length >= 6 && realworldArtifacts.every((artifact) => artifact?.path && artifact?.className && artifact.leaderboardEligible === false && Array.isArray(artifact.missingForLeaderboard));
+const realworldBlackboxSystems = Array.isArray(files.realworldBlackbox.systems) ? files.realworldBlackbox.systems : [];
+const realworldBlackboxCognibrain = realworldBlackboxSystems.find((system) => system.system === "cognibrain");
+const realworldBlackboxBlocked = realworldBlackboxSystems.filter((system) => system.evidenceClass === "credential-blocked");
+const realworldBlackboxRawRetained = realworldBlackboxCognibrain && Array.isArray(realworldBlackboxCognibrain.rawOutputs) && realworldBlackboxCognibrain.rawOutputs.length >= 6;
+const realworldBlackboxJudgeBlocked = realworldBlackboxCognibrain?.qualityClaimAllowed === false && realworldBlackboxCognibrain?.judge?.kind === "missing" && realworldBlackboxCognibrain?.metrics?.score === null && files.realworldBlackbox.eligibilityGate?.llmOrHarnessJudged === false;
+const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked;
+const arenaRunnerChecksFailClosed = !files.arenaSource.includes("checksFromRunnerText") && !files.arenaSource.includes("haystack.includes") && files.arenaSource.includes("structuredChecks") && files.arenaSource.includes("runner omitted structured checks");
 const honestDbBackedBoundary = docsContainAll([
   "MemoryRepository paths for SQLite and Postgres",
   "target database"
@@ -131,12 +144,40 @@ const checks = [
   check("arena-proof-levels-known", "Every competitor row uses a known proof level.", unsupportedCompetitorLevels.length === 0, "fail", {
     unsupported: unsupportedCompetitorLevels.map((system) => `${system.displayName ?? system.system}:${system.proofLevel}`)
   }),
+  check("arena-runner-structured-checks", "Arena command runners fail closed unless they return structured checks; raw text is diagnostic evidence only.", arenaRunnerChecksFailClosed, "fail", {
+    source: "src/eval/arena.ts"
+  }),
   check("benchmark-docs-boundary", "Benchmark docs explicitly separate full local proof from API-shape, native, cloud, CLI and vendor-certified rows.", docsContainAll([
     "This page records the current checked benchmark artifacts",
     "same-run-api-shape",
     "credential-blocked"
   ]), "fail", {
     docs: ["README.md", "docs/benchmarks.md", "docs/evidence.md"]
+  }),
+  check("realworld-benchmark-boundary", "Real-world benchmark protocol demotes current adapted/internal artifacts from comparative leaderboard evidence.", realworldAllClassified && realworldEligibleArtifacts.length === 0 && docsContainAll([
+    "The real-world protocol currently classifies 0 checked artifacts as fair",
+    "Cognibrain-shaped",
+    "custom-adapter-diagnostic"
+  ]), "fail", {
+    artifact: "artifacts/realworld-benchmark-protocol.json",
+    classifiedArtifacts: realworldArtifacts.map((artifact) => `${artifact.path}:${artifact.className}:${artifact.leaderboardEligible ? "eligible" : "not-eligible"}`),
+    leaderboardEligibleArtifacts: realworldEligibleArtifacts
+  }),
+  check("realworld-blackbox-harness-proof", "Neutral real-world black-box harness retains raw outputs, latency/cost fields and refuses quality scoring without an LLM/harness judge.", realworldBlackboxHarnessReady && realworldBlackboxBlocked.length >= 5 && docsContainAll([
+    "Real-World Black-Box Smoke",
+    "export-raw-outputs",
+    "MEMORY_REALWORLD_JUDGE_COMMAND",
+    "not scored",
+    "diagnostics only"
+  ]), "fail", {
+    artifact: "artifacts/realworld-blackbox.json",
+    manifestHash: files.realworldBlackbox.manifestHash,
+    leaderboardEligible: files.realworldBlackbox.leaderboardEligible,
+    llmOrHarnessJudged: files.realworldBlackbox.eligibilityGate?.llmOrHarnessJudged,
+    judge: realworldBlackboxCognibrain?.judge,
+    blockedSystems: realworldBlackboxBlocked.map((system) => system.system),
+    cognibrainScore: realworldBlackboxCognibrain?.metrics?.score,
+    rawOutputs: realworldBlackboxCognibrain?.rawOutputs?.length ?? 0
   }),
   check("connector-hermetic-drivers", "Connector registry has first-party driver and fixture coverage for the native connector set.", maturityRows.length >= 19 && hermeticRows.length >= 19, "fail", {
     artifact: "artifacts/connector-maturity.json",
@@ -265,6 +306,9 @@ const checks = [
     "artifacts/connector-webhooks.json",
     "artifacts/harness-maturity.json",
     "artifacts/product-truth-audit.json",
+    "artifacts/realworld-benchmark-protocol.json",
+    "artifacts/realworld-blackbox.json",
+    "artifacts/realworld-blackbox-openai-intelligence.json",
     "artifacts/runtime-status.json",
     "artifacts/vendor-api-specs.json",
     "artifacts/vendor-live-smoke.json"
@@ -345,13 +389,19 @@ const report = {
     hardWiredServiceStore,
     builtInOidcRbac: runtimeStatus.summary.builtInOidcRbac,
     defaultDenyPolicy: runtimeStatus.summary.defaultDenyPolicy,
-    httpHardened: runtimeStatus.summary.httpHardened
+    httpHardened: runtimeStatus.summary.httpHardened,
+    realWorldLeaderboardEligibleArtifacts: realworldEligibleArtifacts.length,
+    realWorldBlackboxBlockedSystems: realworldBlackboxBlocked.length,
+    realWorldBlackboxJudgeBlocked: realworldBlackboxJudgeBlocked
   },
   truthTuples: [
     ["arena.cognibrain.proof", cognibrainArena?.proofLevel ?? "missing", "artifacts/arena/run.json"],
     ["arena.competitors.realRuns", realCompetitors.length, "artifacts/arena/run.json"],
     ["arena.competitors.apiShape", apiShapeCompetitors.length, "artifacts/arena/run.json"],
     ["arena.competitors.credentialBlocked", blockedCompetitors.length, "artifacts/arena/run.json"],
+    ["benchmarks.realworld.leaderboardEligible", realworldEligibleArtifacts.length, "artifacts/realworld-benchmark-protocol.json"],
+    ["benchmarks.realworld.blackboxBlocked", realworldBlackboxBlocked.length, "artifacts/realworld-blackbox.json"],
+    ["benchmarks.realworld.qualityJudge", realworldBlackboxJudgeBlocked ? "missing-blocks-quality-claim" : realworldBlackboxCognibrain?.judge?.kind ?? "missing", "artifacts/realworld-blackbox.json"],
     ["connectors.hermeticDrivers", hermeticRows.length, "artifacts/connector-maturity.json"],
     ["connectors.liveSmokeReady", liveSmokeReadyRows.length, "artifacts/connector-maturity.json"],
     ["connectors.apiSpecVerified", apiSpecVerifiedRows.length, "artifacts/vendor-api-specs.json"],

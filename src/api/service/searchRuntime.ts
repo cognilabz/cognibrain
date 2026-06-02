@@ -33,6 +33,7 @@ export function search(service: any, options: SearchOptions): SearchResult[] {
       reranker: effectiveOptions.reranker ?? service.defaultReranker,
       verifier: effectiveOptions.verifier ?? service.defaultVerifier,
       evidenceJudge: effectiveOptions.evidenceJudge ?? service.defaultEvidenceJudge,
+      contradictionDetector: effectiveOptions.contradictionDetector ?? defaultRetrievalContradictionDetector(service),
       lexicalProvider: effectiveOptions.lexicalProvider ?? service.lexicalProviderForPersistence()
     });
     const plannedResults = (rawResults as SearchResult[])
@@ -115,6 +116,12 @@ function applyTruthDecision(service: any, result: SearchResult): SearchResult {
     };
   }
 
+function defaultRetrievalContradictionDetector(service: any): SearchOptions["contradictionDetector"] | undefined {
+  return process.env.MEMORY_INTELLIGENCE_CONTRADICTION_IN_RETRIEVAL === "1" || process.env.MEMORY_INTELLIGENCE_CONTRADICTION_IN_RETRIEVAL === "true"
+    ? service.defaultContradictionDetector
+    : undefined;
+}
+
 function applyRiskAwareInjection(result: SearchResult, query: string): SearchResult {
     const riskLevel = classifyRetrievalRisk(query);
     if (riskLevel === "low") return { ...result, risk: { riskLevel, warnings: [], verificationRequests: [], truthReason: result.truth?.reason } };
@@ -128,7 +135,7 @@ function applyRiskAwareInjection(result: SearchResult, query: string): SearchRes
     if (verificationDueAt && verificationDueAt <= Date.now()) verificationRequests.push("source verification is due");
     const actionGuardBlock = (riskLevel === "destructive" || riskLevel === "release-critical") && (warnings.length > 0 || verificationRequests.length > 0);
     if (!warnings.length && !verificationRequests.length) return { ...result, risk: { riskLevel, warnings, verificationRequests, truthReason: result.truth?.reason } };
-    const nextDecision: SearchResult["decision"] = actionGuardBlock ? "review" : result.decision === "exclude" ? "exclude" : "warn";
+    const nextDecision: SearchResult["decision"] = result.decision === "exclude" ? "exclude" : actionGuardBlock ? "review" : "warn";
     return {
       ...result,
       decision: nextDecision,
@@ -212,8 +219,10 @@ export function routeMemory(service: any, options: SearchOptions): MemoryRouteRe
 export function evidencePack(service: any, options: SearchOptions & { tokenBudget?: number }): EvidencePack {
     const tokenBudget = options.tokenBudget ?? 900;
     const results = service.search(options) as SearchResult[];
-    const context = service.retrieval.contextPack(results, tokenBudget);
-    const includedResults = results.filter((result) => result.decision !== "exclude" && context.includes(`[${result.memory.id}]`));
+    const selection = service.retrieval.contextSelection(results, tokenBudget) as { context: string; includedResults: SearchResult[] };
+    const context = selection.context;
+    const includedResults = selection.includedResults;
+    const includedMemoryIds = new Set(includedResults.map((result) => result.memory.id));
     const id = `ctx_${contentHash(`${options.userId}:${options.query}:${includedResults.map((result) => result.memory.id).join(",")}:${tokenBudget}`).slice(2, 14)}`;
     const policyDecisions = results.map((result) => service.evaluatePolicy("retrieve", result.memory, { userId: options.userId, orgId: options.orgId, agentId: options.agentId }));
     const temporalState = {
@@ -343,7 +352,7 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
         truthDecision
       }; }),
       excludedResults: results
-        .filter((result) => result.decision === "exclude" || !context.includes(`[${result.memory.id}]`))
+        .filter((result) => result.decision === "exclude" || !includedMemoryIds.has(result.memory.id))
         .map((result) => ({
           memoryId: result.memory.id,
           reason: result.decision === "exclude"

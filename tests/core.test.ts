@@ -299,6 +299,35 @@ describe("TypeScript memory core", () => {
     expect(JSON.stringify(pack.results)).toContain("truth state");
   });
 
+  it("tracks evidence-pack delivery structurally when context text mentions another memory id", () => {
+    const service = new MemoryService();
+    const decoy = service.add({
+      userId: "u1",
+      content: `CobaltLane deployment gate archive placeholder. ${"Low-confidence unrelated audit filler. ".repeat(80)}`,
+      source: { kind: "agent", confidence: 0.2 },
+      confidence: 0.25
+    });
+    const target = service.add({
+      userId: "u1",
+      content: "CobaltLane deployment gate uses canary verify.",
+      entities: ["cobaltlane", "deployment", "gate", "canary", "verify"],
+      source: { kind: "reviewed_code", confidence: 0.99 },
+      confidence: 0.99
+    });
+    const originalContextSelection = service.retrieval.contextSelection.bind(service.retrieval);
+    service.retrieval.contextSelection = (results, tokenBudget) => {
+      const selection = originalContextSelection(results, tokenBudget);
+      return { ...selection, context: `${selection.context}\nquoted cross-reference [${decoy.id}]` };
+    };
+
+    const pack = service.evidencePack({ userId: "u1", query: "CobaltLane deployment gate canary verify", limit: 2, tokenBudget: 120 });
+    expect(pack.context).toContain(target.id);
+    expect(pack.context).toContain(`[${decoy.id}]`);
+    expect(pack.results.map((result) => result.memoryId)).toContain(target.id);
+    expect(pack.results.map((result) => result.memoryId)).not.toContain(decoy.id);
+    expect(pack.excludedResults?.find((result) => result.memoryId === decoy.id)?.reason).toContain("token budget");
+  });
+
   it("lists and resolves claim conflict sets with an operator decision", () => {
     const service = new MemoryService();
     const firstClaim: MemoryClaim = {
@@ -587,6 +616,80 @@ describe("TypeScript memory core", () => {
     expect(service.translateText("Atlas Speicher", "de").translated).toBe("Atlas memory provider translation.");
   });
 
+  it("compacts and caches JSON command evidence payloads without replacing provider judgement", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-provider-cache-"));
+    const countPath = join(dir, "count.txt");
+    const payloadPath = join(dir, "payloads.jsonl");
+    const script = `
+      const fs = require("node:fs");
+      const input = JSON.parse(fs.readFileSync(0, "utf8"));
+      fs.appendFileSync(${JSON.stringify(countPath)}, "1\\n");
+      fs.appendFileSync(${JSON.stringify(payloadPath)}, JSON.stringify(input) + "\\n");
+      console.log(JSON.stringify({
+        answerable: true,
+        confidence: 0.97,
+        reason: "provider semantic evidence decision",
+        decisions: input.results.map((result) => ({ id: result.id, decision: "include", confidence: 0.97, reason: "provider include" }))
+      }));
+    `;
+    const provider = new JsonCommandMemoryIntelligence({
+      command: process.execPath,
+      args: ["-e", script],
+      cacheTtlMs: 60_000,
+      cacheMaxEntries: 8,
+      compactPayloads: true
+    });
+    const service = new MemoryService();
+    const memory = service.add({
+      userId: "u1",
+      content: `Atlas provider cache note. ${"Semantic details ".repeat(140)}`,
+      tags: Array.from({ length: 40 }, (_, index) => `tag-${index}`),
+      entities: Array.from({ length: 50 }, (_, index) => `entity-${index}`),
+      metadata: { large: "metadata ".repeat(100), nested: { keep: "short" } },
+      source: { kind: "human", confidence: 0.95 }
+    });
+    const result = {
+      memory,
+      score: 0.91,
+      decision: "include" as const,
+      explanation: [`provider explanation ${"detail ".repeat(80)}`],
+      signals: { semantic: 0.9, keyword: 0.2 }
+    };
+
+    const first = provider.judgeEvidence({ query: "Atlas provider cache note", results: [result as any], now: new Date("2026-06-02T12:00:10.000Z") });
+    const second = provider.judgeEvidence({ query: "Atlas provider cache note", results: [result as any], now: new Date("2026-06-02T12:00:45.000Z") });
+
+    expect(first).toMatchObject({ answerable: true, confidence: 0.97 });
+    expect(second).toMatchObject({ answerable: true, confidence: 0.97 });
+    expect(readFileSync(countPath, "utf8").trim().split("\n")).toHaveLength(1);
+    const captured = JSON.parse(readFileSync(payloadPath, "utf8").trim());
+    expect(captured.results[0].memory.content.length).toBeLessThanOrEqual(1203);
+    expect(captured.results[0].memory.tags).toHaveLength(24);
+    expect(captured.results[0].memory.entities).toHaveLength(32);
+    expect(captured.results[0].explanation[0].length).toBeLessThanOrEqual(183);
+  });
+
+  it("fails closed when JSON command evidence output lacks per-memory confidence", () => {
+    const script = `
+      const fs = require("node:fs");
+      const input = JSON.parse(fs.readFileSync(0, "utf8"));
+      console.log(JSON.stringify({
+        answerable: true,
+        confidence: 0.96,
+        reason: "provider claims semantic support but omits decision confidence",
+        decisions: input.results.map((result) => ({ id: result.id, decision: "include", reason: "provider include without confidence" }))
+      }));
+    `;
+    const provider = new JsonCommandMemoryIntelligence({ command: process.execPath, args: ["-e", script] });
+    const service = new MemoryService({ intelligence: { evidenceJudge: provider } });
+    service.add({ userId: "u1", content: "NovaRetail checkout timeout was fixed with Redis pipeline batching.", source: { kind: "human", confidence: 0.95 } });
+
+    const results = service.search({ userId: "u1", query: "What fixed the NovaRetail checkout timeout?", limit: 1 });
+    expect(results[0]).toMatchObject({ decision: "exclude", unsafeToInject: true });
+    expect(results[0].evidence).toMatchObject({ answerable: false, confidence: 0.99 });
+    expect(results[0].explanation?.join(" ")).toContain("provider evidence contract invalid");
+  });
+
   it("uses harness evidence judgement to suppress unsupported retrieval without static query rules", () => {
     const service = new MemoryService({
       intelligence: {
@@ -611,6 +714,133 @@ describe("TypeScript memory core", () => {
     const pack = service.evidencePack({ userId: "u1", query: "What was the exact customer feedback on the dashboard?", limit: 1 });
     expect(pack.evidenceVerdict).toMatchObject({ answerable: false, confidence: 0.93, injected: 0 });
     expect(pack.evidenceVerdict?.blockedMemoryIds).toContain(results[0].memory.id);
+  });
+
+  it("preserves explicit harness include confidence through retrieval calibration", () => {
+    const service = new MemoryService({
+      intelligence: {
+        evidenceJudge: {
+          judgeEvidence: ({ results }) => ({
+            answerable: true,
+            confidence: 0.96,
+            reason: "harness semantically authorized the delivered evidence",
+            decisions: results.map((result) => ({ id: result.memory.id, decision: "include", confidence: 0.96, reason: "semantic support" }))
+          })
+        }
+      }
+    });
+    service.add({ userId: "u1", content: "NovaRetail checkout timeout was fixed with Redis pipeline batching.", source: { kind: "human", confidence: 0.95 } });
+
+    const results = service.search({ userId: "u1", query: "What fixed the checkout problem?", limit: 1 });
+    expect(results[0]).toMatchObject({ decision: "include", unsafeToInject: false, confidence: 0.96 });
+    expect(results[0].explanation?.join(" ")).toContain("provider-evidence");
+  });
+
+  it("fails closed when direct harness top-level evidence verdict is malformed", () => {
+    const service = new MemoryService({
+      intelligence: {
+        evidenceJudge: {
+          judgeEvidence: ({ results }) =>
+            ({
+              answerable: "true",
+              reason: "harness omitted a strict top-level confidence",
+              decisions: results.map((result) => ({ id: result.memory.id, decision: "include", confidence: 0.97, reason: "semantic support" }))
+            }) as any
+        }
+      }
+    });
+    const memory = service.add({ userId: "u1", content: "NovaRetail checkout timeout was fixed with Redis pipeline batching.", source: { kind: "human", confidence: 0.95 } });
+
+    const results = service.search({ userId: "u1", query: "What fixed the NovaRetail checkout timeout?", limit: 1 });
+    expect(results[0]).toMatchObject({ decision: "exclude", unsafeToInject: true });
+    expect(results[0].evidence).toMatchObject({ answerable: false, confidence: 0.99 });
+    expect(results[0].explanation?.join(" ")).toContain("top-level answerable must be boolean");
+    expect(results[0].explanation?.join(" ")).toContain("top-level confidence must be finite number");
+
+    const pack = service.evidencePack({ userId: "u1", query: "What fixed the NovaRetail checkout timeout?", limit: 1 });
+    expect(pack.context).not.toContain(memory.id);
+    expect(pack.evidenceVerdict).toMatchObject({ answerable: false, confidence: 0.99, injected: 0 });
+    expect(pack.evidenceVerdict?.blockedMemoryIds).toContain(memory.id);
+  });
+
+  it("requires finite per-memory harness confidence before injection", () => {
+    const service = new MemoryService({
+      intelligence: {
+        evidenceJudge: {
+          judgeEvidence: ({ results }) => ({
+            answerable: true,
+            confidence: 0.96,
+            reason: "harness semantically authorized the answer but omitted item confidence",
+            decisions: results.map((result) => ({ id: result.memory.id, decision: "include", reason: "semantic support without confidence" }))
+          })
+        }
+      }
+    });
+    const memory = service.add({ userId: "u1", content: "NovaRetail checkout timeout was fixed with Redis pipeline batching.", source: { kind: "human", confidence: 0.95 } });
+
+    const results = service.search({ userId: "u1", query: "What fixed the NovaRetail checkout timeout?", limit: 1 });
+    expect(results[0]).toMatchObject({ decision: "include", unsafeToInject: true });
+    expect(results[0].explanation?.join(" ")).toContain("missing finite per-memory confidence");
+
+    const pack = service.evidencePack({ userId: "u1", query: "What fixed the NovaRetail checkout timeout?", limit: 1 });
+    expect(pack.context).not.toContain(memory.id);
+    expect(pack.evidenceVerdict).toMatchObject({ answerable: true, injected: 0 });
+    expect(pack.excludedResults?.find((result) => result.memoryId === memory.id)?.reason).toContain("unsafe-to-inject");
+  });
+
+  it("fails closed on invalid direct harness evidence decision contracts", () => {
+    const service = new MemoryService({
+      intelligence: {
+        evidenceJudge: {
+          judgeEvidence: ({ results }) => ({
+            answerable: true,
+            confidence: 0.96,
+            reason: "harness returned a malformed decision contract",
+            decisions: [
+              { id: results[0].memory.id, decision: "approve" as any, confidence: 0.96, reason: "invalid decision value" },
+              { id: "unknown-memory", decision: "include", confidence: 0.96, reason: "unknown memory id" }
+            ]
+          })
+        }
+      }
+    });
+    const memory = service.add({ userId: "u1", content: "NovaRetail checkout timeout was fixed with Redis pipeline batching.", source: { kind: "human", confidence: 0.95 } });
+
+    const results = service.search({ userId: "u1", query: "What fixed the NovaRetail checkout timeout?", limit: 1 });
+    expect(results[0]).toMatchObject({ decision: "exclude", unsafeToInject: true });
+    expect(results[0].explanation?.join(" ")).toContain("invalid decision");
+    expect(results[0].explanation?.join(" ")).toContain("unknown memory id");
+
+    const pack = service.evidencePack({ userId: "u1", query: "What fixed the NovaRetail checkout timeout?", limit: 1 });
+    expect(pack.context).not.toContain(memory.id);
+    expect(pack.evidenceVerdict).toMatchObject({ answerable: true, injected: 0 });
+  });
+
+  it("requires explicit per-memory harness evidence decisions before injection", () => {
+    const service = new MemoryService({
+      intelligence: {
+        evidenceJudge: {
+          judgeEvidence: () => ({
+            answerable: true,
+            confidence: 0.94,
+            reason: "harness found the answer somewhere but did not authorize individual evidence",
+            decisions: []
+          })
+        }
+      }
+    });
+    service.add({ userId: "u1", content: "NovaRetail checkout timeout was fixed with Redis pipeline batching.", source: { kind: "human", confidence: 0.95 } });
+    service.add({ userId: "u1", content: "CobaltLane search delays were reduced by Kafka retry backoff.", source: { kind: "human", confidence: 0.95 } });
+
+    const results = service.search({ userId: "u1", query: "What fixed the NovaRetail checkout timeout?", limit: 2 });
+    expect(results.every((result) => result.decision === "exclude")).toBe(true);
+    expect(results.every((result) => result.unsafeToInject)).toBe(true);
+    expect(results[0].explanation?.join(" ")).toContain("missing explicit per-memory decision");
+
+    const pack = service.evidencePack({ userId: "u1", query: "What fixed the NovaRetail checkout timeout?", limit: 2 });
+    expect(pack.evidenceVerdict).toMatchObject({ answerable: true, injected: 0 });
+    expect(pack.results).toHaveLength(0);
+    expect(pack.excludedResults?.map((result) => result.memoryId)).toEqual(expect.arrayContaining(results.map((result) => result.memory.id)));
   });
 
   it("keeps harness-reviewed evidence out of injected context until approved", () => {
@@ -1594,6 +1824,55 @@ describe("TypeScript memory core", () => {
     const contradictions = service.search({ userId: "u1", query: "Atlas Redis shared cache", mode: "path" });
     expect(contradictions.some((result) => result.contradiction && result.decision === "exclude")).toBe(true);
     expect(contradictions.some((result) => result.retrievalMode === "path" && result.explanation?.some((item) => item.includes("mode path")))).toBe(true);
+
+    const oldDb = service.add({
+      userId: "u1",
+      projectId: "p1",
+      content: "Acme Billing used MySQL for ledger storage during the February pilot.",
+      entities: ["acme", "billing", "ledger", "database"],
+      temporal: { eventAt: "2026-02-01T00:00:00.000Z" },
+      source: { kind: "human", confidence: 0.96 }
+    });
+    const currentDb = service.add({
+      userId: "u1",
+      projectId: "p1",
+      content: "Acme Billing migrated ledger storage to Postgres and Postgres is the current source of truth.",
+      entities: ["acme", "billing", "ledger", "database"],
+      temporal: { eventAt: "2026-05-18T00:00:00.000Z" },
+      source: { kind: "human", confidence: 0.96 }
+    });
+    const providerTemporal = service.search({
+      userId: "u1",
+      projectId: "p1",
+      query: "What is Acme Billing's current ledger database?",
+      limit: 4,
+      contradictionDetector: {
+        classify: ({ a, b }) => (
+          [a.id, b.id].includes(oldDb.id) && [a.id, b.id].includes(currentDb.id)
+            ? { label: "contradiction", confidence: 0.94, reason: "provider judged newer fact supersedes old database fact" }
+            : { label: "neutral", confidence: 0.88, reason: "provider judged unrelated pair" }
+        )
+      }
+    });
+    expect(providerTemporal.find((result) => result.memory.id === oldDb.id)?.decision).toBe("exclude");
+    expect(providerTemporal.find((result) => result.memory.id === oldDb.id)?.unsafeToInject).toBe(true);
+    expect(providerTemporal.find((result) => result.memory.id === currentDb.id)?.decision).not.toBe("exclude");
+
+    let defaultContradictionCalls = 0;
+    const defaultContradictionService = new MemoryService({
+      intelligence: {
+        contradictionDetector: {
+          classify: () => {
+            defaultContradictionCalls += 1;
+            return { label: "contradiction", confidence: 0.95, reason: "default retrieval provider should be opt-in" };
+          }
+        }
+      }
+    });
+    defaultContradictionService.add({ userId: "u1", content: "Atlas layout uses moonlit spacing tokens.", entities: ["atlas", "layout"], source: { kind: "human", confidence: 0.96 } });
+    defaultContradictionService.add({ userId: "u1", content: "Atlas layout uses canyon spacing tokens.", entities: ["atlas", "layout"], source: { kind: "human", confidence: 0.96 } });
+    defaultContradictionService.search({ userId: "u1", query: "Atlas layout spacing tokens", limit: 2 });
+    expect(defaultContradictionCalls).toBe(0);
 
     service.addTrainingSample({ userId: "u1", query: "cli workflow", outcome: "accepted", signals: { keyword: 0.9, semantic: 0.7 } });
     service.addTrainingSample({ userId: "u2", query: "other", outcome: "accepted", signals: { graph: 1 } });

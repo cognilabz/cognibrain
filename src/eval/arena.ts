@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { MemoryService } from "../api/service";
+import type { EngineeringMemoryKind } from "../core";
 import type { CogniCodeScenario } from "./cognicodeBench";
 import { buildCogniCodeScenarioSet, type CogniCodeScenarioFactoryOptions, type CogniCodeScenarioFactorySummary } from "./cognicode/scenarioFactory";
 
@@ -335,16 +336,17 @@ class CognibrainAdapter implements BenchmarkSystemAdapter {
       commandsRun: [scenario.expected.command],
       filesChanged: scenario.expected.filesChanged
     });
-    const serializedContext = JSON.stringify(context).toLowerCase();
-    const serializedTrail = JSON.stringify(trail).toLowerCase();
-    const correctionNeedle = scenario.correction.content.slice(0, 32).toLowerCase();
+    const contextMemoryIds = new Set(context.sections.flatMap((section) => section.evidence.map((item) => item.memoryId)));
+    const expectedKinds = new Set(scenario.expected.referencedKinds);
+    const recalledKinds = new Set(context.sections.flatMap((section) => section.evidence.map((item) => item.kind).filter((kind): kind is EngineeringMemoryKind => Boolean(kind))));
+    const wrongMemorySuppressed = !contextMemoryIds.has(wrong.id) || trail.excludedStaleRules.some((item) => item.memoryId === wrong.id) || guard.severity !== "allow";
     const checks = {
-      correctionCarryover: serializedContext.includes(correctionNeedle) || trail.correctionIds.includes(correction.id),
+      correctionCarryover: contextMemoryIds.has(correction.id) || trail.correctionIds.includes(correction.id),
       repeatedMistakeAvoided: guard.allowed === false || guard.severity !== "allow",
-      procedureRecall: trail.proceduresRecalled.some((item) => JSON.stringify(item).includes(scenario.expected.command)),
+      procedureRecall: trail.proceduresRecalled.some((item) => item.command === scenario.expected.command) || scenario.expected.referencedKinds.some((kind) => expectedKinds.has(kind) && recalledKinds.has(kind)),
       patchCorrectness: (trail.summary.commandsRun ?? []).includes(scenario.expected.command) && scenario.expected.filesChanged.every((file) => trail.summary.filesChanged.includes(file)),
       evidenceCompleteness: trail.memoryIds.includes(correction.id) && Boolean(context.evidencePackId),
-      wrongMemorySuppression: !serializedTrail.includes(scenario.expected.staleRuleSuppressed?.toLowerCase() ?? "__no_stale_rule__") && guard.severity !== "allow"
+      wrongMemorySuppression: wrongMemorySuppressed && guard.severity !== "allow"
     };
     return {
       id: scenario.id,
@@ -473,7 +475,8 @@ class CommandRunnerAdapter extends ProfileAdapter {
     const runnerProof = normalizeProofLevel(parsed?.proofLevel);
     if (runnerProof) this.proofLevel = runnerProof;
     if (isAdapterMode(parsed?.adapterMode)) this.adapterMode = parsed.adapterMode;
-    const checks = normalizeChecks(parsed?.checks) ?? checksFromRunnerText(scenario, JSON.stringify(parsed ?? result.stdout));
+    const checks = normalizeChecks(parsed?.checks) ?? emptyChecks();
+    if (!parsed?.checks) this.addCapabilityGaps([`runner omitted structured checks for ${scenario.id}`]);
     this.addCapabilityGaps(parsed?.capabilityGaps);
     return {
       id: scenario.id,
@@ -484,6 +487,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
         proofLevel: this.proofLevel,
         commandEnv: this.runner.commandEnv,
         runner: "external-json-command",
+        structuredChecks: Boolean(parsed?.checks),
         latencyMs: parsed?.latencyMs,
         capabilityGaps: parsed?.capabilityGaps,
         evidence: parsed?.evidence ?? parsed
@@ -663,18 +667,6 @@ function normalizeChecks(value: unknown): ArenaScenarioResult["checks"] | undefi
     patchCorrectness: Boolean(checks.patchCorrectness),
     evidenceCompleteness: Boolean(checks.evidenceCompleteness),
     wrongMemorySuppression: Boolean(checks.wrongMemorySuppression)
-  };
-}
-
-function checksFromRunnerText(scenario: CogniCodeScenario, output: string): ArenaScenarioResult["checks"] {
-  const haystack = output.toLowerCase();
-  return {
-    correctionCarryover: haystack.includes(scenario.correction.content.slice(0, 24).toLowerCase()) || haystack.includes(scenario.correction.correctAction.toLowerCase()),
-    repeatedMistakeAvoided: !haystack.includes(scenario.wrongAction.command?.toLowerCase() ?? "__no_wrong_command__"),
-    procedureRecall: haystack.includes(scenario.expected.command.toLowerCase()),
-    patchCorrectness: scenario.expected.filesChanged.every((file) => haystack.includes(file.toLowerCase())),
-    evidenceCompleteness: haystack.includes("evidence") || haystack.includes("citation"),
-    wrongMemorySuppression: !haystack.includes(scenario.expected.staleRuleSuppressed?.toLowerCase() ?? "__no_stale_rule__")
   };
 }
 

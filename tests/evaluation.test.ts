@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -21,6 +23,7 @@ import { generateHarnessMaturity } from "../src/eval/harnessMaturity";
 import { generateOperatorOsMaturity } from "../src/eval/operatorOsMaturity";
 import { generateBenchmarkHardeningReport } from "../src/eval/benchmarkHardening";
 import { generateBenchmarkRelease } from "../src/eval/benchmarkRelease";
+import { generateRealWorldBlackBoxBenchmark } from "../src/eval/realworldBlackbox";
 import { generatePlanGapAudit } from "../src/eval/planGaps";
 import { runOperatorMemoryBenchmark } from "../src/eval/operatorMemoryBenchmark";
 import { publishArenaReport } from "../src/eval/publishArena";
@@ -36,6 +39,54 @@ type ConnectorBaseArtifacts = {
 };
 
 let connectorBaseArtifactsPromise: Promise<ConnectorBaseArtifacts> | undefined;
+
+async function listenOnAllowedPort(server: ReturnType<typeof createServer>): Promise<void> {
+  for (let port = 18181; port <= 18220; port += 1) {
+    const listened = await new Promise<boolean>((resolve, reject) => {
+      const cleanup = () => {
+        server.off("error", onError);
+      };
+      const onError = (error: NodeJS.ErrnoException) => {
+        cleanup();
+        if (error.code === "EADDRINUSE") resolve(false);
+        else reject(error);
+      };
+      server.once("error", onError);
+      server.listen(port, "127.0.0.1", () => {
+        cleanup();
+        resolve(true);
+      });
+    });
+    if (listened) return;
+  }
+  throw new Error("could not bind a local fixture server port");
+}
+
+async function runNodeScript(args: string[], options: { cwd: string; input: string; timeout: number; env: NodeJS.ProcessEnv }): Promise<{ status: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, args, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => child.kill("SIGTERM"), options.timeout);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("close", (status, signal) => {
+      clearTimeout(timer);
+      resolve({ status, signal, stdout, stderr });
+    });
+    child.stdin.end(options.input);
+  });
+}
 
 function connectorBaseArtifacts(): Promise<ConnectorBaseArtifacts> {
   connectorBaseArtifactsPromise ??= (async () => {
@@ -436,6 +487,484 @@ describe("self verification benchmark loop", () => {
     expect(release.releases.some((item) => item.split === "hidden-eval-placeholder")).toBe(true);
     const gaps = generatePlanGapAudit({ out: join(dir, "plan-gaps.json"), markdown: join(dir, "plan-gaps.md") });
     expect(gaps.checks.map((item) => item.area)).toEqual(expect.arrayContaining(["storage", "security", "truth", "dream", "connectors", "harness", "operator", "benchmarks", "enterprise"]));
+  });
+
+  it("runs the neutral real-world black-box harness without enabling a premature leaderboard", async () => {
+    const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+    const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-blackbox-"));
+    try {
+      delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-blackbox.json"),
+        markdown: join(dir, "realworld-blackbox.md"),
+        systems: ["cognibrain", "keyword", "mem0"]
+      });
+      const cognibrain = report.systems.find((system) => system.system === "cognibrain");
+      expect(report.manifestHash).toHaveLength(64);
+      expect(report.leaderboardEligible).toBe(false);
+      expect(report.eligibilityGate.rawOutputsRetained).toBe(true);
+      expect(report.eligibilityGate.costLatencyRecorded).toBe(true);
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
+      expect(cognibrain?.qualityClaimAllowed).toBe(false);
+      expect(cognibrain?.judge.kind).toBe("missing");
+      expect(cognibrain?.metrics.score).toBeNull();
+      expect(cognibrain?.metrics.recall).toBeNull();
+      expect(cognibrain?.retrievalDiagnostics.note).toContain("Diagnostic only");
+      expect(cognibrain?.rawOutputs).toHaveLength(report.manifest.queries.length);
+      expect(cognibrain?.rawOutputs.flatMap((output) => output.retrievedText).join("\n")).not.toMatch(/evidence_id:/);
+      expect(cognibrain?.metrics.p95LatencyMs).toBeGreaterThanOrEqual(0);
+      expect(report.systems.find((system) => system.system === "mem0")?.evidenceClass).toBe("credential-blocked");
+      expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Real-World Black-Box Benchmark");
+      expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("not scored");
+      expect(existsSync("scripts/benchmark/realworld-openai-judge.mjs")).toBe(true);
+    } finally {
+      if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
+      if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+    }
+  });
+
+  it("scores the real-world black-box harness only through a configured harness judge", async () => {
+    const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+    const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-judge-"));
+    const judgePath = join(dir, "judge.mjs");
+    writeFileSync(
+      judgePath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const decisions = payload.manifest.queries.map(query => ({ queryId: query.id, score: 1, passed: true, supportsAnswer: query.expectedEvidenceIds.length > 0, abstained: query.shouldAbstain === true, leakedForbiddenEvidence: false, reason: "fixture harness judge decision", confidence: 0.99 })); console.log(JSON.stringify({ decisions, judge: "fixture-harness" })); });`
+    );
+    try {
+      process.env.MEMORY_REALWORLD_JUDGE_COMMAND = `${process.execPath} ${judgePath}`;
+      process.env.MEMORY_REALWORLD_JUDGE_KIND = "harness";
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-blackbox-judged.json"),
+        markdown: join(dir, "realworld-blackbox-judged.md"),
+        systems: ["cognibrain"]
+      });
+      const cognibrain = report.systems.find((system) => system.system === "cognibrain");
+      expect(report.leaderboardEligible).toBe(false);
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(true);
+      expect(report.eligibilityGate.enoughOriginalSystems).toBe(false);
+      expect(cognibrain?.qualityClaimAllowed).toBe(true);
+      expect(cognibrain?.judge.kind).toBe("harness");
+      expect(cognibrain?.metrics.score).toBe(1);
+      expect(cognibrain?.metrics.forbiddenLeakageRate).toBe(0);
+      expect(cognibrain?.setup.judgeRaw).toMatchObject({ judge: "fixture-harness" });
+    } finally {
+      if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
+      if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+    }
+  });
+
+  it("blocks malformed real-world judge decisions while retaining same-run raw outputs", async () => {
+    const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+    const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-malformed-judge-"));
+    const judgePath = join(dir, "malformed-judge.mjs");
+    writeFileSync(
+      judgePath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const first = payload.manifest.queries[0]; console.log(JSON.stringify({ decisions: [{ queryId: first.id, score: 1, passed: true, supportsAnswer: true, abstained: false, leakedForbiddenEvidence: false, reason: "fixture one", confidence: 0.99 }, { queryId: first.id, score: 1, passed: true, supportsAnswer: true, abstained: false, leakedForbiddenEvidence: false, reason: "fixture duplicate", confidence: 0.99 }] })); });`
+    );
+    try {
+      process.env.MEMORY_REALWORLD_JUDGE_COMMAND = `${process.execPath} ${judgePath}`;
+      process.env.MEMORY_REALWORLD_JUDGE_KIND = "harness";
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-malformed-judge.json"),
+        systems: ["cognibrain"]
+      });
+      const cognibrain = report.systems[0];
+      expect(cognibrain.qualityClaimAllowed).toBe(false);
+      expect(cognibrain.leaderboardEligible).toBe(false);
+      expect(cognibrain.metrics.score).toBeNull();
+      expect(cognibrain.rawOutputs).toHaveLength(report.manifest.queries.length);
+      expect(cognibrain.blockedReason).toContain("duplicate decision");
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
+    } finally {
+      if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
+      if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+    }
+  });
+
+  it("preserves the last successful judged real-world artifact across blocked reruns", async () => {
+    const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+    const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-success-"));
+    const judgePath = join(dir, "judge.mjs");
+    const latestPath = join(dir, "latest.json");
+    const successPath = join(dir, "success.json");
+    writeFileSync(
+      judgePath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const decisions = payload.manifest.queries.map(query => ({ queryId: query.id, score: 1, passed: true, supportsAnswer: query.expectedEvidenceIds.length > 0, abstained: query.shouldAbstain === true, leakedForbiddenEvidence: false, reason: "fixture harness judge decision", confidence: 0.99 })); console.log(JSON.stringify({ decisions, judge: "fixture-harness" })); });`
+    );
+    try {
+      process.env.MEMORY_REALWORLD_JUDGE_COMMAND = `${process.execPath} ${judgePath}`;
+      process.env.MEMORY_REALWORLD_JUDGE_KIND = "harness";
+      const judged = await generateRealWorldBlackBoxBenchmark({
+        out: latestPath,
+        successOut: successPath,
+        systems: ["cognibrain"]
+      });
+      expect(judged.systems[0].qualityClaimAllowed).toBe(true);
+      expect(JSON.parse(readFileSync(successPath, "utf8")).systems[0].metrics.score).toBe(1);
+
+      delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      const blocked = await generateRealWorldBlackBoxBenchmark({
+        out: latestPath,
+        successOut: successPath,
+        systems: ["cognibrain"]
+      });
+      expect(blocked.systems[0].qualityClaimAllowed).toBe(false);
+      expect(JSON.parse(readFileSync(latestPath, "utf8")).systems[0].metrics.score).toBeNull();
+      expect(JSON.parse(readFileSync(successPath, "utf8")).systems[0].metrics.score).toBe(1);
+    } finally {
+      if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
+      if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+    }
+  });
+
+  it("retains original command raw outputs when the external judge is blocked", async () => {
+    const previousCommand = process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-command-blocked-"));
+    const commandPath = join(dir, "blocked-command.mjs");
+    writeFileSync(
+      commandPath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const rawOutputs = payload.manifest.queries.map(query => ({ queryId: query.id, retrievedEvidenceIds: [], retrievedText: [], latencyMs: 1, raw: { query: query.id } })); console.log(JSON.stringify({ schemaVersion: "1.0", system: "basicmemory", displayName: "Basic Memory", qualityClaimAllowed: false, blockedReason: "fixture judge credential blocked", judge: { kind: "missing", status: "blocked", reason: "fixture judge credential blocked" }, metrics: { score: null, recall: null, abstentionPrecision: null, forbiddenLeakageRate: null, p50LatencyMs: 1, p95LatencyMs: 1, ingestLatencyMs: 0, estimatedCostUsd: 0 }, retrievalDiagnostics: { deterministicEvidenceIdMatch: true, expectedHits: 0, forbiddenHits: 0, abstentionNoResult: 0, note: "raw outputs retained but judge blocked" }, rawOutputs, setup: { runner: "fixture-original-command" } })); });`
+    );
+    try {
+      process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = `${process.execPath} ${commandPath}`;
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-command-blocked.json"),
+        systems: ["basicmemory"]
+      });
+      const basicMemory = report.systems[0];
+      expect(basicMemory.evidenceClass).toBe("same-run-command");
+      expect(basicMemory.evidenceClass).not.toBe("credential-blocked");
+      expect(basicMemory.adapterMode).toBe("external-command");
+      expect(basicMemory.qualityClaimAllowed).toBe(false);
+      expect(basicMemory.leaderboardEligible).toBe(false);
+      expect(basicMemory.judge).toMatchObject({ kind: "missing", status: "blocked" });
+      expect(basicMemory.metrics.score).toBeNull();
+      expect(basicMemory.rawOutputs).toHaveLength(report.manifest.queries.length);
+      expect(report.eligibilityGate.sameManifestForAllSystems).toBe(true);
+      expect(report.eligibilityGate.rawOutputsRetained).toBe(true);
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
+    } finally {
+      if (previousCommand === undefined) delete process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+      else process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = previousCommand;
+    }
+  });
+
+  it("classifies configured external command JSON failures as same-run diagnostics, not credential blockers", async () => {
+    const previousCommand = process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-command-invalid-json-"));
+    const commandPath = join(dir, "invalid-json-command.mjs");
+    writeFileSync(commandPath, `process.stdout.write("not-json");`);
+    try {
+      process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = `${process.execPath} ${commandPath}`;
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-command-invalid-json.json"),
+        systems: ["basicmemory"]
+      });
+      const basicMemory = report.systems[0];
+      expect(basicMemory.evidenceClass).toBe("same-run-command");
+      expect(basicMemory.adapterMode).toBe("external-command");
+      expect(basicMemory.qualityClaimAllowed).toBe(false);
+      expect(basicMemory.leaderboardEligible).toBe(false);
+      expect(basicMemory.metrics.score).toBeNull();
+      expect(basicMemory.rawOutputs).toHaveLength(0);
+      expect(basicMemory.blockedReason).toContain("JSON parse failed");
+      expect(basicMemory.setup.commandBlocked).toBe(true);
+      expect(basicMemory.setup.rawOutputContractValid).toBe(false);
+      expect(report.eligibilityGate.rawOutputsRetained).toBe(false);
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
+    } finally {
+      if (previousCommand === undefined) delete process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+      else process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = previousCommand;
+    }
+  });
+
+  it("blocks malformed blocked-run latency metrics without discarding raw outputs", async () => {
+    const previousCommand = process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-command-metric-contract-"));
+    const commandPath = join(dir, "malformed-metric-command.mjs");
+    writeFileSync(
+      commandPath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const rawOutputs = payload.manifest.queries.map(query => ({ queryId: query.id, retrievedEvidenceIds: [], retrievedText: [], latencyMs: 1, raw: { query: query.id } })); console.log(JSON.stringify({ schemaVersion: "1.0", system: "basicmemory", displayName: "Basic Memory", qualityClaimAllowed: false, blockedReason: "fixture judge credential blocked", judge: { kind: "missing", status: "blocked", reason: "fixture judge credential blocked" }, metrics: { score: null, recall: null, abstentionPrecision: null, forbiddenLeakageRate: null, p50LatencyMs: 1, p95LatencyMs: -5, ingestLatencyMs: 0, estimatedCostUsd: -1 }, rawOutputs, setup: { runner: "fixture-original-command" } })); });`
+    );
+    try {
+      process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = `${process.execPath} ${commandPath}`;
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-command-metric-contract.json"),
+        systems: ["basicmemory"]
+      });
+      const basicMemory = report.systems[0];
+      expect(basicMemory.evidenceClass).toBe("same-run-command");
+      expect(basicMemory.qualityClaimAllowed).toBe(false);
+      expect(basicMemory.metrics.score).toBeNull();
+      expect(basicMemory.rawOutputs).toHaveLength(report.manifest.queries.length);
+      expect(basicMemory.blockedReason).toContain("blocked external p95LatencyMs");
+      expect(basicMemory.setup.metricContractValid).toBe(false);
+      expect(report.eligibilityGate.rawOutputsRetained).toBe(true);
+      expect(report.eligibilityGate.costLatencyRecorded).toBe(false);
+    } finally {
+      if (previousCommand === undefined) delete process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+      else process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = previousCommand;
+    }
+  });
+
+  it("blocks malformed external judged metrics without discarding original command raw outputs", async () => {
+    const previousCommand = process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-command-malformed-"));
+    const commandPath = join(dir, "malformed-command.mjs");
+    writeFileSync(
+      commandPath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const rawOutputs = payload.manifest.queries.map(query => ({ queryId: query.id, retrievedEvidenceIds: [], retrievedText: [], latencyMs: 1, raw: { query: query.id } })); console.log(JSON.stringify({ schemaVersion: "1.0", system: "basicmemory", displayName: "Basic Memory", qualityClaimAllowed: true, judge: { kind: "harness", status: "passed", reason: "fixture malformed metrics" }, metrics: { score: 1.2, recall: 1, abstentionPrecision: 1, forbiddenLeakageRate: 0, p50LatencyMs: 1, p95LatencyMs: 1, ingestLatencyMs: 0, estimatedCostUsd: 0 }, rawOutputs, setup: { runner: "fixture-original-command" } })); });`
+    );
+    try {
+      process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = `${process.execPath} ${commandPath}`;
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-command-malformed.json"),
+        systems: ["basicmemory"]
+      });
+      const basicMemory = report.systems[0];
+      expect(basicMemory.evidenceClass).toBe("same-run-command");
+      expect(basicMemory.qualityClaimAllowed).toBe(false);
+      expect(basicMemory.leaderboardEligible).toBe(false);
+      expect(basicMemory.metrics.score).toBeNull();
+      expect(basicMemory.rawOutputs).toHaveLength(report.manifest.queries.length);
+      expect(basicMemory.blockedReason).toContain("external judged score");
+      expect(report.eligibilityGate.rawOutputsRetained).toBe(true);
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
+    } finally {
+      if (previousCommand === undefined) delete process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+      else process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = previousCommand;
+    }
+  });
+
+  it("blocks external raw outputs that do not exactly match the frozen manifest queries", async () => {
+    const previousCommand = process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-command-raw-contract-"));
+    const commandPath = join(dir, "malformed-raw-command.mjs");
+    writeFileSync(
+      commandPath,
+      `
+let input = "";
+process.stdin.on("data", chunk => input += chunk);
+process.stdin.on("end", () => {
+  const payload = JSON.parse(input);
+  const queries = payload.manifest.queries;
+  const rawOutputs = queries.map(query => ({ queryId: query.id, retrievedEvidenceIds: [], retrievedText: [], latencyMs: 1, raw: { query: query.id } }));
+  rawOutputs[rawOutputs.length - 1] = { ...rawOutputs[0] };
+  console.log(JSON.stringify({
+    schemaVersion: "1.0",
+    system: "basicmemory",
+    displayName: "Basic Memory",
+    qualityClaimAllowed: false,
+    judge: { kind: "missing", status: "blocked", reason: "fixture judge blocked" },
+    metrics: { score: null, recall: null, abstentionPrecision: null, forbiddenLeakageRate: null, p50LatencyMs: 1, p95LatencyMs: 1, ingestLatencyMs: 0, estimatedCostUsd: 0 },
+    rawOutputs,
+    setup: { runner: "fixture-original-command" }
+  }));
+});
+`
+    );
+    try {
+      process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = `${process.execPath} ${commandPath}`;
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-command-raw-contract.json"),
+        systems: ["basicmemory"]
+      });
+      const basicMemory = report.systems[0];
+      expect(basicMemory.evidenceClass).toBe("same-run-command");
+      expect(basicMemory.qualityClaimAllowed).toBe(false);
+      expect(basicMemory.leaderboardEligible).toBe(false);
+      expect(basicMemory.metrics.score).toBeNull();
+      expect(basicMemory.rawOutputs).toHaveLength(report.manifest.queries.length);
+      expect(basicMemory.blockedReason).toContain("duplicate queryId");
+      expect(basicMemory.setup.rawOutputContractValid).toBe(false);
+      expect(report.eligibilityGate.rawOutputsRetained).toBe(false);
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
+    } finally {
+      if (previousCommand === undefined) delete process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+      else process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = previousCommand;
+    }
+  });
+
+  it("retains Cognibrain raw outputs when the configured judge fails after retrieval", async () => {
+    const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+    const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-judge-blocked-"));
+    const judgePath = join(dir, "blocked-judge.mjs");
+    const fakeSecret = "sk-proj-fixture-secret-token-1234567890abcdefghijklmnopqrstuvwxyz";
+    writeFileSync(judgePath, `console.error("fixture judge credential blocked ${fakeSecret}"); process.exit(1);`);
+    try {
+      process.env.MEMORY_REALWORLD_JUDGE_COMMAND = `${process.execPath} ${judgePath} --api-key ${fakeSecret}`;
+      process.env.MEMORY_REALWORLD_JUDGE_KIND = "harness";
+      const outPath = join(dir, "realworld-judge-blocked.json");
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: outPath,
+        systems: ["cognibrain"]
+      });
+      const cognibrain = report.systems[0];
+      expect(cognibrain.evidenceClass).toBe("same-run-full");
+      expect(cognibrain.qualityClaimAllowed).toBe(false);
+      expect(cognibrain.judge).toMatchObject({ kind: "missing", status: "blocked" });
+      expect(cognibrain.metrics.score).toBeNull();
+      expect(cognibrain.rawOutputs).toHaveLength(report.manifest.queries.length);
+      expect(cognibrain.rawOutputs.some((output) => output.retrievedText.length > 0)).toBe(true);
+      expect(report.eligibilityGate.sameManifestForAllSystems).toBe(true);
+      expect(report.eligibilityGate.rawOutputsRetained).toBe(true);
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
+      expect(report.runProvenance.judge.commandFingerprint).toHaveLength(64);
+      const artifact = readFileSync(outPath, "utf8");
+      expect(artifact).not.toContain(fakeSecret);
+      expect(artifact).not.toContain("--api-key");
+      expect(artifact).toContain("[redacted:secret]");
+    } finally {
+      if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
+      if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+    }
+  });
+
+  it("rejects string-coerced booleans from the OpenAI real-world judge wrapper", async () => {
+    const server = createServer((request, response) => {
+      request.resume();
+      request.on("end", () => {
+        response.setHeader("content-type", "application/json");
+        response.setHeader("connection", "close");
+        response.end(JSON.stringify({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                decision: {
+                  queryId: "q1",
+                  score: 1,
+                  passed: "true",
+                  supportsAnswer: "true",
+                  abstained: "false",
+                  leakedForbiddenEvidence: "false",
+                  reason: "fixture invalid string booleans",
+                  confidence: 0.9
+                }
+              })
+            }
+          }]
+        }));
+      });
+    });
+    await listenOnAllowedPort(server);
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("fixture server did not expose a port");
+      const payload = {
+        manifest: {
+          queries: [{ id: "q1", question: "What fixed NovaRetail?", expectedEvidenceIds: ["e1"], topK: 3 }],
+          events: [{ id: "e1", content: "Redis pipeline batching fixed NovaRetail checkout timeouts." }]
+        },
+        rawOutputs: [{ queryId: "q1", retrievedText: ["Redis pipeline batching fixed NovaRetail checkout timeouts."] }]
+      };
+      const result = await runNodeScript(["scripts/benchmark/realworld-openai-judge.mjs"], {
+        cwd: process.cwd(),
+        input: `${JSON.stringify(payload)}\n`,
+        timeout: 10_000,
+        env: {
+          ...process.env,
+          MEMORY_OPENAI_API_KEY: "fixture-key",
+          MEMORY_OPENAI_BASE_URL: `http://127.0.0.1:${address.port}`
+        }
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("must be a JSON boolean");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("exports only delivered real-world retrieval evidence while retaining excluded diagnostics", async () => {
+    const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+    const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const previousIntelligenceCommand = process.env.MEMORY_INTELLIGENCE_COMMAND;
+    const previousIntelligenceArgs = process.env.MEMORY_INTELLIGENCE_ARGS;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-delivered-"));
+    const judgePath = join(dir, "judge.mjs");
+    const intelligencePath = join(dir, "intelligence.mjs");
+    writeFileSync(
+      judgePath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const decisions = payload.manifest.queries.map(query => ({ queryId: query.id, score: 1, passed: true, supportsAnswer: query.expectedEvidenceIds.length > 0, abstained: query.shouldAbstain === true, leakedForbiddenEvidence: false, reason: "fixture harness judge decision", confidence: 0.99 })); console.log(JSON.stringify({ decisions })); });`
+    );
+    writeFileSync(
+      intelligencePath,
+      `
+const task = process.argv[2];
+let input = "";
+process.stdin.on("data", chunk => input += chunk);
+process.stdin.on("end", () => {
+  const payload = JSON.parse(input);
+  if (task !== "evidence") {
+    console.log(JSON.stringify({}));
+    return;
+  }
+  const query = String(payload.query || "");
+  const decisions = payload.results.map(result => {
+    const content = result.memory.content;
+    const include =
+      (query.includes("Acme Billing") && content.includes("Postgres")) ||
+      (query.includes("NovaRetail") && content.includes("NovaRetail")) ||
+      (!query.includes("Acme Billing") && !query.includes("NovaRetail") && !content.includes("February pilot") && !content.includes("CobaltLane"));
+    const decision = content.includes("February pilot") ? "exclude" : content.includes("CobaltLane") ? "review" : include ? "include" : "exclude";
+    return { id: result.id, decision, confidence: 0.95, reason: "fixture harness evidence decision" };
+  });
+  console.log(JSON.stringify({ answerable: true, confidence: 0.95, reason: "fixture harness evidence", decisions }));
+});
+`
+    );
+    try {
+      process.env.MEMORY_REALWORLD_JUDGE_COMMAND = `${process.execPath} ${judgePath}`;
+      process.env.MEMORY_REALWORLD_JUDGE_KIND = "harness";
+      process.env.MEMORY_INTELLIGENCE_COMMAND = process.execPath;
+      process.env.MEMORY_INTELLIGENCE_ARGS = intelligencePath;
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-blackbox-delivered.json"),
+        markdown: join(dir, "realworld-blackbox-delivered.md"),
+        systems: ["cognibrain"]
+      });
+      const acme = report.systems[0].rawOutputs.find((output) => output.queryId === "q-acme-current-db");
+      expect(acme?.retrievedText.join("\n")).not.toContain("Postgres");
+      expect(acme?.retrievedText.join("\n")).not.toContain("February pilot");
+      expect(acme?.raw).toEqual(expect.arrayContaining([
+        expect.objectContaining({ evidenceId: "temporal-acme-db-current", delivered: false, decision: "review", unsafeToInject: true })
+      ]));
+      expect(acme?.raw).toEqual(expect.arrayContaining([
+        expect.objectContaining({ evidenceId: "temporal-acme-db-old", delivered: false, decision: "exclude" })
+      ]));
+      const support = report.systems[0].rawOutputs.find((output) => output.queryId === "q-support-novaretail-fix");
+      expect(support?.retrievedText.join("\n")).toContain("NovaRetail");
+      expect(support?.retrievedText.join("\n")).not.toContain("CobaltLane");
+      expect(support?.raw).toEqual(expect.arrayContaining([
+        expect.objectContaining({ evidenceId: "support-cobaltlane-decoy", delivered: false, decision: "review", unsafeToInject: true })
+      ]));
+    } finally {
+      if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
+      if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+      if (previousIntelligenceCommand === undefined) delete process.env.MEMORY_INTELLIGENCE_COMMAND;
+      else process.env.MEMORY_INTELLIGENCE_COMMAND = previousIntelligenceCommand;
+      if (previousIntelligenceArgs === undefined) delete process.env.MEMORY_INTELLIGENCE_ARGS;
+      else process.env.MEMORY_INTELLIGENCE_ARGS = previousIntelligenceArgs;
+    }
   });
 
   it("covers truth and dream workbench commands in the release contract", () => {

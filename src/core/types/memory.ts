@@ -1,7 +1,7 @@
 import type { BeliefState, ConsentPolicy, FeedbackKind, MemoryAuditEvent, MemoryLayer, MemoryPolicyRule, MemoryProvenance, MemoryRelation, MemorySchemaVersion, MemoryScope, MemoryType, PolicyDecision, Provenance, QueryIntent, QueryPlan, RelationType, RetrievalMode, SourceKind, SourceRef, TemporalMetadata } from "./base";
 import type { CodebaseScope, EngineeringMemoryKind } from "./engineering";
 import type { CurrentTruthDecision } from "./extraction";
-import type { ContextEvidenceJudge, ContextReranker, ContextVerifier, EvidenceJudgement, RetrievalProfile, RetrievalWeights } from "./retrieval";
+import type { ContextEvidenceJudge, ContextReranker, ContextVerifier, ContradictionDetector, EvidenceJudgement, RetrievalProfile, RetrievalWeights } from "./retrieval";
 
 export interface MemoryInput {
   brainId?: string;
@@ -103,6 +103,7 @@ export interface SearchOptions {
   verifier?: ContextVerifier;
   reranker?: ContextReranker;
   evidenceJudge?: ContextEvidenceJudge;
+  contradictionDetector?: ContradictionDetector;
   embeddingProvider?: EmbeddingProvider;
   disableEmbeddings?: boolean;
   lexicalProvider?: LexicalScoreProvider;

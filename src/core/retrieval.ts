@@ -5,7 +5,7 @@ import { activateGraph } from "./graphReasoning";
 import { clamp, MemoryStore } from "./store";
 import { bestConceptMatch, conceptScore } from "./semantic";
 import { cosineLike, estimateTokens, keywordCoverage, tokenize } from "./text";
-import type { EvidenceJudgement, LexicalScoreProvider, Memory, MemoryClaim, RetrievalWeights, SearchOptions, SearchResult } from "./types";
+import type { ContradictionDetector, EvidenceJudgement, LexicalScoreProvider, Memory, MemoryClaim, RetrievalWeights, SearchOptions, SearchResult } from "./types";
 
 const STALE_DAYS = 30;
 const INJECTION_CONFIDENCE_THRESHOLD = 0.5;
@@ -72,7 +72,8 @@ export class RetrievalEngine {
     const results = fuseResults(scored, mode).slice(0, options.limit ?? 8);
 
     const reranked = options.reranker ? options.reranker.rerank({ query: options.query, results, now }) : heuristicRerank(options.query, results);
-    const contradicted = applyContradictionDecisions(reranked);
+    const providerContradicted = options.contradictionDetector ? applyProviderContradictionDecisions(reranked, options.contradictionDetector) : reranked;
+    const contradicted = applyContradictionDecisions(providerContradicted);
     const verified = options.verifier ? options.verifier.verify({ query: options.query, results: contradicted, now }) : heuristicVerify(options.query, contradicted);
     const evidenceJudged = options.evidenceJudge ? applyEvidenceJudgement(options.evidenceJudge.judgeEvidence({ query: options.query, results: verified, now }), verified) : verified;
     const calibrated = calibrateResults(evidenceJudged);
@@ -81,8 +82,9 @@ export class RetrievalEngine {
     return calibrated;
   }
 
-  contextPack(results: SearchResult[], tokenBudget = 900): string {
+  contextSelection(results: SearchResult[], tokenBudget = 900): { context: string; includedResults: SearchResult[] } {
     const lines: string[] = [];
+    const includedResults: SearchResult[] = [];
     let spent = 0;
     for (const result of results) {
       if (result.decision === "exclude") continue;
@@ -97,8 +99,13 @@ export class RetrievalEngine {
       if (spent + tokens > tokenBudget) break;
       spent += tokens;
       lines.push(line);
+      includedResults.push(result);
     }
-    return lines.join("\n");
+    return { context: lines.join("\n"), includedResults };
+  }
+
+  contextPack(results: SearchResult[], tokenBudget = 900): string {
+    return this.contextSelection(results, tokenBudget).context;
   }
 
   private score(
@@ -234,23 +241,88 @@ export class RetrievalEngine {
 }
 
 function applyEvidenceJudgement(judgement: EvidenceJudgement, results: SearchResult[]): SearchResult[] {
-  const decisions = new Map((judgement.decisions ?? []).map((decision) => [decision.id, decision]));
+  const contract = normalizeEvidenceJudgementContract(judgement, results);
   return results.map((result) => {
-    const decision = decisions.get(result.memory.id);
-    const providerDecision = decision?.decision ?? (judgement.answerable ? undefined : "exclude");
+    const decision = contract.decisions.get(result.memory.id);
+    const providerDecision = decision?.decision ?? "exclude";
+    const missingMemoryDecision = contract.judgement.answerable && !decision;
+    const invalidMemoryConfidence = contract.judgement.answerable && decision !== undefined && !isFiniteRatio(decision.confidence);
+    const invalidDecisionContract = contract.invalidReasons.length > 0;
     return {
       ...result,
       confidence: decision?.confidence ?? result.confidence,
-      decision: providerDecision ?? result.decision,
-      unsafeToInject: result.unsafeToInject || !judgement.answerable,
-      evidence: judgement,
+      decision: invalidDecisionContract ? "exclude" : providerDecision ?? result.decision,
+      unsafeToInject: result.unsafeToInject || !contract.judgement.answerable || missingMemoryDecision || invalidMemoryConfidence || invalidDecisionContract,
+      evidence: contract.judgement,
       explanation: [
         ...(result.explanation ?? []),
-        `provider evidence: ${judgement.answerable ? "answerable" : "not answerable"}${judgement.reason ? ` ${judgement.reason}` : ""}`,
+        `provider evidence: ${contract.judgement.answerable ? "answerable" : "not answerable"}${contract.judgement.reason ? ` ${contract.judgement.reason}` : ""}`,
+        ...(missingMemoryDecision ? ["provider evidence memory: missing explicit per-memory decision"] : []),
+        ...(invalidMemoryConfidence ? ["provider evidence memory: missing finite per-memory confidence"] : []),
+        ...contract.invalidReasons.map((reason) => `provider evidence contract: ${reason}`),
         ...(decision?.reason ? [`provider evidence memory: ${decision.reason}`] : [])
       ]
     };
   });
+}
+
+function normalizeEvidenceJudgementContract(judgement: EvidenceJudgement, results: SearchResult[]): { judgement: EvidenceJudgement; decisions: Map<string, NonNullable<EvidenceJudgement["decisions"]>[number]>; invalidReasons: string[] } {
+  const invalidReasons: string[] = [];
+  const raw = judgement as EvidenceJudgement & Record<string, unknown>;
+  if (typeof raw.answerable !== "boolean") invalidReasons.push("top-level answerable must be boolean");
+  if (!isFiniteRatio(raw.confidence)) invalidReasons.push("top-level confidence must be finite number in [0,1]");
+  if (invalidReasons.length > 0) {
+    const reason = `provider evidence contract invalid: ${invalidReasons.join("; ")}`;
+    const decisions = new Map<string, NonNullable<EvidenceJudgement["decisions"]>[number]>();
+    for (const result of results) decisions.set(result.memory.id, { id: result.memory.id, decision: "exclude", confidence: 0.99, reason });
+    return {
+      judgement: {
+        answerable: false,
+        confidence: 0.99,
+        reason,
+        requiredEvidence: Array.isArray(judgement.requiredEvidence) ? judgement.requiredEvidence : undefined,
+        decisions: [...decisions.values()]
+      },
+      decisions,
+      invalidReasons
+    };
+  }
+  const decisionContract = normalizeEvidenceDecisionContract(judgement, results);
+  return { judgement, decisions: decisionContract.decisions, invalidReasons: decisionContract.invalidReasons };
+}
+
+function normalizeEvidenceDecisionContract(judgement: EvidenceJudgement, results: SearchResult[]): { decisions: Map<string, NonNullable<EvidenceJudgement["decisions"]>[number]>; invalidReasons: string[] } {
+  const expectedIds = new Set(results.map((result) => result.memory.id));
+  const decisions = new Map<string, NonNullable<EvidenceJudgement["decisions"]>[number]>();
+  const invalidReasons: string[] = [];
+  for (const decision of judgement.decisions ?? []) {
+    if (!expectedIds.has(decision.id)) {
+      invalidReasons.push(`unknown memory id ${decision.id || "<empty>"}`);
+      continue;
+    }
+    if (decisions.has(decision.id)) {
+      invalidReasons.push(`duplicate memory id ${decision.id}`);
+      continue;
+    }
+    if (!isEvidenceDecisionValue(decision.decision)) {
+      invalidReasons.push(`invalid decision for ${decision.id}`);
+      continue;
+    }
+    decisions.set(decision.id, decision);
+  }
+  if (judgement.answerable) {
+    const missing = results.map((result) => result.memory.id).filter((id) => !decisions.has(id));
+    if (missing.length) invalidReasons.push(`missing decisions for ${missing.join(", ")}`);
+  }
+  return { decisions, invalidReasons };
+}
+
+function isEvidenceDecisionValue(value: unknown): value is NonNullable<SearchResult["decision"]> {
+  return value === "include" || value === "exclude" || value === "warn" || value === "review";
+}
+
+function isFiniteRatio(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 }
 
 function parseTemporalConstraint(query: string, now: Date): { after?: Date; before?: Date } {
@@ -319,6 +391,7 @@ function fuseResults(results: SearchResult[], mode: NonNullable<SearchOptions["m
 
 function applyContradictionDecisions(results: SearchResult[]): SearchResult[] {
   return results.map((result) => {
+    if (result.decision === "exclude") return result;
     const conflict = results.find((other) => other.memory.id !== result.memory.id && isLikelyContradiction(result.memory, other.memory) && other.memory.trust >= result.memory.trust);
     if (!conflict) return result;
     const action = conflict.memory.trust - result.memory.trust > 0.08 ? "exclude" : "review";
@@ -329,6 +402,60 @@ function applyContradictionDecisions(results: SearchResult[]): SearchResult[] {
       explanation: [...(result.explanation ?? []), `contradiction with ${conflict.memory.id}`]
     };
   });
+}
+
+function applyProviderContradictionDecisions(results: SearchResult[], detector: ContradictionDetector): SearchResult[] {
+  const decisions = new Map<string, { action: "exclude" | "review"; reason: string; otherId: string }>();
+  for (let leftIndex = 0; leftIndex < results.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < results.length; rightIndex += 1) {
+      const left = results[leftIndex];
+      const right = results[rightIndex];
+      if (!shouldProviderCompare(left.memory, right.memory)) continue;
+      const classified = detector.classify({ a: left.memory, b: right.memory });
+      if (classified.label !== "contradiction" || classified.confidence < 0.72) continue;
+      const loser = providerContradictionLoser(left, right);
+      const winner = loser.memory.id === left.memory.id ? right : left;
+      const action = winner.memory.trust - loser.memory.trust > 0.08 || memoryTime(winner.memory).getTime() > memoryTime(loser.memory).getTime() ? "exclude" : "review";
+      const existing = decisions.get(loser.memory.id);
+      if (existing?.action === "exclude" && action === "review") continue;
+      decisions.set(loser.memory.id, {
+        action,
+        otherId: winner.memory.id,
+        reason: classified.reason ?? "provider contradiction"
+      });
+    }
+  }
+  if (!decisions.size) return results;
+  return results.map((result) => {
+    const decision = decisions.get(result.memory.id);
+    if (!decision) return result;
+    return {
+      ...result,
+      decision: decision.action,
+      contradiction: { memoryId: decision.otherId, reason: decision.reason, action: decision.action },
+      explanation: [...(result.explanation ?? []), `provider contradiction with ${decision.otherId}: ${decision.reason}`]
+    };
+  });
+}
+
+function shouldProviderCompare(a: Memory, b: Memory): boolean {
+  if (a.id === b.id) return false;
+  if (a.beliefState !== "active" || b.beliefState !== "active") return false;
+  const sharedEntities = new Set(a.entities.filter((entity) => b.entities.includes(entity)));
+  if (sharedEntities.size > 0) return true;
+  return keywordCoverage(tokenize(a.content), tokenize(b.content)) >= 0.28 || keywordCoverage(tokenize(b.content), tokenize(a.content)) >= 0.28;
+}
+
+function providerContradictionLoser(a: SearchResult, b: SearchResult): SearchResult {
+  if (a.memory.trust !== b.memory.trust) return a.memory.trust < b.memory.trust ? a : b;
+  const aTime = memoryTime(a.memory).getTime();
+  const bTime = memoryTime(b.memory).getTime();
+  if (aTime !== bTime) return aTime < bTime ? a : b;
+  return a.score < b.score ? a : b;
+}
+
+function memoryTime(memory: Memory): Date {
+  return memory.temporal.validFrom ? new Date(memory.temporal.validFrom) : memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt;
 }
 
 function isLikelyContradiction(a: Memory, b: Memory): boolean {
@@ -537,13 +664,19 @@ function heuristicVerify(query: string, results: SearchResult[]): SearchResult[]
 
 function calibrateResults(results: SearchResult[]): SearchResult[] {
   return results.map((result) => {
-    const confidence = calibrateConfidence(result);
-    const unsafeToInject = confidence < INJECTION_CONFIDENCE_THRESHOLD || result.decision === "exclude" || result.decision === "review";
+    const heuristicConfidence = calibrateConfidence(result);
+    const providerConfidence = result.evidence && result.decision === "include" && typeof result.confidence === "number"
+      ? clamp(result.confidence)
+      : undefined;
+    const confidence = providerConfidence === undefined ? heuristicConfidence : Math.max(heuristicConfidence, providerConfidence);
+    const unsafeToInject = Boolean(result.unsafeToInject) || confidence < INJECTION_CONFIDENCE_THRESHOLD || result.decision === "exclude" || result.decision === "review";
     return {
       ...result,
       confidence,
       unsafeToInject,
-      explanation: unsafeToInject ? [...(result.explanation ?? []), `calibration unsafe confidence ${confidence.toFixed(2)}`] : [...(result.explanation ?? []), `calibration confidence ${confidence.toFixed(2)}`]
+      explanation: unsafeToInject
+        ? [...(result.explanation ?? []), `calibration unsafe confidence ${confidence.toFixed(2)}`]
+        : [...(result.explanation ?? []), `calibration confidence ${confidence.toFixed(2)}${providerConfidence === undefined ? "" : " provider-evidence"}`]
     };
   });
 }

@@ -249,11 +249,13 @@ describe("self verification benchmark loop", () => {
     const competitorsPath = join(dir, "competitors.json");
     const outputPath = join(dir, "market.json");
     const reportShape = {
+      qualityClaimAllowed: true,
       ours: {
         name: "open-memory-harness",
         accuracy: 0.9,
         correct: 9,
         total: 10,
+        judge: { kind: "provider-evidence-support", status: "passed" },
         details: [{ id: "fixture-q1", question: "Which session contains the answer?", passed: true, score: 1, expectedEvidence: ["answer-session"], retrievedEvidence: ["answer-session"] }]
       },
       baselines: [{ name: "keyword-only", accuracy: 0.7, correct: 7, total: 10 }]
@@ -302,8 +304,10 @@ describe("self verification benchmark loop", () => {
         ]
       })
     );
-    const report = runMarketGate({ locomoPath, longMemEvalPath, competitorsPath, outputPath });
+    const report = runMarketGate({ locomoPath, longMemEvalPath, competitorsPath, outputPath, beamPath: "", beam500kPath: "" });
     expect(report.passed).toBe(true);
+    expect(report.claimAllowed).toBe(true);
+    expect(report.proofLevel).toBe("direct-comparable-market-superiority");
     expect(report.directMarketComparison.configured).toBe(true);
     expect(report.directMarketComparison.passed).toBe(true);
     expect(report.directMarketComparison.comparisons[0].questions[0]).toMatchObject({ id: "fixture-q1", matched: true });
@@ -1003,7 +1007,7 @@ process.stdin.on("end", () => {
     expect(readFileSync(join(dir, "operator-memory-benchmark.md"), "utf8")).toContain("Operator Memory Dream Benchmark");
   });
 
-  it("accepts same-run native operator-memory competitor measurements without allowing unsupported market claims", async () => {
+  it("does not score native operator-memory competitor self-checks without an LLM harness judge", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-operator-memory-native-"));
     const providerPath = join(dir, "native-provider.mjs");
     writeFileSync(
@@ -1011,8 +1015,10 @@ process.stdin.on("end", () => {
       `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const failed = payload.scenario.kind === "connector_failure"; console.log(JSON.stringify({ proofLevel: "same-run-native", adapterMode: "native-command", checks: { currentTruthSelected: true, staleTruthSuppressed: failed, sourceRefRevalidated: false, connectorRefreshAccounted: false, beliefRevisionApplied: false, failureContained: failed }, capabilityGaps: ["fixture native runner has no source-aware dream"], latencyMs: 1, evidence: { scenarioId: payload.scenario.id } })); });`
     );
     const previous = process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND;
+    const previousJudge = process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND;
     try {
       process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND = `${process.execPath} ${providerPath}`;
+      delete process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND;
       const report = await runOperatorMemoryBenchmark({
         out: join(dir, "operator-memory-native.json"),
         markdown: join(dir, "operator-memory-native.md"),
@@ -1021,11 +1027,61 @@ process.stdin.on("end", () => {
       const mem0 = report.systems.find((system) => system.system === "mem0-native");
       expect(mem0?.proofLevel).toBe("same-run-native");
       expect(mem0?.runner?.commandEnv).toBe("MEMORY_OPERATOR_MEMORY_MEM0_COMMAND");
+      expect(mem0?.score).toBe(0);
+      expect(mem0?.scenarios[0]?.evidence.structuredChecks).toBe(false);
+      expect(mem0?.scenarios[0]?.evidence.runnerSelfChecksIgnored).toBe(true);
+      expect(mem0?.scenarios[0]?.evidence.judge).toEqual({ kind: "missing" });
+      expect(mem0?.capabilityGaps.join(" ")).toContain("self-scored operator-memory checks");
       expect(report.summary.cognibrainScore).toBeGreaterThan(mem0?.score ?? 0);
       expect(report.summary.marketSuperiorityClaimAllowed).toBe(false);
+      expect(report.summary.marketSuperiorityBlockers.some((item) => item.includes("Mem0") && item.includes("unjudged"))).toBe(true);
       expect(report.summary.marketSuperiorityBlockers.some((item) => item.includes("Graphiti"))).toBe(true);
     } finally {
-      process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND = previous;
+      if (previous === undefined) delete process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND;
+      else process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND = previous;
+      if (previousJudge === undefined) delete process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND;
+      else process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND = previousJudge;
+    }
+  });
+
+  it("scores native operator-memory competitor evidence only after a strict LLM harness judge", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-operator-memory-judged-"));
+    const providerPath = join(dir, "native-provider.mjs");
+    const judgePath = join(dir, "judge.mjs");
+    writeFileSync(
+      providerPath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); console.log(JSON.stringify({ proofLevel: "same-run-native", adapterMode: "native-command", checks: { currentTruthSelected: "true", staleTruthSuppressed: "true", sourceRefRevalidated: "true", connectorRefreshAccounted: "true", beliefRevisionApplied: "true", failureContained: "true" }, capabilityGaps: ["fixture native runner requires central judge"], latencyMs: 1, evidence: { retrievedText: "semantic evidence for " + payload.scenario.id } })); });`
+    );
+    writeFileSync(
+      judgePath,
+      `process.stdin.resume(); process.stdin.on("end", () => { console.log(JSON.stringify({ checks: { currentTruthSelected: true, staleTruthSuppressed: true, sourceRefRevalidated: true, connectorRefreshAccounted: false, beliefRevisionApplied: true, failureContained: false }, confidence: 0.92, reason: "central harness judged raw evidence" })); });`
+    );
+    const previous = process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND;
+    const previousJudge = process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND;
+    try {
+      process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND = `${process.execPath} ${providerPath}`;
+      process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND = `${process.execPath} ${judgePath}`;
+      const report = await runOperatorMemoryBenchmark({
+        out: join(dir, "operator-memory-judged.json"),
+        markdown: join(dir, "operator-memory-judged.md"),
+        systems: ["cognibrain-dream", "mem0-native"]
+      });
+      const mem0 = report.systems.find((system) => system.system === "mem0-native");
+      expect(mem0?.proofLevel).toBe("same-run-native");
+      expect(mem0?.score).toBeGreaterThan(0);
+      expect(mem0?.scenarios[0]?.evidence.structuredChecks).toBe(true);
+      expect(mem0?.scenarios[0]?.evidence.runnerSelfChecksIgnored).toBe(false);
+      expect(mem0?.scenarios[0]?.evidence.judge).toMatchObject({
+        kind: "llm-harness-command",
+        confidence: 0.92,
+        reason: "central harness judged raw evidence"
+      });
+      expect(report.summary.marketSuperiorityClaimAllowed).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND;
+      else process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND = previous;
+      if (previousJudge === undefined) delete process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND;
+      else process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND = previousJudge;
     }
   });
 
@@ -1042,6 +1098,79 @@ process.stdin.on("end", () => {
     } finally {
       process.env.MEMORY_ARENA_AUTO_NATIVE = previous;
     }
+  });
+
+  it("does not score external Arena runner self-checks without an LLM harness judge", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-arena-self-checks-"));
+    const runnerPath = join(dir, "runner.mjs");
+    writeFileSync(
+      runnerPath,
+      `process.stdin.resume(); process.stdin.on("end", () => { console.log(JSON.stringify({ proofLevel: "same-run-native", adapterMode: "native-command", checks: { correctionCarryover: true, repeatedMistakeAvoided: true, procedureRecall: true, patchCorrectness: true, evidenceCompleteness: true, wrongMemorySuppression: true }, capabilityGaps: [], latencyMs: 1, evidence: { retrievedText: "runner claims everything passed" } })); });`
+    );
+    const previousCommand = process.env.MEMORY_ARENA_MEM0_COMMAND;
+    const previousProof = process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL;
+    const previousJudge = process.env.MEMORY_ARENA_JUDGE_COMMAND;
+    try {
+      process.env.MEMORY_ARENA_MEM0_COMMAND = `${process.execPath} ${runnerPath}`;
+      process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL = "same-run-native";
+      delete process.env.MEMORY_ARENA_JUDGE_COMMAND;
+      const report = await runBenchmarkArena({ systems: ["mem0"], count: 1 });
+      const mem0 = report.systems[0];
+      expect(mem0.score).toBe(0);
+      expect(mem0.capabilityGaps.join(" ")).toContain("self-scored checks");
+      expect(mem0.scenarios[0].evidence.runnerSelfChecksIgnored).toBe(true);
+      expect(mem0.scenarios[0].evidence.structuredChecks).toBe(false);
+    } finally {
+      if (previousCommand === undefined) delete process.env.MEMORY_ARENA_MEM0_COMMAND;
+      else process.env.MEMORY_ARENA_MEM0_COMMAND = previousCommand;
+      if (previousProof === undefined) delete process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL;
+      else process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL = previousProof;
+      if (previousJudge === undefined) delete process.env.MEMORY_ARENA_JUDGE_COMMAND;
+      else process.env.MEMORY_ARENA_JUDGE_COMMAND = previousJudge;
+    }
+  });
+
+  it("scores external Arena runner evidence only after strict LLM harness judge validation", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-arena-judged-"));
+    const runnerPath = join(dir, "runner.mjs");
+    const judgePath = join(dir, "judge.mjs");
+    writeFileSync(
+      runnerPath,
+      `process.stdin.resume(); process.stdin.on("end", () => { console.log(JSON.stringify({ proofLevel: "same-run-native", adapterMode: "native-command", checks: { correctionCarryover: false, repeatedMistakeAvoided: false, procedureRecall: false, patchCorrectness: false, evidenceCompleteness: false, wrongMemorySuppression: false }, capabilityGaps: [], latencyMs: 1, evidence: { retrievedText: "raw product evidence for neutral judge" } })); });`
+    );
+    writeFileSync(
+      judgePath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { JSON.parse(input); console.log(JSON.stringify({ checks: { correctionCarryover: true, repeatedMistakeAvoided: false, procedureRecall: true, patchCorrectness: false, evidenceCompleteness: true, wrongMemorySuppression: false }, confidence: 0.91, reason: "fixture LLM harness judge" })); });`
+    );
+    const previousCommand = process.env.MEMORY_ARENA_MEM0_COMMAND;
+    const previousProof = process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL;
+    const previousJudge = process.env.MEMORY_ARENA_JUDGE_COMMAND;
+    try {
+      process.env.MEMORY_ARENA_MEM0_COMMAND = `${process.execPath} ${runnerPath}`;
+      process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL = "same-run-native";
+      process.env.MEMORY_ARENA_JUDGE_COMMAND = `${process.execPath} ${judgePath}`;
+      const report = await runBenchmarkArena({ systems: ["mem0"], count: 1 });
+      const mem0 = report.systems[0];
+      expect(mem0.score).toBe(0.5);
+      expect(mem0.scenarios[0].evidence.structuredChecks).toBe(true);
+      expect(mem0.scenarios[0].evidence.judge).toEqual(expect.objectContaining({ kind: "llm-harness-command", confidence: 0.91 }));
+    } finally {
+      if (previousCommand === undefined) delete process.env.MEMORY_ARENA_MEM0_COMMAND;
+      else process.env.MEMORY_ARENA_MEM0_COMMAND = previousCommand;
+      if (previousProof === undefined) delete process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL;
+      else process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL = previousProof;
+      if (previousJudge === undefined) delete process.env.MEMORY_ARENA_JUDGE_COMMAND;
+      else process.env.MEMORY_ARENA_JUDGE_COMMAND = previousJudge;
+    }
+  });
+
+  it("keeps Basic Memory external public benchmark heuristics diagnostic unless a harness judge is configured", () => {
+    const source = readFileSync("scripts/benchmark/competitors/basic_memory_external_runner.py", "utf8");
+    expect(source).toContain("MEMORY_EXTERNAL_PUBLIC_JUDGE_COMMAND");
+    expect(source).toContain('"qualityClaimAllowed"');
+    expect(source).toContain('"heuristicDiagnostics"');
+    expect(source).toContain('"accuracy": None');
+    expect(source).toContain("Diagnostic only. These values are produced by evidence-id, token, or substring heuristics");
   });
 
   it("publishes a marketing scorecard with bars and per-scenario details", () => {
@@ -1169,8 +1298,11 @@ process.stdin.on("end", () => {
       })
     );
 
-    const saturated = runMarketGate({ locomoPath, longMemEvalPath, outputPath });
-    expect(saturated.passed).toBe(true);
+    const saturated = runMarketGate({ locomoPath, longMemEvalPath, outputPath, beamPath: "", beam500kPath: "" });
+    expect(saturated.passed).toBe(false);
+    expect(saturated.diagnosticPassed).toBe(true);
+    expect(saturated.proofLevel).toBe("diagnostic-public-benchmark-baseline");
+    expect(saturated.claimBlockers.some((item) => item.includes("LongMemEval-S is local-diagnostic"))).toBe(true);
     expect(saturated.benchmarks.find((item) => item.dataset === "LongMemEval-S")?.saturated).toBe(true);
 
     writeFileSync(
@@ -1181,7 +1313,7 @@ process.stdin.on("end", () => {
         source: { name: "LongMemEval-S", metric: "Answer-session recall@K against answer_session_ids" }
       })
     );
-    const lowerTie = runMarketGate({ locomoPath, longMemEvalPath, outputPath });
+    const lowerTie = runMarketGate({ locomoPath, longMemEvalPath, outputPath, beamPath: "", beam500kPath: "" });
     expect(lowerTie.passed).toBe(false);
     expect(lowerTie.benchmarks.find((item) => item.dataset === "LongMemEval-S")?.saturated).toBe(false);
   });
@@ -1219,6 +1351,47 @@ process.stdin.on("end", () => {
       expect(artifact.datasets[0].questions[0].generatedAnswer).toBe("Redis backs the cache.");
       expect(artifact.datasets[0].questions[0].judge.reason).toBe("external judge matched redis");
       expect(artifact.summary.meanScore).toBe(1);
+    } finally {
+      process.env.MEMORY_BENCHMARK_ANSWERER_COMMAND = previousAnswerer;
+      process.env.MEMORY_BENCHMARK_ANSWERER_ARGS = previousAnswererArgs;
+      process.env.MEMORY_BENCHMARK_JUDGE_COMMAND = previousJudge;
+      process.env.MEMORY_BENCHMARK_JUDGE_ARGS = previousJudgeArgs;
+    }
+  });
+
+  it("fails closed on malformed external answer-generation judge contracts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "open-memory-answer-provider-malformed-"));
+    const reportPath = join(dir, "nextgen.json");
+    const providerPath = join(dir, "provider.mjs");
+    const outputPath = join(dir, "answers.json");
+    writeFileSync(
+      reportPath,
+      JSON.stringify({
+        suites: [
+          {
+            id: "external-proof",
+            details: [{ id: "q1", question: "What cache is used?", expected: ["redis"], retrieved: ["Redis backs the cache."] }]
+          }
+        ]
+      })
+    );
+    writeFileSync(
+      providerPath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); if (payload.task === "answer") console.log(JSON.stringify({ answer: "Redis backs the cache." })); else console.log(JSON.stringify({ score: 1, passed: "true", reason: "malformed boolean" })); });`
+    );
+    const previousAnswerer = process.env.MEMORY_BENCHMARK_ANSWERER_COMMAND;
+    const previousAnswererArgs = process.env.MEMORY_BENCHMARK_ANSWERER_ARGS;
+    const previousJudge = process.env.MEMORY_BENCHMARK_JUDGE_COMMAND;
+    const previousJudgeArgs = process.env.MEMORY_BENCHMARK_JUDGE_ARGS;
+    try {
+      process.env.MEMORY_BENCHMARK_ANSWERER_COMMAND = process.execPath;
+      process.env.MEMORY_BENCHMARK_ANSWERER_ARGS = providerPath;
+      process.env.MEMORY_BENCHMARK_JUDGE_COMMAND = process.execPath;
+      process.env.MEMORY_BENCHMARK_JUDGE_ARGS = providerPath;
+      const artifact = runAnswerGenerationBenchmark({ reports: [reportPath], outputPath });
+      expect(artifact.datasets[0].questions[0].judge).toMatchObject({ score: 0, passed: false });
+      expect(artifact.datasets[0].questions[0].judge.reason).toContain("passed must be a boolean");
+      expect(artifact.summary.meanScore).toBe(0);
     } finally {
       process.env.MEMORY_BENCHMARK_ANSWERER_COMMAND = previousAnswerer;
       process.env.MEMORY_BENCHMARK_ANSWERER_ARGS = previousAnswererArgs;

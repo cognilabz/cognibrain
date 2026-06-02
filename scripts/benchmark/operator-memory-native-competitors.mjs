@@ -33,6 +33,10 @@ const env = {
   MEMORY_OPERATOR_MEMORY_PYTHON_RUNNER_TIMEOUT_MS: process.env.MEMORY_OPERATOR_MEMORY_PYTHON_RUNNER_TIMEOUT_MS ?? "120000"
 };
 
+if (!env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND && (process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY)) {
+  env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND = `${process.execPath} ${join(root, "scripts", "benchmark", "operator-memory-openai-judge.mjs")}`;
+}
+
 const benchmark = spawnSync("npx", [
   "tsx",
   "src/eval/operatorMemoryBenchmark.ts",

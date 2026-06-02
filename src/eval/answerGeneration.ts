@@ -184,10 +184,15 @@ function splitArgs(value: string | undefined): string[] {
 }
 
 function normalizeJudge(output: Record<string, any>, judgeName: string) {
-  const score = typeof output.score === "number" && Number.isFinite(output.score) ? Math.max(0, Math.min(1, output.score)) : 0;
+  if (typeof output.score !== "number" || !Number.isFinite(output.score) || output.score < 0 || output.score > 1) {
+    return { score: 0, passed: false, reason: `${judgeName} provider contract invalid: score must be a finite 0..1 number` };
+  }
+  if (typeof output.passed !== "boolean") {
+    return { score: 0, passed: false, reason: `${judgeName} provider contract invalid: passed must be a boolean` };
+  }
   return {
-    score,
-    passed: typeof output.passed === "boolean" ? output.passed : score >= 0.5,
+    score: output.score,
+    passed: output.passed,
     reason: typeof output.reason === "string" ? output.reason : `${judgeName} provider score`
   };
 }

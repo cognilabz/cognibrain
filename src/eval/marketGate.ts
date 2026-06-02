@@ -5,7 +5,11 @@ interface BenchmarkReport {
   generatedAt?: string;
   source?: { name?: string; metric?: string; repository?: string; paper?: string; split?: string };
   config?: { split?: string };
-  ours: { name: string; accuracy: number; correct: number; total: number; details?: BenchmarkDetail[] };
+  proof?: string;
+  proofLevel?: string;
+  qualityClaimAllowed?: boolean;
+  judge?: { kind?: string; status?: string };
+  ours: { name: string; accuracy: number; correct: number; total: number; details?: BenchmarkDetail[]; judge?: { kind?: string; status?: string } };
   baselines: Array<{ name: string; accuracy: number; correct: number; total: number }>;
 }
 
@@ -34,6 +38,9 @@ interface GateBenchmarkSummary {
   dataset: string;
   metric: string;
   passed: boolean;
+  diagnosticPassed: boolean;
+  scoreable: boolean;
+  proof: "local-diagnostic" | "llm-harness" | "public-benchmark";
   saturated: boolean;
   ours: { correct: number; total: number; accuracy: number };
   bestBaseline: { name: string; correct: number; total: number; accuracy: number };
@@ -107,15 +114,27 @@ export function runMarketGate(options: Partial<GateOptions> = {}) {
   const competitorArtifact = resolved.competitorsPath ? readCompetitors(resolved.competitorsPath) : undefined;
   const directMarketComparison = compareCompetitors(benchmarks, competitorArtifact);
   const methodologyFailures = competitorArtifact ? competitorMethodologyFailures(competitorArtifact) : [];
+  const allBenchmarksScoreable = benchmarks.every((benchmark) => benchmark.scoreable);
+  const diagnosticPassed = benchmarks.every((benchmark) => benchmark.diagnosticPassed) && methodologyFailures.length === 0;
+  const directClaimAllowed = allBenchmarksScoreable && directMarketComparison.passed && methodologyFailures.length === 0;
+  const baselineClaimAllowed = allBenchmarksScoreable && benchmarks.every((benchmark) => benchmark.passed) && methodologyFailures.length === 0;
   const report = {
-    passed: benchmarks.every((benchmark) => benchmark.passed) && methodologyFailures.length === 0,
+    passed: directClaimAllowed || baselineClaimAllowed,
+    diagnosticPassed,
+    claimAllowed: directClaimAllowed || baselineClaimAllowed,
     generatedAt: new Date().toISOString(),
-    proofLevel: directMarketComparison.passed
+    proofLevel: directClaimAllowed
       ? "direct-comparable-market-superiority"
-      : "certified-public-benchmark-baseline-superiority",
+      : baselineClaimAllowed
+        ? "certified-public-benchmark-baseline-superiority"
+        : "diagnostic-public-benchmark-baseline",
     limitations: [
-      "This gate proves superiority over included local baselines on official public datasets.",
-      "It does not claim direct superiority over commercial vendors unless their comparable artifacts are imported and evaluated with the same metric, top-K, and budget."
+      "Local evidence-id or deterministic recall reports are diagnostics only until the benchmark artifact carries LLM/harness or comparable public-benchmark proof.",
+      "Baseline and market superiority claims require every included benchmark row to be scoreable and any competitor artifact to use the same metric, top-K, budget, methodology metadata and per-question rows."
+    ],
+    claimBlockers: [
+      ...benchmarks.filter((benchmark) => !benchmark.scoreable).map((benchmark) => `${benchmark.dataset} is ${benchmark.proof}; require LLM/harness or comparable public-benchmark proof before claim`),
+      ...methodologyFailures.map((failure) => `${failure.competitor} ${failure.dataset}/${failure.metric}: ${failure.reason}`)
     ],
     benchmarks,
     directMarketComparison,
@@ -183,16 +202,33 @@ function summarizeBenchmark(report: BenchmarkReport, fallbackDataset: string): G
   const dataset = report.source?.name === "BEAM" && split ? `BEAM ${split}` : report.source?.name ?? fallbackDataset;
   const margin = report.ours.accuracy - bestBaseline.accuracy;
   const saturated = report.ours.accuracy === 1 && bestBaseline.accuracy === 1;
+  const proof = benchmarkProof(report);
+  const scoreable = proof !== "local-diagnostic";
+  const diagnosticPassed = margin > 0 || saturated;
   return {
     dataset,
     metric: report.source?.metric ?? "unknown",
-    passed: margin > 0 || saturated,
+    passed: scoreable && diagnosticPassed,
+    diagnosticPassed,
+    scoreable,
+    proof,
     saturated,
     ours: pickScore(report.ours),
     bestBaseline: { name: bestBaseline.name, ...pickScore(bestBaseline) },
     margin,
     questions: normalizeBenchmarkQuestions(report.ours.details ?? [])
   };
+}
+
+function benchmarkProof(report: BenchmarkReport): GateBenchmarkSummary["proof"] {
+  const kind = report.ours?.judge?.kind ?? report.judge?.kind;
+  const proof = report.proof ?? report.proofLevel;
+  if (report.qualityClaimAllowed === true && (kind === "llm" || kind === "harness" || kind === "provider-evidence-support" || proof === "llm-harness" || proof === "public-benchmark")) {
+    return kind === "provider-evidence-support" || proof === "llm-harness" ? "llm-harness" : proof === "public-benchmark" ? "public-benchmark" : "llm-harness";
+  }
+  if (kind === "provider-evidence-support" || kind === "llm" || kind === "harness" || proof === "llm-harness") return "llm-harness";
+  if (proof === "public-benchmark") return "public-benchmark";
+  return "local-diagnostic";
 }
 
 function pickScore(score: { correct: number; total: number; accuracy: number }) {
@@ -343,5 +379,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     outputPath: args.get("--out") ?? undefined
   });
   console.log(JSON.stringify(report, null, 2));
-  process.exit(report.passed ? 0 : 1);
+  process.exit(report.passed || report.diagnosticPassed ? 0 : 1);
 }

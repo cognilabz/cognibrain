@@ -25,6 +25,15 @@ const files = {
   realworldProtocol: readJson("artifacts/realworld-benchmark-protocol.json", { currentArtifacts: [], leaderboardEligibleArtifacts: [] }),
   realworldBlackbox: readJson("artifacts/realworld-blackbox.json", { systems: [], manifestHash: "", eligibilityGate: {}, leaderboardEligible: true }),
   arenaSource: read("src/eval/arena.ts"),
+  arenaOpenAiJudge: read("scripts/benchmark/arena-openai-judge.mjs"),
+  nativeCompetitorBenchmark: read("scripts/benchmark/benchmark-native-competitors.mjs"),
+  operatorMemoryBenchmarkSource: read("src/eval/operatorMemoryBenchmark.ts"),
+  operatorMemoryOpenAiJudge: read("scripts/benchmark/operator-memory-openai-judge.mjs"),
+  operatorMemoryNativeCompetitorBenchmark: read("scripts/benchmark/operator-memory-native-competitors.mjs"),
+  basicMemoryExternalRunner: read("scripts/benchmark/competitors/basic_memory_external_runner.py"),
+  marketGateSource: read("src/eval/marketGate.ts"),
+  leaderboardSource: read("src/eval/leaderboard.ts"),
+  answerGenerationSource: read("src/eval/answerGeneration.ts"),
   releaseCheck: read("scripts/release/release-check.mjs"),
   internalRunner: read("scripts/internal/run-task.mjs"),
   cli: readMany(["bin/cognibrain.mjs", "bin/lib/render.mjs"]),
@@ -115,7 +124,14 @@ const realworldBlackboxBlocked = realworldBlackboxSystems.filter((system) => sys
 const realworldBlackboxRawRetained = realworldBlackboxCognibrain && Array.isArray(realworldBlackboxCognibrain.rawOutputs) && realworldBlackboxCognibrain.rawOutputs.length >= 6;
 const realworldBlackboxJudgeBlocked = realworldBlackboxCognibrain?.qualityClaimAllowed === false && realworldBlackboxCognibrain?.judge?.kind === "missing" && realworldBlackboxCognibrain?.metrics?.score === null && files.realworldBlackbox.eligibilityGate?.llmOrHarnessJudged === false;
 const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked;
-const arenaRunnerChecksFailClosed = !files.arenaSource.includes("checksFromRunnerText") && !files.arenaSource.includes("haystack.includes") && files.arenaSource.includes("structuredChecks") && files.arenaSource.includes("runner omitted structured checks");
+const arenaRunnerChecksFailClosed = !files.arenaSource.includes("checksFromRunnerText") && !files.arenaSource.includes("haystack.includes") && files.arenaSource.includes("runnerSelfChecksIgnored") && files.arenaSource.includes("MEMORY_ARENA_JUDGE_COMMAND") && files.arenaSource.includes("runner supplied self-scored checks");
+const arenaOpenAiJudgeStrict = files.arenaOpenAiJudge.includes("Do not trust runner-proposed checks") && files.arenaOpenAiJudge.includes("Do not use exact string overlap") && files.arenaOpenAiJudge.includes("must be a JSON boolean") && files.nativeCompetitorBenchmark.includes("arena-openai-judge.mjs");
+const operatorMemoryNativeJudgeBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("runnerSelfChecksIgnored") && files.operatorMemoryBenchmarkSource.includes("raw native evidence is unjudged") && files.operatorMemoryBenchmarkSource.includes("native/cloud artifact is unjudged") && files.operatorMemoryOpenAiJudge.includes("Do not trust runner-proposed checks") && files.operatorMemoryOpenAiJudge.includes("Do not use exact string overlap") && files.operatorMemoryOpenAiJudge.includes("must be a JSON boolean") && files.operatorMemoryNativeCompetitorBenchmark.includes("operator-memory-openai-judge.mjs");
+const externalBasicMemoryHeuristicsBounded = files.basicMemoryExternalRunner.includes("MEMORY_EXTERNAL_PUBLIC_JUDGE_COMMAND") && files.basicMemoryExternalRunner.includes('"qualityClaimAllowed"') && files.basicMemoryExternalRunner.includes('"heuristicDiagnostics"') && files.basicMemoryExternalRunner.includes("Diagnostic only. These values are produced by evidence-id, token, or substring heuristics") && files.basicMemoryExternalRunner.includes('"accuracy": None');
+const marketGateClaimBoundary = files.marketGateSource.includes("diagnostic-public-benchmark-baseline") && files.marketGateSource.includes("claimAllowed") && files.marketGateSource.includes("claimBlockers") && files.marketGateSource.includes("local-diagnostic") && files.marketGateSource.includes("provider-evidence-support");
+const leaderboardDiagnosticClaimsBounded = files.leaderboardSource.includes('"local-diagnostic"') && files.leaderboardSource.includes("claimAllowed") && files.leaderboardSource.includes("cannot allow quality claims") && files.leaderboardSource.includes('"llm-harness"') && files.leaderboardSource.includes('"public-benchmark"');
+const answerGenerationNormalizeJudge = functionBody(files.answerGenerationSource, "normalizeJudge");
+const answerGenerationJudgeStrict = answerGenerationNormalizeJudge.includes("passed must be a boolean") && answerGenerationNormalizeJudge.includes("score must be a finite 0..1 number") && !answerGenerationNormalizeJudge.includes("score >= 0.5");
 const honestDbBackedBoundary = docsContainAll([
   "MemoryRepository paths for SQLite and Postgres",
   "target database"
@@ -144,7 +160,7 @@ const checks = [
   check("arena-proof-levels-known", "Every competitor row uses a known proof level.", unsupportedCompetitorLevels.length === 0, "fail", {
     unsupported: unsupportedCompetitorLevels.map((system) => `${system.displayName ?? system.system}:${system.proofLevel}`)
   }),
-  check("arena-runner-structured-checks", "Arena command runners fail closed unless they return structured checks; raw text is diagnostic evidence only.", arenaRunnerChecksFailClosed, "fail", {
+  check("arena-runner-judge-validated-checks", "Arena command runners fail closed unless a central LLM/harness judge validates raw runner evidence into strict boolean checks; runner self-checks are diagnostic only.", arenaRunnerChecksFailClosed, "fail", {
     source: "src/eval/arena.ts"
   }),
   check("benchmark-docs-boundary", "Benchmark docs explicitly separate full local proof from API-shape, native, cloud, CLI and vendor-certified rows.", docsContainAll([
@@ -178,6 +194,26 @@ const checks = [
     blockedSystems: realworldBlackboxBlocked.map((system) => system.system),
     cognibrainScore: realworldBlackboxCognibrain?.metrics?.score,
     rawOutputs: realworldBlackboxCognibrain?.rawOutputs?.length ?? 0
+  }),
+  check("leaderboard-diagnostic-claim-boundary", "Public leaderboard artifacts mark local deterministic scores as diagnostic-only and allow claims only for LLM/harness or comparable public benchmark proof.", leaderboardDiagnosticClaimsBounded, "fail", {
+    source: "src/eval/leaderboard.ts"
+  }),
+  check("answer-generation-judge-contract", "External answer-generation judges fail closed unless score is finite 0..1 and passed is a strict boolean.", answerGenerationJudgeStrict, "fail", {
+    source: "src/eval/answerGeneration.ts"
+  }),
+  check("arena-external-runner-judge-contract", "External Arena competitor runners cannot score themselves; native same-run outputs require an explicit LLM/harness judge command for scoreable checks.", arenaRunnerChecksFailClosed && arenaOpenAiJudgeStrict, "fail", {
+    source: "src/eval/arena.ts",
+    judge: "scripts/benchmark/arena-openai-judge.mjs"
+  }),
+  check("operator-memory-native-judge-boundary", "Operator Memory native competitor runners cannot score themselves; same-run native/cloud outputs require an explicit LLM/harness judge command for scoreable source-aware checks.", operatorMemoryNativeJudgeBoundary, "fail", {
+    source: "src/eval/operatorMemoryBenchmark.ts",
+    judge: "scripts/benchmark/operator-memory-openai-judge.mjs"
+  }),
+  check("external-basic-memory-score-boundary", "Basic Memory external public-dataset adapter keeps evidence-id/token/substr heuristics as diagnostics and requires an external LLM/harness judge before accuracy/delta become scoreable.", externalBasicMemoryHeuristicsBounded, "fail", {
+    source: "scripts/benchmark/competitors/basic_memory_external_runner.py"
+  }),
+  check("market-gate-claim-boundary", "MarketGate keeps local public-dataset ID/recall victories diagnostic until included benchmark artifacts carry LLM/harness or comparable public-benchmark proof.", marketGateClaimBoundary, "fail", {
+    source: "src/eval/marketGate.ts"
   }),
   check("connector-hermetic-drivers", "Connector registry has first-party driver and fixture coverage for the native connector set.", maturityRows.length >= 19 && hermeticRows.length >= 19, "fail", {
     artifact: "artifacts/connector-maturity.json",
@@ -525,6 +561,21 @@ function runtimeStatusReport() {
 
 function readinessRow(feature, code, api, cliTui, mcp, tests, artifact, productionState, claimBoundary) {
   return { feature, code, api, cliTui, mcp, tests, artifact, productionState, claimBoundary };
+}
+
+function functionBody(source, name) {
+  const start = source.indexOf(`function ${name}`);
+  if (start < 0) return "";
+  const open = source.indexOf("{", start);
+  if (open < 0) return "";
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") depth += 1;
+    if (char === "}") depth -= 1;
+    if (depth === 0) return source.slice(open, index + 1);
+  }
+  return source.slice(open);
 }
 
 function read(path) {

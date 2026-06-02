@@ -248,8 +248,13 @@ describe("TypeScript memory core integrations", () => {
       expect(artifact.privacy).toMatchObject({ anonymized: true, noRawPrompts: true, noRawEvidence: true });
       expect(artifact.publication.anonymized).toBe(true);
       expect(artifact.entries.some((entry) => entry.category === "answer_generation")).toBe(true);
+      expect(artifact.entries.filter((entry) => entry.proof === "local-diagnostic").every((entry) => entry.claimAllowed === false && entry.claimClass === "diagnostic-only")).toBe(true);
+      expect(JSON.stringify(artifact.entries)).not.toContain("local-deterministic");
       expect(JSON.stringify(artifact)).not.toContain("rawPrompt");
       expect(JSON.stringify(artifact)).not.toContain("rawEvidence");
+      const invalidClaim = structuredClone(artifact);
+      invalidClaim.entries[0].claimAllowed = true;
+      expect(() => validateLeaderboardArtifact(invalidClaim)).toThrow(/cannot allow quality claims/);
       const publication = publishLeaderboardArtifact({ inputPath: outputPath, outputDir: join(dir, "public") });
       expect(publication.entries).toBeGreaterThan(0);
       expect(publication.anonymized).toBe(true);

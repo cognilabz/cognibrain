@@ -86,6 +86,22 @@ interface ArenaScenarioResult {
   evidence: Record<string, unknown>;
 }
 
+interface ParsedRunnerOutput {
+  checks?: Partial<ArenaScenarioResult["checks"]>;
+  evidence?: Record<string, unknown>;
+  capabilityGaps?: string[];
+  latencyMs?: number;
+  proofLevel?: string;
+  adapterMode?: string;
+}
+
+interface ArenaJudgeResult {
+  checks: ArenaScenarioResult["checks"];
+  reason: string;
+  confidence: number;
+  evidence?: Record<string, unknown>;
+}
+
 interface ArenaSystemResult {
   system: MemorySystemId;
   displayName: string;
@@ -443,8 +459,8 @@ class CommandRunnerAdapter extends ProfileAdapter {
       system: this.id,
       scenario,
       expectedOutput: {
-        checks: ["correctionCarryover", "repeatedMistakeAvoided", "procedureRecall", "patchCorrectness", "evidenceCompleteness", "wrongMemorySuppression"],
-        note: "Return JSON with a checks object and optional evidence/capabilityGaps/latencyMs."
+        evidence: "Return raw product evidence, retrieved context, actions, and optional capabilityGaps/latencyMs.",
+        note: "External runner checks are treated as advisory only. Scoreable checks require MEMORY_ARENA_JUDGE_COMMAND to validate the raw evidence."
       }
     };
     const result = spawnSync(this.runner.command, [], {
@@ -475,8 +491,15 @@ class CommandRunnerAdapter extends ProfileAdapter {
     const runnerProof = normalizeProofLevel(parsed?.proofLevel);
     if (runnerProof) this.proofLevel = runnerProof;
     if (isAdapterMode(parsed?.adapterMode)) this.adapterMode = parsed.adapterMode;
-    const checks = normalizeChecks(parsed?.checks) ?? emptyChecks();
-    if (!parsed?.checks) this.addCapabilityGaps([`runner omitted structured checks for ${scenario.id}`]);
+    const judged = judgeRunnerOutput(this.id, scenario, parsed, this.runner.commandEnv);
+    const checks = judged?.checks ?? emptyChecks();
+    if (!judged) {
+      this.addCapabilityGaps([
+        parsed?.checks
+          ? `runner supplied self-scored checks for ${scenario.id}; ignored until MEMORY_ARENA_JUDGE_COMMAND validates raw evidence`
+          : `runner omitted judge-validated checks for ${scenario.id}`
+      ]);
+    }
     this.addCapabilityGaps(parsed?.capabilityGaps);
     return {
       id: scenario.id,
@@ -487,7 +510,9 @@ class CommandRunnerAdapter extends ProfileAdapter {
         proofLevel: this.proofLevel,
         commandEnv: this.runner.commandEnv,
         runner: "external-json-command",
-        structuredChecks: Boolean(parsed?.checks),
+        structuredChecks: Boolean(judged),
+        runnerSelfChecksIgnored: Boolean(parsed?.checks && !judged),
+        judge: judged ? { kind: "llm-harness-command", reason: judged.reason, confidence: judged.confidence, evidence: judged.evidence } : { kind: "missing" },
         latencyMs: parsed?.latencyMs,
         capabilityGaps: parsed?.capabilityGaps,
         evidence: parsed?.evidence ?? parsed
@@ -641,7 +666,7 @@ function loadImportedScenarios(path: string, id: MemorySystemId): Map<string, Ar
   return map;
 }
 
-function parseRunnerOutput(stdout: string): { checks?: Partial<ArenaScenarioResult["checks"]>; evidence?: Record<string, unknown>; capabilityGaps?: string[]; latencyMs?: number; proofLevel?: string; adapterMode?: string } | undefined {
+function parseRunnerOutput(stdout: string): ParsedRunnerOutput | undefined {
   const trimmed = stdout.trim();
   if (!trimmed) return undefined;
   try {
@@ -660,14 +685,66 @@ function parseRunnerOutput(stdout: string): { checks?: Partial<ArenaScenarioResu
 function normalizeChecks(value: unknown): ArenaScenarioResult["checks"] | undefined {
   if (!value || typeof value !== "object") return undefined;
   const checks = value as Partial<Record<keyof ArenaScenarioResult["checks"], unknown>>;
+  if (ARENA_CHECK_KEYS.some((key) => typeof checks[key] !== "boolean")) return undefined;
   return {
-    correctionCarryover: Boolean(checks.correctionCarryover),
-    repeatedMistakeAvoided: Boolean(checks.repeatedMistakeAvoided),
-    procedureRecall: Boolean(checks.procedureRecall),
-    patchCorrectness: Boolean(checks.patchCorrectness),
-    evidenceCompleteness: Boolean(checks.evidenceCompleteness),
-    wrongMemorySuppression: Boolean(checks.wrongMemorySuppression)
+    correctionCarryover: checks.correctionCarryover as boolean,
+    repeatedMistakeAvoided: checks.repeatedMistakeAvoided as boolean,
+    procedureRecall: checks.procedureRecall as boolean,
+    patchCorrectness: checks.patchCorrectness as boolean,
+    evidenceCompleteness: checks.evidenceCompleteness as boolean,
+    wrongMemorySuppression: checks.wrongMemorySuppression as boolean
   };
+}
+
+const ARENA_CHECK_KEYS: Array<keyof ArenaScenarioResult["checks"]> = ["correctionCarryover", "repeatedMistakeAvoided", "procedureRecall", "patchCorrectness", "evidenceCompleteness", "wrongMemorySuppression"];
+
+function judgeRunnerOutput(system: MemorySystemId, scenario: CogniCodeScenario, runnerOutput: ParsedRunnerOutput | undefined, commandEnv: string): ArenaJudgeResult | undefined {
+  const command = process.env.MEMORY_ARENA_JUDGE_COMMAND;
+  if (!command || !runnerOutput) return undefined;
+  const payload = {
+    schemaVersion: "1.0",
+    contract: "cognibrain-arena-llm-harness-judge-v1",
+    system,
+    commandEnv,
+    scenario,
+    runnerOutput,
+    requiredChecks: ARENA_CHECK_KEYS
+  };
+  const result = spawnSync(command, [], {
+    input: `${JSON.stringify(payload)}\n`,
+    encoding: "utf8",
+    shell: true,
+    timeout: Number(process.env.MEMORY_ARENA_JUDGE_TIMEOUT_MS ?? 120_000),
+    maxBuffer: 10 * 1024 * 1024
+  });
+  if (result.status !== 0) return undefined;
+  const parsed = parseJsonLine(result.stdout);
+  const checks = normalizeChecks(parsed?.checks);
+  if (!checks) return undefined;
+  const confidence = parsed && typeof parsed.confidence === "number" && Number.isFinite(parsed.confidence) && parsed.confidence >= 0 && parsed.confidence <= 1 ? parsed.confidence : undefined;
+  if (confidence === undefined) return undefined;
+  return {
+    checks,
+    confidence,
+    reason: typeof parsed?.reason === "string" ? parsed.reason.slice(0, 1000) : "arena judge decision",
+    evidence: parsed?.judge && typeof parsed.judge === "object" ? parsed.judge as Record<string, unknown> : undefined
+  };
+}
+
+function parseJsonLine(stdout: string): Record<string, unknown> | undefined {
+  const trimmed = stdout.trim();
+  if (!trimmed) return undefined;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const jsonLine = trimmed.split(/\r?\n/).reverse().find((line) => line.trim().startsWith("{"));
+    if (!jsonLine) return undefined;
+    try {
+      return JSON.parse(jsonLine);
+    } catch {
+      return undefined;
+    }
+  }
 }
 
 function emptyChecks(): ArenaScenarioResult["checks"] {

@@ -57,6 +57,22 @@ interface ScenarioResult {
   evidence: Record<string, unknown>;
 }
 
+interface ParsedNativeOutput {
+  proofLevel?: string;
+  adapterMode?: string;
+  checks?: unknown;
+  capabilityGaps?: unknown;
+  latencyMs?: unknown;
+  evidence?: unknown;
+}
+
+interface OperatorMemoryJudgeResult {
+  checks: ScenarioChecks;
+  confidence: number;
+  reason: string;
+  evidence?: Record<string, unknown>;
+}
+
 interface SystemResult {
   system: SystemId;
   displayName: string;
@@ -120,10 +136,12 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
   const competitors = systems.filter((system) => system.system !== "cognibrain-dream");
   const bestBaseline = Math.max(0, ...competitors.map((system) => system.score));
   const realCompetitors = competitors.filter((system) => ["same-run-native", "same-run-cloud-api"].includes(system.proofLevel));
+  const unjudgedRealCompetitors = realCompetitors.filter((system) => system.scenarios.some((scenario) => scenario.evidence.structuredChecks !== true));
   const requiredNative = ["mem0-native", "langmem-native", "graphiti-native"] as const;
   const missingNative = requiredNative.filter((system) => !systems.some((result) => result.system === system && ["same-run-native", "same-run-cloud-api"].includes(result.proofLevel)));
   const marketSuperiorityBlockers = [
     ...missingNative.map((system) => `${displayName(system)} same-run native/cloud artifact is missing or credential-blocked.`),
+    ...unjudgedRealCompetitors.map((system) => `${system.displayName} native/cloud artifact is unjudged; set MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND before market claims.`),
     ...(process.env.MEMORY_OPERATOR_MEMORY_LIVE_CONNECTOR_PROOF === "true" ? [] : ["No live GitHub/Jira/Confluence/Notion credentialed tenant run was supplied."]),
     ...(process.env.MEMORY_OPERATOR_MEMORY_INDEPENDENT_PROOF === "true" ? [] : ["No vendor-signed or independently reproduced artifact was supplied."])
   ];
@@ -256,21 +274,30 @@ function runNativeScenario(system: SystemId, scenario: OperatorMemoryScenario, c
     });
   }
   try {
-    const parsed = JSON.parse(result.stdout.trim());
-    const checks = normalizeChecks(parsed.checks);
+    const parsed = JSON.parse(result.stdout.trim()) as ParsedNativeOutput;
+    const judged = judgeNativeScenario(system, scenario, parsed, command);
+    const checks = judged?.checks ?? normalizeChecks({});
+    const runnerSelfChecksIgnored = Boolean(parsed.checks && !judged);
     return {
       scenarioId: scenario.id,
       title: scenario.title,
       kind: scenario.kind,
       checks,
-      score: parsed.proofLevel === "credential-blocked" ? 0 : scoreChecks(checks),
-      capabilityGaps: Array.isArray(parsed.capabilityGaps) ? parsed.capabilityGaps.map(String) : capabilityGaps(system),
+      score: parsed.proofLevel === "credential-blocked" ? 0 : judged ? scoreChecks(checks) : 0,
+      capabilityGaps: unique([
+        ...(Array.isArray(parsed.capabilityGaps) ? parsed.capabilityGaps.map(String) : capabilityGaps(system)),
+        ...(runnerSelfChecksIgnored ? [`${displayName(system)} supplied self-scored operator-memory checks; ignored until MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND validates raw evidence`] : []),
+        ...(!judged && parsed.proofLevel !== "credential-blocked" ? [`${displayName(system)} raw native evidence is unjudged; score held at 0 until MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND succeeds`] : [])
+      ]),
       evidence: {
         system,
         proofLevel: parsed.proofLevel ?? "same-run-native",
         adapterMode: parsed.adapterMode ?? "native-command",
         latencyMs: parsed.latencyMs,
         runner: command,
+        structuredChecks: Boolean(judged),
+        runnerSelfChecksIgnored,
+        judge: judged ? { kind: "llm-harness-command", confidence: judged.confidence, reason: judged.reason, evidence: judged.evidence } : { kind: "missing" },
         nativeEvidence: parsed.evidence
       }
     };
@@ -441,6 +468,69 @@ function normalizeChecks(value: unknown): ScenarioChecks {
     beliefRevisionApplied: Boolean(checks.beliefRevisionApplied),
     failureContained: Boolean(checks.failureContained)
   };
+}
+
+const OPERATOR_MEMORY_CHECK_KEYS: Array<keyof ScenarioChecks> = ["currentTruthSelected", "staleTruthSuppressed", "sourceRefRevalidated", "connectorRefreshAccounted", "beliefRevisionApplied", "failureContained"];
+
+function normalizeStrictChecks(value: unknown): ScenarioChecks | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const checks = value as Partial<Record<keyof ScenarioChecks, unknown>>;
+  if (OPERATOR_MEMORY_CHECK_KEYS.some((key) => typeof checks[key] !== "boolean")) return undefined;
+  return {
+    currentTruthSelected: checks.currentTruthSelected as boolean,
+    staleTruthSuppressed: checks.staleTruthSuppressed as boolean,
+    sourceRefRevalidated: checks.sourceRefRevalidated as boolean,
+    connectorRefreshAccounted: checks.connectorRefreshAccounted as boolean,
+    beliefRevisionApplied: checks.beliefRevisionApplied as boolean,
+    failureContained: checks.failureContained as boolean
+  };
+}
+
+function judgeNativeScenario(system: SystemId, scenario: OperatorMemoryScenario, runnerOutput: ParsedNativeOutput, command: string): OperatorMemoryJudgeResult | undefined {
+  const judgeCommand = process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND;
+  if (!judgeCommand) return undefined;
+  const result = spawnSync(judgeCommand, {
+    cwd: process.cwd(),
+    input: JSON.stringify({
+      schemaVersion: "1.0",
+      contract: "cognibrain-operator-memory-llm-harness-judge-v1",
+      system,
+      scenario,
+      runnerOutput,
+      requiredChecks: OPERATOR_MEMORY_CHECK_KEYS
+    }),
+    encoding: "utf8",
+    shell: true,
+    timeout: Number(process.env.MEMORY_OPERATOR_MEMORY_JUDGE_TIMEOUT_MS ?? 120_000),
+    maxBuffer: 10 * 1024 * 1024
+  });
+  if (result.status !== 0) return undefined;
+  const parsed = parseJsonLine(result.stdout);
+  const checks = normalizeStrictChecks(parsed?.checks);
+  const confidence = typeof parsed?.confidence === "number" && Number.isFinite(parsed.confidence) && parsed.confidence >= 0 && parsed.confidence <= 1 ? parsed.confidence : undefined;
+  if (!checks || confidence === undefined) return undefined;
+  return {
+    checks,
+    confidence,
+    reason: typeof parsed?.reason === "string" ? parsed.reason.slice(0, 1000) : "operator memory judge decision",
+    evidence: parsed?.judge && typeof parsed.judge === "object" ? parsed.judge as Record<string, unknown> : undefined
+  };
+}
+
+function parseJsonLine(stdout: string): Record<string, unknown> | undefined {
+  const trimmed = stdout.trim();
+  if (!trimmed) return undefined;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const jsonLine = trimmed.split(/\r?\n/).reverse().find((line) => line.trim().startsWith("{"));
+    if (!jsonLine) return undefined;
+    try {
+      return JSON.parse(jsonLine);
+    } catch {
+      return undefined;
+    }
+  }
 }
 
 function nativeProofLevel(results: ScenarioResult[]): ProofLevel {

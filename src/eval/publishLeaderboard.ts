@@ -23,7 +23,7 @@ export function publishLeaderboardArtifact(options: { inputPath?: string; output
 
 function renderLeaderboardHtml(artifact: LeaderboardArtifact & { publication: LeaderboardArtifact["publication"] & { publishedAt?: string; channel?: string } }) {
   const rows = artifact.entries
-    .map((entry) => `<tr><td>${escapeHtml(entry.suite)}</td><td>${escapeHtml(entry.category)}</td><td>${escapeHtml(entry.metric)}</td><td>${entry.score.toFixed(4)}</td><td>${escapeHtml(entry.proof)}</td></tr>`)
+    .map((entry) => `<tr><td>${escapeHtml(entry.suite)}</td><td>${escapeHtml(entry.category)}</td><td>${escapeHtml(entry.metric)}</td><td>${entry.score.toFixed(4)}</td><td>${escapeHtml(entry.proof)}</td><td>${entry.claimAllowed ? "Yes" : "No"}</td><td>${escapeHtml(entry.claimClass)}</td></tr>`)
     .join("\n");
   return `<!doctype html>
 <html lang="en">
@@ -42,7 +42,7 @@ function renderLeaderboardHtml(artifact: LeaderboardArtifact & { publication: Le
   <h1>cognibrain leaderboard</h1>
   <p>${escapeHtml(artifact.publication.claimScope)}</p>
   <table>
-    <thead><tr><th>Suite</th><th>Category</th><th>Metric</th><th>Score</th><th>Proof</th></tr></thead>
+    <thead><tr><th>Suite</th><th>Category</th><th>Metric</th><th>Score</th><th>Proof</th><th>Claim</th><th>Class</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
 </body>

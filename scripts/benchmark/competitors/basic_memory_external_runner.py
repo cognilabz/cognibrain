@@ -98,6 +98,8 @@ async def run(args: argparse.Namespace, project_home: Path, started: float) -> d
         "proofLevel": "same-run-native",
         "adapterMode": "basic-memory-markdown-reindex-mcp-search",
         "package": f"basic-memory=={version('basic-memory')}",
+        "qualityClaimAllowed": all(row["basicMemory"]["scoreable"] for row in rows),
+        "judge": external_public_judge_metadata(),
         "passed": all(row["basicMemory"]["total"] > 0 for row in rows),
         "durationMs": round((time.perf_counter() - started) * 1000),
         "rows": rows,
@@ -165,16 +167,101 @@ def row_summary(dataset: str, metric: str, details: list[dict[str, Any]], cognib
     correct = sum(1 for detail in details if detail["passed"])
     total = len(details)
     cognibrain = same_sample_cognibrain(cognibrain_path, {detail["id"] for detail in details})
-    accuracy = correct / max(1, total)
+    heuristic_accuracy = correct / max(1, total)
+    heuristic = {
+        "basicMemory": {"accuracy": heuristic_accuracy, "correct": correct, "total": total},
+        "cognibrainSameSample": cognibrain,
+        "deltaVsCognibrain": round(heuristic_accuracy - cognibrain["accuracy"], 4),
+        "note": "Diagnostic only. These values are produced by evidence-id, token, or substring heuristics and are not quality scores.",
+    }
+    judged = external_public_judgement(dataset, metric, details, config, heuristic)
+    if judged is None:
+        basic_memory = {"accuracy": None, "correct": None, "total": total, "scoreable": False}
+        cognibrain_scoreable = {"accuracy": None, "correct": None, "total": cognibrain["total"], "scoreable": False}
+        delta = None
+    else:
+        basic_memory = {**judged["basicMemory"], "scoreable": True}
+        cognibrain_scoreable = {**judged["cognibrainSameSample"], "scoreable": True}
+        delta = round(basic_memory["accuracy"] - cognibrain_scoreable["accuracy"], 4)
     return {
         "dataset": dataset,
         "metric": metric,
         "config": config,
         "indexedFiles": indexed_files,
-        "basicMemory": {"accuracy": accuracy, "correct": correct, "total": total},
-        "cognibrainSameSample": cognibrain,
-        "deltaVsCognibrain": round(accuracy - cognibrain["accuracy"], 4),
+        "judge": external_public_judge_metadata(scoreable=judged is not None),
+        "basicMemory": basic_memory,
+        "cognibrainSameSample": cognibrain_scoreable,
+        "deltaVsCognibrain": delta,
+        "heuristicDiagnostics": heuristic,
         "details": details,
+    }
+
+
+def external_public_judgement(dataset: str, metric: str, details: list[dict[str, Any]], config: dict[str, Any], heuristic: dict[str, Any]) -> dict[str, Any] | None:
+    command = os.environ.get("MEMORY_EXTERNAL_PUBLIC_JUDGE_COMMAND")
+    if not command:
+        return None
+    payload = {
+        "schemaVersion": "1.0",
+        "contract": "cognibrain-external-public-benchmark-judge-v1",
+        "dataset": dataset,
+        "metric": metric,
+        "config": config,
+        "heuristicDiagnostics": heuristic,
+        "details": details,
+        "instructions": [
+            "Judge semantic benchmark quality from retrieved evidence, not from exact string/id matches.",
+            "Return strict JSON with basicMemory and cognibrainSameSample objects containing finite accuracy in 0..1 plus integer correct/total.",
+            "If the evidence is insufficient for a score, return blocked=true with a reason.",
+        ],
+    }
+    result = subprocess.run(command, input=json.dumps(payload), text=True, shell=True, capture_output=True, timeout=int(os.environ.get("MEMORY_EXTERNAL_PUBLIC_JUDGE_TIMEOUT_MS", "120000")) / 1000)
+    if result.returncode != 0:
+        return None
+    try:
+        parsed = json.loads(result.stdout.strip().splitlines()[-1])
+    except Exception:
+        return None
+    if parsed.get("blocked"):
+        return None
+    try:
+        return {
+            "basicMemory": strict_score(parsed.get("basicMemory"), "basicMemory"),
+            "cognibrainSameSample": strict_score(parsed.get("cognibrainSameSample"), "cognibrainSameSample"),
+            "judgeRaw": parsed.get("judge"),
+        }
+    except ValueError:
+        return None
+
+
+def strict_score(value: Any, name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} judge score must be an object")
+    accuracy = value.get("accuracy")
+    correct = value.get("correct")
+    total = value.get("total")
+    if not isinstance(accuracy, (int, float)) or not 0 <= float(accuracy) <= 1:
+        raise ValueError(f"{name}.accuracy must be finite 0..1")
+    if not isinstance(correct, int) or correct < 0:
+        raise ValueError(f"{name}.correct must be a non-negative integer")
+    if not isinstance(total, int) or total <= 0 or correct > total:
+        raise ValueError(f"{name}.total must be a positive integer greater than correct")
+    return {"accuracy": float(accuracy), "correct": correct, "total": total}
+
+
+def external_public_judge_metadata(scoreable: bool = False) -> dict[str, Any]:
+    command = os.environ.get("MEMORY_EXTERNAL_PUBLIC_JUDGE_COMMAND")
+    if not command:
+        return {
+            "kind": "missing",
+            "status": "blocked",
+            "scoreable": False,
+            "reason": "MEMORY_EXTERNAL_PUBLIC_JUDGE_COMMAND is required for scoreable external public benchmark metrics",
+        }
+    return {
+        "kind": "llm-harness-command",
+        "status": "passed" if scoreable else "configured",
+        "scoreable": scoreable,
     }
 
 
@@ -383,7 +470,8 @@ def write_markdown(path: Path, report: dict[str, Any]) -> None:
         bm = row["basicMemory"]["accuracy"]
         cb = row["cognibrainSameSample"]["accuracy"]
         delta = row["deltaVsCognibrain"]
-        lines.append(f"| {row['dataset']} | `{row['metric']}` | {pct(bm)} | {pct(cb)} | {pct(delta, signed=True)} | {row['config']['noteGranularity']} notes |")
+        note = "LLM/harness judged" if row["basicMemory"]["scoreable"] else "diagnostic only; judge blocked"
+        lines.append(f"| {row['dataset']} | `{row['metric']}` | {pct(bm)} | {pct(cb)} | {pct(delta, signed=True)} | {row['config']['noteGranularity']} notes; {note} |")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -400,13 +488,16 @@ def compact_summary(report: dict[str, Any]) -> dict[str, Any]:
                 "basicMemory": row["basicMemory"],
                 "cognibrainSameSample": row["cognibrainSameSample"],
                 "deltaVsCognibrain": row["deltaVsCognibrain"],
+                "judge": row["judge"],
             }
             for row in report["rows"]
         ],
     }
 
 
-def pct(value: float, signed: bool = False) -> str:
+def pct(value: float | None, signed: bool = False) -> str:
+    if value is None:
+        return "not scored"
     sign = "+" if signed and value >= 0 else ""
     return f"{sign}{value * 100:.1f}%"
 

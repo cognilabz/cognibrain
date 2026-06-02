@@ -65,12 +65,26 @@ product runs for other memory systems and are not a fair market leaderboard.
 
 Benchmark claims on this page are limited to the checked artifacts listed above.
 Older or stronger rows are not carried forward without a current artifact.
+The public `leaderboard.json` artifact now marks local fixture and deterministic
+coverage scores as `claimAllowed=false` diagnostic rows; quality claims require
+LLM/harness proof, and market comparisons require comparable public benchmark
+artifacts.
 The real-world protocol currently classifies 0 checked artifacts as fair
 cross-system leaderboard evidence.
 The current LLM-intelligence artifact is judge-blocked and intentionally reports
 no quality score. It retains same-manifest raw outputs for Cognibrain, Basic
 Memory and LangMem so retrieval weaknesses remain inspectable while the
 LLM/harness judge is unavailable.
+Arena external command runners follow the same boundary: runner-provided checks
+are diagnostic only unless `MEMORY_ARENA_JUDGE_COMMAND` validates the raw
+product evidence into strict boolean checks.
+Operator Memory native competitor runners are bounded the same way: runner
+checks are ignored for scoring unless `MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND`
+validates raw source-aware evidence into strict boolean checks.
+The public-dataset `market-gate` now follows this too: local LoCoMo,
+LongMemEval or BEAM recall wins are `diagnostic-public-benchmark-baseline`
+unless every included benchmark artifact carries LLM/harness or comparable
+public-benchmark proof.
 
 ## Real-World Fairness Boundary
 

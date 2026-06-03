@@ -31,6 +31,38 @@ describe("cognibrain CLI", () => {
     expect(output).toContain("cognibrain skill install|status|doctor|path");
   }, slowCliTimeout);
 
+  it("does not treat memory subcommand help flags as memory content or ids", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-memory-help-"));
+    try {
+      const env = { ...process.env, MEMORY_AUTO_DREAM: "false", MEMORY_DB_PATH: join(dir, "memory.json") };
+      const commands = [
+        { args: ["memory", "add", "--help"], usage: "Usage: memctl add <content>" },
+        { args: ["memories", "add", "--help"], usage: "Usage: memctl add <content>" },
+        { args: ["memory", "edit", "--help"], usage: "Usage: memctl edit <memory-id> <new-content>" },
+        { args: ["memory", "archive", "--help"], usage: "Usage: memctl archive <memory-id>" }
+      ];
+
+      for (const item of commands) {
+        const result = spawnSync(process.execPath, [cli, "--runtime-root", dir, ...item.args], { cwd: dir, env, encoding: "utf8" });
+        expect(result.status).toBe(0);
+        expect(result.stdout.trim()).toBe(item.usage);
+        expect(result.stderr).toBe("");
+      }
+
+      const lifecycleAlias = spawnSync(process.execPath, [cli, "--runtime-root", dir, "memory", "patch-evidence", "--help"], { cwd: dir, env, encoding: "utf8" });
+      expect(lifecycleAlias.status).toBe(0);
+      expect(lifecycleAlias.stdout).toContain("cognibrain patch-evidence --user <id> --task <text>");
+      expect(lifecycleAlias.stdout).toContain("legacy aliases");
+      expect(lifecycleAlias.stderr).toBe("");
+
+      const memories = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      expect(memories.recent).toEqual([]);
+      if (existsSync(join(dir, "memory.json"))) expect(readFileSync(join(dir, "memory.json"), "utf8")).not.toContain("--help");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
   it("plans native service automation for Linux, macOS, and Windows from the CLI", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-service-"));
     try {

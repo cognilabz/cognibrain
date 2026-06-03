@@ -100,6 +100,10 @@ export async function handleHarnessCommand(args, context) {
 }
 
 export async function handleMemoryLifecycleCommand(args, context) {
+  if (args[0] === "help" || args.includes("--help") || args.includes("-h")) {
+    printLifecycleUsage({ prefix: "cognibrain", alias: true });
+    return;
+  }
   await runLifecycleCommand(memoryLifecycleArgs(args), context, { prefix: "cognibrain", alias: true });
 }
 

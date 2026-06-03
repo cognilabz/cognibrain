@@ -54,13 +54,63 @@ const ablationRows = [
   { label: "No memory", value: baselineScore("no_memory"), detail: "baseline diagnostic · claim blocked", kind: "blocked" }
 ].filter((row) => Number.isFinite(Number(row.value)));
 
-const svg = renderSvg({ publicBenchmarks, diagnosticRows, arenaRows, ablationRows });
+const svg = renderSvg({
+  publicBenchmarks: withFallbackRows(publicBenchmarks, [emptyPublicBenchmarkRow()]),
+  diagnosticRows: withFallbackRows(diagnosticRows, [emptyDiagnosticRow()]),
+  arenaRows: withFallbackRows(arenaRows, [emptyArenaRow()]),
+  ablationRows: withFallbackRows(ablationRows, [emptyAblationRow()])
+});
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, `${svg}\n`);
 
 function readJson(path) {
   if (!existsSync(path)) return null;
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function withFallbackRows(rows, fallbackRows) {
+  return rows.length ? rows : fallbackRows;
+}
+
+function emptyPublicBenchmarkRow() {
+  return {
+    label: "No public artifact",
+    value: 0,
+    detail: "0/0",
+    proof: "boundary-missing",
+    claimAllowed: false,
+    diagnosticPassed: true,
+    claimDetail: "claim blocked",
+    baselineLabel: "baseline",
+    baseline: 0
+  };
+}
+
+function emptyDiagnosticRow() {
+  return {
+    label: "No integrity artifact",
+    value: 0,
+    detail: "local diagnostic · claim blocked",
+    kind: "blocked"
+  };
+}
+
+function emptyArenaRow() {
+  return {
+    label: "No arena artifact",
+    value: 0,
+    detail: "api-shape diagnostic · claim blocked",
+    kind: "blocked"
+  };
+}
+
+function emptyAblationRow() {
+  return {
+    label: "No ablation artifact",
+    value: 0,
+    detail: "ablation diagnostic · claim blocked",
+    kind: "blocked"
+  };
 }
 
 function publicRow(label, report) {

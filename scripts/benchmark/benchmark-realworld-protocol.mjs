@@ -90,16 +90,24 @@ const currentArtifacts = [
   }),
   classifyArtifact({
     path: "artifacts/realworld-blackbox-openai-intelligence.json",
-    className: openaiIntelligenceSummary.originalEligibleSystems >= 2 ? "llm-intelligence-neutral-comparative-smoke" : "llm-intelligence-neutral-smoke",
+    className: openaiIntelligenceSummary.originalEligibleSystems >= 2
+      ? "llm-intelligence-neutral-comparative-smoke"
+      : openaiIntelligenceSummary.originalRawOutputSystems >= 2
+        ? "native-original-raw-output-smoke"
+        : "llm-intelligence-neutral-smoke",
     leaderboardEligible: false,
     why: openaiIntelligenceSummary.exists
-      ? `Runs ${openaiIntelligenceSummary.originalEligibleSystems} original non-baseline system(s) on the frozen manifest (${openaiIntelligenceSummary.originalSystemNames.join(", ") || "none"}), with LLM/harness judged outputs. It remains a small neutral smoke, not a market leaderboard.`
+      ? `Runs ${openaiIntelligenceSummary.originalRawOutputSystems} original non-baseline system(s) on the frozen manifest (${openaiIntelligenceSummary.originalRawOutputSystemNames.join(", ") || "none"}), with ${openaiIntelligenceSummary.originalEligibleSystems} LLM/harness judged original system(s). It remains a small neutral smoke, not a market leaderboard.`
       : "Configured as the LLM-intelligence neutral smoke artifact, but no current artifact exists.",
     allowedUse: openaiIntelligenceSummary.originalEligibleSystems >= 2
       ? "Comparative smoke evidence on realworld-blackbox-v1, including raw outputs, latency and LLM/harness-judged quality for attached original systems."
-      : "Evidence that provider-driven retrieval can suppress stale/forbidden evidence before the final LLM judge scores delivered outputs.",
+      : openaiIntelligenceSummary.originalRawOutputSystems >= 2
+        ? "Comparative raw-output smoke evidence on realworld-blackbox-v1; score, recall, abstention and leakage metrics remain blocked until the shared LLM/harness judge succeeds."
+        : "Evidence that provider-driven retrieval can suppress stale/forbidden evidence before the final LLM judge scores delivered outputs.",
     missingForLeaderboard: openaiIntelligenceSummary.originalEligibleSystems >= 2
       ? ["larger third-party-sourced task set", "more original memory systems executed without repair", "latency and cost budget preregistered for LLM intelligence"]
+      : openaiIntelligenceSummary.originalRawOutputSystems >= 2
+        ? ["LLM/harness judge command succeeds on the current raw outputs", "larger third-party-sourced task set", "more original memory systems executed without repair", "latency and cost budget preregistered for LLM intelligence"]
       : ["at least two original non-baseline systems executed on the same manifest", "external competitor commands configured", "larger third-party-sourced task set", "latency and cost budget preregistered for LLM intelligence"],
   }),
   classifyArtifact({
@@ -195,6 +203,12 @@ const report = {
           item: "Expand the neutral black-box harness beyond the first original competitor smoke.",
           reason: `Current checked smoke has ${openaiIntelligenceSummary.originalEligibleSystems} original non-baseline systems; a market claim still needs more original systems and a larger third-party-sourced task set.`,
         }
+      : openaiIntelligenceSummary.originalRawOutputSystems >= 2
+        ? {
+            priority: "P0",
+            item: "Attach a successful LLM/harness judge to the current original raw-output competitor smoke.",
+            reason: `Current checked smoke has ${openaiIntelligenceSummary.originalRawOutputSystems} original non-baseline raw-output systems (${openaiIntelligenceSummary.originalRawOutputSystemNames.join(", ")}), but quality metrics remain blocked until the shared judge succeeds.`,
+          }
       : {
           priority: "P0",
           item: "Attach original competitor commands to the neutral black-box harness before more comparative claims.",
@@ -264,18 +278,27 @@ function classifyArtifact({ path, className, leaderboardEligible, why, allowedUs
 
 function summarizeRealWorldArtifact(path) {
   const absolute = join(root, path);
-  if (!existsSync(absolute)) return { exists: false, originalEligibleSystems: 0, originalSystemNames: [] };
+  if (!existsSync(absolute)) return { exists: false, originalEligibleSystems: 0, originalSystemNames: [], originalRawOutputSystems: 0, originalRawOutputSystemNames: [] };
   try {
     const value = JSON.parse(readFileSync(absolute, "utf8"));
     const systems = Array.isArray(value.systems) ? value.systems : [];
     const original = systems.filter((system) => system?.system !== "keyword" && system?.evidenceClass !== "local-baseline" && system?.leaderboardEligible === true);
+    const originalRawOutput = systems.filter((system) =>
+      system?.system !== "keyword" &&
+      system?.system !== "cognibrain" &&
+      system?.evidenceClass === "same-run-command" &&
+      Array.isArray(system?.rawOutputs) &&
+      system.rawOutputs.length > 0
+    );
     return {
       exists: true,
       originalEligibleSystems: original.length,
       originalSystemNames: original.map((system) => system.displayName ?? system.system).filter(Boolean),
+      originalRawOutputSystems: originalRawOutput.length,
+      originalRawOutputSystemNames: originalRawOutput.map((system) => system.displayName ?? system.system).filter(Boolean),
     };
   } catch {
-    return { exists: true, originalEligibleSystems: 0, originalSystemNames: [] };
+    return { exists: true, originalEligibleSystems: 0, originalSystemNames: [], originalRawOutputSystems: 0, originalRawOutputSystemNames: [] };
   }
 }
 

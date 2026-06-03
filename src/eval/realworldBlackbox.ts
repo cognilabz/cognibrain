@@ -63,6 +63,7 @@ interface SystemResult {
   displayName: string;
   evidenceClass: EvidenceClass;
   adapterMode: AdapterMode;
+  comparativeSmokeEligible: boolean;
   leaderboardEligible: boolean;
   blockedReason?: string;
   qualityClaimAllowed: boolean;
@@ -98,7 +99,7 @@ interface RealWorldReport {
   schemaVersion: "1.0";
   generatedAt: string;
   benchmark: "realworld-blackbox";
-  status: "neutral-harness-ready-results-not-leaderboard" | "leaderboard-eligible";
+  status: "neutral-harness-ready-results-not-leaderboard" | "comparative-smoke-eligible-results-not-market-leaderboard";
   manifestHash: string;
   runProvenance: {
     judge: {
@@ -127,7 +128,18 @@ interface RealWorldReport {
   };
   systems: SystemResult[];
   leaderboardEligibleSystems: string[];
+  comparativeSmokeEligibleSystems: string[];
+  comparativeSmokeEligible: boolean;
   leaderboardEligible: boolean;
+  marketClaimAllowed: boolean;
+  claimBoundary: {
+    proof: "realworld-smoke-diagnostic" | "realworld-central-judge-smoke";
+    claimAllowed: boolean;
+    comparativeSmokeEligible: boolean;
+    leaderboardEligible: boolean;
+    marketClaimAllowed: boolean;
+    claimBlockers: string[];
+  };
   improvementSignals: Array<{ priority: string; item: string; evidence: string }>;
 }
 
@@ -172,13 +184,13 @@ export async function generateRealWorldBlackBoxBenchmark(options: { out?: string
     const system = await runSystemWithCommandSupport(adapter, manifest, judge);
     systems.push(system);
   }
-  const leaderboardEligibleSystems = systems.filter((system) => system.leaderboardEligible).map((system) => system.system);
-  const cognibrainLeaderboardEligible = systems.some((system) => system.system === "cognibrain" && system.leaderboardEligible);
+  const comparativeSmokeEligibleSystems = systems.filter((system) => system.comparativeSmokeEligible).map((system) => system.system);
+  const cognibrainComparativeSmokeEligible = systems.some((system) => system.system === "cognibrain" && system.comparativeSmokeEligible);
   const originalCompetitorEligibleSystems = systems
     .filter((system) =>
       system.system !== "cognibrain" &&
       (system.evidenceClass === "same-run-full" || system.evidenceClass === "same-run-command") &&
-      system.leaderboardEligible
+      system.comparativeSmokeEligible
     )
     .map((system) => system.system);
   const manifestCoverageReady = manifest.queries.length >= 15 &&
@@ -191,21 +203,28 @@ export async function generateRealWorldBlackBoxBenchmark(options: { out?: string
     rawOutputsRetained: systems.every((system) => system.evidenceClass === "credential-blocked" || (system.rawOutputs.length === manifest.queries.length && system.setup.rawOutputContractValid !== false)),
     costLatencyRecorded: systems.every((system) => metricsHaveFiniteCostLatency(system.metrics) && system.setup.metricContractValid !== false),
     llmOrHarnessJudged: systems.every((system) => system.evidenceClass === "credential-blocked" || system.qualityClaimAllowed),
-    enoughOriginalSystems: cognibrainLeaderboardEligible && originalCompetitorEligibleSystems.length >= 2
+    enoughOriginalSystems: cognibrainComparativeSmokeEligible && originalCompetitorEligibleSystems.length >= 2
   };
-  const leaderboardEligible = Object.values(eligibilityGate).every(Boolean);
+  const comparativeSmokeEligible = Object.values(eligibilityGate).every(Boolean);
+  const marketClaimAllowed = false;
+  const leaderboardEligible = false;
+  const claimBoundary = realWorldClaimBoundary(comparativeSmokeEligible);
   const report: RealWorldReport = {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
     benchmark: "realworld-blackbox",
-    status: leaderboardEligible ? "leaderboard-eligible" : "neutral-harness-ready-results-not-leaderboard",
+    status: comparativeSmokeEligible ? "comparative-smoke-eligible-results-not-market-leaderboard" : "neutral-harness-ready-results-not-leaderboard",
     manifestHash,
     runProvenance: buildRunProvenance(requested, judge),
     manifest,
     eligibilityGate,
     systems,
-    leaderboardEligibleSystems,
+    leaderboardEligibleSystems: [],
+    comparativeSmokeEligibleSystems,
+    comparativeSmokeEligible,
     leaderboardEligible,
+    marketClaimAllowed,
+    claimBoundary,
     improvementSignals: improvementSignals(systems)
   };
   if (options.out) writeJson(options.out, report);
@@ -215,6 +234,22 @@ export async function generateRealWorldBlackBoxBenchmark(options: { out?: string
     if (options.successMarkdown) writeMarkdown(options.successMarkdown, report);
   }
   return report;
+}
+
+function realWorldClaimBoundary(comparativeSmokeEligible: boolean): RealWorldReport["claimBoundary"] {
+  return {
+    proof: comparativeSmokeEligible ? "realworld-central-judge-smoke" : "realworld-smoke-diagnostic",
+    claimAllowed: false,
+    comparativeSmokeEligible,
+    leaderboardEligible: false,
+    marketClaimAllowed: false,
+    claimBlockers: [
+      ...(!comparativeSmokeEligible ? ["Comparative smoke requires Cognibrain plus at least two original systems judged by the same central LLM/harness judge on the frozen manifest."] : []),
+      "Market leaderboard claims require a larger third-party-sourced task set beyond realworld-blackbox-v1.",
+      "Market leaderboard claims require more original memory systems executed without repair on the same preregistered protocol.",
+      "Market leaderboard claims require preregistered latency and cost budgets for the LLM/harness judge and all attached systems."
+    ]
+  };
 }
 
 function isSuccessfulJudgedOriginalRun(report: RealWorldReport): boolean {
@@ -605,6 +640,7 @@ function scoreSystem(adapter: Adapter, manifest: RealWorldManifest, setup: Recor
       displayName: adapter.displayName,
       evidenceClass: adapter.evidenceClass,
       adapterMode: adapter.adapterMode,
+      comparativeSmokeEligible: false,
       leaderboardEligible: false,
       qualityClaimAllowed: false,
       judge: {
@@ -658,7 +694,8 @@ function scoreSystem(adapter: Adapter, manifest: RealWorldManifest, setup: Recor
     displayName: adapter.displayName,
     evidenceClass: adapter.evidenceClass,
     adapterMode: adapter.adapterMode,
-    leaderboardEligible: originalRun,
+    comparativeSmokeEligible: originalRun,
+    leaderboardEligible: false,
     qualityClaimAllowed: true,
     judge: {
       kind: judge.kind,
@@ -690,6 +727,7 @@ function judgeBlockedSystem(adapter: Adapter, setup: Record<string, unknown>, ra
     displayName: adapter.displayName,
     evidenceClass: adapter.evidenceClass,
     adapterMode: adapter.adapterMode,
+    comparativeSmokeEligible: false,
     leaderboardEligible: false,
     qualityClaimAllowed: false,
     blockedReason: sanitizeDiagnosticText(reason),
@@ -752,6 +790,7 @@ function blockedSystem(adapter: Adapter, reason: string, latencyMs: number): Sys
     displayName: adapter.displayName,
     evidenceClass: "credential-blocked",
     adapterMode: "blocked-command",
+    comparativeSmokeEligible: false,
     leaderboardEligible: false,
     qualityClaimAllowed: false,
     blockedReason: safeReason,
@@ -790,6 +829,7 @@ function externalCommandBlockedSystem(adapter: Adapter, reason: string, latencyM
     displayName: adapter.displayName,
     evidenceClass: "same-run-command",
     adapterMode: "external-command",
+    comparativeSmokeEligible: false,
     leaderboardEligible: false,
     qualityClaimAllowed: false,
     blockedReason: safeReason,
@@ -1032,12 +1072,16 @@ class CommandAdapter implements Adapter {
   }
 }
 
-async function runCommandAdapter(adapter: CommandAdapter, manifest: RealWorldManifest): Promise<SystemResult> {
+async function runCommandAdapter(adapter: CommandAdapter, manifest: RealWorldManifest, judge?: RealWorldJudge): Promise<SystemResult> {
   try {
     const setup = adapter.setup(manifest);
     const external = adapter.runExternal();
     if (!external) return externalCommandBlockedSystem(adapter, "external command did not produce a result", 0);
-    return { ...external, setup: { ...external.setup, ...setup, manifestHash: sha256(stableStringify(manifest)) } };
+    const mergedSetup = { ...external.setup, ...setup, manifestHash: sha256(stableStringify(manifest)) };
+    if (judge && external.rawOutputs.length === manifest.queries.length && external.setup.rawOutputContractValid !== false) {
+      return scoreSystem(adapter, manifest, mergedSetup, external.rawOutputs, external.metrics.ingestLatencyMs, judge);
+    }
+    return { ...external, setup: mergedSetup };
   } catch (error) {
     return externalCommandBlockedSystem(adapter, error instanceof Error ? error.message : String(error), 0);
   }
@@ -1080,6 +1124,7 @@ function normalizeExternalSystem(adapter: CommandAdapter, value: any, latencyMs:
       displayName: adapter.displayName,
       evidenceClass: "same-run-command",
       adapterMode: "external-command",
+      comparativeSmokeEligible: false,
       leaderboardEligible: false,
       qualityClaimAllowed: false,
       blockedReason: sanitizeDiagnosticText(typeof value.blockedReason === "string" ? value.blockedReason : typeof value.judge?.reason === "string" ? value.judge.reason : "external judge blocked after raw outputs were captured"),
@@ -1102,42 +1147,13 @@ function normalizeExternalSystem(adapter: CommandAdapter, value: any, latencyMs:
     };
   }
   if (value && rawOutputs && value.metrics && (value.judge?.kind === "llm" || value.judge?.kind === "harness")) {
-    let metrics: SystemResult["metrics"];
-    try {
-      metrics = normalizeExternalJudgedMetrics(value.metrics, latencyMs);
-    } catch (error) {
-      return externalRawOutputsBlockedSystem(
-        adapter,
-        rawOutputs,
-        error instanceof Error ? error.message : String(error),
-        latencyMs,
-        value.setup ?? {}
-      );
-    }
-    return {
-      system: adapter.id,
-      displayName: adapter.displayName,
-      evidenceClass: "same-run-command",
-      adapterMode: "external-command",
-      leaderboardEligible: true,
-      qualityClaimAllowed: true,
-      judge: {
-        kind: value.judge.kind,
-        status: "passed",
-        reason: typeof value.judge.reason === "string" ? value.judge.reason : "external system returned judged metrics"
-      },
-      metrics,
-      buckets: value.buckets ?? {},
-      retrievalDiagnostics: value.retrievalDiagnostics ?? {
-        deterministicEvidenceIdMatch: false,
-        expectedHits: 0,
-        forbiddenHits: 0,
-        abstentionNoResult: 0,
-        note: "External command supplied judged metrics; local deterministic diagnostics were not applied."
-      },
+    return externalRawOutputsBlockedSystem(
+      adapter,
       rawOutputs,
-      setup: sanitizeRecord(value.setup ?? {}) as Record<string, unknown>
-    };
+      "External command supplied judged metrics, but central MEMORY_REALWORLD_JUDGE_COMMAND recomputation is required before quality claims are allowed.",
+      latencyMs,
+      value.setup ?? {}
+    );
   }
   return externalCommandBlockedSystem(adapter, "external command JSON missing judged metrics/rawOutputs with judge.kind=llm|harness", latencyMs);
 }
@@ -1180,7 +1196,8 @@ function normalizeExternalRawOutput(value: unknown): QueryOutput {
 }
 
 function validateJudgeDecisions(manifest: RealWorldManifest, decisions: JudgeDecision[]): JudgeDecision[] {
-  const expectedIds = new Set(manifest.queries.map((query) => query.id));
+  const queriesById = new Map(manifest.queries.map((query) => [query.id, query]));
+  const expectedIds = new Set(queriesById.keys());
   const seen = new Set<string>();
   for (const decision of decisions) {
     if (!expectedIds.has(decision.queryId)) throw new Error(`judge returned unknown queryId ${decision.queryId || "<empty>"}`);
@@ -1192,23 +1209,29 @@ function validateJudgeDecisions(manifest: RealWorldManifest, decisions: JudgeDec
     strictBoolean(decision.supportsAnswer, `judge supportsAnswer for ${decision.queryId}`);
     strictBoolean(decision.abstained, `judge abstained for ${decision.queryId}`);
     strictBoolean(decision.leakedForbiddenEvidence, `judge leakedForbiddenEvidence for ${decision.queryId}`);
+    validateJudgeDecisionSemantics(queriesById.get(decision.queryId)!, decision);
   }
   const missing = [...expectedIds].filter((id) => !seen.has(id));
   if (missing.length) throw new Error(`judge did not return one decision for every manifest query; missing ${missing.join(", ")}`);
   return manifest.queries.map((query) => decisions.find((decision) => decision.queryId === query.id)!);
 }
 
-function normalizeExternalJudgedMetrics(value: any, latencyMs: number): SystemResult["metrics"] {
-  return {
-    score: strictRatioMetric(value?.score, "external judged score"),
-    recall: strictRatioMetric(value?.recall, "external judged recall"),
-    abstentionPrecision: strictRatioMetric(value?.abstentionPrecision, "external judged abstentionPrecision"),
-    forbiddenLeakageRate: strictRatioMetric(value?.forbiddenLeakageRate, "external judged forbiddenLeakageRate"),
-    p50LatencyMs: strictNonNegativeNumber(value?.p50LatencyMs ?? latencyMs, "external p50LatencyMs"),
-    p95LatencyMs: strictNonNegativeNumber(value?.p95LatencyMs ?? latencyMs, "external p95LatencyMs"),
-    ingestLatencyMs: strictNonNegativeNumber(value?.ingestLatencyMs ?? 0, "external ingestLatencyMs"),
-    estimatedCostUsd: strictNonNegativeNumber(value?.estimatedCostUsd ?? 0, "external estimatedCostUsd")
-  };
+function validateJudgeDecisionSemantics(query: RealWorldQuery, decision: JudgeDecision): void {
+  if (decision.leakedForbiddenEvidence && (decision.passed || decision.score !== 0)) {
+    throw new Error(`judge decision for ${decision.queryId} is inconsistent: forbidden leakage must force passed=false and score=0`);
+  }
+  if (decision.abstained && decision.supportsAnswer) {
+    throw new Error(`judge decision for ${decision.queryId} is inconsistent: abstained=true cannot also support the answer`);
+  }
+  if (decision.passed && decision.score <= 0) {
+    throw new Error(`judge decision for ${decision.queryId} is inconsistent: passed=true requires a positive semantic score`);
+  }
+  if (query.shouldAbstain && decision.passed && (!decision.abstained || decision.supportsAnswer || decision.leakedForbiddenEvidence)) {
+    throw new Error(`judge decision for ${decision.queryId} is inconsistent: abstention queries can pass only by abstaining without answer support or leakage`);
+  }
+  if (!query.shouldAbstain && query.expectedEvidenceIds.length > 0 && decision.passed && (!decision.supportsAnswer || decision.abstained || decision.leakedForbiddenEvidence)) {
+    throw new Error(`judge decision for ${decision.queryId} is inconsistent: answer queries can pass only with semantic answer support and no abstention or leakage`);
+  }
 }
 
 function normalizeExternalBlockedMetrics(value: any, latencies: number[], latencyMs: number): SystemResult["metrics"] {
@@ -1238,6 +1261,7 @@ function externalRawOutputsBlockedSystem(adapter: Adapter, rawOutputs: QueryOutp
     displayName: adapter.displayName,
     evidenceClass: "same-run-command",
     adapterMode: "external-command",
+    comparativeSmokeEligible: false,
     leaderboardEligible: false,
     qualityClaimAllowed: false,
     blockedReason: safeReason,
@@ -1270,18 +1294,18 @@ function externalRawOutputsBlockedSystem(adapter: Adapter, rawOutputs: QueryOutp
 }
 
 async function runSystemWithCommandSupport(adapter: Adapter, manifest: RealWorldManifest, judge?: RealWorldJudge): Promise<SystemResult> {
-  if (adapter instanceof CommandAdapter && adapter.adapterMode === "external-command") return runCommandAdapter(adapter, manifest);
+  if (adapter instanceof CommandAdapter && adapter.adapterMode === "external-command") return runCommandAdapter(adapter, manifest, judge);
   return runSystem(adapter, manifest, judge);
 }
 
 function improvementSignals(systems: SystemResult[]): Array<{ priority: string; item: string; evidence: string }> {
   const blocked = systems.filter((system) => system.evidenceClass === "credential-blocked");
   const originalCompetitors = systems.filter((system) => system.system !== "cognibrain" && system.evidenceClass !== "local-baseline");
-  const cognibrainEligible = systems.some((system) => system.system === "cognibrain" && system.leaderboardEligible);
+  const cognibrainEligible = systems.some((system) => system.system === "cognibrain" && system.comparativeSmokeEligible);
   const eligibleCompetitors = systems.filter((system) =>
     system.system !== "cognibrain" &&
     (system.evidenceClass === "same-run-full" || system.evidenceClass === "same-run-command") &&
-    system.leaderboardEligible
+    system.comparativeSmokeEligible
   );
   const judgeBlocked = systems.filter((system) => system.evidenceClass !== "credential-blocked" && !system.qualityClaimAllowed);
   const cognibrain = systems.find((system) => system.system === "cognibrain");
@@ -1347,7 +1371,13 @@ function writeMarkdown(path: string, report: RealWorldReport): void {
     "",
     `Status: \`${report.status}\``,
     "",
+    `Comparative smoke eligible: ${report.comparativeSmokeEligible ? "yes" : "no"}. Market claim allowed: ${report.marketClaimAllowed ? "yes" : "no"}. Leaderboard eligible: ${report.leaderboardEligible ? "yes" : "no"}.`,
+    "",
     "This is the neutral harness implementation. When the eligibility gate is true, it is a comparative smoke for this frozen manifest, not a market-wide leaderboard. Quality scores are reported only when an LLM/harness judge is configured.",
+    "",
+    "Claim blockers:",
+    "",
+    ...report.claimBoundary.claimBlockers.map((item) => `- ${item}`),
     "",
     "## Eligibility Gate",
     "",
@@ -1357,9 +1387,9 @@ function writeMarkdown(path: string, report: RealWorldReport): void {
     "",
     "## Systems",
     "",
-    "| System | Evidence class | Mode | Judge | Score | Recall | Abstention | Leakage | p95 latency | Eligible |",
+    "| System | Evidence class | Mode | Judge | Score | Recall | Abstention | Leakage | p95 latency | Smoke eligible |",
     "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
-    ...report.systems.map((system) => `| ${system.displayName} | \`${system.evidenceClass}\` | \`${system.adapterMode}\` | \`${system.judge.kind}:${system.judge.status}\` | ${percent(system.metrics.score)} | ${percent(system.metrics.recall)} | ${percent(system.metrics.abstentionPrecision)} | ${percent(system.metrics.forbiddenLeakageRate)} | ${system.metrics.p95LatencyMs} ms | ${system.leaderboardEligible ? "Yes" : "No"} |`),
+    ...report.systems.map((system) => `| ${system.displayName} | \`${system.evidenceClass}\` | \`${system.adapterMode}\` | \`${system.judge.kind}:${system.judge.status}\` | ${percent(system.metrics.score)} | ${percent(system.metrics.recall)} | ${percent(system.metrics.abstentionPrecision)} | ${percent(system.metrics.forbiddenLeakageRate)} | ${system.metrics.p95LatencyMs} ms | ${system.comparativeSmokeEligible ? "Yes" : "No"} |`),
     "",
     "## Improvement Signals",
     "",
@@ -1526,15 +1556,19 @@ async function main(): Promise<void> {
   });
   console.log(JSON.stringify({
     generatedAt: report.generatedAt,
-    status: report.status,
-    manifestHash: report.manifestHash,
-    leaderboardEligible: report.leaderboardEligible,
-    systems: report.systems.map((system) => ({
+	    status: report.status,
+	    manifestHash: report.manifestHash,
+	    comparativeSmokeEligible: report.comparativeSmokeEligible,
+	    leaderboardEligible: report.leaderboardEligible,
+	    marketClaimAllowed: report.marketClaimAllowed,
+	    claimBlockers: report.claimBoundary.claimBlockers,
+	    systems: report.systems.map((system) => ({
       system: system.system,
       evidenceClass: system.evidenceClass,
       judge: system.judge.kind,
       score: system.metrics.score,
       p95LatencyMs: system.metrics.p95LatencyMs,
+      comparativeSmokeEligible: system.comparativeSmokeEligible,
       leaderboardEligible: system.leaderboardEligible,
       blockedReason: system.blockedReason
     }))

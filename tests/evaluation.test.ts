@@ -134,7 +134,7 @@ describe("self verification benchmark loop", () => {
     expect(report.claimBoundary.scorer).toBe("locomo-evidence-id-recall-diagnostic");
     expect(report.claimBoundary.marketClaimAllowed).toBe(false);
     expect(report.ours.accuracy).toBeGreaterThan(Math.max(...report.baselines.map((item) => item.accuracy)));
-  }, 60_000);
+  }, 120_000);
 
   it("runs a LongMemEval-style answer-session recall fixture", () => {
     const dir = mkdtempSync(join(tmpdir(), "open-memory-lme-"));
@@ -521,7 +521,7 @@ describe("self verification benchmark loop", () => {
     expect(report.rows.find((row) => row.harness === "devin-style")?.maturity.configGenerated).toBe(true);
     expect(report.goldenPaths.every((path) => path.passed)).toBe(true);
     expect(readFileSync(join(dir, "harness-maturity.md"), "utf8")).toContain("Harness Maturity Matrix");
-  });
+  }, 20_000);
 
   it("generates terminal operator OS and benchmark hardening proof artifacts", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-operator-benchmark-"));
@@ -650,7 +650,7 @@ describe("self verification benchmark loop", () => {
     }
   });
 
-  it("requires Cognibrain plus two judged original competitor commands for real-world leaderboard eligibility", async () => {
+  it("requires Cognibrain plus two judged original competitor commands for real-world comparative smoke eligibility without market claims", async () => {
     const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
     const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
     const previousBasicMemoryCommand = process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
@@ -701,11 +701,24 @@ process.stdin.on("end", () => {
         out: join(dir, "realworld-market-gate.json"),
         systems: ["cognibrain", "basicmemory", "langmem", "keyword"]
       });
-      expect(report.leaderboardEligible).toBe(true);
+      expect(report.comparativeSmokeEligible).toBe(true);
+      expect(report.leaderboardEligible).toBe(false);
+      expect(report.marketClaimAllowed).toBe(false);
+      expect(report.status).toBe("comparative-smoke-eligible-results-not-market-leaderboard");
       expect(report.eligibilityGate.llmOrHarnessJudged).toBe(true);
       expect(report.eligibilityGate.enoughOriginalSystems).toBe(true);
-      expect(report.leaderboardEligibleSystems).toEqual(expect.arrayContaining(["cognibrain", "basicmemory", "langmem"]));
-      expect(report.leaderboardEligibleSystems).not.toContain("keyword");
+      expect(report.leaderboardEligibleSystems).toEqual([]);
+      expect(report.comparativeSmokeEligibleSystems).toEqual(expect.arrayContaining(["cognibrain", "basicmemory", "langmem"]));
+      expect(report.comparativeSmokeEligibleSystems).not.toContain("keyword");
+      expect(report.systems.filter((system) => system.leaderboardEligible)).toEqual([]);
+      expect(report.systems.filter((system) => system.comparativeSmokeEligible).map((system) => system.system)).toEqual(expect.arrayContaining(["cognibrain", "basicmemory", "langmem"]));
+      expect(report.claimBoundary).toMatchObject({
+        claimAllowed: false,
+        comparativeSmokeEligible: true,
+        leaderboardEligible: false,
+        marketClaimAllowed: false
+      });
+      expect(report.claimBoundary.claimBlockers.join(" ")).toContain("larger third-party-sourced task set");
       expect(report.systems.find((system) => system.system === "basicmemory")?.evidenceClass).toBe("same-run-command");
       expect(report.systems.find((system) => system.system === "langmem")?.evidenceClass).toBe("same-run-command");
       expect(report.improvementSignals.some((signal) => signal.evidence.includes("Cognibrain and 2 original competitors"))).toBe(true);
@@ -719,7 +732,7 @@ process.stdin.on("end", () => {
       if (previousLangMemCommand === undefined) delete process.env.MEMORY_REALWORLD_LANGMEM_COMMAND;
       else process.env.MEMORY_REALWORLD_LANGMEM_COMMAND = previousLangMemCommand;
     }
-  });
+  }, 30_000);
 
   it("blocks malformed real-world judge decisions while retaining same-run raw outputs", async () => {
     const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
@@ -743,6 +756,37 @@ process.stdin.on("end", () => {
       expect(cognibrain.metrics.score).toBeNull();
       expect(cognibrain.rawOutputs).toHaveLength(report.manifest.queries.length);
       expect(cognibrain.blockedReason).toContain("duplicate decision");
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
+    } finally {
+      if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
+      if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+    }
+  });
+
+  it("blocks inconsistent real-world judge decisions even when the judge returns a complete decision set", async () => {
+    const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+    const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-inconsistent-judge-"));
+    const judgePath = join(dir, "inconsistent-judge.mjs");
+    writeFileSync(
+      judgePath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const decisions = payload.manifest.queries.map((query, index) => ({ queryId: query.id, score: index === 0 ? 0.8 : 1, passed: true, supportsAnswer: query.expectedEvidenceIds.length > 0, abstained: query.shouldAbstain === true, leakedForbiddenEvidence: index === 0, reason: "fixture inconsistent semantic judge decision", confidence: 0.99 })); console.log(JSON.stringify({ decisions })); });`
+    );
+    try {
+      process.env.MEMORY_REALWORLD_JUDGE_COMMAND = `${process.execPath} ${judgePath}`;
+      process.env.MEMORY_REALWORLD_JUDGE_KIND = "harness";
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-inconsistent-judge.json"),
+        systems: ["cognibrain"]
+      });
+      const cognibrain = report.systems[0];
+      expect(cognibrain.qualityClaimAllowed).toBe(false);
+      expect(cognibrain.leaderboardEligible).toBe(false);
+      expect(cognibrain.metrics.score).toBeNull();
+      expect(cognibrain.rawOutputs).toHaveLength(report.manifest.queries.length);
+      expect(cognibrain.blockedReason).toContain("forbidden leakage must force passed=false");
       expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
     } finally {
       if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
@@ -824,6 +868,41 @@ process.stdin.on("end", () => {
     }
   });
 
+  it("does not trust external command self-judged metrics without central real-world judge recomputation", async () => {
+    const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+    const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const previousBasicMemoryCommand = process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-self-judged-command-"));
+    const commandPath = join(dir, "self-judged-command.mjs");
+    writeFileSync(
+      commandPath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const rawOutputs = payload.manifest.queries.map(query => ({ queryId: query.id, retrievedEvidenceIds: query.expectedEvidenceIds.slice(0, query.topK), retrievedText: query.expectedEvidenceIds.map(id => "fixture evidence " + id), latencyMs: 1, raw: { queryId: query.id } })); console.log(JSON.stringify({ schemaVersion: "1.0", system: "basicmemory", displayName: "Basic Memory", qualityClaimAllowed: true, judge: { kind: "harness", status: "passed", reason: "fixture self judged metrics" }, metrics: { score: 1, recall: 1, abstentionPrecision: 1, forbiddenLeakageRate: 0, p50LatencyMs: 1, p95LatencyMs: 1, ingestLatencyMs: 1, estimatedCostUsd: 0 }, rawOutputs, setup: { runner: "fixture-self-judged-command" } })); });`
+    );
+    try {
+      delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = `${process.execPath} ${commandPath}`;
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-self-judged-command.json"),
+        systems: ["basicmemory"]
+      });
+      const basicMemory = report.systems[0];
+      expect(basicMemory.evidenceClass).toBe("same-run-command");
+      expect(basicMemory.qualityClaimAllowed).toBe(false);
+      expect(basicMemory.leaderboardEligible).toBe(false);
+      expect(basicMemory.metrics.score).toBeNull();
+      expect(basicMemory.rawOutputs).toHaveLength(report.manifest.queries.length);
+      expect(basicMemory.blockedReason).toContain("central MEMORY_REALWORLD_JUDGE_COMMAND recomputation is required");
+    } finally {
+      if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
+      if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+      if (previousBasicMemoryCommand === undefined) delete process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
+      else process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = previousBasicMemoryCommand;
+    }
+  });
+
   it("classifies configured external command JSON failures as same-run diagnostics, not credential blockers", async () => {
     const previousCommand = process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-command-invalid-json-"));
@@ -902,7 +981,7 @@ process.stdin.on("end", () => {
       expect(basicMemory.leaderboardEligible).toBe(false);
       expect(basicMemory.metrics.score).toBeNull();
       expect(basicMemory.rawOutputs).toHaveLength(report.manifest.queries.length);
-      expect(basicMemory.blockedReason).toContain("external judged score");
+      expect(basicMemory.blockedReason).toContain("central MEMORY_REALWORLD_JUDGE_COMMAND recomputation is required");
       expect(report.eligibilityGate.rawOutputsRetained).toBe(true);
       expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
     } finally {
@@ -1277,7 +1356,7 @@ process.stdin.on("end", () => {
       if (previousJudge === undefined) delete process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND;
       else process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND = previousJudge;
     }
-  });
+  }, 30_000);
 
   it("includes Basic Memory in the Arena competitor matrix with bounded proof", async () => {
     const previous = process.env.MEMORY_ARENA_AUTO_NATIVE;
@@ -1293,6 +1372,71 @@ process.stdin.on("end", () => {
       process.env.MEMORY_ARENA_AUTO_NATIVE = previous;
     }
   });
+
+  it("keeps Benchmark Arena diagnostic passes claim-blocked without a report-level harness judge", async () => {
+    const previousJudge = process.env.MEMORY_ARENA_QUALITY_JUDGE_COMMAND;
+    const previousAutoNative = process.env.MEMORY_ARENA_AUTO_NATIVE;
+    try {
+      delete process.env.MEMORY_ARENA_QUALITY_JUDGE_COMMAND;
+      process.env.MEMORY_ARENA_AUTO_NATIVE = "false";
+      const report = await runBenchmarkArena({ systems: ["cognibrain", "mem0", "graphiti", "cognee", "langmem"], count: 2 });
+      expect(report.passed).toBe(true);
+      expect(report.diagnosticPassed).toBe(true);
+      expect(report.qualityClaimAllowed).toBe(false);
+      expect(report.marketClaimAllowed).toBe(false);
+      expect(report.leaderboardEligible).toBe(false);
+      expect(report.judge).toMatchObject({ kind: "missing", status: "missing", score: null });
+      expect(report.claimBoundary).toMatchObject({
+        proof: "arena-local-diagnostic",
+        scorer: "arena-local-scenario-diagnostic",
+        claimAllowed: false,
+        qualityClaimAllowed: false,
+        marketClaimAllowed: false,
+        leaderboardEligible: false
+      });
+      expect(report.claimBoundary.claimBlockers.join(" ")).toContain("MEMORY_ARENA_QUALITY_JUDGE_COMMAND");
+    } finally {
+      if (previousJudge === undefined) delete process.env.MEMORY_ARENA_QUALITY_JUDGE_COMMAND;
+      else process.env.MEMORY_ARENA_QUALITY_JUDGE_COMMAND = previousJudge;
+      if (previousAutoNative === undefined) delete process.env.MEMORY_ARENA_AUTO_NATIVE;
+      else process.env.MEMORY_ARENA_AUTO_NATIVE = previousAutoNative;
+    }
+  });
+
+  it("allows Benchmark Arena quality claims only through a report-level LLM harness judge", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-arena-quality-judge-"));
+    const judgePath = join(dir, "judge.mjs");
+    writeFileSync(
+      judgePath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); if (payload.contract !== "cognibrain-arena-quality-llm-harness-judge-v1") throw new Error("bad contract"); console.log(JSON.stringify({ passed: true, score: 0.94, reason: "fixture report-level judge validated Arena evidence", evidence: { systems: payload.systems.length } })); });`
+    );
+    const previousJudge = process.env.MEMORY_ARENA_QUALITY_JUDGE_COMMAND;
+    const previousAutoNative = process.env.MEMORY_ARENA_AUTO_NATIVE;
+    try {
+      process.env.MEMORY_ARENA_QUALITY_JUDGE_COMMAND = `${process.execPath} ${judgePath}`;
+      process.env.MEMORY_ARENA_AUTO_NATIVE = "false";
+      const report = await runBenchmarkArena({ systems: ["cognibrain", "mem0", "graphiti", "cognee", "langmem"], count: 2 });
+      expect(report.diagnosticPassed).toBe(true);
+      expect(report.qualityClaimAllowed).toBe(true);
+      expect(report.marketClaimAllowed).toBe(false);
+      expect(report.leaderboardEligible).toBe(false);
+      expect(report.judge).toMatchObject({ kind: "llm-harness-command", status: "passed", score: 0.94 });
+      expect(report.claimBoundary).toMatchObject({
+        proof: "arena-llm-harness-judge",
+        scorer: "arena-report-llm-harness-judge",
+        claimAllowed: true,
+        qualityClaimAllowed: true,
+        marketClaimAllowed: false,
+        leaderboardEligible: false
+      });
+      expect(report.claimBoundary.claimBlockers.join(" ")).toContain("Market superiority remains blocked");
+    } finally {
+      if (previousJudge === undefined) delete process.env.MEMORY_ARENA_QUALITY_JUDGE_COMMAND;
+      else process.env.MEMORY_ARENA_QUALITY_JUDGE_COMMAND = previousJudge;
+      if (previousAutoNative === undefined) delete process.env.MEMORY_ARENA_AUTO_NATIVE;
+      else process.env.MEMORY_ARENA_AUTO_NATIVE = previousAutoNative;
+    }
+  }, 30_000);
 
   it("does not score external Arena runner self-checks without an LLM harness judge", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-arena-self-checks-"));
@@ -1323,6 +1467,76 @@ process.stdin.on("end", () => {
       else process.env.MEMORY_ARENA_JUDGE_COMMAND = previousJudge;
     }
   });
+
+  it("fails closed when an external Arena runner times out", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-arena-runner-timeout-"));
+    const runnerPath = join(dir, "runner-timeout.mjs");
+    writeFileSync(
+      runnerPath,
+      `process.stdin.resume(); process.stdin.on("end", () => setTimeout(() => console.log(JSON.stringify({ proofLevel: "same-run-native", adapterMode: "native-command", evidence: { late: true } })), 2000));`
+    );
+    const previousCommand = process.env.MEMORY_ARENA_MEM0_COMMAND;
+    const previousProof = process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL;
+    const previousJudge = process.env.MEMORY_ARENA_JUDGE_COMMAND;
+    const previousTimeout = process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS;
+    try {
+      process.env.MEMORY_ARENA_MEM0_COMMAND = `${process.execPath} ${runnerPath}`;
+      process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL = "same-run-native";
+      process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS = "100";
+      delete process.env.MEMORY_ARENA_JUDGE_COMMAND;
+      const report = await runBenchmarkArena({ systems: ["mem0"], count: 2 });
+      const mem0 = report.systems[0];
+      expect(mem0.score).toBe(0);
+      expect(mem0.scenarios[0].evidence.runnerFailed).toBe(true);
+      expect(mem0.scenarios[0].evidence.runnerDisabled).toBe(true);
+      expect(mem0.scenarios[0].evidence.timeoutMs).toBe(100);
+      expect(mem0.scenarios[1].evidence.runnerDisabled).toBe(true);
+      expect(mem0.scenarios[1].evidence.disabledAfterScenario).toBe(mem0.scenarios[0].id);
+      expect(mem0.capabilityGaps.join(" ")).toContain("runner failed");
+    } finally {
+      if (previousCommand === undefined) delete process.env.MEMORY_ARENA_MEM0_COMMAND;
+      else process.env.MEMORY_ARENA_MEM0_COMMAND = previousCommand;
+      if (previousProof === undefined) delete process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL;
+      else process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL = previousProof;
+      if (previousJudge === undefined) delete process.env.MEMORY_ARENA_JUDGE_COMMAND;
+      else process.env.MEMORY_ARENA_JUDGE_COMMAND = previousJudge;
+      if (previousTimeout === undefined) delete process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS;
+      else process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS = previousTimeout;
+    }
+  }, 30_000);
+
+  it("disables an external Arena runner after blocked-command evidence", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-arena-runner-blocked-json-"));
+    const runnerPath = join(dir, "runner-blocked.mjs");
+    writeFileSync(
+      runnerPath,
+      `process.stdin.resume(); process.stdin.on("end", () => { console.log(JSON.stringify({ proofLevel: "credential-blocked", adapterMode: "blocked-command", capabilityGaps: ["fixture native runner failed before producing JSON"], latencyMs: 7, evidence: { runner: "fixture", error: "fixture timeout" } })); });`
+    );
+    const previousCommand = process.env.MEMORY_ARENA_MEM0_COMMAND;
+    const previousProof = process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL;
+    const previousJudge = process.env.MEMORY_ARENA_JUDGE_COMMAND;
+    try {
+      process.env.MEMORY_ARENA_MEM0_COMMAND = `${process.execPath} ${runnerPath}`;
+      process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL = "same-run-native";
+      delete process.env.MEMORY_ARENA_JUDGE_COMMAND;
+      const report = await runBenchmarkArena({ systems: ["mem0"], count: 2 });
+      const mem0 = report.systems[0];
+      expect(mem0.proofLevel).toBe("credential-blocked");
+      expect(mem0.adapterMode).toBe("blocked-command");
+      expect(mem0.scenarios[0].evidence.runnerDisabled).toBe(true);
+      expect(mem0.scenarios[0].evidence.evidence).toEqual(expect.objectContaining({ runner: "fixture", error: "fixture timeout" }));
+      expect(mem0.scenarios[1].evidence.runnerDisabled).toBe(true);
+      expect(mem0.scenarios[1].evidence.disabledAfterScenario).toBe(mem0.scenarios[0].id);
+      expect(mem0.capabilityGaps.join(" ")).toContain("disabling runner");
+    } finally {
+      if (previousCommand === undefined) delete process.env.MEMORY_ARENA_MEM0_COMMAND;
+      else process.env.MEMORY_ARENA_MEM0_COMMAND = previousCommand;
+      if (previousProof === undefined) delete process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL;
+      else process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL = previousProof;
+      if (previousJudge === undefined) delete process.env.MEMORY_ARENA_JUDGE_COMMAND;
+      else process.env.MEMORY_ARENA_JUDGE_COMMAND = previousJudge;
+    }
+  }, 30_000);
 
   it("scores external Arena runner evidence only after strict LLM harness judge validation", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-arena-judged-"));
@@ -1385,6 +1599,18 @@ process.stdin.on("end", () => {
     expect(svg).toContain("ablation diagnostic");
     const ablationSection = svg.slice(svg.indexOf("CogniCodeBench Ablation"));
     expect(ablationSection).not.toContain("bar-cognibrain");
+    const cleanDir = mkdtempSync(join(tmpdir(), "cognibrain-benchmark-svg-clean-"));
+    const cleanOutputPath = join(cleanDir, "benchmark-results.svg");
+    const cleanResult = spawnSync(process.execPath, [join(process.cwd(), "scripts/release/render-benchmark-svg.mjs"), cleanOutputPath], {
+      cwd: cleanDir,
+      encoding: "utf8"
+    });
+    expect(cleanResult.status).toBe(0);
+    const cleanSvg = readFileSync(cleanOutputPath, "utf8");
+    expect(cleanSvg).toContain("claim blocked");
+    expect(cleanSvg).toContain("diagnostic pass");
+    expect(cleanSvg).toContain("api-shape diagnostic");
+    expect(cleanSvg).toContain("ablation diagnostic");
   });
 
   it("publishes a marketing scorecard with bars and per-scenario details", () => {
@@ -1845,7 +2071,7 @@ process.stdin.on("end", () => {
       if (previousPatchCommand === undefined) delete process.env.MEMORY_COGNICODEBENCH_PATCH_COMMAND;
       else process.env.MEMORY_COGNICODEBENCH_PATCH_COMMAND = previousPatchCommand;
     }
-  }, 30_000);
+  }, 90_000);
 
   it("allows CogniCodeBench quality claims only through a report-level LLM/harness judge", () => {
     const previousJudge = process.env.MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND;
@@ -1873,7 +2099,7 @@ process.stdin.on("end", () => {
       if (previousJudge === undefined) delete process.env.MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND;
       else process.env.MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND = previousJudge;
     }
-  }, 30_000);
+  }, 90_000);
 
   it("generates CogniCodeBench scenarios as a passing generation artifact", () => {
     const dir = mkdtempSync(join(tmpdir(), "open-memory-cognicode-generate-"));

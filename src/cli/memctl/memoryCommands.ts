@@ -25,8 +25,33 @@ import {
 
 type CommandContext = { service: MemoryService; userId: string };
 
+const COMMAND_USAGE: Record<string, string> = {
+  add: "Usage: memctl add <content>",
+  list: "Usage: memctl list [--limit <n>] [--include-archived]",
+  extract: "Usage: memctl extract <conversation-or-event-text>",
+  action: "Usage: memctl action <command-or-action-summary>",
+  "coding-context": "Usage: memctl coding-context <query>",
+  "context-enrich": "Usage: memctl context-enrich <query>",
+  "code-correction": "Usage: memctl code-correction <correction>",
+  "action-guard": "Usage: memctl action-guard <action>",
+  "patch-evidence": "Usage: memctl patch-evidence <task>",
+  search: "Usage: memctl search <query>",
+  inspect: "Usage: memctl inspect <memory-id>",
+  edit: "Usage: memctl edit <memory-id> <new-content>",
+  archive: "Usage: memctl archive <memory-id>",
+  route: "Usage: memctl route <query>",
+  intent: "Usage: memctl intent <query>",
+  evidence: "Usage: memctl evidence <query|context-pack-id>",
+  "evidence-pack": "Usage: memctl evidence-pack <query|context-pack-id>",
+  "why-used": "Usage: memctl why-used <query|context-pack-id>"
+};
+
 export async function handleMemoryCommands(command: string | undefined, args: string[], context: CommandContext): Promise<boolean> {
   const { service, userId } = context;
+  if (command && args.some((arg) => arg === "--help" || arg === "-h") && COMMAND_USAGE[command]) {
+    console.log(COMMAND_USAGE[command]);
+    return true;
+  }
   switch (command) {
   case "add": {
     const content = args.join(" ");

@@ -25,6 +25,7 @@ const files = {
   postgresLive: readJson("artifacts/postgres-live.json", { acceptance: {} }),
   realworldProtocol: readJson("artifacts/realworld-benchmark-protocol.json", { currentArtifacts: [], leaderboardEligibleArtifacts: [] }),
   realworldBlackbox: readJson("artifacts/realworld-blackbox.json", { systems: [], manifestHash: "", eligibilityGate: {}, leaderboardEligible: true }),
+  realworldNativeCompetitors: readJson("artifacts/realworld-native-competitors.json", { systems: [], originalRawOutputRuns: 0 }),
   arenaSource: read("src/eval/arena.ts"),
   arenaOpenAiJudge: read("scripts/benchmark/arena-openai-judge.mjs"),
   nativeCompetitorBenchmark: read("scripts/benchmark/benchmark-native-competitors.mjs"),
@@ -39,6 +40,9 @@ const files = {
   operatorMemoryNativePythonRunner: read("scripts/benchmark/competitors/operator_memory_native_runner.py"),
   operatorMemoryNativePythonRunnerWrapper: read("scripts/benchmark/competitors/operator-memory-native-python-runner.mjs"),
   basicMemoryExternalRunner: read("scripts/benchmark/competitors/basic_memory_external_runner.py"),
+  realworldNativeCompetitorBenchmark: read("scripts/benchmark/benchmark-realworld-native-competitors.mjs"),
+  realworldBasicMemoryRunner: read("scripts/benchmark/competitors/basic_memory_realworld_runner.py"),
+  realworldLangMemRunner: read("scripts/benchmark/competitors/langmem_realworld_runner.py"),
   realworldBlackboxSource: read("src/eval/realworldBlackbox.ts"),
   marketGateSource: read("src/eval/marketGate.ts"),
   evaluationRunSource: read("src/eval/run.ts"),
@@ -64,6 +68,7 @@ const files = {
   mcpTools: read("src/connectors/mcpTools.ts"),
   mcpHandlers: read("src/connectors/mcpHandlers.ts"),
   coreTests: read("tests/core.test.ts"),
+  evaluationTests: read("tests/evaluation.test.ts"),
   storageAdapter: read("src/core/storageAdapter.ts"),
   repositories: readMany([
     "src/api/repositories/sqliteRepository.ts",
@@ -143,11 +148,44 @@ const realworldBlackboxBlocked = realworldBlackboxSystems.filter((system) => sys
 const realworldBlackboxRawRetained = realworldBlackboxCognibrain && Array.isArray(realworldBlackboxCognibrain.rawOutputs) && realworldBlackboxCognibrain.rawOutputs.length >= 15;
 const realworldBlackboxJudgeBlocked = realworldBlackboxCognibrain?.qualityClaimAllowed === false && realworldBlackboxCognibrain?.judge?.kind === "missing" && realworldBlackboxCognibrain?.metrics?.score === null && files.realworldBlackbox.eligibilityGate?.llmOrHarnessJudged === false;
 const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked;
-const realworldBlackboxMarketGateStrict = files.realworldBlackboxSource.includes("cognibrainLeaderboardEligible") &&
+const realworldBlackboxMarketGateStrict = files.realworldBlackboxSource.includes("cognibrainComparativeSmokeEligible") &&
+  files.realworldBlackboxSource.includes("leaderboardEligibleSystems: []") &&
   files.realworldBlackboxSource.includes("originalCompetitorEligibleSystems.length >= 2") &&
   files.realworldBlackboxSource.includes('system.system !== "cognibrain"') &&
   files.realworldBlackboxSource.includes('system.evidenceClass === "same-run-command"') &&
+  files.realworldBlackboxSource.includes("system.comparativeSmokeEligible") &&
   files.realworldBlackboxSource.includes("Cognibrain plus at least 2");
+const realworldNativeCompetitorPath = files.internalRunner.includes("benchmark-realworld-native-competitors.mjs") &&
+  files.realworldNativeCompetitorBenchmark.includes("realworld-native-competitor-run") &&
+  files.realworldNativeCompetitorBenchmark.includes("basic_memory_realworld_runner.py") &&
+  files.realworldNativeCompetitorBenchmark.includes("langmem_realworld_runner.py") &&
+  files.realworldNativeCompetitorBenchmark.includes("MEMORY_REALWORLD_JUDGE_COMMAND") &&
+  files.realworldNativeCompetitorBenchmark.includes("comparativeSmokeEligible") &&
+  files.realworldNativeCompetitorBenchmark.includes("marketClaimAllowed") &&
+  files.realworldNativeCompetitorBenchmark.includes("quality and comparative-smoke eligibility require the configured central LLM/harness judge") &&
+  files.realworldNativeCompetitorBenchmark.includes("market and leaderboard claims remain blocked by the RealWorld claim boundary") &&
+  files.realworldBasicMemoryRunner.includes("basic-memory-original-package") &&
+  files.realworldBasicMemoryRunner.includes("Diagnostic only. Raw outputs were captured") &&
+  files.realworldLangMemRunner.includes("langmem-original-package") &&
+  files.realworldLangMemRunner.includes("Diagnostic only. Raw outputs were captured");
+const realworldCentralJudgeRecompute = files.realworldBlackboxSource.includes("central MEMORY_REALWORLD_JUDGE_COMMAND recomputation is required") &&
+  files.realworldBlackboxSource.includes("scoreSystem(adapter, manifest, mergedSetup, external.rawOutputs") &&
+  files.realworldBlackboxSource.includes("validateJudgeDecisionSemantics") &&
+  files.realworldBlackboxSource.includes("forbidden leakage must force passed=false") &&
+  files.evaluationTests.includes("does not trust external command self-judged metrics") &&
+  files.evaluationTests.includes("blocks inconsistent real-world judge decisions");
+const realworldSmokeMarketBoundary = files.realworldBlackboxSource.includes("comparativeSmokeEligible") &&
+  files.realworldBlackboxSource.includes("marketClaimAllowed") &&
+  files.realworldBlackboxSource.includes("leaderboardEligibleSystems: []") &&
+  files.realworldBlackboxSource.includes("system.comparativeSmokeEligible") &&
+  files.realworldBlackboxSource.includes("comparativeSmokeEligible: originalRun") &&
+  files.realworldBlackboxSource.includes("leaderboardEligible: false") &&
+  files.realworldBlackboxSource.includes("comparative-smoke-eligible-results-not-market-leaderboard") &&
+  files.realworldBlackboxSource.includes("Market leaderboard claims require a larger third-party-sourced task set") &&
+  files.realworldBlackboxSource.includes("claimBoundary") &&
+  files.evaluationTests.includes("comparative smoke eligibility without market claims") &&
+  files.evaluationTests.includes("report.leaderboardEligibleSystems).toEqual([]") &&
+  files.evaluationTests.includes("marketClaimAllowed).toBe(false)");
 const benchmarkReleaseRows = Array.isArray(files.benchmarkRelease.releases) ? files.benchmarkRelease.releases : [];
 const benchmarkReleaseClaimBoundary = files.benchmarkRelease.passed === true &&
   files.benchmarkRelease.publication?.qualityClaimAllowed === false &&
@@ -166,7 +204,17 @@ const benchmarkReleaseClaimBoundary = files.benchmarkRelease.passed === true &&
     Array.isArray(release?.claimBoundary?.claimBlockers) &&
     release.claimBoundary.claimBlockers.length > 0
   );
-const arenaRunnerChecksFailClosed = !files.arenaSource.includes("checksFromRunnerText") && !files.arenaSource.includes("haystack.includes") && files.arenaSource.includes("runnerSelfChecksIgnored") && files.arenaSource.includes("MEMORY_ARENA_JUDGE_COMMAND") && files.arenaSource.includes("runner supplied self-scored checks");
+const arenaRunnerChecksFailClosed = !files.arenaSource.includes("checksFromRunnerText") && !files.arenaSource.includes("haystack.includes") && files.arenaSource.includes("runnerSelfChecksIgnored") && files.arenaSource.includes("MEMORY_ARENA_JUDGE_COMMAND") && files.arenaSource.includes("runner supplied self-scored checks") && files.arenaSource.includes("this.runner.args ?? []") && files.arenaSource.includes("shell: this.runner.shell ?? true") && files.arenaSource.includes("timeoutMs") && files.arenaSource.includes("runnerDisabled") && files.arenaSource.includes("disabling runner for remaining scenarios");
+const arenaQualityClaimBoundary = files.arenaSource.includes("MEMORY_ARENA_QUALITY_JUDGE_COMMAND") &&
+  files.arenaSource.includes("cognibrain-arena-quality-llm-harness-judge-v1") &&
+  files.arenaSource.includes("arena-local-scenario-diagnostic") &&
+  files.arenaSource.includes("arena-report-llm-harness-judge") &&
+  files.arenaSource.includes("qualityClaimAllowed") &&
+  files.arenaSource.includes("marketClaimAllowed") &&
+  files.arenaSource.includes("leaderboardEligible") &&
+  files.arenaSource.includes("Market superiority remains blocked because Benchmark Arena is a synthetic diagnostic") &&
+  files.publishArenaSource.includes("Arena claim allowed") &&
+  files.publishArenaSource.includes("Arena claim blockers");
 const arenaOpenAiJudgeStrict = files.arenaOpenAiJudge.includes("Do not trust runner-proposed checks") && files.arenaOpenAiJudge.includes("Do not use exact string overlap") && files.arenaOpenAiJudge.includes("must be a JSON boolean") && files.nativeCompetitorBenchmark.includes("arena-openai-judge.mjs");
 const arenaBundledRunnersRawOnly = [files.arenaMem0Runner, files.arenaGbrainRunner, files.arenaNativePythonRunner, files.arenaNativePythonRunnerWrapper].every((source) =>
   !source.includes("haystack") &&
@@ -179,7 +227,7 @@ const arenaBundledRunnersRawOnly = [files.arenaMem0Runner, files.arenaGbrainRunn
 ) && [files.arenaMem0Runner, files.arenaGbrainRunner, files.arenaNativePythonRunner].every((source) =>
   source.includes("Raw runner evidence only") &&
   source.includes("MEMORY_ARENA_JUDGE_COMMAND")
-);
+) && files.arenaNativePythonRunnerWrapper.includes("MEMORY_ARENA_RUNNER_TIMEOUT_MS") && files.arenaNativePythonRunnerWrapper.includes("timeoutMs");
 const operatorMemoryNativeJudgeBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("runnerSelfChecksIgnored") && files.operatorMemoryBenchmarkSource.includes("raw native evidence is unjudged") && files.operatorMemoryBenchmarkSource.includes("native/cloud artifact is unjudged") && files.operatorMemoryOpenAiJudge.includes("Do not trust runner-proposed checks") && files.operatorMemoryOpenAiJudge.includes("Do not use exact string overlap") && files.operatorMemoryOpenAiJudge.includes("must be a JSON boolean") && files.operatorMemoryNativeCompetitorBenchmark.includes("operator-memory-openai-judge.mjs");
 const operatorMemoryBundledRunnersRawOnly = [files.operatorMemoryNativePythonRunner, files.operatorMemoryNativePythonRunnerWrapper].every((source) =>
   !source.includes("haystack") &&
@@ -188,7 +236,7 @@ const operatorMemoryBundledRunnersRawOnly = [files.operatorMemoryNativePythonRun
   !source.includes('"checks"') &&
   !source.includes("emptyChecks") &&
   !source.includes("empty_checks")
-) && files.operatorMemoryNativePythonRunner.includes("Raw runner evidence only") && files.operatorMemoryNativePythonRunner.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND");
+) && files.operatorMemoryNativePythonRunner.includes("Raw runner evidence only") && files.operatorMemoryNativePythonRunner.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryNativePythonRunnerWrapper.includes("MEMORY_OPERATOR_MEMORY_RUNNER_TIMEOUT_MS") && files.operatorMemoryNativePythonRunnerWrapper.includes("timeoutMs");
 const operatorMemoryQualityClaimBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("operator-memory-quality-llm-harness-judge-v1") && files.operatorMemoryBenchmarkSource.includes("operator-memory-local-check-diagnostic") && files.operatorMemoryBenchmarkSource.includes("operator-memory-llm-harness-judge") && files.operatorMemoryBenchmarkSource.includes("Local operator-memory scenario checks are deterministic diagnostics only") && files.operatorMemoryBenchmarkSource.includes("Quality claims require") && files.operatorMemoryBenchmarkSource.includes("Do not rely on exact string overlap, check names, or runner-proposed scores");
 const cognicodeQualityClaimBoundary = files.cognicodeBenchSource.includes("MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND") && files.cognicodeBenchSource.includes("cognibrain-cognicodebench-quality-llm-harness-judge-v1") && files.cognicodeBenchSource.includes("MEMORY_COGNICODEBENCH_PATCH_COMMAND") && files.cognicodeBenchSource.includes("cognibrain-cognicodebench-patch-proposal-harness-v1") && files.cognicodeBenchSource.includes("expectedDirectPatchHarness") && files.cognicodeBenchSource.includes("cognicodebench-local-scenario-diagnostic") && files.cognicodeBenchSource.includes("cognicodebench-llm-harness-judge") && files.cognicodeBenchSource.includes("CogniCodeBench local scenario checks, ablations, token overlap leakage diagnostics and synthetic patch checks are deterministic diagnostics only") && files.cognicodeBenchSource.includes("Do not rely on exact string overlap, token overlap, regex matches, check names, or runner-proposed scores");
 const externalBasicMemoryHeuristicsBounded = files.basicMemoryExternalRunner.includes("MEMORY_EXTERNAL_PUBLIC_JUDGE_COMMAND") && files.basicMemoryExternalRunner.includes('"qualityClaimAllowed"') && files.basicMemoryExternalRunner.includes('"heuristicDiagnostics"') && files.basicMemoryExternalRunner.includes("Diagnostic only. These values are produced by evidence-id, token, or substring heuristics") && files.basicMemoryExternalRunner.includes('"accuracy": None');
@@ -288,6 +336,18 @@ const checks = [
   check("realworld-blackbox-market-gate-strict", "Real-world leaderboard eligibility requires Cognibrain plus at least two judged original competitor same-run systems, so local baselines and single-opponent smokes cannot become market proof.", realworldBlackboxMarketGateStrict, "fail", {
     source: "src/eval/realworldBlackbox.ts"
   }),
+  check("realworld-native-competitor-runner", "Real-world competitor mode attaches Basic Memory and LangMem original package runners to the same manifest while keeping raw-output diagnostics claim-blocked until an LLM/harness judge succeeds.", realworldNativeCompetitorPath, "fail", {
+    source: "scripts/benchmark/benchmark-realworld-native-competitors.mjs",
+    runners: ["scripts/benchmark/competitors/basic_memory_realworld_runner.py", "scripts/benchmark/competitors/langmem_realworld_runner.py"]
+  }),
+  check("realworld-central-judge-recompute", "Real-world external commands cannot self-certify quality metrics; raw outputs must be recomputed by the central LLM/harness judge and semantically inconsistent judge decisions fail closed.", realworldCentralJudgeRecompute, "fail", {
+    source: "src/eval/realworldBlackbox.ts",
+    tests: "tests/evaluation.test.ts"
+  }),
+  check("realworld-smoke-market-claim-boundary", "Real-world centrally judged small-manifest results may become comparative smoke only; market and leaderboard claims stay blocked until a larger third-party-sourced protocol with more original systems and preregistered cost/latency budgets exists.", realworldSmokeMarketBoundary, "fail", {
+    source: "src/eval/realworldBlackbox.ts",
+    tests: "tests/evaluation.test.ts"
+  }),
   check("leaderboard-diagnostic-claim-boundary", "Public leaderboard artifacts mark local deterministic scores as diagnostic-only and allow claims only for LLM/harness or comparable public benchmark proof.", leaderboardDiagnosticClaimsBounded, "fail", {
     source: "src/eval/leaderboard.ts"
   }),
@@ -303,6 +363,9 @@ const checks = [
   check("arena-external-runner-judge-contract", "External Arena competitor runners cannot score themselves; native same-run outputs require an explicit LLM/harness judge command for scoreable checks.", arenaRunnerChecksFailClosed && arenaOpenAiJudgeStrict, "fail", {
     source: "src/eval/arena.ts",
     judge: "scripts/benchmark/arena-openai-judge.mjs"
+  }),
+  check("arena-quality-claim-boundary", "Benchmark Arena separates diagnostic pass from quality, market and leaderboard claims; report-level quality claims require an explicit LLM/harness judge and market claims remain blocked as synthetic diagnostics.", arenaQualityClaimBoundary, "fail", {
+    source: "src/eval/arena.ts"
   }),
   check("arena-bundled-runner-raw-evidence-only", "Bundled Mem0 and GBrain Arena runners emit raw evidence only and do not compute string/substring self-checks.", arenaBundledRunnersRawOnly, "fail", {
     sources: ["scripts/benchmark/competitors/mem0-runner.mjs", "scripts/benchmark/competitors/gbrain-runner.mjs", "scripts/benchmark/competitors/native_python_runner.py", "scripts/benchmark/competitors/native-python-runner.mjs"]

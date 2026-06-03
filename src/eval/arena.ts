@@ -147,6 +147,27 @@ interface ArenaReport {
   leaderboard: Array<{ system: string; score: number; proofLevel: ProofLevel; repeatedMistakeRate: number; gaps: number }>;
   winner: string;
   passed: boolean;
+  diagnosticPassed: boolean;
+  qualityClaimAllowed: boolean;
+  marketClaimAllowed: boolean;
+  leaderboardEligible: boolean;
+  judge: {
+    kind: "missing" | "llm-harness-command";
+    status: "missing" | "passed" | "failed";
+    score: number | null;
+    reason: string;
+    commandEnv?: string;
+    evidence?: Record<string, unknown>;
+  };
+  claimBoundary: {
+    proof: "arena-local-diagnostic" | "arena-llm-harness-judge";
+    scorer: string;
+    claimAllowed: boolean;
+    qualityClaimAllowed: boolean;
+    marketClaimAllowed: boolean;
+    leaderboardEligible: boolean;
+    claimBlockers: string[];
+  };
 }
 
 export async function runBenchmarkArena(options: { systems?: string[]; benchmark?: string; out?: string } & CogniCodeScenarioFactoryOptions = {}): Promise<ArenaReport> {
@@ -176,6 +197,24 @@ export async function runBenchmarkArena(options: { systems?: string[]; benchmark
   const leaderboard = systems
     .map((system) => ({ system: system.displayName, score: system.score, proofLevel: system.proofLevel, repeatedMistakeRate: system.metrics.repeatedMistakeRate, gaps: system.capabilityGaps.length }))
     .sort((a, b) => b.score - a.score || a.repeatedMistakeRate - b.repeatedMistakeRate || a.gaps - b.gaps);
+  const diagnosticPassed = systems.length >= 5 && systems.every((system) => system.scenarioCount === scenarios.length) && systems.some((system) => system.system === "cognibrain" && system.proofLevel === "same-run-full" && system.score >= 0.95);
+  const qualityJudge = runArenaQualityJudge({ systems, leaderboard, scenarioFactory: scenarioSet.summary, diagnosticPassed });
+  const qualityClaimAllowed = Boolean(diagnosticPassed && qualityJudge?.passed);
+  const judgedOriginalCompetitors = systems.filter((system) =>
+    system.system !== "cognibrain" &&
+    ["same-run-native", "same-run-cloud-api", "same-run-cli", "same-run-full"].includes(system.proofLevel) &&
+    system.scenarios.length > 0 &&
+    system.scenarios.every((scenario) => scenario.evidence.structuredChecks === true && (scenario.evidence.judge as { kind?: string } | undefined)?.kind === "llm-harness-command")
+  );
+  const leaderboardEligible = Boolean(qualityClaimAllowed && judgedOriginalCompetitors.length >= 2);
+  const marketClaimAllowed = false;
+  const claimBlockers = [
+    !diagnosticPassed && "Arena diagnostic gate did not pass.",
+    !qualityJudge && "MEMORY_ARENA_QUALITY_JUDGE_COMMAND is required before Arena can allow quality claims.",
+    qualityJudge && !qualityJudge.passed && `Configured Arena quality judge did not pass: ${qualityJudge.reason}`,
+    judgedOriginalCompetitors.length < 2 && `Arena leaderboard eligibility requires at least 2 judged original competitor systems; current judged original competitors: ${judgedOriginalCompetitors.length}.`,
+    "Market superiority remains blocked because Benchmark Arena is a synthetic diagnostic; market claims require external public benchmark proof."
+  ].filter((item): item is string => Boolean(item));
   const report: ArenaReport = {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
@@ -205,13 +244,100 @@ export async function runBenchmarkArena(options: { systems?: string[]; benchmark
     scenarioFactory: scenarioSet.summary,
     leaderboard,
     winner: leaderboard[0]?.system ?? "",
-    passed: systems.length >= 5 && systems.every((system) => system.scenarioCount === scenarios.length) && systems.some((system) => system.system === "cognibrain" && system.proofLevel === "same-run-full" && system.score >= 0.95)
+    passed: diagnosticPassed,
+    diagnosticPassed,
+    qualityClaimAllowed,
+    marketClaimAllowed,
+    leaderboardEligible,
+    judge: qualityJudge
+      ? {
+          kind: "llm-harness-command",
+          status: qualityJudge.passed ? "passed" : "failed",
+          score: qualityJudge.score,
+          reason: qualityJudge.reason,
+          commandEnv: "MEMORY_ARENA_QUALITY_JUDGE_COMMAND",
+          evidence: qualityJudge.evidence
+        }
+      : {
+          kind: "missing",
+          status: "missing",
+          score: null,
+          reason: "MEMORY_ARENA_QUALITY_JUDGE_COMMAND is required before Benchmark Arena may report quality claims."
+        },
+    claimBoundary: {
+      proof: qualityClaimAllowed ? "arena-llm-harness-judge" : "arena-local-diagnostic",
+      scorer: qualityClaimAllowed ? "arena-report-llm-harness-judge" : "arena-local-scenario-diagnostic",
+      claimAllowed: qualityClaimAllowed,
+      qualityClaimAllowed,
+      marketClaimAllowed,
+      leaderboardEligible,
+      claimBlockers
+    }
   };
   if (options.out) {
     mkdirSync(dirname(options.out), { recursive: true });
     writeFileSync(options.out, `${JSON.stringify(report, null, 2)}\n`);
   }
   return report;
+}
+
+function runArenaQualityJudge(input: { systems: ArenaSystemResult[]; leaderboard: ArenaReport["leaderboard"]; scenarioFactory: CogniCodeScenarioFactorySummary; diagnosticPassed: boolean }): { passed: boolean; score: number; reason: string; evidence?: Record<string, unknown> } | undefined {
+  const command = process.env.MEMORY_ARENA_QUALITY_JUDGE_COMMAND;
+  if (!command) return undefined;
+  const result = spawnSync(command, {
+    input: `${JSON.stringify({
+      contract: "cognibrain-arena-quality-llm-harness-judge-v1",
+      instruction: [
+        "Judge whether Benchmark Arena supports a quality claim for Cognibrain.",
+        "Treat local scenario checks and runner-proposed checks as diagnostic context only.",
+        "Do not use exact string overlap, regex matches, check names, or runner-proposed scores as sufficient evidence.",
+        "Return strict JSON with boolean passed, finite score in 0..1, and reason."
+      ],
+      diagnosticPassed: input.diagnosticPassed,
+      scenarioFactory: input.scenarioFactory,
+      leaderboard: input.leaderboard,
+      systems: input.systems.map((system) => ({
+        system: system.system,
+        displayName: system.displayName,
+        proofLevel: system.proofLevel,
+        adapterMode: system.adapterMode,
+        score: system.score,
+        metrics: system.metrics,
+        capabilityGaps: system.capabilityGaps,
+        scenarioCount: system.scenarioCount,
+        sampleEvidence: system.scenarios.slice(0, 5).map((scenario) => ({
+          id: scenario.id,
+          score: scenario.score,
+          checks: scenario.checks,
+          evidence: scenario.evidence
+        }))
+      }))
+    })}\n`,
+    encoding: "utf8",
+    shell: true,
+    timeout: Number(process.env.MEMORY_ARENA_QUALITY_JUDGE_TIMEOUT_MS ?? 120_000),
+    maxBuffer: 20 * 1024 * 1024
+  });
+  if (result.status !== 0) {
+    return { passed: false, score: 0, reason: `Arena quality judge command failed with status ${result.status ?? 1}`, evidence: { stderrTail: tail(result.stderr), stdoutTail: tail(result.stdout) } };
+  }
+  let parsed: any;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch (error) {
+    return { passed: false, score: 0, reason: `Arena quality judge returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`, evidence: { stdoutTail: tail(result.stdout) } };
+  }
+  const passed = typeof parsed?.passed === "boolean" ? parsed.passed : undefined;
+  const score = typeof parsed?.score === "number" && Number.isFinite(parsed.score) && parsed.score >= 0 && parsed.score <= 1 ? parsed.score : undefined;
+  if (passed === undefined || score === undefined) {
+    return { passed: false, score: 0, reason: "Arena quality judge must return boolean passed and finite score in 0..1", evidence: { stdoutTail: tail(result.stdout) } };
+  }
+  return {
+    passed,
+    score,
+    reason: typeof parsed?.reason === "string" && parsed.reason.trim() ? parsed.reason : "Arena quality judge returned no reason.",
+    evidence: isRecord(parsed?.evidence) ? parsed.evidence : undefined
+  };
 }
 
 function loadScenarios(options: CogniCodeScenarioFactoryOptions): { scenarios: CogniCodeScenario[]; summary: CogniCodeScenarioFactorySummary } {
@@ -440,11 +566,21 @@ class CommandRunnerAdapter extends ProfileAdapter {
   adapterMode: AdapterMode;
   proofLevel: ProofLevel;
   capabilityGaps: string[];
+  private runnerDisabled?: {
+    reason: string;
+    scenarioId: string;
+    status: number | null;
+    signal: NodeJS.Signals | null;
+    timeoutMs: number;
+    stderrTail: string;
+    stdoutTail: string;
+    error?: string;
+  };
 
   constructor(
     id: Exclude<MemorySystemId, "cognibrain">,
     profile: ConstructorParameters<typeof ProfileAdapter>[1],
-    public readonly runner: { command: string; commandEnv: string; proofLevel: ProofLevel; adapterMode: AdapterMode }
+    public readonly runner: { command: string; args?: string[]; commandEnv: string; proofLevel: ProofLevel; adapterMode: AdapterMode; shell?: boolean }
   ) {
     super(id, profile);
     this.adapterMode = runner.adapterMode;
@@ -453,6 +589,29 @@ class CommandRunnerAdapter extends ProfileAdapter {
   }
 
   runScenario(scenario: CogniCodeScenario): ArenaScenarioResult {
+    if (this.runnerDisabled) {
+      const checks = emptyChecks();
+      return {
+        id: scenario.id,
+        checks,
+        score: 0,
+        evidence: {
+          adapter: this.id,
+          proofLevel: this.proofLevel,
+          commandEnv: this.runner.commandEnv,
+          runnerFailed: true,
+          runnerDisabled: true,
+          disabledAfterScenario: this.runnerDisabled.scenarioId,
+          reason: this.runnerDisabled.reason,
+          status: this.runnerDisabled.status,
+          signal: this.runnerDisabled.signal,
+          timeoutMs: this.runnerDisabled.timeoutMs,
+          stderrTail: this.runnerDisabled.stderrTail,
+          stdoutTail: this.runnerDisabled.stdoutTail,
+          error: this.runnerDisabled.error
+        }
+      };
+    }
     const payload = {
       schemaVersion: "1.0",
       contract: "cognibrain-benchmark-system-adapter-v2",
@@ -463,16 +622,28 @@ class CommandRunnerAdapter extends ProfileAdapter {
         note: "External runner checks are treated as advisory only. Scoreable checks require MEMORY_ARENA_JUDGE_COMMAND to validate the raw evidence."
       }
     };
-    const result = spawnSync(this.runner.command, [], {
+    const timeoutMs = Number(process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS ?? 30_000);
+    const result = spawnSync(this.runner.command, this.runner.args ?? [], {
       input: `${JSON.stringify(payload)}\n`,
       encoding: "utf8",
-      shell: true,
-      timeout: Number(process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS ?? 30_000),
+      shell: this.runner.shell ?? true,
+      timeout: timeoutMs,
       maxBuffer: 10 * 1024 * 1024
     });
     if (result.status !== 0) {
       const checks = emptyChecks();
-      this.addCapabilityGaps([`runner failed for ${scenario.id}`]);
+      const failure = {
+        reason: result.error?.message ? `runner failed for ${scenario.id}: ${result.error.message}` : `runner failed for ${scenario.id}`,
+        scenarioId: scenario.id,
+        status: result.status,
+        signal: result.signal,
+        timeoutMs,
+        stderrTail: tail(result.stderr),
+        stdoutTail: tail(result.stdout),
+        error: result.error?.message
+      };
+      this.runnerDisabled = failure;
+      this.addCapabilityGaps([`${failure.reason}; disabling runner for remaining scenarios in this benchmark run`]);
       return {
         id: scenario.id,
         checks,
@@ -482,8 +653,13 @@ class CommandRunnerAdapter extends ProfileAdapter {
           proofLevel: this.proofLevel,
           commandEnv: this.runner.commandEnv,
           runnerFailed: true,
-          status: result.status,
-          stderrTail: tail(result.stderr)
+          runnerDisabled: true,
+          status: failure.status,
+          signal: failure.signal,
+          timeoutMs: failure.timeoutMs,
+          stderrTail: failure.stderrTail,
+          stdoutTail: failure.stdoutTail,
+          error: failure.error
         }
       };
     }
@@ -491,6 +667,45 @@ class CommandRunnerAdapter extends ProfileAdapter {
     const runnerProof = normalizeProofLevel(parsed?.proofLevel);
     if (runnerProof) this.proofLevel = runnerProof;
     if (isAdapterMode(parsed?.adapterMode)) this.adapterMode = parsed.adapterMode;
+    if (runnerProof === "credential-blocked" && parsed?.adapterMode === "blocked-command") {
+      const checks = emptyChecks();
+      const capabilityGaps = Array.isArray(parsed?.capabilityGaps)
+        ? parsed.capabilityGaps.filter((gap: unknown): gap is string => typeof gap === "string")
+        : [`runner returned blocked-command evidence for ${scenario.id}`];
+      const failure = {
+        reason: capabilityGaps[0] ?? `runner returned blocked-command evidence for ${scenario.id}`,
+        scenarioId: scenario.id,
+        status: result.status,
+        signal: result.signal,
+        timeoutMs,
+        stderrTail: tail(result.stderr),
+        stdoutTail: tail(result.stdout),
+        error: typeof parsed?.evidence?.error === "string" ? parsed.evidence.error : result.error?.message
+      };
+      this.runnerDisabled = failure;
+      this.addCapabilityGaps([...capabilityGaps, `${failure.reason}; disabling runner for remaining scenarios in this benchmark run`]);
+      return {
+        id: scenario.id,
+        checks,
+        score: 0,
+        evidence: {
+          adapter: this.id,
+          proofLevel: this.proofLevel,
+          commandEnv: this.runner.commandEnv,
+          runnerFailed: true,
+          runnerDisabled: true,
+          status: failure.status,
+          signal: failure.signal,
+          timeoutMs: failure.timeoutMs,
+          latencyMs: parsed?.latencyMs,
+          capabilityGaps,
+          evidence: parsed?.evidence,
+          stderrTail: failure.stderrTail,
+          stdoutTail: failure.stdoutTail,
+          error: failure.error
+        }
+      };
+    }
     const judged = judgeRunnerOutput(this.id, scenario, parsed, this.runner.commandEnv);
     const checks = judged?.checks ?? emptyChecks();
     if (!judged) {
@@ -620,29 +835,35 @@ function autoNativeAdapter(id: Exclude<MemorySystemId, "cognibrain">, profile: C
   if (process.env.MEMORY_ARENA_AUTO_NATIVE === "false") return undefined;
   if (id === "gbrain" && existsSync(".cognibrain/vendor/gbrain/src/cli.ts") && existsSync("scripts/benchmark/competitors/gbrain-runner.mjs")) {
     return new CommandRunnerAdapter(id, profile, {
-      command: `${process.execPath} scripts/benchmark/competitors/gbrain-runner.mjs`,
+      command: process.execPath,
+      args: ["scripts/benchmark/competitors/gbrain-runner.mjs"],
       commandEnv: `${envPrefix}_COMMAND:auto-gbrain-cli`,
       proofLevel: "same-run-cli",
-      adapterMode: "cli-command"
+      adapterMode: "cli-command",
+      shell: false
     });
   }
   const mem0Key = process.env.MEM0_API_KEY ?? process.env[`${envPrefix}_API_KEY`];
   if (id === "mem0" && mem0Key && existsSync("scripts/benchmark/competitors/mem0-runner.mjs")) {
     process.env[`${envPrefix}_API_KEY`] = mem0Key;
     return new CommandRunnerAdapter(id, profile, {
-      command: `${process.execPath} scripts/benchmark/competitors/mem0-runner.mjs`,
+      command: process.execPath,
+      args: ["scripts/benchmark/competitors/mem0-runner.mjs"],
       commandEnv: `${envPrefix}_COMMAND:auto-mem0-cli`,
       proofLevel: "same-run-cloud-api",
-      adapterMode: "cloud-command"
+      adapterMode: "cloud-command",
+      shell: false
     });
   }
   if (["mem0", "graphiti", "cognee", "langmem", "basicmemory"].includes(id) && existsSync(".cognibrain/native-runners/competitors-venv/bin/python") && existsSync("scripts/benchmark/competitors/native-python-runner.mjs")) {
     const proofLevel = id === "graphiti" || id === "cognee" ? "credential-blocked" : "same-run-native";
     return new CommandRunnerAdapter(id, profile, {
-      command: `${process.execPath} scripts/benchmark/competitors/native-python-runner.mjs --system ${id}`,
+      command: process.execPath,
+      args: ["scripts/benchmark/competitors/native-python-runner.mjs", "--system", id],
       commandEnv: `${envPrefix}_COMMAND:auto-native-python`,
       proofLevel,
-      adapterMode: proofLevel === "credential-blocked" ? "blocked-command" : "native-command"
+      adapterMode: proofLevel === "credential-blocked" ? "blocked-command" : "native-command",
+      shell: false
     });
   }
   return undefined;
@@ -771,6 +992,10 @@ function tail(value: string | undefined): string {
   return String(value ?? "").split(/\r?\n/).slice(-20).join("\n");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function scoreChecks(checks: ArenaScenarioResult["checks"]): number {
   return ratio(Object.values(checks).filter(Boolean).length, Object.values(checks).length);
 }
@@ -826,7 +1051,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   runBenchmarkArena(cliOptions(process.argv.slice(2)))
     .then((report) => {
       console.log(JSON.stringify(report, null, 2));
-      if (!report.passed) process.exit(1);
+      if (!report.diagnosticPassed) process.exit(1);
     })
     .catch((error) => {
       console.error(error);

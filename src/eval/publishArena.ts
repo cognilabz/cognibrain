@@ -46,6 +46,19 @@ interface ArenaReport {
   leaderboard: Array<{ system: string; score: number; proofLevel: string; repeatedMistakeRate: number; gaps: number }>;
   winner: string;
   passed: boolean;
+  diagnosticPassed?: boolean;
+  qualityClaimAllowed?: boolean;
+  marketClaimAllowed?: boolean;
+  leaderboardEligible?: boolean;
+  claimBoundary?: {
+    proof: string;
+    scorer: string;
+    claimAllowed: boolean;
+    qualityClaimAllowed: boolean;
+    marketClaimAllowed: boolean;
+    leaderboardEligible: boolean;
+    claimBlockers: string[];
+  };
 }
 
 interface PublicBenchmarkGate {
@@ -170,6 +183,8 @@ Generated from \`artifacts/arena/run.json\` at ${report.publication.publishedAt}
 
 Claim allowed: ${report.publication.claimAllowed ? "yes" : "no"}. Proof level: \`${report.publication.proofLevel}\`. Diagnostic passed: ${report.publication.diagnosticPassed ? "yes" : "no"}.
 
+Arena claim allowed: ${report.claimBoundary?.claimAllowed ? "yes" : "no"}. Arena quality claim allowed: ${report.qualityClaimAllowed ? "yes" : "no"}. Arena market claim allowed: ${report.marketClaimAllowed ? "yes" : "no"}. Arena leaderboard eligible: ${report.leaderboardEligible ? "yes" : "no"}.
+
 Recall is not enough. The next code change has to prove the memory worked. These synthetic scores are diagnostics unless the claim gate allows them.
 
 ## Synthetic Diagnostic Scorecard
@@ -210,7 +225,11 @@ Claim blockers:
 
 ${publicClaimBlockers}
 
-` : ""}Boundary: competitor rows are only as strong as their proof level. \`same-run-api-shape\` is a local compatibility model. \`credential-blocked\` means the real runner exists but could not execute without required credentials or services. \`same-run-native\`, \`same-run-cloud-api\` and \`same-run-cli\` require configured external runners.
+` : ""}Arena claim blockers:
+
+${report.claimBoundary?.claimBlockers?.length ? report.claimBoundary.claimBlockers.map((item) => `- ${item}`).join("\n") : "- none"}
+
+Boundary: competitor rows are only as strong as their proof level. \`same-run-api-shape\` is a local compatibility model. \`credential-blocked\` means the real runner exists but could not execute without required credentials or services. \`same-run-native\`, \`same-run-cloud-api\` and \`same-run-cli\` require configured external runners.
 
 ## Proof Levels
 

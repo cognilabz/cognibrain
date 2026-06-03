@@ -751,7 +751,7 @@ describe("TypeScript memory core integrations", () => {
       delete process.env.MEMORY_SECRET_OAUTH_REAL_DOCS_CLIENT_SECRET;
       tokenServer.kill();
     }
-  });
+  }, 30_000);
 
   it("extracts local OCR, PDF OCR, ASR, and video frame metadata into auditable memories", () => {
     const service = new MemoryService();

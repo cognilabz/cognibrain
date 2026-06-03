@@ -10,6 +10,8 @@ const python = process.env.MEMORY_ARENA_COMPETITOR_PYTHON ?? join(root, ".cognib
 const script = join(root, "scripts", "benchmark", "competitors", "native_python_runner.py");
 const started = Date.now();
 const stdin = await readStdin();
+const defaultTimeoutMs = Math.max(1_000, Number(process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS ?? 30_000) - 1_000);
+const timeoutMs = Number(process.env.MEMORY_ARENA_PYTHON_RUNNER_TIMEOUT_MS ?? defaultTimeoutMs);
 
 if (!system) {
   printBlocked("unknown", "missing --system argument");
@@ -31,7 +33,7 @@ const result = spawnSync(python, [script, "--system", system], {
     MEM0_TELEMETRY: process.env.MEM0_TELEMETRY ?? "false",
     COGNIBRAIN_NATIVE_RUNNER_ROOT: process.env.COGNIBRAIN_NATIVE_RUNNER_ROOT ?? join(root, ".cognibrain", "native-runners")
   },
-  timeout: Number(process.env.MEMORY_ARENA_PYTHON_RUNNER_TIMEOUT_MS ?? 120_000),
+  timeout: timeoutMs,
   maxBuffer: 20 * 1024 * 1024
 });
 
@@ -49,6 +51,8 @@ console.log(JSON.stringify({
   evidence: {
     runner: "native-python-runner",
     system,
+    timeoutMs,
+    signal: result.signal,
     status: result.status ?? 1,
     stderrTail: tail(result.stderr),
     stdoutTail: tail(result.stdout),

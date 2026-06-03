@@ -18,7 +18,7 @@ const tasks = {
   "benchmark:realworld:protocol": cmd("node", ["scripts/benchmark/benchmark-realworld-protocol.mjs"]),
   "benchmark:realworld:blackbox": cmd("npx", ["tsx", "src/eval/realworldBlackbox.ts", "--out", "artifacts/realworld-blackbox.json", "--markdown", "artifacts/docs/realworld-blackbox.md"]),
   "benchmark:realworld:basicmemory": cmd("npx", ["tsx", "src/eval/realworldBlackbox.ts", "--out", "artifacts/realworld-blackbox-openai-intelligence.json", "--markdown", "artifacts/docs/realworld-blackbox-openai-intelligence.md", "--success-out", "artifacts/realworld-blackbox-openai-intelligence-success.json", "--success-markdown", "artifacts/docs/realworld-blackbox-openai-intelligence-success.md", "--systems", "cognibrain,basicmemory,keyword"]),
-  "benchmark:realworld:competitors": cmd("npx", ["tsx", "src/eval/realworldBlackbox.ts", "--out", "artifacts/realworld-blackbox-openai-intelligence.json", "--markdown", "artifacts/docs/realworld-blackbox-openai-intelligence.md", "--success-out", "artifacts/realworld-blackbox-openai-intelligence-success.json", "--success-markdown", "artifacts/docs/realworld-blackbox-openai-intelligence-success.md", "--systems", "cognibrain,basicmemory,langmem,keyword"]),
+  "benchmark:realworld:competitors": cmd("node", ["scripts/benchmark/benchmark-realworld-native-competitors.mjs"]),
   "benchmark:realworld:openai-judge": cmd("node", ["scripts/benchmark/realworld-openai-judge.mjs"]),
   "benchmark:realworld:openai-intelligence": cmd("node", ["scripts/benchmark/openai-memory-intelligence.mjs"]),
   "benchmark:nextgen": cmd("npx", ["tsx", "src/eval/nextgenBenchmarks.ts", "--out", "artifacts/nextgen-benchmarks.json"]),

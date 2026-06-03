@@ -1385,6 +1385,18 @@ process.stdin.on("end", () => {
     expect(svg).toContain("ablation diagnostic");
     const ablationSection = svg.slice(svg.indexOf("CogniCodeBench Ablation"));
     expect(ablationSection).not.toContain("bar-cognibrain");
+    const cleanDir = mkdtempSync(join(tmpdir(), "cognibrain-benchmark-svg-clean-"));
+    const cleanOutputPath = join(cleanDir, "benchmark-results.svg");
+    const cleanResult = spawnSync(process.execPath, [join(process.cwd(), "scripts/release/render-benchmark-svg.mjs"), cleanOutputPath], {
+      cwd: cleanDir,
+      encoding: "utf8"
+    });
+    expect(cleanResult.status).toBe(0);
+    const cleanSvg = readFileSync(cleanOutputPath, "utf8");
+    expect(cleanSvg).toContain("claim blocked");
+    expect(cleanSvg).toContain("diagnostic pass");
+    expect(cleanSvg).toContain("api-shape diagnostic");
+    expect(cleanSvg).toContain("ablation diagnostic");
   });
 
   it("publishes a marketing scorecard with bars and per-scenario details", () => {

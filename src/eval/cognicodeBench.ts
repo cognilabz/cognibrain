@@ -125,7 +125,7 @@ export interface CogniCodeScenarioResult {
 }
 
 export interface CogniCodePatchProposal {
-  mode: "context-derived" | "external-harness";
+  mode: "context-derived" | "external-harness" | "ablation-simulated";
   status: "passed" | "failed";
   command: string;
   filesChanged: string[];
@@ -195,6 +195,13 @@ export interface CogniCodeBenchReport {
     integrity: {
       score: number;
       overfitRisk: "low" | "medium" | "high";
+      metrics: {
+        expectedLeakage: number;
+        expectedDirectPatchHarness: boolean;
+        externalPatchHarnessRate: number;
+        bestBaseline: number;
+        fullScore: number;
+      };
       signals: string[];
     };
     weaknesses: Array<{ area: string; severity: "low" | "medium" | "high"; evidence: string; recommendation: string }>;
@@ -434,6 +441,7 @@ export function runCogniCodeBench(options: CogniCodeScenarioFactoryOptions & { o
       requiredExternalProofForQualityClaim: [
         "LLM/harness judge over semantic scenario evidence using MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND",
         "hidden expected actions or external patch proposal stage for patch-correctness claims",
+        "ablation baselines may simulate from visible repo metadata only; hidden expected commands and files stay evaluator-only",
         "public artifact with full judge contract, prompt, raw evidence and failure cases"
       ],
       requiredExternalProofForMarketClaim: [
@@ -824,17 +832,18 @@ function emptyMetrics(): CogniCodeBenchReport["metrics"] {
 }
 
 function baselineReports(scenarios: CogniCodeScenario[]): CogniCodeBenchReport["baselines"] {
+  const patchSimulationNote = "Patch behavior is simulated from visible repo metadata and recalled memory kinds; hidden expected commands/files are evaluator-only.";
   const modes: Array<{ name: CogniCodeAblationMode; notes: string[] }> = [
-    { name: "no_memory", notes: ["No retrieved correction, procedure, temporal, graph or tool-outcome memory is available."] },
-    { name: "raw_chat_history", notes: ["Nearby correction text can leak through, but scope, supersession and structured actions are absent."] },
-    { name: "vector_only", notes: ["Similarity retrieves related text, but stale and active rules are not separated."] },
-    { name: "semantic_only", notes: ["Semantic matches help with broad intent, but commands, freshness and forbidden files are brittle."] },
-    { name: "keyword_only", notes: ["Exact tokens help command recall, but architecture placement and stale-rule handling are weak."] },
-    { name: "graph_only", notes: ["Relationships help file and dependency placement, but correction and temporal state are incomplete."] },
-    { name: "temporal_only", notes: ["Freshness helps migrations, but architecture, commands and forbidden-file evidence are incomplete."] },
-    { name: "procedure_only", notes: ["Procedures recall commands, but review corrections and stale-rule suppression stay incomplete."] },
-    { name: "cognibrain_without_temporal", notes: ["Correction, procedure and graph memory remain, but migration and branch freshness are removed."] },
-    { name: "cognibrain_without_corrections", notes: ["Tool outcomes and procedures remain, but reviewer corrections are not carried forward."] }
+    { name: "no_memory", notes: ["No retrieved correction, procedure, temporal, graph or tool-outcome memory is available.", patchSimulationNote] },
+    { name: "raw_chat_history", notes: ["Nearby correction text can leak through, but scope, supersession and structured actions are absent.", patchSimulationNote] },
+    { name: "vector_only", notes: ["Similarity retrieves related text, but stale and active rules are not separated.", patchSimulationNote] },
+    { name: "semantic_only", notes: ["Semantic matches help with broad intent, but commands, freshness and forbidden files are brittle.", patchSimulationNote] },
+    { name: "keyword_only", notes: ["Exact tokens help command recall, but architecture placement and stale-rule handling are weak.", patchSimulationNote] },
+    { name: "graph_only", notes: ["Relationships help file and dependency placement, but correction and temporal state are incomplete.", patchSimulationNote] },
+    { name: "temporal_only", notes: ["Freshness helps migrations, but architecture, commands and forbidden-file evidence are incomplete.", patchSimulationNote] },
+    { name: "procedure_only", notes: ["Procedures recall commands, but review corrections and stale-rule suppression stay incomplete.", patchSimulationNote] },
+    { name: "cognibrain_without_temporal", notes: ["Correction, procedure and graph memory remain, but migration and branch freshness are removed.", patchSimulationNote] },
+    { name: "cognibrain_without_corrections", notes: ["Tool outcomes and procedures remain, but reviewer corrections are not carried forward.", patchSimulationNote] }
   ];
   return modes.map((mode) => {
     const results = scenarios.map((scenario) => runAblationScenario(scenario, mode.name));
@@ -860,6 +869,7 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
   const dependency = scenario.correctionType === "library_correction";
   const forbidden = scenario.correctionType === "forbidden_file_correction" || scenario.correction.memoryKind === "generated_file_rule" || scenario.correction.memoryKind === "forbidden_action";
   const stale = Boolean(scenario.expected.staleRuleSuppressed) || Boolean(scenario.noiseMemories?.some((memory) => memory.beliefState === "stale"));
+  const visibleTestCommandSignal = conceptScore(scenario.repoSeed.testCommand, ["test command", "run tests", "verify"]).score >= 0.45;
   const checks = {
     correctionRecalled: false,
     procedureRecalled: false,
@@ -886,7 +896,7 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
       break;
     case "keyword_only":
       checks.correctionRecalled = command || forbidden || dependency;
-      checks.procedureRecalled = command || conceptScore(scenario.expected.command, ["test command", "run tests", "verify"]).score >= 0.45;
+      checks.procedureRecalled = command || visibleTestCommandSignal;
       checks.wrongActionSuppressed = forbidden || command;
       checks.patchCorrect = command || forbidden;
       checks.evidenceComplete = false;
@@ -918,10 +928,10 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
       checks.staleSuppressed = !stale || temporal;
       break;
     case "procedure_only":
-      checks.correctionRecalled = command || scenario.expected.referencedKinds.includes("procedure");
+      checks.correctionRecalled = command || scenario.correction.memoryKind === "procedure";
       checks.procedureRecalled = true;
       checks.wrongActionSuppressed = command || forbidden && !hard;
-      checks.patchCorrect = command || conceptScore(scenario.expected.command, ["test command", "run tests", "verify"]).score >= 0.45;
+      checks.patchCorrect = command || visibleTestCommandSignal;
       checks.evidenceComplete = false;
       checks.staleSuppressed = !stale;
       break;
@@ -935,7 +945,7 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
       break;
     case "cognibrain_without_corrections":
       checks.correctionRecalled = false;
-      checks.procedureRecalled = command || conceptScore(scenario.expected.command, ["test command", "run tests", "verify"]).score >= 0.45;
+      checks.procedureRecalled = command || visibleTestCommandSignal;
       checks.wrongActionSuppressed = command && !forbidden;
       checks.patchCorrect = command || dependency;
       checks.evidenceComplete = false;
@@ -943,7 +953,10 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
       break;
   }
   checks.sourceRefCorrect = ["graph_only", "cognibrain_without_temporal"].includes(mode) && Boolean(scenario.sourceRef);
-  checks.patchGranularCorrect = checks.patchCorrect && !["no_memory", "raw_chat_history"].includes(mode);
+  const simulatedPatchProposal = ablationPatchProposal(scenario, mode, checks);
+  const patchChecks = evaluatePatchModel(scenario, simulatedPatchProposal);
+  checks.patchCorrect = checks.patchCorrect && simulatedPatchProposal.command === scenario.expected.command && scenario.expected.filesChanged.every((file) => simulatedPatchProposal.filesChanged.includes(file));
+  checks.patchGranularCorrect = checks.patchCorrect && Object.values(patchChecks).every(Boolean) && !["no_memory", "raw_chat_history"].includes(mode);
   checks.longHorizonRecall = checks.correctionRecalled && checks.procedureRecalled && (mode === "cognibrain_without_temporal" || !hard);
   const errors = Object.entries(checks).filter(([, value]) => !value).map(([key]) => key);
   const score = round(Object.values(checks).filter(Boolean).length / Object.values(checks).length);
@@ -962,18 +975,31 @@ function runAblationScenario(scenario: CogniCodeScenario, mode: CogniCodeAblatio
         checks.procedureRecalled || kind === "tool_outcome" && checks.wrongActionSuppressed
       ),
       sourceRefs: scenario.sourceRef ? [scenario.sourceRef] : [],
-      patchProposal: {
-        mode: "context-derived",
-        status: checks.patchCorrect ? "passed" : "failed",
-        command: checks.procedureRecalled ? scenario.expected.command : "",
-        filesChanged: checks.patchCorrect ? scenario.expected.filesChanged : [],
-        reason: `${mode} ablation simulates patch proposal behavior without direct full-system context.`
-      },
-      patchChecks: checks.patchGranularCorrect
-        ? { changedExpectedFiles: true, avoidedForbiddenFiles: true, requiredPatternsModeled: true, testFilesModeled: true }
-        : { changedExpectedFiles: checks.patchCorrect, avoidedForbiddenFiles: !forbidden || checks.wrongActionSuppressed, requiredPatternsModeled: false, testFilesModeled: checks.procedureRecalled }
+      patchProposal: simulatedPatchProposal,
+      patchChecks
     },
     errors
+  };
+}
+
+function ablationPatchProposal(scenario: CogniCodeScenario, mode: CogniCodeAblationMode, checks: CogniCodeScenarioResult["checks"]): CogniCodePatchProposal {
+  const visibleKinds = new Set<EngineeringMemoryKind>();
+  if (checks.correctionRecalled) visibleKinds.add(scenario.correction.memoryKind);
+  if (checks.procedureRecalled) visibleKinds.add("procedure");
+  if (checks.wrongActionSuppressed) visibleKinds.add("forbidden_action");
+  const filesChanged = checks.patchCorrect ? contextDerivedFiles(scenario, visibleKinds) : [];
+  const command = checks.procedureRecalled ? scenario.repoSeed.testCommand : "";
+  return {
+    mode: "ablation-simulated",
+    status: command && filesChanged.length ? "passed" : "failed",
+    command,
+    filesChanged,
+    reason: `${mode} ablation uses only visible repo metadata and simulated recalled memory kinds; hidden expected actions are reserved for evaluation.`,
+    evidence: {
+      visibleMemoryKinds: [...visibleKinds],
+      repoFilesConsidered: scenario.repoSeed.files.length,
+      commandSource: checks.procedureRecalled ? "repoSeed.testCommand" : "not recalled"
+    }
   };
 }
 
@@ -1037,6 +1063,13 @@ function benchmarkDiagnostics(
     integrity: {
       score: integrityScore,
       overfitRisk: integrityScore < 0.45 ? "high" : integrityScore < 0.75 ? "medium" : "low",
+      metrics: {
+        expectedLeakage: round(expectedLeakage),
+        expectedDirectPatchHarness: Boolean(expectedDirectPatchHarness),
+        externalPatchHarnessRate: round(externalPatchHarnessRate),
+        bestBaseline: round(bestBaseline),
+        fullScore: round(fullScore)
+      },
       signals: [
         `expectedLeakage=${round(expectedLeakage)}`,
         `expectedDirectPatchHarness=${Boolean(expectedDirectPatchHarness)}`,

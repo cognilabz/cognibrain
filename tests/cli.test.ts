@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,6 +58,51 @@ describe("cognibrain CLI", () => {
       const memories = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories", "--json"], { cwd: dir, env, encoding: "utf8" }));
       expect(memories.recent).toEqual([]);
       if (existsSync(join(dir, "memory.json"))) expect(readFileSync(join(dir, "memory.json"), "utf8")).not.toContain("--help");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("does not treat operator subcommand help flags as durable write targets", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-operator-help-"));
+    const repoHelpScaffold = join(root, ".cognibrain", "integrations", "help");
+    const listFiles = (path: string, prefix = ""): string[] => {
+      if (!existsSync(path)) return [];
+      return readdirSync(path, { withFileTypes: true }).flatMap((entry) => {
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        const full = join(path, entry.name);
+        return entry.isDirectory() ? listFiles(full, rel) : [rel];
+      });
+    };
+    try {
+      const env = {
+        ...process.env,
+        CODEX_HOME: join(dir, ".codex"),
+        MEMORY_AUTO_DREAM: "false",
+        MEMORY_DB_PATH: join(dir, "memory.json")
+      };
+      const commands = [
+        { args: ["connector", "add", "--help"], usage: "cognibrain connector add" },
+        { args: ["connector", "remove", "--help"], usage: "cognibrain connector remove" },
+        { args: ["adapter", "add", "--help"], usage: "cognibrain adapter add" },
+        { args: ["adapter", "remove", "--help"], usage: "cognibrain adapter remove" },
+        { args: ["connections", "add", "--help"], usage: "cognibrain connections add" },
+        { args: ["sdk", "platform", "--help"], usage: "cognibrain sdk platform <name>" },
+        { args: ["sdk", "harness", "--help"], usage: "cognibrain sdk harness <name>" },
+        { args: ["service", "install", "--help"], usage: "cognibrain service install" },
+        { args: ["config", "codex", "--help"], usage: "cognibrain config <all|codex" }
+      ];
+
+      expect(existsSync(repoHelpScaffold)).toBe(false);
+      for (const item of commands) {
+        const result = spawnSync(process.execPath, [cli, "--runtime-root", dir, ...item.args], { cwd: root, env, encoding: "utf8" });
+        expect(result.status).toBe(0);
+        expect(result.stdout).toContain(item.usage);
+        expect(result.stderr).toBe("");
+      }
+
+      expect(listFiles(dir)).toEqual([]);
+      expect(existsSync(repoHelpScaffold)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

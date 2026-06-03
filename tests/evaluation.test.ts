@@ -2039,8 +2039,16 @@ process.stdin.on("end", () => {
     expect(report.metrics.sourceRefCorrectness).toBe(1);
     expect(report.metrics.granularPatchCorrectness).toBe(1);
     expect(report.diagnostics.integrity.overfitRisk).toBe("low");
+    expect(report.diagnostics.integrity.metrics).toMatchObject({
+      expectedDirectPatchHarness: false,
+      externalPatchHarnessRate: 0,
+      bestBaseline: expect.any(Number),
+      fullScore: expect.any(Number)
+    });
     expect(report.diagnostics.weaknesses).toEqual([]);
     expect(new Set(report.scenarios.map((scenario) => scenario.evidence.patchProposal.mode))).toEqual(new Set(["context-derived"]));
+    expect(report.methodology.requiredExternalProofForQualityClaim).toContain("ablation baselines may simulate from visible repo metadata only; hidden expected commands and files stay evaluator-only");
+    expect(report.baselines.every((baseline) => baseline.notes.some((note) => note.includes("hidden expected commands/files are evaluator-only")))).toBe(true);
     expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.no_memory.score);
     expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.procedure_only.score);
     expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.temporal_only.score);

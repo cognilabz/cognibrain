@@ -258,7 +258,7 @@ async function memoriesCommand(memoryArgs = []) {
 async function connectionsCommand(connectionArgs = []) {
   const subcommandIndex = firstSubcommandIndex(connectionArgs);
   const subcommand = subcommandIndex >= 0 ? connectionArgs[subcommandIndex] : "overview";
-  if (subcommand === "help" || subcommand === "--help") {
+  if (subcommand === "help" || hasHelpFlag(connectionArgs)) {
     connectionsUsage(0);
     return;
   }
@@ -307,7 +307,7 @@ async function connectionsCommand(connectionArgs = []) {
 
 async function serviceCommand(serviceArgs = []) {
   const subcommand = firstSubcommand(serviceArgs);
-  if (subcommand === "help" || subcommand === "--help") {
+  if (subcommand === "help" || hasHelpFlag(serviceArgs)) {
     serviceUsage(0);
     return;
   }
@@ -582,7 +582,7 @@ async function skillCommand(commandArgs) {
 
 async function configCommand(commandArgs) {
   const subcommand = commandArgs[0] ?? "show";
-  if (subcommand === "help" || subcommand === "--help") configUsage(0);
+  if (subcommand === "help" || hasHelpFlag(commandArgs)) configUsage(0);
   if (subcommand === "list") {
     const result = configCatalog();
     if (commandArgs.includes("--json")) printJson(result);
@@ -621,7 +621,7 @@ async function configCommand(commandArgs) {
 
 async function connectorCommand(commandArgs) {
   const subcommand = commandArgs[0] ?? "list";
-  if (subcommand === "help" || subcommand === "--help") connectorUsage(0);
+  if (subcommand === "help" || hasHelpFlag(commandArgs)) connectorUsage(0);
   if (subcommand === "list") {
     const result = connectorCatalog();
     if (commandArgs.includes("--json")) printJson(result);
@@ -680,7 +680,7 @@ async function connectorCommand(commandArgs) {
 
 async function adapterCommand(commandArgs) {
   const subcommand = commandArgs[0] ?? "list";
-  if (subcommand === "help" || subcommand === "--help") adapterUsage(0);
+  if (subcommand === "help" || hasHelpFlag(commandArgs)) adapterUsage(0);
   if (subcommand === "list") {
     const result = adapterCatalog();
     if (commandArgs.includes("--json")) printJson(result);
@@ -727,7 +727,7 @@ async function adapterCommand(commandArgs) {
 
 async function sdkCommand(commandArgs) {
   const subcommand = commandArgs[0] ?? "list";
-  if (subcommand === "help" || subcommand === "--help") sdkUsage(0);
+  if (subcommand === "help" || hasHelpFlag(commandArgs)) sdkUsage(0);
   if (subcommand === "list") {
     const result = sdkCatalog();
     if (commandArgs.includes("--json")) printJson(result);
@@ -2262,6 +2262,10 @@ function majorVersion(version) {
 function optionValue(argv, name) {
   const index = argv.indexOf(name);
   return index >= 0 ? argv[index + 1] : undefined;
+}
+
+function hasHelpFlag(argv) {
+  return argv.includes("--help") || argv.includes("-h");
 }
 
 function firstSubcommand(argv, fallback = "overview") {

@@ -1,3 +1,5 @@
+import { adapterDefinitions, connectorDefinitions } from "./catalogs.mjs";
+
 export function usage(exitCode) {
   console.log(`cognibrain
 

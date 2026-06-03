@@ -186,12 +186,15 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
       ["package.json", "\"benchmark:release\""],
       ["tests/evaluation.test.ts", "generateBenchmarkRelease"]
     ]),
-    check("benchmarks.cognicode-claim-boundary", "benchmarks", "CogniCodeBench keeps local scenario and ablation scores diagnostic-only unless an LLM/harness report judge validates quality.", files, [
+    check("benchmarks.cognicode-claim-boundary", "benchmarks", "CogniCodeBench keeps local scenario and ablation scores diagnostic-only unless an LLM/harness report judge validates quality, and ablation patch simulations keep hidden expected commands/files evaluator-only.", files, [
       ["src/eval/cognicodeBench.ts", "MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND"],
       ["src/eval/cognicodeBench.ts", "cognibrain-cognicodebench-quality-llm-harness-judge-v1"],
       ["src/eval/cognicodeBench.ts", "MEMORY_COGNICODEBENCH_PATCH_COMMAND"],
       ["src/eval/cognicodeBench.ts", "cognibrain-cognicodebench-patch-proposal-harness-v1"],
       ["src/eval/cognicodeBench.ts", "expectedDirectPatchHarness"],
+      ["src/eval/cognicodeBench.ts", "ablation-simulated"],
+      ["src/eval/cognicodeBench.ts", "hidden expected commands and files stay evaluator-only"],
+      ["src/eval/cognicodeBench.ts", "hidden expected actions are reserved for evaluation"],
       ["src/eval/cognicodeBench.ts", "cognicodebench-local-scenario-diagnostic"],
       ["src/eval/cognicodeBench.ts", "qualityClaimAllowed"],
       ["src/eval/cognicodeBench.ts", "marketClaimAllowed: false"],

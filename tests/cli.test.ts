@@ -60,6 +60,12 @@ describe("cognibrain CLI", () => {
       expect(before.localRuntimeState).toMatchObject({ present: true, parseable: true });
       expect(before.prune.requested).toBe(false);
       expect(before.vscode.settingsPresent).toBe(false);
+      expect(before.vscode.missingLowResourceSettings).toEqual([
+        "typescript.disableAutomaticTypeAcquisition",
+        "typescript.tsserver.maxTsServerMemory",
+        "typescript.tsserver.experimental.enableProjectDiagnostics",
+        "typescript.tsserver.watchOptions"
+      ]);
 
       const dryRun = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "resources", "--prune-benchmark-caches", "--dry-run", "--json"], { cwd: dir, env, encoding: "utf8" }));
       expect(dryRun.prune.dryRun).toBe(true);
@@ -1125,6 +1131,17 @@ describe("cognibrain CLI", () => {
         expect(vscodeSettings["files.watcherExclude"][pattern], pattern).toBe(true);
         expect(vscodeSettings["search.exclude"][pattern], pattern).toBe(true);
       }
+      expect(vscodeSettings["typescript.disableAutomaticTypeAcquisition"]).toBe(true);
+      expect(vscodeSettings["typescript.tsserver.maxTsServerMemory"]).toBe(1024);
+      expect(vscodeSettings["typescript.tsserver.experimental.enableProjectDiagnostics"]).toBe(false);
+      expect(vscodeSettings["typescript.tsserver.watchOptions"].excludeDirectories).toEqual(expect.arrayContaining([
+        "**/.cognibrain",
+        "**/artifacts",
+        "**/data/benchmarks",
+        "**/dist",
+        "**/node_modules",
+        "**/operator-ui/.next"
+      ]));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

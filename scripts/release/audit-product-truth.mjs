@@ -152,6 +152,13 @@ const requiredHeavyGeneratedExcludes = [
 ];
 const vscodeHeavyGeneratedExcludes = files.cli.includes("HEAVY_GENERATED_EXCLUDE_PATTERNS") &&
   requiredHeavyGeneratedExcludes.every((pattern) => files.cli.includes(pattern) && files.cliTests.includes(pattern));
+const vscodeLowResourceSettings = files.cli.includes("VS_CODE_LOW_RESOURCE_SETTINGS") &&
+  files.cli.includes("typescript.tsserver.maxTsServerMemory") &&
+  files.cli.includes("typescript.tsserver.watchOptions") &&
+  files.cli.includes("typescript.disableAutomaticTypeAcquisition") &&
+  files.cli.includes("missingLowResourceSettings") &&
+  files.cliTests.includes("typescript.tsserver.maxTsServerMemory") &&
+  files.cliTests.includes("typescript.tsserver.watchOptions");
 const dreamJobWorkerControl = files.service.includes("cancelDreamJob(") && files.service.includes("retryDreamJob(") && files.dreamRoutes.includes("/dream/jobs") && files.dreamRoutes.includes("cancel") && files.dreamRoutes.includes("retry") && files.mcpTools.includes("memory_dream_job_cancel") && files.mcpTools.includes("memory_dream_job_retry") && files.coreTests.includes("cancels and retries dream jobs");
 const liveSourceRevalidation = files.service.includes("revalidateSourceRefsAsync") && files.service.includes("await resolver.fetch") && files.service.includes("listExternalVendorItems") && files.dreamRoutes.includes("revalidateSourceRefsAsync") && files.coreTests.includes("uses live async source resolver fetch") && files.coreTests.includes("default GitHub source resolver fetches current provider state");
 const postgresVerifierPassed = files.postgresLive?.acceptance?.startsWithPostgresBackend === true && files.postgresLive?.storage?.active === "postgres-repository";
@@ -167,6 +174,12 @@ const realworldArtifacts = Array.isArray(files.realworldProtocol.currentArtifact
 const realworldEligibleArtifacts = Array.isArray(files.realworldProtocol.leaderboardEligibleArtifacts) ? files.realworldProtocol.leaderboardEligibleArtifacts : [];
 const realworldAllClassified = realworldArtifacts.length >= 6 && realworldArtifacts.every((artifact) => artifact?.path && artifact?.className && artifact.leaderboardEligible === false && Array.isArray(artifact.missingForLeaderboard));
 const realworldNativeProtocolArtifact = realworldArtifacts.find((artifact) => artifact?.path === "artifacts/realworld-native-competitors.json");
+const realworldOriginalRawOutputSystems = (files.realworldNativeCompetitors.systems ?? [])
+  .filter((system) => system?.evidenceClass === "same-run-command" && Number(system.rawOutputCount ?? 0) >= 15)
+  .map((system) => system.displayName ?? system.system)
+  .filter(Boolean);
+const realworldOriginalRawOutputRuns = Number(files.realworldNativeCompetitors.originalRawOutputRuns ?? 0);
+const realworldJudgeBlockedOriginalRuns = Number(files.realworldNativeCompetitors.judgeBlockedOriginalRuns ?? 0);
 const realworldBlackboxSystems = Array.isArray(files.realworldBlackbox.systems) ? files.realworldBlackbox.systems : [];
 const realworldBlackboxCognibrain = realworldBlackboxSystems.find((system) => system.system === "cognibrain");
 const realworldBlackboxBlocked = realworldBlackboxSystems.filter((system) => system.evidenceClass === "credential-blocked");
@@ -200,11 +213,11 @@ const realworldNativeOriginalRawProof = realworldNativeProtocolArtifact?.classNa
   String(realworldNativeProtocolArtifact?.allowedUse ?? "").includes("Same-manifest original-package raw-output proof") &&
   String(realworldNativeProtocolArtifact?.allowedUse ?? "").includes("market claims remain blocked") &&
   files.realworldProtocol.currentArtifacts?.some?.((artifact) => artifact?.path === "artifacts/realworld-native-competitors.json") &&
-  files.realworldNativeCompetitors.originalRawOutputRuns >= 2 &&
-  files.realworldNativeCompetitors.judgeBlockedOriginalRuns >= 2 &&
+  realworldOriginalRawOutputRuns >= 2 &&
+  realworldJudgeBlockedOriginalRuns >= 2 &&
   files.realworldNativeCompetitors.marketClaimAllowed === false &&
   files.realworldNativeCompetitors.leaderboardEligible === false &&
-  (files.realworldNativeCompetitors.systems ?? []).filter((system) => system?.evidenceClass === "same-run-command" && Number(system.rawOutputCount ?? 0) >= 15).length >= 2;
+  realworldOriginalRawOutputSystems.length >= 2;
 const realworldCentralJudgeRecompute = files.realworldBlackboxSource.includes("central MEMORY_REALWORLD_JUDGE_COMMAND recomputation is required") &&
   files.realworldBlackboxSource.includes("scoreSystem(adapter, manifest, mergedSetup, external.rawOutputs") &&
   files.realworldBlackboxSource.includes("validateJudgeDecisionSemantics") &&
@@ -453,8 +466,9 @@ const checks = [
   check("realworld-native-original-raw-proof", "Real-world protocol surfaces the native original-package raw-output proof as same-manifest diagnostic evidence while blocking score, market and leaderboard claims until the shared LLM/harness judge succeeds.", realworldNativeOriginalRawProof, "fail", {
     artifact: "artifacts/realworld-native-competitors.json",
     protocolArtifact: realworldNativeProtocolArtifact,
-    originalRawOutputRuns: files.realworldNativeCompetitors.originalRawOutputRuns ?? 0,
-    judgeBlockedOriginalRuns: files.realworldNativeCompetitors.judgeBlockedOriginalRuns ?? 0
+    originalRawOutputRuns: realworldOriginalRawOutputRuns,
+    judgeBlockedOriginalRuns: realworldJudgeBlockedOriginalRuns,
+    originalRawOutputSystems: realworldOriginalRawOutputSystems
   }),
   check("realworld-central-judge-recompute", "Real-world external commands cannot self-certify quality metrics; raw outputs must be recomputed by the central LLM/harness judge and semantically inconsistent judge decisions fail closed.", realworldCentralJudgeRecompute, "fail", {
     source: "src/eval/realworldBlackbox.ts",
@@ -669,7 +683,7 @@ const checks = [
     removed: ["animated terminal UI dependency", "src/cli/inkApp.mjs", "generated CLI screenshots"],
     structuredMemoryAdd: "src/cli/memctl/memoryCommands.ts"
   }),
-  check("runtime-resource-footprint", "MCP, lifecycle and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers, status exposes API/dashboard RSS and CPU, and reinstallable benchmark caches have a measured prune path.", files.cli.includes("lightweightMcpServer.mjs") && vscodeHeavyGeneratedExcludes && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cli.includes("function resourcesCommand") && files.cli.includes("WORKSPACE_BENCHMARK_CACHE_TARGETS") && files.cli.includes("user-cache/native-runners") && files.cli.includes("--prune-benchmark-caches") && files.benchmarkCacheRoot.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.benchmarkCacheRoot.includes("Library\", \"Caches\", \"cognibrain") && files.cli.includes("runtime: \"built-node\"") && files.cli.includes("runtime: \"source-node-import-tsx\"") && files.cli.includes("processModel: \"single-process\"") && files.cli.includes("runtime: \"source-tsx-cli\"") && files.cli.includes("COGNIBRAIN_API_RUNTIME") && files.cli.includes("dist/api/server.mjs") && files.cli.includes("entryPoints: [resolve(root, \"src\", \"api\", \"server.ts\")]") && files.packageJson.scripts?.["build:api"] === "node scripts/runtime/build-api.mjs" && files.packageJson.scripts?.build?.includes("npm run build:api") && packageFiles.has("dist/api/") && files.cliTests.includes("status.runtime.api.resources.rssMb") && files.cliTests.includes("status.runtime.api.runtime") && files.cliTests.includes("prunes reinstallable benchmark caches") && files.cliTests.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.cliTests.includes("user-cache/native-runners"), "fail", {
+  check("runtime-resource-footprint", "MCP, lifecycle and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers and TypeScript language-server scans, status exposes API/dashboard RSS and CPU, and reinstallable benchmark caches have a measured prune path.", files.cli.includes("lightweightMcpServer.mjs") && vscodeHeavyGeneratedExcludes && vscodeLowResourceSettings && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cli.includes("function resourcesCommand") && files.cli.includes("WORKSPACE_BENCHMARK_CACHE_TARGETS") && files.cli.includes("user-cache/native-runners") && files.cli.includes("--prune-benchmark-caches") && files.benchmarkCacheRoot.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.benchmarkCacheRoot.includes("Library\", \"Caches\", \"cognibrain") && files.cli.includes("runtime: \"built-node\"") && files.cli.includes("runtime: \"source-node-import-tsx\"") && files.cli.includes("processModel: \"single-process\"") && files.cli.includes("runtime: \"source-tsx-cli\"") && files.cli.includes("COGNIBRAIN_API_RUNTIME") && files.cli.includes("dist/api/server.mjs") && files.cli.includes("entryPoints: [resolve(root, \"src\", \"api\", \"server.ts\")]") && files.packageJson.scripts?.["build:api"] === "node scripts/runtime/build-api.mjs" && files.packageJson.scripts?.build?.includes("npm run build:api") && packageFiles.has("dist/api/") && files.cliTests.includes("status.runtime.api.resources.rssMb") && files.cliTests.includes("status.runtime.api.runtime") && files.cliTests.includes("prunes reinstallable benchmark caches") && files.cliTests.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.cliTests.includes("user-cache/native-runners"), "fail", {
     code: ["bin/lib/cliRuntime.mjs", "bin/lib/harnessRuntime.mjs", "bin/lib/lightweightMcpServer.mjs"],
     checks: [
       "default MCP uses lightweight JS daemon proxy",
@@ -680,6 +694,7 @@ const checks = [
       "runtime state records API runtime and process model for resource measurements",
       "status reports API/dashboard RSS and CPU for live runtime PIDs",
       "VSCode watcher/search excludes generated runtime and benchmark directories",
+      "VSCode TypeScript server avoids generated runtime and benchmark directories",
       "original/native benchmark package caches default to a user cache outside the VSCode workspace",
       "resources CLI measures and prunes reinstallable benchmark caches without deleting memory data"
     ],
@@ -782,6 +797,13 @@ const report = {
     failures: failures.length,
     openGaps: gaps.length,
     realCompetitorRuns: realCompetitors.length,
+    arenaRealCompetitorRuns: realCompetitors.length,
+    realWorldOriginalRawOutputRuns: realworldOriginalRawOutputRuns,
+    realWorldJudgeBlockedOriginalRuns: realworldJudgeBlockedOriginalRuns,
+    realWorldOriginalRawOutputSystems: realworldOriginalRawOutputSystems,
+    realWorldComparativeSmokeEligible: files.realworldNativeCompetitors.comparativeSmokeEligible === true,
+    realWorldLeaderboardEligible: files.realworldNativeCompetitors.leaderboardEligible === true,
+    realWorldMarketClaimAllowed: files.realworldNativeCompetitors.marketClaimAllowed === true,
     apiShapeCompetitors: apiShapeCompetitors.length,
     blockedCompetitors: blockedCompetitors.length,
     nativeConnectorRows: maturityRows.length,

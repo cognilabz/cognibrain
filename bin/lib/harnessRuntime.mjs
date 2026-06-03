@@ -24,6 +24,31 @@ export const HEAVY_GENERATED_EXCLUDE_PATTERNS = Object.freeze([
   "**/test-results/**"
 ]);
 
+export const VS_CODE_TSSERVER_EXCLUDE_DIRECTORIES = Object.freeze([
+  "**/.cognibrain",
+  "**/.next",
+  "**/.turbo",
+  "**/.venv",
+  "**/artifacts",
+  "**/coverage",
+  "**/data/benchmarks",
+  "**/dist",
+  "**/node_modules",
+  "**/operator-ui/.next",
+  "**/output",
+  "**/playwright-report",
+  "**/test-results"
+]);
+
+export const VS_CODE_LOW_RESOURCE_SETTINGS = Object.freeze({
+  "typescript.disableAutomaticTypeAcquisition": true,
+  "typescript.tsserver.maxTsServerMemory": 1024,
+  "typescript.tsserver.experimental.enableProjectDiagnostics": false,
+  "typescript.tsserver.watchOptions": Object.freeze({
+    excludeDirectories: VS_CODE_TSSERVER_EXCLUDE_DIRECTORIES
+  })
+});
+
 export function createHarnessRuntime({ root, launchCwd, rawArgs, readJson, writeJson }) {
 function writeHarnessConfig(target) {
   switch (target) {
@@ -169,8 +194,11 @@ function writeVsCodeResourceSettings() {
   const excludes = Object.fromEntries(HEAVY_GENERATED_EXCLUDE_PATTERNS.map((pattern) => [pattern, true]));
   json["files.watcherExclude"] = { ...(json["files.watcherExclude"] ?? {}), ...excludes };
   json["search.exclude"] = { ...(json["search.exclude"] ?? {}), ...excludes };
+  for (const [key, value] of Object.entries(VS_CODE_LOW_RESOURCE_SETTINGS)) {
+    json[key] = value;
+  }
   writeJson(path, json);
-  console.log(`Wrote VS Code resource excludes: ${path}`);
+  console.log(`Wrote VS Code low-resource settings: ${path}`);
 }
 
 function writeOpenCodeConfig() {

@@ -1,6 +1,6 @@
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { HEAVY_GENERATED_EXCLUDE_PATTERNS } from "./harnessRuntime.mjs";
+import { HEAVY_GENERATED_EXCLUDE_PATTERNS, VS_CODE_LOW_RESOURCE_SETTINGS } from "./harnessRuntime.mjs";
 import { nativeRunnerRoot, originalBenchmarkRoot, vendorBenchmarkRoot } from "../../scripts/benchmark/cache-root.mjs";
 
 const WORKSPACE_BENCHMARK_CACHE_TARGETS = Object.freeze([
@@ -103,6 +103,7 @@ export function formatResourceFootprint(result) {
   }
   if (result.vscode.settingsPresent) {
     lines.push(`VS Code excludes: watcher missing ${result.vscode.missingWatcherExcludes.length}, search missing ${result.vscode.missingSearchExcludes.length}`);
+    lines.push(`VS Code low-resource settings: missing ${result.vscode.missingLowResourceSettings.length}`);
   } else {
     lines.push("VS Code excludes: settings missing; run cognibrain config vscode");
   }
@@ -189,8 +190,25 @@ function vscodeResourceSettingsHealth({ launchCwd, readJson }) {
     settingsPresent: existsSync(settingsPath),
     requiredExcludes: HEAVY_GENERATED_EXCLUDE_PATTERNS,
     missingWatcherExcludes: HEAVY_GENERATED_EXCLUDE_PATTERNS.filter((pattern) => watcher[pattern] !== true),
-    missingSearchExcludes: HEAVY_GENERATED_EXCLUDE_PATTERNS.filter((pattern) => search[pattern] !== true)
+    missingSearchExcludes: HEAVY_GENERATED_EXCLUDE_PATTERNS.filter((pattern) => search[pattern] !== true),
+    requiredLowResourceSettings: VS_CODE_LOW_RESOURCE_SETTINGS,
+    missingLowResourceSettings: missingVsCodeLowResourceSettings(settings)
   };
+}
+
+function missingVsCodeLowResourceSettings(settings) {
+  const missing = [];
+  for (const [key, expected] of Object.entries(VS_CODE_LOW_RESOURCE_SETTINGS)) {
+    const actual = settings[key];
+    if (key === "typescript.tsserver.watchOptions") {
+      const expectedExcludes = expected.excludeDirectories ?? [];
+      const actualExcludes = Array.isArray(actual?.excludeDirectories) ? actual.excludeDirectories : [];
+      if (!expectedExcludes.every((pattern) => actualExcludes.includes(pattern))) missing.push(key);
+    } else if (actual !== expected) {
+      missing.push(key);
+    }
+  }
+  return missing;
 }
 
 function formatBytes(bytes) {

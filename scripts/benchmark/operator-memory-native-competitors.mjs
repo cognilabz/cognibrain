@@ -129,6 +129,7 @@ function writeReport(details) {
       metrics: system.metrics,
       scenarioCount: system.scenarios?.length ?? 0,
       runner: system.runner,
+      runnerContract: system.runnerContract,
       capabilityGaps: system.capabilityGaps
     })),
     summary: details.operatorMemory?.summary ?? null,

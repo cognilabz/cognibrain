@@ -14,6 +14,7 @@ const gaps = [
 if (!apiKey) {
   console.log(JSON.stringify({
     capabilityGaps: ["MEM0_API_KEY is not configured, so no cloud/API same-run was executed", ...gaps],
+    runnerContract: arenaRunnerContract(),
     latencyMs: Date.now() - started,
     evidence: {
       runner: "mem0-cli",
@@ -62,6 +63,7 @@ try {
 
   console.log(JSON.stringify({
     capabilityGaps: gaps,
+    runnerContract: arenaRunnerContract(),
     latencyMs: Date.now() - started,
     evidence: {
       runner: "mem0-cli",
@@ -76,6 +78,7 @@ try {
 } catch (error) {
   console.log(JSON.stringify({
     capabilityGaps: [`Mem0 runner failed: ${error.message}`, ...gaps],
+    runnerContract: arenaRunnerContract(),
     latencyMs: Date.now() - started,
     evidence: {
       runner: "mem0-cli",
@@ -83,6 +86,16 @@ try {
       error: error.message
     }
   }));
+}
+
+function arenaRunnerContract() {
+  return {
+    rawEvidenceOnly: true,
+    selfScoredChecksAllowed: false,
+    scoreableChecksRequireJudge: true,
+    judgeEnv: "MEMORY_ARENA_JUDGE_COMMAND",
+    judgeProtocol: "cognibrain-arena-llm-harness-judge-v1"
+  };
 }
 
 function parseJson(value) {

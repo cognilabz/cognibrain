@@ -46,6 +46,7 @@ try {
   if (get.status !== 0) throw new Error(`gbrain get failed: ${tail(get.stderr || get.stdout)}`);
   console.log(JSON.stringify({
     capabilityGaps: gaps,
+    runnerContract: arenaRunnerContract(),
     latencyMs: Date.now() - started,
     evidence: {
       runner: "gbrain-cli",
@@ -62,6 +63,7 @@ try {
 } catch (error) {
   console.log(JSON.stringify({
     capabilityGaps: [`GBrain runner failed: ${error.message}`, ...gaps],
+    runnerContract: arenaRunnerContract(),
     latencyMs: Date.now() - started,
     evidence: {
       runner: "gbrain-cli",
@@ -71,6 +73,16 @@ try {
       error: error.message
     }
   }));
+}
+
+function arenaRunnerContract() {
+  return {
+    rawEvidenceOnly: true,
+    selfScoredChecksAllowed: false,
+    scoreableChecksRequireJudge: true,
+    judgeEnv: "MEMORY_ARENA_JUDGE_COMMAND",
+    judgeProtocol: "cognibrain-arena-llm-harness-judge-v1"
+  };
 }
 
 function ensureGBrainHome() {

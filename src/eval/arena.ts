@@ -93,6 +93,15 @@ interface ParsedRunnerOutput {
   latencyMs?: number;
   proofLevel?: string;
   adapterMode?: string;
+  runnerContract?: Partial<RunnerContract>;
+}
+
+interface RunnerContract {
+  rawEvidenceOnly: boolean;
+  selfScoredChecksAllowed: boolean;
+  scoreableChecksRequireJudge: boolean;
+  judgeEnv: "MEMORY_ARENA_JUDGE_COMMAND";
+  judgeProtocol: "cognibrain-arena-llm-harness-judge-v1";
 }
 
 interface ArenaJudgeResult {
@@ -123,6 +132,7 @@ interface ArenaSystemResult {
   };
   capabilityGaps: string[];
   scenarios: ArenaScenarioResult[];
+  runnerContract?: RunnerContract & { observedScenarioContracts: number; scenarioCount: number };
   runner?: {
     commandEnv?: string;
     artifactEnv?: string;
@@ -667,6 +677,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
     const runnerProof = normalizeProofLevel(parsed?.proofLevel);
     if (runnerProof) this.proofLevel = runnerProof;
     if (isAdapterMode(parsed?.adapterMode)) this.adapterMode = parsed.adapterMode;
+    const runnerContract = normalizeRunnerContract(parsed?.runnerContract ?? parsed?.evidence?.runnerContract);
     if (runnerProof === "credential-blocked" && parsed?.adapterMode === "blocked-command") {
       const checks = emptyChecks();
       const capabilityGaps = Array.isArray(parsed?.capabilityGaps)
@@ -699,6 +710,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
           timeoutMs: failure.timeoutMs,
           latencyMs: parsed?.latencyMs,
           capabilityGaps,
+          runnerContract,
           evidence: parsed?.evidence,
           stderrTail: failure.stderrTail,
           stdoutTail: failure.stdoutTail,
@@ -727,6 +739,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
         runner: "external-json-command",
         structuredChecks: Boolean(judged),
         runnerSelfChecksIgnored: Boolean(parsed?.checks && !judged),
+        runnerContract,
         judge: judged ? { kind: "llm-harness-command", reason: judged.reason, confidence: judged.confidence, evidence: judged.evidence } : { kind: "missing" },
         latencyMs: parsed?.latencyMs,
         capabilityGaps: parsed?.capabilityGaps,
@@ -811,6 +824,7 @@ function systemResult(adapter: BenchmarkSystemAdapter, scenarios: ArenaScenarioR
     },
     capabilityGaps: adapter.capabilityGaps,
     scenarios,
+    runnerContract: aggregateRunnerContracts(scenarios),
     runner: runnerMetadata(adapter)
   };
 }
@@ -901,6 +915,38 @@ function parseRunnerOutput(stdout: string): ParsedRunnerOutput | undefined {
       return undefined;
     }
   }
+}
+
+function normalizeRunnerContract(value: unknown): RunnerContract | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    value.rawEvidenceOnly !== true ||
+    value.selfScoredChecksAllowed !== false ||
+    value.scoreableChecksRequireJudge !== true ||
+    value.judgeEnv !== "MEMORY_ARENA_JUDGE_COMMAND" ||
+    value.judgeProtocol !== "cognibrain-arena-llm-harness-judge-v1"
+  ) {
+    return undefined;
+  }
+  return {
+    rawEvidenceOnly: true,
+    selfScoredChecksAllowed: false,
+    scoreableChecksRequireJudge: true,
+    judgeEnv: "MEMORY_ARENA_JUDGE_COMMAND",
+    judgeProtocol: "cognibrain-arena-llm-harness-judge-v1"
+  };
+}
+
+function aggregateRunnerContracts(scenarios: ArenaScenarioResult[]): ArenaSystemResult["runnerContract"] {
+  const contracts = scenarios
+    .map((scenario) => normalizeRunnerContract(scenario.evidence.runnerContract))
+    .filter((contract): contract is RunnerContract => Boolean(contract));
+  if (!contracts.length) return undefined;
+  return {
+    ...contracts[0],
+    observedScenarioContracts: contracts.length,
+    scenarioCount: scenarios.length
+  };
 }
 
 function normalizeChecks(value: unknown): ArenaScenarioResult["checks"] | undefined {

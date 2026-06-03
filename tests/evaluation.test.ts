@@ -31,6 +31,9 @@ import { publishArenaReport } from "../src/eval/publishArena";
 import { runBenchmarkArena } from "../src/eval/arena";
 import { CLI_COMMAND_CONTRACTS, MEMCTL_COMMAND_CONTRACTS } from "../src/api/releaseContract";
 
+const heavyBenchmarkTimeout = 90_000;
+const nativeRunnerBenchmarkTimeout = 30_000;
+
 type ConnectorBaseArtifacts = {
   vendorContract: string;
   apiSpecs: string;
@@ -1204,7 +1207,7 @@ process.stdin.on("end", () => {
       if (previousIntelligenceArgs === undefined) delete process.env.MEMORY_INTELLIGENCE_ARGS;
       else process.env.MEMORY_INTELLIGENCE_ARGS = previousIntelligenceArgs;
     }
-  }, 30_000);
+  }, heavyBenchmarkTimeout);
 
   it("covers truth and dream workbench commands in the release contract", () => {
     const cliCommands = new Set(CLI_COMMAND_CONTRACTS.map((contract) => contract.command));
@@ -1285,7 +1288,7 @@ process.stdin.on("end", () => {
     const providerPath = join(dir, "native-provider.mjs");
     writeFileSync(
       providerPath,
-      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const failed = payload.scenario.kind === "connector_failure"; console.log(JSON.stringify({ proofLevel: "same-run-native", adapterMode: "native-command", checks: { currentTruthSelected: true, staleTruthSuppressed: failed, sourceRefRevalidated: false, connectorRefreshAccounted: false, beliefRevisionApplied: false, failureContained: failed }, capabilityGaps: ["fixture native runner has no source-aware dream"], latencyMs: 1, evidence: { scenarioId: payload.scenario.id } })); });`
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const failed = payload.scenario.kind === "connector_failure"; console.log(JSON.stringify({ proofLevel: "same-run-native", adapterMode: "native-command", runnerContract: { rawEvidenceOnly: true, selfScoredChecksAllowed: false, scoreableChecksRequireJudge: true, judgeEnv: "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND", judgeProtocol: "cognibrain-operator-memory-llm-harness-judge-v1" }, checks: { currentTruthSelected: true, staleTruthSuppressed: failed, sourceRefRevalidated: false, connectorRefreshAccounted: false, beliefRevisionApplied: false, failureContained: failed }, capabilityGaps: ["fixture native runner has no source-aware dream"], latencyMs: 1, evidence: { scenarioId: payload.scenario.id } })); });`
     );
     const previous = process.env.MEMORY_OPERATOR_MEMORY_MEM0_COMMAND;
     const previousJudge = process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND;
@@ -1303,6 +1306,19 @@ process.stdin.on("end", () => {
       expect(mem0?.score).toBe(0);
       expect(mem0?.scenarios[0]?.evidence.structuredChecks).toBe(false);
       expect(mem0?.scenarios[0]?.evidence.runnerSelfChecksIgnored).toBe(true);
+      expect(mem0?.scenarios[0]?.evidence.runnerContract).toMatchObject({
+        rawEvidenceOnly: true,
+        selfScoredChecksAllowed: false,
+        scoreableChecksRequireJudge: true,
+        judgeEnv: "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND"
+      });
+      expect(mem0?.runnerContract).toMatchObject({
+        rawEvidenceOnly: true,
+        selfScoredChecksAllowed: false,
+        scoreableChecksRequireJudge: true,
+        observedScenarioContracts: 10,
+        scenarioCount: 10
+      });
       expect(mem0?.scenarios[0]?.evidence.judge).toEqual({ kind: "missing" });
       expect(mem0?.capabilityGaps.join(" ")).toContain("self-scored operator-memory checks");
       expect(report.summary.cognibrainScore).toBeGreaterThan(mem0?.score ?? 0);
@@ -1315,7 +1331,7 @@ process.stdin.on("end", () => {
       if (previousJudge === undefined) delete process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND;
       else process.env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND = previousJudge;
     }
-  });
+  }, nativeRunnerBenchmarkTimeout);
 
   it("scores native operator-memory competitor evidence only after a strict LLM harness judge", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-operator-memory-judged-"));
@@ -1443,7 +1459,7 @@ process.stdin.on("end", () => {
     const runnerPath = join(dir, "runner.mjs");
     writeFileSync(
       runnerPath,
-      `process.stdin.resume(); process.stdin.on("end", () => { console.log(JSON.stringify({ proofLevel: "same-run-native", adapterMode: "native-command", checks: { correctionCarryover: true, repeatedMistakeAvoided: true, procedureRecall: true, patchCorrectness: true, evidenceCompleteness: true, wrongMemorySuppression: true }, capabilityGaps: [], latencyMs: 1, evidence: { retrievedText: "runner claims everything passed" } })); });`
+      `process.stdin.resume(); process.stdin.on("end", () => { console.log(JSON.stringify({ proofLevel: "same-run-native", adapterMode: "native-command", runnerContract: { rawEvidenceOnly: true, selfScoredChecksAllowed: false, scoreableChecksRequireJudge: true, judgeEnv: "MEMORY_ARENA_JUDGE_COMMAND", judgeProtocol: "cognibrain-arena-llm-harness-judge-v1" }, checks: { correctionCarryover: true, repeatedMistakeAvoided: true, procedureRecall: true, patchCorrectness: true, evidenceCompleteness: true, wrongMemorySuppression: true }, capabilityGaps: [], latencyMs: 1, evidence: { retrievedText: "runner claims everything passed" } })); });`
     );
     const previousCommand = process.env.MEMORY_ARENA_MEM0_COMMAND;
     const previousProof = process.env.MEMORY_ARENA_MEM0_PROOF_LEVEL;
@@ -1458,6 +1474,19 @@ process.stdin.on("end", () => {
       expect(mem0.capabilityGaps.join(" ")).toContain("self-scored checks");
       expect(mem0.scenarios[0].evidence.runnerSelfChecksIgnored).toBe(true);
       expect(mem0.scenarios[0].evidence.structuredChecks).toBe(false);
+      expect(mem0.scenarios[0].evidence.runnerContract).toMatchObject({
+        rawEvidenceOnly: true,
+        selfScoredChecksAllowed: false,
+        scoreableChecksRequireJudge: true,
+        judgeEnv: "MEMORY_ARENA_JUDGE_COMMAND"
+      });
+      expect(mem0.runnerContract).toMatchObject({
+        rawEvidenceOnly: true,
+        selfScoredChecksAllowed: false,
+        scoreableChecksRequireJudge: true,
+        observedScenarioContracts: 1,
+        scenarioCount: 1
+      });
     } finally {
       if (previousCommand === undefined) delete process.env.MEMORY_ARENA_MEM0_COMMAND;
       else process.env.MEMORY_ARENA_MEM0_COMMAND = previousCommand;
@@ -2045,6 +2074,26 @@ process.stdin.on("end", () => {
       bestBaseline: expect.any(Number),
       fullScore: expect.any(Number)
     });
+    expect(report.harnessContracts.qualityJudge).toMatchObject({
+      configured: false,
+      requiredForQualityClaim: true,
+      reportLevel: true,
+      semanticJudgeRequired: true,
+      strictJson: true,
+      failClosed: true,
+      forbidsStringRegexScoring: true
+    });
+    expect(report.harnessContracts.patchProposal).toMatchObject({
+      configured: false,
+      hiddenExpectedFieldsProvided: false,
+      visibleRepoMetadataOnly: true,
+      strictJson: true,
+      failClosed: true
+    });
+    expect(report.harnessContracts.ablation).toMatchObject({
+      patchSimulationUsesHiddenExpected: false,
+      hiddenExpectedEvaluatorOnly: true
+    });
     expect(report.diagnostics.weaknesses).toEqual([]);
     expect(new Set(report.scenarios.map((scenario) => scenario.evidence.patchProposal.mode))).toEqual(new Set(["context-derived"]));
     expect(report.methodology.requiredExternalProofForQualityClaim).toContain("ablation baselines may simulate from visible repo metadata only; hidden expected commands and files stay evaluator-only");
@@ -2055,7 +2104,7 @@ process.stdin.on("end", () => {
     expect(report.ablation.cognibrain_full.score).toBeGreaterThan(report.ablation.semantic_only.score);
     expect(report.baselines.map((baseline) => baseline.name)).toContain("cognibrain_without_corrections");
     expect(report.examples).toHaveLength(5);
-  });
+  }, nativeRunnerBenchmarkTimeout);
 
   it("can route CogniCodeBench patch proposals through an external harness without hidden expected fields", () => {
     const previousPatchCommand = process.env.MEMORY_COGNICODEBENCH_PATCH_COMMAND;
@@ -2100,6 +2149,7 @@ process.stdin.on("end", () => {
       expect(report.qualityClaimAllowed).toBe(true);
       expect(report.proof).toBe("llm-harness");
       expect(report.claimBoundary.scorer).toBe("cognicodebench-llm-harness-judge");
+      expect(report.harnessContracts.qualityJudge.configured).toBe(true);
       expect(report.judge).toMatchObject({ kind: "llm-harness-command", status: "passed", score: 0.91 });
       expect(report.marketClaimAllowed).toBe(false);
       expect(report.claimBoundary.claimBlockers.some((item) => item.includes("Market superiority requires"))).toBe(true);

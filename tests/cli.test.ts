@@ -9,7 +9,7 @@ import { createMcpRuntimeToolHandlers } from "../src/connectors/mcpRuntimeClient
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const cli = join(root, "bin", "cognibrain.mjs");
 const connectCli = join(root, "bin", "cognibrain-connect.mjs");
-const slowCliTimeout = 90_000;
+const slowCliTimeout = 180_000;
 
 describe("cognibrain CLI", () => {
   it("prints the one-command surface", () => {

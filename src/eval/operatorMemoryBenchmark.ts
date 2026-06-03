@@ -64,6 +64,15 @@ interface ParsedNativeOutput {
   capabilityGaps?: unknown;
   latencyMs?: unknown;
   evidence?: unknown;
+  runnerContract?: Partial<OperatorMemoryRunnerContract>;
+}
+
+interface OperatorMemoryRunnerContract {
+  rawEvidenceOnly: boolean;
+  selfScoredChecksAllowed: boolean;
+  scoreableChecksRequireJudge: boolean;
+  judgeEnv: "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND";
+  judgeProtocol: "cognibrain-operator-memory-llm-harness-judge-v1";
 }
 
 interface OperatorMemoryJudgeResult {
@@ -85,6 +94,7 @@ interface SystemResult {
   displayName: string;
   proofLevel: ProofLevel;
   adapterMode: "full-local" | "local-baseline" | "native-command" | "cloud-command" | "blocked-command";
+  scenarioCount: number;
   score: number;
   metrics: {
     currentTruthAccuracy: number;
@@ -96,6 +106,7 @@ interface SystemResult {
   };
   scenarios: ScenarioResult[];
   capabilityGaps: string[];
+  runnerContract?: OperatorMemoryRunnerContract & { observedScenarioContracts: number; scenarioCount: number };
   runner?: { commandEnv: string; command?: string };
 }
 
@@ -271,6 +282,7 @@ async function runSystem(system: SystemId, scenarios: OperatorMemoryScenario[]):
     displayName: displayName(system),
     proofLevel: system === "cognibrain-dream" ? "same-run-full" : "local-baseline",
     adapterMode: system === "cognibrain-dream" ? "full-local" : "local-baseline",
+    scenarioCount: results.length,
     score,
     metrics: {
       currentTruthAccuracy: rate(results, "currentTruthSelected"),
@@ -295,6 +307,7 @@ function runNativeSystem(system: SystemId, scenarios: OperatorMemoryScenario[]):
     displayName: displayName(system),
     proofLevel,
     adapterMode: proofLevel === "credential-blocked" ? "blocked-command" : proofLevel === "same-run-cloud-api" ? "cloud-command" : "native-command",
+    scenarioCount: results.length,
     score,
     metrics: {
       currentTruthAccuracy: rate(results, "currentTruthSelected"),
@@ -306,6 +319,7 @@ function runNativeSystem(system: SystemId, scenarios: OperatorMemoryScenario[]):
     },
     scenarios: results,
     capabilityGaps: unique(results.flatMap((result) => result.capabilityGaps ?? [])),
+    runnerContract: aggregateRunnerContracts(results),
     runner: { commandEnv: command.envName, command: command.command }
   };
 }
@@ -336,6 +350,7 @@ function runNativeScenario(system: SystemId, scenario: OperatorMemoryScenario, c
     const judged = judgeNativeScenario(system, scenario, parsed, command);
     const checks = judged?.checks ?? normalizeChecks({});
     const runnerSelfChecksIgnored = Boolean(parsed.checks && !judged);
+    const runnerContract = normalizeRunnerContract(parsed.runnerContract ?? (isRecord(parsed.evidence) ? parsed.evidence.runnerContract : undefined));
     return {
       scenarioId: scenario.id,
       title: scenario.title,
@@ -355,6 +370,7 @@ function runNativeScenario(system: SystemId, scenario: OperatorMemoryScenario, c
         runner: command,
         structuredChecks: Boolean(judged),
         runnerSelfChecksIgnored,
+        runnerContract,
         judge: judged ? { kind: "llm-harness-command", confidence: judged.confidence, reason: judged.reason, evidence: judged.evidence } : { kind: "missing" },
         nativeEvidence: parsed.evidence
       }
@@ -509,6 +525,7 @@ function blockedNativeScenario(system: SystemId, scenario: OperatorMemoryScenari
       system,
       proofLevel: "credential-blocked",
       adapterMode: "blocked-command",
+      runnerContract: operatorMemoryRunnerContract(),
       blocked: true,
       reason,
       ...evidence
@@ -529,6 +546,42 @@ function normalizeChecks(value: unknown): ScenarioChecks {
 }
 
 const OPERATOR_MEMORY_CHECK_KEYS: Array<keyof ScenarioChecks> = ["currentTruthSelected", "staleTruthSuppressed", "sourceRefRevalidated", "connectorRefreshAccounted", "beliefRevisionApplied", "failureContained"];
+
+function operatorMemoryRunnerContract(): OperatorMemoryRunnerContract {
+  return {
+    rawEvidenceOnly: true,
+    selfScoredChecksAllowed: false,
+    scoreableChecksRequireJudge: true,
+    judgeEnv: "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND",
+    judgeProtocol: "cognibrain-operator-memory-llm-harness-judge-v1"
+  };
+}
+
+function normalizeRunnerContract(value: unknown): OperatorMemoryRunnerContract | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    value.rawEvidenceOnly !== true ||
+    value.selfScoredChecksAllowed !== false ||
+    value.scoreableChecksRequireJudge !== true ||
+    value.judgeEnv !== "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND" ||
+    value.judgeProtocol !== "cognibrain-operator-memory-llm-harness-judge-v1"
+  ) {
+    return undefined;
+  }
+  return operatorMemoryRunnerContract();
+}
+
+function aggregateRunnerContracts(results: ScenarioResult[]): SystemResult["runnerContract"] {
+  const contracts = results
+    .map((result) => normalizeRunnerContract(result.evidence.runnerContract))
+    .filter((contract): contract is OperatorMemoryRunnerContract => Boolean(contract));
+  if (!contracts.length) return undefined;
+  return {
+    ...contracts[0],
+    observedScenarioContracts: contracts.length,
+    scenarioCount: results.length
+  };
+}
 
 function normalizeStrictChecks(value: unknown): ScenarioChecks | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -632,6 +685,10 @@ function parseJsonLine(stdout: string): Record<string, unknown> | undefined {
       return undefined;
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function nativeProofLevel(results: ScenarioResult[]): ProofLevel {

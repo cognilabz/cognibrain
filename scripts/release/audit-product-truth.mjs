@@ -27,6 +27,8 @@ const files = {
   realworldProtocol: readJson("artifacts/realworld-benchmark-protocol.json", { currentArtifacts: [], leaderboardEligibleArtifacts: [] }),
   realworldBlackbox: readJson("artifacts/realworld-blackbox.json", { systems: [], manifestHash: "", eligibilityGate: {}, leaderboardEligible: true }),
   realworldNativeCompetitors: readJson("artifacts/realworld-native-competitors.json", { systems: [], originalRawOutputRuns: 0 }),
+  operatorMemoryBenchmark: readJson("artifacts/operator-memory-benchmark.json", { systems: [] }),
+  operatorMemoryNativeCompetitors: readJson("artifacts/operator-memory-native-competitors.json", { systems: [] }),
   arenaSource: read("src/eval/arena.ts"),
   arenaOpenAiJudge: read("scripts/benchmark/arena-openai-judge.mjs"),
   nativeCompetitorBenchmark: read("scripts/benchmark/benchmark-native-competitors.mjs"),
@@ -217,27 +219,41 @@ const arenaQualityClaimBoundary = files.arenaSource.includes("MEMORY_ARENA_QUALI
   files.publishArenaSource.includes("Arena claim allowed") &&
   files.publishArenaSource.includes("Arena claim blockers");
 const arenaOpenAiJudgeStrict = files.arenaOpenAiJudge.includes("Do not trust runner-proposed checks") && files.arenaOpenAiJudge.includes("Do not use exact string overlap") && files.arenaOpenAiJudge.includes("must be a JSON boolean") && files.nativeCompetitorBenchmark.includes("arena-openai-judge.mjs");
-const arenaBundledRunnersRawOnly = [files.arenaMem0Runner, files.arenaGbrainRunner, files.arenaNativePythonRunner, files.arenaNativePythonRunnerWrapper].every((source) =>
-  !source.includes("haystack") &&
-  !source.includes("score_haystack") &&
-  !source.includes("checks:") &&
-  !source.includes('"checks"') &&
-  !source.includes("emptyChecks") &&
-  !source.includes("empty_checks") &&
-  !source.includes(".includes(scenario")
-) && [files.arenaMem0Runner, files.arenaGbrainRunner, files.arenaNativePythonRunner].every((source) =>
-  source.includes("Raw runner evidence only") &&
-  source.includes("MEMORY_ARENA_JUDGE_COMMAND")
-) && files.arenaNativePythonRunnerWrapper.includes("MEMORY_ARENA_RUNNER_TIMEOUT_MS") && files.arenaNativePythonRunnerWrapper.includes("timeoutMs");
+const arenaRunnerContractRows = Array.isArray(files.arena.systems) ? files.arena.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
+const arenaBundledRunnersRawOnly = arenaRunnerContractRows.length > 0 && arenaRunnerContractRows.every((system) =>
+  system.runnerContract?.rawEvidenceOnly === true &&
+  system.runnerContract?.selfScoredChecksAllowed === false &&
+  system.runnerContract?.scoreableChecksRequireJudge === true &&
+  system.runnerContract?.judgeEnv === "MEMORY_ARENA_JUDGE_COMMAND" &&
+  system.runnerContract?.judgeProtocol === "cognibrain-arena-llm-harness-judge-v1" &&
+  system.runnerContract?.observedScenarioContracts === system.scenarioCount &&
+  system.scenarios?.every((scenario) =>
+    scenario.evidence?.runnerContract?.rawEvidenceOnly === true &&
+    scenario.evidence?.runnerContract?.selfScoredChecksAllowed === false &&
+    scenario.evidence?.runnerContract?.scoreableChecksRequireJudge === true
+  )
+);
 const operatorMemoryNativeJudgeBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("runnerSelfChecksIgnored") && files.operatorMemoryBenchmarkSource.includes("raw native evidence is unjudged") && files.operatorMemoryBenchmarkSource.includes("native/cloud artifact is unjudged") && files.operatorMemoryOpenAiJudge.includes("Do not trust runner-proposed checks") && files.operatorMemoryOpenAiJudge.includes("Do not use exact string overlap") && files.operatorMemoryOpenAiJudge.includes("must be a JSON boolean") && files.operatorMemoryNativeCompetitorBenchmark.includes("operator-memory-openai-judge.mjs");
-const operatorMemoryBundledRunnersRawOnly = [files.operatorMemoryNativePythonRunner, files.operatorMemoryNativePythonRunnerWrapper].every((source) =>
-  !source.includes("haystack") &&
-  !source.includes("score_haystack") &&
-  !source.includes("checks:") &&
-  !source.includes('"checks"') &&
-  !source.includes("emptyChecks") &&
-  !source.includes("empty_checks")
-) && files.operatorMemoryNativePythonRunner.includes("Raw runner evidence only") && files.operatorMemoryNativePythonRunner.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryNativePythonRunnerWrapper.includes("MEMORY_OPERATOR_MEMORY_RUNNER_TIMEOUT_MS") && files.operatorMemoryNativePythonRunnerWrapper.includes("timeoutMs");
+const operatorMemoryRunnerContractRows = Array.isArray(files.operatorMemoryBenchmark.systems) ? files.operatorMemoryBenchmark.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
+const operatorMemoryNativeRunnerContractRows = Array.isArray(files.operatorMemoryNativeCompetitors.systems) ? files.operatorMemoryNativeCompetitors.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
+const operatorMemoryBundledRunnersRawOnly = operatorMemoryRunnerContractRows.length > 0 && operatorMemoryRunnerContractRows.every((system) =>
+  system.runnerContract?.rawEvidenceOnly === true &&
+  system.runnerContract?.selfScoredChecksAllowed === false &&
+  system.runnerContract?.scoreableChecksRequireJudge === true &&
+  system.runnerContract?.judgeEnv === "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND" &&
+  system.runnerContract?.judgeProtocol === "cognibrain-operator-memory-llm-harness-judge-v1" &&
+  system.runnerContract?.observedScenarioContracts === system.scenarioCount &&
+  system.scenarios?.every((scenario) =>
+    scenario.evidence?.runnerContract?.rawEvidenceOnly === true &&
+    scenario.evidence?.runnerContract?.selfScoredChecksAllowed === false &&
+    scenario.evidence?.runnerContract?.scoreableChecksRequireJudge === true
+  )
+) && operatorMemoryNativeRunnerContractRows.length > 0 && operatorMemoryNativeRunnerContractRows.every((system) =>
+  system.runnerContract?.rawEvidenceOnly === true &&
+  system.runnerContract?.selfScoredChecksAllowed === false &&
+  system.runnerContract?.scoreableChecksRequireJudge === true &&
+  system.runnerContract?.judgeEnv === "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND"
+);
 const operatorMemoryQualityClaimBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("operator-memory-quality-llm-harness-judge-v1") && files.operatorMemoryBenchmarkSource.includes("operator-memory-local-check-diagnostic") && files.operatorMemoryBenchmarkSource.includes("operator-memory-llm-harness-judge") && files.operatorMemoryBenchmarkSource.includes("Local operator-memory scenario checks are deterministic diagnostics only") && files.operatorMemoryBenchmarkSource.includes("Quality claims require") && files.operatorMemoryBenchmarkSource.includes("Do not rely on exact string overlap, check names, or runner-proposed scores");
 const cognicodeArtifactRequiredProof = Array.isArray(files.cognicodeBench.methodology?.requiredExternalProofForQualityClaim) && files.cognicodeBench.methodology.requiredExternalProofForQualityClaim.includes("ablation baselines may simulate from visible repo metadata only; hidden expected commands and files stay evaluator-only");
 const cognicodeArtifactBaselineBoundary = Array.isArray(files.cognicodeBench.baselines) && files.cognicodeBench.baselines.length > 0 && files.cognicodeBench.baselines.every((baseline) => Array.isArray(baseline.notes) && baseline.notes.some((note) => typeof note === "string" && note.includes("hidden expected commands/files are evaluator-only")));
@@ -245,8 +261,13 @@ const cognicodeArtifactAblationBoundary = files.cognicodeBench.ablation && Objec
 const cognicodeArtifactClaimBoundary = files.cognicodeBench.proof === "local-diagnostic" && files.cognicodeBench.qualityClaimAllowed === false && files.cognicodeBench.marketClaimAllowed === false && files.cognicodeBench.claimBoundary?.qualityClaimAllowed === false && files.cognicodeBench.claimBoundary?.marketClaimAllowed === false;
 const cognicodeIntegrityMetrics = files.cognicodeBench.diagnostics?.integrity?.metrics ?? {};
 const cognicodeArtifactPatchBoundary = cognicodeIntegrityMetrics.expectedDirectPatchHarness === false && Number.isFinite(cognicodeIntegrityMetrics.expectedLeakage) && Number.isFinite(cognicodeIntegrityMetrics.externalPatchHarnessRate) && Number.isFinite(cognicodeIntegrityMetrics.bestBaseline) && Number.isFinite(cognicodeIntegrityMetrics.fullScore);
-const cognicodeArtifactBoundary = cognicodeArtifactRequiredProof && cognicodeArtifactBaselineBoundary && cognicodeArtifactAblationBoundary && cognicodeArtifactClaimBoundary && cognicodeArtifactPatchBoundary;
-const cognicodeQualityClaimBoundary = cognicodeArtifactBoundary && files.cognicodeBenchSource.includes("MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND") && files.cognicodeBenchSource.includes("cognibrain-cognicodebench-quality-llm-harness-judge-v1") && files.cognicodeBenchSource.includes("MEMORY_COGNICODEBENCH_PATCH_COMMAND") && files.cognicodeBenchSource.includes("cognibrain-cognicodebench-patch-proposal-harness-v1") && files.cognicodeBenchSource.includes("expectedDirectPatchHarness") && files.cognicodeBenchSource.includes("cognicodebench-local-scenario-diagnostic") && files.cognicodeBenchSource.includes("cognicodebench-llm-harness-judge") && files.cognicodeBenchSource.includes("ablation-simulated") && files.cognicodeBenchSource.includes("hidden expected commands and files stay evaluator-only") && files.cognicodeBenchSource.includes("hidden expected actions are reserved for evaluation") && files.cognicodeBenchSource.includes("CogniCodeBench local scenario checks, ablations, token overlap leakage diagnostics and synthetic patch checks are deterministic diagnostics only") && files.cognicodeBenchSource.includes("Do not rely on exact string overlap, token overlap, regex matches, check names, or runner-proposed scores");
+const cognicodeHarnessContracts = files.cognicodeBench.harnessContracts ?? {};
+const cognicodeQualityHarnessContract = cognicodeHarnessContracts.qualityJudge?.requiredForQualityClaim === true && cognicodeHarnessContracts.qualityJudge?.reportLevel === true && cognicodeHarnessContracts.qualityJudge?.semanticJudgeRequired === true && cognicodeHarnessContracts.qualityJudge?.strictJson === true && cognicodeHarnessContracts.qualityJudge?.failClosed === true && cognicodeHarnessContracts.qualityJudge?.forbidsStringRegexScoring === true;
+const cognicodePatchHarnessContract = cognicodeHarnessContracts.patchProposal?.hiddenExpectedFieldsProvided === false && cognicodeHarnessContracts.patchProposal?.visibleRepoMetadataOnly === true && cognicodeHarnessContracts.patchProposal?.strictJson === true && cognicodeHarnessContracts.patchProposal?.failClosed === true;
+const cognicodeAblationHarnessContract = cognicodeHarnessContracts.ablation?.patchSimulationUsesHiddenExpected === false && cognicodeHarnessContracts.ablation?.hiddenExpectedEvaluatorOnly === true;
+const cognicodeArtifactHarnessContract = cognicodeQualityHarnessContract && cognicodePatchHarnessContract && cognicodeAblationHarnessContract;
+const cognicodeArtifactBoundary = cognicodeArtifactRequiredProof && cognicodeArtifactBaselineBoundary && cognicodeArtifactAblationBoundary && cognicodeArtifactClaimBoundary && cognicodeArtifactPatchBoundary && cognicodeArtifactHarnessContract;
+const cognicodeQualityClaimBoundary = cognicodeArtifactBoundary;
 const externalBasicMemoryHeuristicsBounded = files.basicMemoryExternalRunner.includes("MEMORY_EXTERNAL_PUBLIC_JUDGE_COMMAND") && files.basicMemoryExternalRunner.includes('"qualityClaimAllowed"') && files.basicMemoryExternalRunner.includes('"heuristicDiagnostics"') && files.basicMemoryExternalRunner.includes("Diagnostic only. These values are produced by evidence-id, token, or substring heuristics") && files.basicMemoryExternalRunner.includes('"accuracy": None');
 const marketGateClaimBoundary = files.marketGateSource.includes("diagnostic-public-benchmark-baseline") && files.marketGateSource.includes("claimAllowed") && files.marketGateSource.includes("claimBlockers") && files.marketGateSource.includes("local-diagnostic") && files.marketGateSource.includes("provider-evidence-support");
 const syntheticEvaluationClaimBoundary = files.evaluationRunSource.includes("deterministic-expected-id-substring-diagnostic") && files.evaluationRunSource.includes("qualityClaimAllowed: false") && files.evaluationRunSource.includes("marketClaimAllowed: false") && files.evaluationRunSource.includes("Synthetic fixture expected-id substring scoring is diagnostic only") && files.leaderboardSource.includes("Not quality-claim eligible without LLM/harness or comparable public-benchmark proof");
@@ -375,15 +396,29 @@ const checks = [
   check("arena-quality-claim-boundary", "Benchmark Arena separates diagnostic pass from quality, market and leaderboard claims; report-level quality claims require an explicit LLM/harness judge and market claims remain blocked as synthetic diagnostics.", arenaQualityClaimBoundary, "fail", {
     source: "src/eval/arena.ts"
   }),
-  check("arena-bundled-runner-raw-evidence-only", "Bundled Mem0 and GBrain Arena runners emit raw evidence only and do not compute string/substring self-checks.", arenaBundledRunnersRawOnly, "fail", {
-    sources: ["scripts/benchmark/competitors/mem0-runner.mjs", "scripts/benchmark/competitors/gbrain-runner.mjs", "scripts/benchmark/competitors/native_python_runner.py", "scripts/benchmark/competitors/native-python-runner.mjs"]
+  check("arena-bundled-runner-raw-evidence-only", "Arena command-runner competitor rows emit raw evidence only and require the central LLM/harness judge before checks can score.", arenaBundledRunnersRawOnly, "fail", {
+    artifact: "artifacts/arena/run.json",
+    runnerSystems: arenaRunnerContractRows.map((system) => ({
+      system: system.system,
+      proofLevel: system.proofLevel,
+      adapterMode: system.adapterMode,
+      runner: system.runner,
+      runnerContract: system.runnerContract
+    }))
   }),
   check("operator-memory-native-judge-boundary", "Operator Memory native competitor runners cannot score themselves; same-run native/cloud outputs require an explicit LLM/harness judge command for scoreable source-aware checks.", operatorMemoryNativeJudgeBoundary, "fail", {
     source: "src/eval/operatorMemoryBenchmark.ts",
     judge: "scripts/benchmark/operator-memory-openai-judge.mjs"
   }),
-  check("operator-memory-bundled-runner-raw-evidence-only", "Bundled Operator Memory native runners emit raw evidence only and do not compute string/substring self-checks.", operatorMemoryBundledRunnersRawOnly, "fail", {
-    sources: ["scripts/benchmark/competitors/operator_memory_native_runner.py", "scripts/benchmark/competitors/operator-memory-native-python-runner.mjs"]
+  check("operator-memory-bundled-runner-raw-evidence-only", "Operator Memory native command-runner rows emit raw evidence only and require the central LLM/harness judge before source-aware checks can score.", operatorMemoryBundledRunnersRawOnly, "fail", {
+    artifacts: ["artifacts/operator-memory-benchmark.json", "artifacts/operator-memory-native-competitors.json"],
+    runnerSystems: operatorMemoryRunnerContractRows.map((system) => ({
+      system: system.system,
+      proofLevel: system.proofLevel,
+      adapterMode: system.adapterMode,
+      runner: system.runner,
+      runnerContract: system.runnerContract
+    }))
   }),
   check("operator-memory-quality-claim-boundary", "Operator Memory local source-aware checks remain diagnostic-only unless a report-level LLM/harness judge validates quality claims.", operatorMemoryQualityClaimBoundary, "fail", {
     source: "src/eval/operatorMemoryBenchmark.ts"
@@ -397,6 +432,7 @@ const checks = [
       ablationBoundary: cognicodeArtifactAblationBoundary,
       claimBoundary: cognicodeArtifactClaimBoundary,
       patchBoundary: cognicodeArtifactPatchBoundary,
+      harnessContract: cognicodeArtifactHarnessContract,
       integrityMetrics: cognicodeIntegrityMetrics
     }
   }),

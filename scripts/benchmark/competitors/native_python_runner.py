@@ -42,6 +42,7 @@ def main() -> int:
             "proofLevel": "credential-blocked",
             "adapterMode": "blocked-command",
             "capabilityGaps": [f"{args.system} native runner failed: {exc}"],
+            "runnerContract": arena_runner_contract(),
             "latencyMs": elapsed_ms(started),
             "evidence": {
                 "runner": "native-python-runner",
@@ -88,6 +89,7 @@ def run_mem0(scenario: dict[str, Any], started: float) -> dict[str, Any]:
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
+        "runnerContract": arena_runner_contract(),
         "capabilityGaps": [
             "Mem0 OSS run used real mem0ai add/search with infer=false and local Qdrant/FastEmbed, not Mem0 cloud",
             "Mem0 does not expose Cognibrain's typed pre-tool action guard in this adapter",
@@ -121,6 +123,7 @@ def run_langmem(scenario: dict[str, Any], started: float) -> dict[str, Any]:
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
+        "runnerContract": arena_runner_contract(),
         "capabilityGaps": [
             "LangMem run used real create_manage_memory_tool/create_search_memory_tool with LangGraph InMemoryStore",
             "LangMem does not expose Cognibrain's typed pre-tool action guard in this adapter",
@@ -176,6 +179,7 @@ def run_basicmemory(scenario: dict[str, Any], started: float) -> dict[str, Any]:
             "proofLevel": "credential-blocked",
             "adapterMode": "blocked-command",
             "capabilityGaps": ["Basic Memory CLI runner failed before completing write/search/context"],
+            "runnerContract": arena_runner_contract(),
             "latencyMs": elapsed_ms(started),
             "evidence": {
                 "runner": "basic-memory-cli",
@@ -187,6 +191,7 @@ def run_basicmemory(scenario: dict[str, Any], started: float) -> dict[str, Any]:
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
+        "runnerContract": arena_runner_contract(),
         "capabilityGaps": [
             "Basic Memory run used the real local CLI/MCP/API path with an isolated SQLite-backed project",
             "Basic Memory stores durable Markdown notes and graph context, but this adapter found no typed pre-tool action guard",
@@ -244,6 +249,7 @@ async def run_graphiti(scenario: dict[str, Any], started: float, system: str) ->
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
+        "runnerContract": arena_runner_contract(),
         "capabilityGaps": [
             "Graphiti run used real graphiti-core with local Kuzu driver",
             "Graphiti does not expose Cognibrain's typed pre-tool action guard in this adapter",
@@ -283,6 +289,7 @@ async def run_cognee(scenario: dict[str, Any], started: float) -> dict[str, Any]
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
+        "runnerContract": arena_runner_contract(),
         "capabilityGaps": [
             "Cognee run used real remember/recall API with operator-supplied LLM credentials",
             "Cognee does not expose Cognibrain's typed pre-tool action guard in this adapter",
@@ -344,6 +351,7 @@ def blocked(system: str, started: float, reason: str) -> dict[str, Any]:
         "proofLevel": "credential-blocked",
         "adapterMode": "blocked-command",
         "capabilityGaps": [reason],
+        "runnerContract": arena_runner_contract(),
         "latencyMs": elapsed_ms(started),
         "evidence": {
             "runner": "native-python-runner",
@@ -352,6 +360,16 @@ def blocked(system: str, started: float, reason: str) -> dict[str, Any]:
             "reason": reason,
             "packages": package_versions(system),
         },
+    }
+
+
+def arena_runner_contract() -> dict[str, Any]:
+    return {
+        "rawEvidenceOnly": True,
+        "selfScoredChecksAllowed": False,
+        "scoreableChecksRequireJudge": True,
+        "judgeEnv": "MEMORY_ARENA_JUDGE_COMMAND",
+        "judgeProtocol": "cognibrain-arena-llm-harness-judge-v1",
     }
 
 

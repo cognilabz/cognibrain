@@ -37,6 +37,7 @@ def main() -> int:
             "proofLevel": "credential-blocked",
             "adapterMode": "blocked-command",
             "capabilityGaps": [f"{args.system} operator-memory native runner failed: {exc}"],
+            "runnerContract": operator_memory_runner_contract(),
             "latencyMs": elapsed_ms(started),
             "evidence": {
                 "runner": "operator-memory-native-python-runner",
@@ -80,6 +81,7 @@ def run_mem0(scenario: dict[str, Any], started: float) -> dict[str, Any]:
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
+        "runnerContract": operator_memory_runner_contract(),
         "capabilityGaps": [
             "Mem0 OSS run used real mem0ai add/search with infer=false and local Qdrant/FastEmbed",
             "Mem0 retrieved memories but did not run source-aware Dream, sourceRef revalidation or connector failure accounting",
@@ -112,6 +114,7 @@ def run_langmem(scenario: dict[str, Any], started: float) -> dict[str, Any]:
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
+        "runnerContract": operator_memory_runner_contract(),
         "capabilityGaps": [
             "LangMem run used real create_manage_memory_tool/create_search_memory_tool with LangGraph InMemoryStore",
             "LangMem retrieved memories but did not run source-aware Dream, sourceRef revalidation or connector failure accounting",
@@ -168,6 +171,7 @@ async def run_graphiti(scenario: dict[str, Any], started: float, system: str) ->
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
+        "runnerContract": operator_memory_runner_contract(),
         "capabilityGaps": [
             "Graphiti run used real graphiti-core with local Kuzu driver",
             "Graphiti retrieved graph memories but did not run Cognibrain source-aware Dream or connector failure accounting in this adapter",
@@ -201,6 +205,7 @@ async def run_cognee(scenario: dict[str, Any], started: float) -> dict[str, Any]
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
+        "runnerContract": operator_memory_runner_contract(),
         "capabilityGaps": [
             "Cognee run used real remember/recall API with operator-supplied LLM credentials",
             "Cognee retrieved knowledge but did not run Cognibrain source-aware Dream or connector failure accounting in this adapter",
@@ -242,6 +247,7 @@ def blocked(system: str, started: float, reason: str) -> dict[str, Any]:
         "proofLevel": "credential-blocked",
         "adapterMode": "blocked-command",
         "capabilityGaps": [reason],
+        "runnerContract": operator_memory_runner_contract(),
         "latencyMs": elapsed_ms(started),
         "evidence": {
             "runner": "operator-memory-native-python-runner",
@@ -250,6 +256,16 @@ def blocked(system: str, started: float, reason: str) -> dict[str, Any]:
             "reason": reason,
             "packages": package_versions(system),
         },
+    }
+
+
+def operator_memory_runner_contract() -> dict[str, Any]:
+    return {
+        "rawEvidenceOnly": True,
+        "selfScoredChecksAllowed": False,
+        "scoreableChecksRequireJudge": True,
+        "judgeEnv": "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND",
+        "judgeProtocol": "cognibrain-operator-memory-llm-harness-judge-v1",
     }
 
 

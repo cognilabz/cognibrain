@@ -153,6 +153,33 @@ export interface CogniCodeBenchReport {
     marketClaimAllowed: boolean;
     claimBlockers: string[];
   };
+  harnessContracts: {
+    qualityJudge: {
+      configured: boolean;
+      requiredForQualityClaim: true;
+      reportLevel: true;
+      semanticJudgeRequired: true;
+      strictJson: true;
+      failClosed: true;
+      forbidsStringRegexScoring: true;
+      protocol: "cognibrain-cognicodebench-quality-llm-harness-judge-v1";
+      envVar: "MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND";
+    };
+    patchProposal: {
+      configured: boolean;
+      hiddenExpectedFieldsProvided: false;
+      visibleRepoMetadataOnly: true;
+      strictJson: true;
+      failClosed: true;
+      protocol: "cognibrain-cognicodebench-patch-proposal-harness-v1";
+      envVar: "MEMORY_COGNICODEBENCH_PATCH_COMMAND";
+    };
+    ablation: {
+      patchSimulationUsesHiddenExpected: false;
+      hiddenExpectedEvaluatorOnly: true;
+      simulatedPatchSource: "visible-repo-metadata-and-recalled-memory-kinds";
+    };
+  };
   judge: {
     kind: "missing" | "llm-harness-command";
     status: "missing" | "passed" | "failed";
@@ -202,7 +229,6 @@ export interface CogniCodeBenchReport {
         bestBaseline: number;
         fullScore: number;
       };
-      signals: string[];
     };
     weaknesses: Array<{ area: string; severity: "low" | "medium" | "high"; evidence: string; recommendation: string }>;
   };
@@ -418,6 +444,33 @@ export function runCogniCodeBench(options: CogniCodeScenarioFactoryOptions & { o
       qualityClaimAllowed,
       marketClaimAllowed: false,
       claimBlockers
+    },
+    harnessContracts: {
+      qualityJudge: {
+        configured: Boolean(process.env.MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND),
+        requiredForQualityClaim: true,
+        reportLevel: true,
+        semanticJudgeRequired: true,
+        strictJson: true,
+        failClosed: true,
+        forbidsStringRegexScoring: true,
+        protocol: "cognibrain-cognicodebench-quality-llm-harness-judge-v1",
+        envVar: "MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND"
+      },
+      patchProposal: {
+        configured: Boolean(process.env.MEMORY_COGNICODEBENCH_PATCH_COMMAND),
+        hiddenExpectedFieldsProvided: false,
+        visibleRepoMetadataOnly: true,
+        strictJson: true,
+        failClosed: true,
+        protocol: "cognibrain-cognicodebench-patch-proposal-harness-v1",
+        envVar: "MEMORY_COGNICODEBENCH_PATCH_COMMAND"
+      },
+      ablation: {
+        patchSimulationUsesHiddenExpected: false,
+        hiddenExpectedEvaluatorOnly: true,
+        simulatedPatchSource: "visible-repo-metadata-and-recalled-memory-kinds"
+      }
     },
     judge: qualityJudge
       ? {
@@ -1069,14 +1122,7 @@ function benchmarkDiagnostics(
         externalPatchHarnessRate: round(externalPatchHarnessRate),
         bestBaseline: round(bestBaseline),
         fullScore: round(fullScore)
-      },
-      signals: [
-        `expectedLeakage=${round(expectedLeakage)}`,
-        `expectedDirectPatchHarness=${Boolean(expectedDirectPatchHarness)}`,
-        `externalPatchHarnessRate=${round(externalPatchHarnessRate)}`,
-        `bestBaseline=${round(bestBaseline)}`,
-        `fullScore=${round(fullScore)}`
-      ]
+      }
     },
     weaknesses
   };

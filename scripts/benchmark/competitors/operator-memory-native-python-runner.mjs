@@ -49,6 +49,7 @@ console.log(JSON.stringify({
   proofLevel: "credential-blocked",
   adapterMode: "blocked-command",
   capabilityGaps: [`${system} operator-memory native runner failed before producing JSON`],
+  runnerContract: operatorMemoryRunnerContract(),
   latencyMs: Date.now() - started,
   evidence: {
     runner: "operator-memory-native-python-runner",
@@ -67,6 +68,7 @@ function printBlocked(blockedSystem, reason) {
     proofLevel: "credential-blocked",
     adapterMode: "blocked-command",
     capabilityGaps: [reason],
+    runnerContract: operatorMemoryRunnerContract(),
     latencyMs: Date.now() - started,
     evidence: {
       runner: "operator-memory-native-python-runner",
@@ -75,6 +77,16 @@ function printBlocked(blockedSystem, reason) {
       reason
     }
   }));
+}
+
+function operatorMemoryRunnerContract() {
+  return {
+    rawEvidenceOnly: true,
+    selfScoredChecksAllowed: false,
+    scoreableChecksRequireJudge: true,
+    judgeEnv: "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND",
+    judgeProtocol: "cognibrain-operator-memory-llm-harness-judge-v1"
+  };
 }
 
 function optionValue(name) {

@@ -79,6 +79,53 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
     testsCoreIntegrations: read("tests/core-integrations.test.ts"),
     testsEvaluation: read("tests/evaluation.test.ts")
   };
+  const cognicodeArtifact = readJson("artifacts/cognicodebench/run.json");
+  const arenaArtifact = readJson("artifacts/arena/run.json");
+  const operatorMemoryArtifact = readJson("artifacts/operator-memory-benchmark.json");
+  const operatorMemoryNativeArtifact = readJson("artifacts/operator-memory-native-competitors.json");
+  const cognicodeHarnessContracts = cognicodeArtifact.harnessContracts ?? {};
+  const cognicodeIntegrityMetrics = cognicodeArtifact.diagnostics?.integrity?.metrics ?? {};
+  const cognicodeArtifactBoundary = cognicodeArtifact.qualityClaimAllowed === false &&
+    cognicodeArtifact.marketClaimAllowed === false &&
+    cognicodeArtifact.claimBoundary?.qualityClaimAllowed === false &&
+    cognicodeArtifact.claimBoundary?.marketClaimAllowed === false &&
+    cognicodeHarnessContracts.qualityJudge?.requiredForQualityClaim === true &&
+    cognicodeHarnessContracts.qualityJudge?.reportLevel === true &&
+    cognicodeHarnessContracts.qualityJudge?.semanticJudgeRequired === true &&
+    cognicodeHarnessContracts.qualityJudge?.strictJson === true &&
+    cognicodeHarnessContracts.qualityJudge?.failClosed === true &&
+    cognicodeHarnessContracts.qualityJudge?.forbidsStringRegexScoring === true &&
+    cognicodeHarnessContracts.patchProposal?.hiddenExpectedFieldsProvided === false &&
+    cognicodeHarnessContracts.patchProposal?.visibleRepoMetadataOnly === true &&
+    cognicodeHarnessContracts.patchProposal?.strictJson === true &&
+    cognicodeHarnessContracts.patchProposal?.failClosed === true &&
+    cognicodeHarnessContracts.ablation?.patchSimulationUsesHiddenExpected === false &&
+    cognicodeHarnessContracts.ablation?.hiddenExpectedEvaluatorOnly === true &&
+    cognicodeIntegrityMetrics.expectedDirectPatchHarness === false;
+  const arenaRunnerContractRows = Array.isArray(arenaArtifact.systems) ? arenaArtifact.systems.filter((system: any) => system?.runner?.commandEnv || system?.runnerContract) : [];
+  const arenaRunnerContractBoundary = arenaRunnerContractRows.length > 0 && arenaRunnerContractRows.every((system: any) =>
+    system.runnerContract?.rawEvidenceOnly === true &&
+    system.runnerContract?.selfScoredChecksAllowed === false &&
+    system.runnerContract?.scoreableChecksRequireJudge === true &&
+    system.runnerContract?.judgeEnv === "MEMORY_ARENA_JUDGE_COMMAND" &&
+    system.runnerContract?.judgeProtocol === "cognibrain-arena-llm-harness-judge-v1" &&
+    system.runnerContract?.observedScenarioContracts === system.scenarioCount
+  );
+  const operatorMemoryRunnerContractRows = Array.isArray(operatorMemoryArtifact.systems) ? operatorMemoryArtifact.systems.filter((system: any) => system?.runner?.commandEnv || system?.runnerContract) : [];
+  const operatorMemoryNativeRunnerContractRows = Array.isArray(operatorMemoryNativeArtifact.systems) ? operatorMemoryNativeArtifact.systems.filter((system: any) => system?.runner?.commandEnv || system?.runnerContract) : [];
+  const operatorMemoryRunnerContractBoundary = operatorMemoryRunnerContractRows.length > 0 && operatorMemoryRunnerContractRows.every((system: any) =>
+    system.runnerContract?.rawEvidenceOnly === true &&
+    system.runnerContract?.selfScoredChecksAllowed === false &&
+    system.runnerContract?.scoreableChecksRequireJudge === true &&
+    system.runnerContract?.judgeEnv === "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND" &&
+    system.runnerContract?.judgeProtocol === "cognibrain-operator-memory-llm-harness-judge-v1" &&
+    system.runnerContract?.observedScenarioContracts === system.scenarioCount
+  ) && operatorMemoryNativeRunnerContractRows.length > 0 && operatorMemoryNativeRunnerContractRows.every((system: any) =>
+    system.runnerContract?.rawEvidenceOnly === true &&
+    system.runnerContract?.selfScoredChecksAllowed === false &&
+    system.runnerContract?.scoreableChecksRequireJudge === true &&
+    system.runnerContract?.judgeEnv === "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND"
+  );
   const all = Object.values(files).join("\n");
   const checks: PlanGapCheck[] = [
     check("storage.async-postgres-pool", "storage", "Postgres production repository uses a long-lived pg.Pool, prepared statements, migrations and RLS.", files, [
@@ -186,30 +233,40 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
       ["package.json", "\"benchmark:release\""],
       ["tests/evaluation.test.ts", "generateBenchmarkRelease"]
     ]),
-    check("benchmarks.cognicode-claim-boundary", "benchmarks", "CogniCodeBench keeps local scenario and ablation scores diagnostic-only unless an LLM/harness report judge validates quality, and ablation patch simulations keep hidden expected commands/files evaluator-only.", files, [
-      ["src/eval/cognicodeBench.ts", "MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND"],
-      ["src/eval/cognicodeBench.ts", "cognibrain-cognicodebench-quality-llm-harness-judge-v1"],
-      ["src/eval/cognicodeBench.ts", "MEMORY_COGNICODEBENCH_PATCH_COMMAND"],
-      ["src/eval/cognicodeBench.ts", "cognibrain-cognicodebench-patch-proposal-harness-v1"],
-      ["src/eval/cognicodeBench.ts", "expectedDirectPatchHarness"],
-      ["src/eval/cognicodeBench.ts", "ablation-simulated"],
-      ["src/eval/cognicodeBench.ts", "hidden expected commands and files stay evaluator-only"],
-      ["src/eval/cognicodeBench.ts", "hidden expected actions are reserved for evaluation"],
-      ["src/eval/cognicodeBench.ts", "cognicodebench-local-scenario-diagnostic"],
-      ["src/eval/cognicodeBench.ts", "qualityClaimAllowed"],
-      ["src/eval/cognicodeBench.ts", "marketClaimAllowed: false"],
-      ["tests/evaluation.test.ts", "allows CogniCodeBench quality claims only through a report-level LLM/harness judge"]
-    ]),
-    check("benchmarks.bundled-runners-raw-only", "benchmarks", "Bundled Arena competitor runners provide raw evidence and leave scenario scoring to the central LLM/harness judge.", files, [
-      ["scripts/benchmark/competitors/mem0-runner.mjs", "Raw runner evidence only"],
-      ["scripts/benchmark/competitors/mem0-runner.mjs", "MEMORY_ARENA_JUDGE_COMMAND"],
-      ["scripts/benchmark/competitors/gbrain-runner.mjs", "Raw runner evidence only"],
-      ["scripts/benchmark/competitors/gbrain-runner.mjs", "MEMORY_ARENA_JUDGE_COMMAND"],
-      ["scripts/benchmark/competitors/native_python_runner.py", "Raw runner evidence only"],
-      ["scripts/benchmark/competitors/native_python_runner.py", "MEMORY_ARENA_JUDGE_COMMAND"],
-      ["scripts/benchmark/competitors/operator_memory_native_runner.py", "Raw runner evidence only"],
-      ["scripts/benchmark/competitors/operator_memory_native_runner.py", "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND"]
-    ]),
+    {
+      id: "benchmarks.cognicode-claim-boundary",
+      area: "benchmarks",
+      description: "CogniCodeBench keeps local scenario and ablation scores diagnostic-only unless an LLM/harness report judge validates quality, and ablation patch simulations keep hidden expected commands/files evaluator-only.",
+      passed: cognicodeArtifactBoundary,
+      evidence: [
+        "artifacts/cognicodebench/run.json:claimBoundary.qualityClaimAllowed=false",
+        "artifacts/cognicodebench/run.json:claimBoundary.marketClaimAllowed=false",
+        "artifacts/cognicodebench/run.json:harnessContracts.qualityJudge.requiredForQualityClaim=true",
+        "artifacts/cognicodebench/run.json:harnessContracts.qualityJudge.semanticJudgeRequired=true",
+        "artifacts/cognicodebench/run.json:harnessContracts.qualityJudge.forbidsStringRegexScoring=true",
+        "artifacts/cognicodebench/run.json:harnessContracts.patchProposal.hiddenExpectedFieldsProvided=false",
+        "artifacts/cognicodebench/run.json:harnessContracts.patchProposal.visibleRepoMetadataOnly=true",
+        "artifacts/cognicodebench/run.json:harnessContracts.ablation.patchSimulationUsesHiddenExpected=false",
+        "artifacts/cognicodebench/run.json:diagnostics.integrity.metrics.expectedDirectPatchHarness=false"
+      ],
+      gaps: cognicodeArtifactBoundary ? [] : ["artifacts/cognicodebench/run.json missing structured CogniCodeBench claim-boundary harness contract"]
+    },
+    {
+      id: "benchmarks.bundled-runners-raw-only",
+      area: "benchmarks",
+      description: "Arena command-runner competitor rows provide raw evidence and leave scenario scoring to the central LLM/harness judge.",
+      passed: arenaRunnerContractBoundary,
+      evidence: arenaRunnerContractRows.map((system: any) => `artifacts/arena/run.json:${system.system}.runnerContract.${system.runnerContract?.judgeEnv ?? "missing"}`),
+      gaps: arenaRunnerContractBoundary ? [] : ["artifacts/arena/run.json missing structured raw-runner contract for Arena command-runner systems"]
+    },
+    {
+      id: "benchmarks.operator-memory-native-runners-raw-only",
+      area: "benchmarks",
+      description: "Operator Memory native command-runner rows provide raw evidence and leave source-aware scoring to the central LLM/harness judge.",
+      passed: operatorMemoryRunnerContractBoundary,
+      evidence: operatorMemoryRunnerContractRows.map((system: any) => `artifacts/operator-memory-benchmark.json:${system.system}.runnerContract.${system.runnerContract?.judgeEnv ?? "missing"}`),
+      gaps: operatorMemoryRunnerContractBoundary ? [] : ["operator-memory artifacts missing structured raw-runner contract for native command-runner systems"]
+    },
     check("enterprise.production-hardening", "enterprise", "Enterprise hardening has Prometheus metrics, structured logs/tracing, backup replay and production certification artifacts.", files, [
       ["src/api/server.ts", "/metrics/prometheus"],
       ["src/api/service.ts", "prometheusMetrics"],
@@ -323,6 +380,15 @@ function read(path: string): string {
 
 function readMany(paths: string[]): string {
   return paths.map((path) => read(path)).join("\n");
+}
+
+function readJson(path: string): Record<string, any> {
+  try {
+    const source = read(path);
+    return source ? JSON.parse(source) : {};
+  } catch {
+    return {};
+  }
 }
 
 function cliOptions(argv: string[]): { out?: string; markdown?: string } {

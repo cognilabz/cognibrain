@@ -5,6 +5,16 @@ import { join } from "node:path";
 
 const root = new URL("../..", import.meta.url).pathname;
 const artifactPath = join(root, "artifacts", "release-check.json");
+const defaultStepTimeoutMs = envNumber("MEMORY_RELEASE_CHECK_STEP_TIMEOUT_MS", 15 * 60_000);
+const stepTimeouts = new Map([
+  ["unit tests", envNumber("MEMORY_RELEASE_CHECK_TEST_TIMEOUT_MS", 10 * 60_000)],
+  ["dashboard build", envNumber("MEMORY_RELEASE_CHECK_BUILD_TIMEOUT_MS", 5 * 60_000)],
+  ["CogniCodeBench", envNumber("MEMORY_RELEASE_CHECK_COGNICODE_TIMEOUT_MS", 5 * 60_000)],
+  ["Benchmark Arena", envNumber("MEMORY_RELEASE_CHECK_ARENA_TIMEOUT_MS", 30 * 60_000)],
+  ["Postgres verifier", envNumber("MEMORY_RELEASE_CHECK_POSTGRES_TIMEOUT_MS", 5 * 60_000)],
+  ["npm pack dry-run", envNumber("MEMORY_RELEASE_CHECK_PACK_TIMEOUT_MS", 5 * 60_000)],
+  ["Python SDK tests", envNumber("MEMORY_RELEASE_CHECK_PYTHON_TIMEOUT_MS", 5 * 60_000)]
+]);
 const steps = [
   ["unit tests", "npm", ["run", "test"]],
   ["dashboard build", "npm", ["run", "build"]],
@@ -33,21 +43,27 @@ const steps = [
 const results = [];
 for (const [name, command, args] of steps) {
   const startedAt = new Date();
+  const timeoutMs = stepTimeouts.get(name) ?? defaultStepTimeoutMs;
   const result = spawnSync(command, args, {
     cwd: root,
     encoding: "utf8",
     env: process.env,
+    timeout: timeoutMs,
+    killSignal: "SIGTERM",
     maxBuffer: 20 * 1024 * 1024
   });
   const finishedAt = new Date();
+  const timedOut = Boolean(result.error && "code" in result.error && result.error.code === "ETIMEDOUT");
   const entry = {
     name,
     command: [command, ...args].join(" "),
     status: result.status ?? 1,
-    ok: result.status === 0,
+    ok: result.status === 0 && !timedOut,
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     durationMs: finishedAt.getTime() - startedAt.getTime(),
+    timeoutMs,
+    timedOut,
     stdoutTail: tail(result.stdout),
     stderrTail: tail(result.stderr),
     error: result.error?.message
@@ -88,7 +104,13 @@ function actionableFailure(entry) {
     `release:check failed at "${entry.name}".`,
     `Command: ${entry.command}`,
     `Artifact: artifacts/release-check.json`,
+    entry.timedOut ? `Timed out after ${entry.timeoutMs}ms.` : "",
     entry.stderrTail ? `stderr tail:\n${entry.stderrTail}` : "",
     entry.stdoutTail ? `stdout tail:\n${entry.stdoutTail}` : ""
   ].filter(Boolean).join("\n");
+}
+
+function envNumber(name, fallback) {
+  const value = Number(process.env[name] ?? fallback);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 }

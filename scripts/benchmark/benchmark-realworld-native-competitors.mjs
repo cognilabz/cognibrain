@@ -67,21 +67,26 @@ if (realworld.status !== 0) {
 }
 
 function installPythonCompetitors() {
+  const pythonCandidate = process.env.MEMORY_REALWORLD_PYTHON ?? process.env.MEMORY_ARENA_PYTHON ?? process.env.PYTHON ?? "python3";
+  const packages = [
+    "basic-memory==0.21.5",
+    "langmem==0.0.30"
+  ];
   const uv = spawnSync("uv", ["--version"], {
     cwd: root,
     encoding: "utf8",
     timeout: 30_000,
     maxBuffer: 4 * 1024 * 1024
   });
-  if (uv.status !== 0) {
-    return { installed: false, blockedReason: "uv is required to install isolated Python real-world competitor packages", uv: commandEntry(uv), venv: pythonVenv, install: null };
-  }
-
-  const pythonCandidate = process.env.MEMORY_REALWORLD_PYTHON ?? process.env.MEMORY_ARENA_PYTHON ?? process.env.PYTHON ?? "python3";
   let venv = { status: 0, stdout: "already exists", stderr: "" };
   if (!existsSync(pythonBin)) {
     mkdirSync(dirname(pythonVenv), { recursive: true });
-    venv = spawnSync("uv", ["venv", pythonVenv, "--python", pythonCandidate], {
+    venv = uv.status === 0 ? spawnSync("uv", ["venv", pythonVenv, "--python", pythonCandidate], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 180_000,
+      maxBuffer: 20 * 1024 * 1024
+    }) : spawnSync(pythonCandidate, ["-m", "venv", pythonVenv], {
       cwd: root,
       encoding: "utf8",
       timeout: 180_000,
@@ -90,11 +95,12 @@ function installPythonCompetitors() {
     if (venv.status !== 0) return { installed: false, uv: commandEntry(uv), venv: pythonVenv, create: commandEntry(venv), install: null };
   }
 
-  const packages = [
-    "basic-memory==0.21.5",
-    "langmem==0.0.30"
-  ];
-  const install = spawnSync("uv", ["pip", "install", "--python", pythonBin, ...packages], {
+  const install = uv.status === 0 ? spawnSync("uv", ["pip", "install", "--python", pythonBin, ...packages], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 600_000,
+    maxBuffer: 80 * 1024 * 1024
+  }) : spawnSync(pythonBin, ["-m", "pip", "install", ...packages], {
     cwd: root,
     encoding: "utf8",
     timeout: 600_000,
@@ -104,6 +110,7 @@ function installPythonCompetitors() {
     installed: install.status === 0 && existsSync(pythonBin),
     python: pythonBin,
     packages,
+    installer: uv.status === 0 ? "uv" : "python-venv-pip",
     uv: commandEntry(uv),
     create: commandEntry(venv),
     install: commandEntry(install)

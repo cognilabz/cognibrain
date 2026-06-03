@@ -5,15 +5,35 @@ import { MemoryService } from "../api/service";
 interface SuiteScore {
   id: string;
   passed: boolean;
+  diagnosticPassed: boolean;
+  proof: "local-lifecycle-diagnostic";
+  qualityClaimAllowed: false;
+  marketClaimAllowed: false;
+  claimBoundary: {
+    scorer: "deterministic-fixture-diagnostic" | "structural-lifecycle-diagnostic" | "harness-review-diagnostic";
+    claimBlockers: string[];
+  };
   score: number;
-  details: Array<{ id: string; passed: boolean; score: number; expected: string[]; actual: string }>;
+  details: Array<{ id: string; passed: boolean; diagnosticPassed: boolean; score: number; expected: string[]; actual: string; scorer: string }>;
 }
 
 export function runNextgenBenchmarkSuites(outputPath = "artifacts/nextgen-benchmarks.json", trendPath = "artifacts/benchmark-trend.json") {
   const suites = [answerGenerationSuite(), multiHopTemporalSuite(), behavioralPatternSuite(), retrievalCalibrationSuite(), uspEvidenceSuite()];
   const trend = benchmarkTrend(suites, trendPath);
+  const diagnosticPassed = suites.every((suite) => suite.diagnosticPassed);
   const report = {
-    passed: suites.every((suite) => suite.passed),
+    passed: diagnosticPassed,
+    diagnosticPassed,
+    proof: "local-lifecycle-diagnostic" as const,
+    qualityClaimAllowed: false as const,
+    marketClaimAllowed: false as const,
+    claimBoundary: {
+      scorer: "deterministic-fixture-diagnostic",
+      claimBlockers: [
+        "Nextgen suites are local lifecycle diagnostics built from deterministic fixtures and structural checks.",
+        "Answer-quality or market claims require an external LLM/harness judge or comparable public benchmark proof."
+      ]
+    },
     generatedAt: new Date().toISOString(),
     suites,
     trend
@@ -37,9 +57,9 @@ function answerGenerationSuite(): SuiteScore {
     const results = service.search({ userId: "answer", query: test.query, includePrivate: true, limit: 3 });
     const actual = synthesizeAnswer(results.map((result) => result.memory.content));
     const score = test.expected.every((term) => actual.toLowerCase().includes(term)) ? 1 : 0;
-    return { id: test.id, passed: score === 1, score, expected: test.expected, actual };
+    return diagnosticDetail(test.id, score === 1, score, test.expected, actual, "deterministic-fixture-diagnostic");
   });
-  return finalizeSuite("answer-generation", details);
+  return finalizeSuite("answer-generation", details, "deterministic-fixture-diagnostic");
 }
 
 function multiHopTemporalSuite(): SuiteScore {
@@ -52,10 +72,10 @@ function multiHopTemporalSuite(): SuiteScore {
   const path = service.graphPaths("atlas", "redisadapter", { userId: "multi", relationTypes: ["transitive_depends_on"], maxDepth: 3 });
   const temporal = service.temporalQuery("multi", { after: "2026-05-01T00:00:00.000Z", before: "2026-05-09T00:00:00.000Z" });
   const details = [
-    { id: "multi-hop-path", passed: path.length > 0, score: path.length > 0 ? 1 : 0, expected: ["transitive_depends_on"], actual: JSON.stringify(path[0]?.explanation ?? []) },
-    { id: "temporal-interval", passed: temporal.events.length === 2, score: temporal.events.length === 2 ? 1 : 0, expected: ["2 events"], actual: `${temporal.events.length} events` }
+    diagnosticDetail("multi-hop-path", path.length > 0, path.length > 0 ? 1 : 0, ["transitive_depends_on"], JSON.stringify(path[0]?.explanation ?? []), "structural-lifecycle-diagnostic"),
+    diagnosticDetail("temporal-interval", temporal.events.length === 2, temporal.events.length === 2 ? 1 : 0, ["2 events"], `${temporal.events.length} events`, "structural-lifecycle-diagnostic")
   ];
-  return finalizeSuite("multi-hop-temporal", details);
+  return finalizeSuite("multi-hop-temporal", details, "structural-lifecycle-diagnostic");
 }
 
 function behavioralPatternSuite(): SuiteScore {
@@ -70,10 +90,10 @@ function behavioralPatternSuite(): SuiteScore {
   const patterns = service.behavioralPatterns("pattern").patterns;
   const friday = patterns.find((pattern) => pattern.cadence === "weekly:friday");
   const details = [
-    { id: "weekly-friday-detection", passed: Boolean(friday), score: friday ? 1 : 0, expected: ["weekly:friday"], actual: JSON.stringify(patterns.map((pattern) => pattern.cadence)) },
-    { id: "false-positive-risk", passed: Boolean(friday && (friday.falsePositiveRisk ?? 1) <= 0.5), score: friday ? 1 - (friday.falsePositiveRisk ?? 1) : 0, expected: ["risk<=0.5"], actual: String(friday?.falsePositiveRisk ?? "missing") }
+    diagnosticDetail("weekly-friday-detection", Boolean(friday), friday ? 1 : 0, ["weekly:friday"], JSON.stringify(patterns.map((pattern) => pattern.cadence)), "structural-lifecycle-diagnostic"),
+    diagnosticDetail("false-positive-risk", Boolean(friday && (friday.falsePositiveRisk ?? 1) <= 0.5), friday ? 1 - (friday.falsePositiveRisk ?? 1) : 0, ["risk<=0.5"], String(friday?.falsePositiveRisk ?? "missing"), "structural-lifecycle-diagnostic")
   ];
-  return finalizeSuite("behavioral-patterns", details);
+  return finalizeSuite("behavioral-patterns", details, "structural-lifecycle-diagnostic");
 }
 
 function retrievalCalibrationSuite(): SuiteScore {
@@ -104,18 +124,12 @@ function retrievalCalibrationSuite(): SuiteScore {
   const reviewedDelivered = harnessPack.results.some((result) => result.memoryId === reviewed.id);
   const reviewedRetainedInVerdict = harnessPack.evidenceVerdict?.reviewMemoryIds.includes(reviewed.id) ?? false;
   const details = [
-    { id: "confidence-field", passed: typeof high?.confidence === "number" && high.confidence > 0.5, score: high?.confidence ?? 0, expected: ["confidence>0.5"], actual: String(high?.confidence ?? "missing") },
-    { id: "unsafe-threshold", passed: Boolean(low?.unsafeToInject && (low.confidence ?? 1) < 0.5), score: low?.unsafeToInject ? 1 : 0, expected: ["unsafe low-confidence"], actual: JSON.stringify({ confidence: low?.confidence, unsafeToInject: low?.unsafeToInject }) },
-    { id: "context-exclusion", passed: !weakDelivered && weakExcluded, score: !weakDelivered && weakExcluded ? 1 : 0, expected: ["weak memory excluded"], actual: JSON.stringify({ deliveredIds: pack.results.map((result) => result.memoryId), excludedIds: pack.excludedResults?.map((result) => result.memoryId) ?? [] }) },
-    {
-      id: "harness-review-not-injected",
-      passed: !reviewedDelivered && reviewedRetainedInVerdict,
-      score: !reviewedDelivered && reviewedRetainedInVerdict ? 1 : 0,
-      expected: ["reviewed memory excluded", "evidence verdict retained"],
-      actual: JSON.stringify({ deliveredIds: harnessPack.results.map((result) => result.memoryId), evidenceVerdict: harnessPack.evidenceVerdict })
-    }
+    diagnosticDetail("confidence-field", typeof high?.confidence === "number" && high.confidence > 0.5, high?.confidence ?? 0, ["confidence>0.5"], String(high?.confidence ?? "missing"), "structural-lifecycle-diagnostic"),
+    diagnosticDetail("unsafe-threshold", Boolean(low?.unsafeToInject && (low.confidence ?? 1) < 0.5), low?.unsafeToInject ? 1 : 0, ["unsafe low-confidence"], JSON.stringify({ confidence: low?.confidence, unsafeToInject: low?.unsafeToInject }), "structural-lifecycle-diagnostic"),
+    diagnosticDetail("context-exclusion", !weakDelivered && weakExcluded, !weakDelivered && weakExcluded ? 1 : 0, ["weak memory excluded"], JSON.stringify({ deliveredIds: pack.results.map((result) => result.memoryId), excludedIds: pack.excludedResults?.map((result) => result.memoryId) ?? [] }), "structural-lifecycle-diagnostic"),
+    diagnosticDetail("harness-review-not-injected", !reviewedDelivered && reviewedRetainedInVerdict, !reviewedDelivered && reviewedRetainedInVerdict ? 1 : 0, ["reviewed memory excluded", "evidence verdict retained"], JSON.stringify({ deliveredIds: harnessPack.results.map((result) => result.memoryId), evidenceVerdict: harnessPack.evidenceVerdict }), "harness-review-diagnostic")
   ];
-  return finalizeSuite("retrieval-calibration", details);
+  return finalizeSuite("retrieval-calibration", details, "harness-review-diagnostic");
 }
 
 function uspEvidenceSuite(): SuiteScore {
@@ -141,21 +155,42 @@ function uspEvidenceSuite(): SuiteScore {
   const pack = service.evidencePack({ userId: "usp", orgId: "org-1", query: "Why should Atlas run tests before release?", limit: 3, tokenBudget: 500 });
   const first = pack.results[0];
   const details = [
-    { id: "why-used-explanation", passed: Boolean(first?.retrieval.explanation.length && first.retrieval.signals.trust > 0), score: first?.retrieval.explanation.length ? 1 : 0, expected: ["explanation", "trust signal"], actual: JSON.stringify(first?.retrieval.explanation ?? []) },
-    { id: "source-citation", passed: Boolean(first?.retrieval.citation.includes("AGENTS.md") && first.retrieval.citation.includes(":12")), score: first?.retrieval.citation.includes("AGENTS.md") ? 1 : 0, expected: ["file citation"], actual: first?.retrieval.citation ?? "missing" },
-    { id: "temporal-validity", passed: first?.validity.validFrom === "2026-05-01T00:00:00.000Z" && first?.validity.stale === false, score: first?.validity.validFrom ? 1 : 0, expected: ["validFrom", "not stale"], actual: JSON.stringify(first?.validity ?? {}) },
-    { id: "consent-boundary", passed: !pack.results.some((result) => result.content.includes("private until approved")), score: pack.results.some((result) => result.content.includes("private until approved")) ? 0 : 1, expected: ["private excluded"], actual: pack.results.map((result) => result.consent.visibility).join(",") }
+    diagnosticDetail("why-used-explanation", Boolean(first?.retrieval.explanation.length && first.retrieval.signals.trust > 0), first?.retrieval.explanation.length ? 1 : 0, ["explanation", "trust signal"], JSON.stringify(first?.retrieval.explanation ?? []), "structural-lifecycle-diagnostic"),
+    diagnosticDetail("source-citation", Boolean(first?.retrieval.citation.includes("AGENTS.md") && first.retrieval.citation.includes(":12")), first?.retrieval.citation.includes("AGENTS.md") ? 1 : 0, ["file citation"], first?.retrieval.citation ?? "missing", "structural-lifecycle-diagnostic"),
+    diagnosticDetail("temporal-validity", first?.validity.validFrom === "2026-05-01T00:00:00.000Z" && first?.validity.stale === false, first?.validity.validFrom ? 1 : 0, ["validFrom", "not stale"], JSON.stringify(first?.validity ?? {}), "structural-lifecycle-diagnostic"),
+    diagnosticDetail("consent-boundary", !pack.results.some((result) => result.content.includes("private until approved")), pack.results.some((result) => result.content.includes("private until approved")) ? 0 : 1, ["private excluded"], pack.results.map((result) => result.consent.visibility).join(","), "structural-lifecycle-diagnostic")
   ];
-  return finalizeSuite("usp-evidence-pack", details);
+  return finalizeSuite("usp-evidence-pack", details, "structural-lifecycle-diagnostic");
 }
 
 function synthesizeAnswer(evidence: string[]): string {
   return evidence.slice(0, 3).join(" ");
 }
 
-function finalizeSuite(id: string, details: SuiteScore["details"]): SuiteScore {
+function diagnosticDetail(id: string, passed: boolean, score: number, expected: string[], actual: string, scorer: SuiteScore["claimBoundary"]["scorer"]): SuiteScore["details"][number] {
+  return { id, passed, diagnosticPassed: passed, score, expected, actual, scorer };
+}
+
+function finalizeSuite(id: string, details: SuiteScore["details"], scorer: SuiteScore["claimBoundary"]["scorer"]): SuiteScore {
   const score = details.reduce((total, item) => total + item.score, 0) / Math.max(1, details.length);
-  return { id, passed: details.every((detail) => detail.passed), score, details };
+  const diagnosticPassed = details.every((detail) => detail.diagnosticPassed);
+  return {
+    id,
+    passed: diagnosticPassed,
+    diagnosticPassed,
+    proof: "local-lifecycle-diagnostic",
+    qualityClaimAllowed: false,
+    marketClaimAllowed: false,
+    claimBoundary: {
+      scorer,
+      claimBlockers: [
+        `${id} uses ${scorer}; it is a local lifecycle diagnostic, not answer-quality or market-comparison proof.`,
+        "Promote only after LLM/harness judging or comparable public benchmark proof is attached."
+      ]
+    },
+    score,
+    details
+  };
 }
 
 function benchmarkTrend(suites: SuiteScore[], trendPath: string) {

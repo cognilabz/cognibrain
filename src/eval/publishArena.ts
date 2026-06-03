@@ -52,10 +52,16 @@ interface PublicBenchmarkGate {
   generatedAt?: string;
   proofLevel?: string;
   passed?: boolean;
+  diagnosticPassed?: boolean;
+  claimAllowed?: boolean;
+  claimBlockers?: string[];
   benchmarks: Array<{
     dataset: string;
     metric: string;
     passed: boolean;
+    diagnosticPassed: boolean;
+    scoreable: boolean;
+    proof: string;
     ours: { correct: number; total: number; accuracy: number };
     bestBaseline: { name: string; correct: number; total: number; accuracy: number };
     margin: number;
@@ -69,6 +75,9 @@ interface PublishedArenaReport extends ArenaReport {
     publishedAt: string;
     channel: string;
     claimScope: string;
+    proofLevel: string;
+    claimAllowed: boolean;
+    diagnosticPassed: boolean;
   };
 }
 
@@ -90,13 +99,17 @@ export function publishArenaReport(options: { inputPath?: string; outputDir?: st
   validateArenaReport(report);
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(dirname(markdownPath), { recursive: true });
+  const publicBenchmarkGate = readPublicBenchmarkSummary(options.marketGatePath ?? "artifacts/market-gate.json");
   const publicReport = {
     ...report,
-    publicBenchmarkGate: readPublicBenchmarkSummary(options.marketGatePath ?? "artifacts/market-gate.json"),
+    publicBenchmarkGate,
     publication: {
       publishedAt: new Date().toISOString(),
       channel: "static-json-html-md",
-      claimScope: "Synthetic same-scenario engineering-memory benchmark with explicit proof levels."
+      claimScope: "Synthetic same-scenario engineering-memory diagnostic with explicit proof levels; market and quality claims require publicBenchmarkGate.claimAllowed=true.",
+      proofLevel: publicBenchmarkGate?.proofLevel ?? "synthetic-diagnostic",
+      claimAllowed: publicBenchmarkGate?.claimAllowed === true,
+      diagnosticPassed: publicBenchmarkGate?.diagnosticPassed === true
     }
   } satisfies PublishedArenaReport;
   writeFileSync(join(outputDir, "results.json"), `${JSON.stringify(publicReport, null, 2)}\n`);
@@ -114,10 +127,18 @@ function validateArenaReport(report: ArenaReport): void {
   }
 }
 
+function systemClaimStatus(proofLevel: string): string {
+  if (proofLevel === "same-run-full") return "local product proof only; not market-wide";
+  if (proofLevel === "same-run-api-shape") return "api-shape diagnostic; claim blocked";
+  if (proofLevel === "credential-blocked") return "credential blocked; no scoreable claim";
+  if (proofLevel === "same-run-native" || proofLevel === "same-run-cloud-api" || proofLevel === "same-run-cli") return "native run; LLM/harness judge required";
+  return "claim blocked until proof level is certified";
+}
+
 function renderArenaMarkdown(report: PublishedArenaReport) {
   const systems = orderedSystems(report);
   const rows = systems
-    .map((system) => `| ${system.displayName} | ${points(system.score)} / 1000 | ${system.score.toFixed(4)} | ${markdownBar(system.score, 18)} | ${system.proofLevel} | ${system.scenarioCount} | ${system.metrics.repeatedMistakeRate.toFixed(4)} | ${system.capabilityGaps.length} |`)
+    .map((system) => `| ${system.displayName} | ${systemClaimStatus(system.proofLevel)} | ${points(system.score)} / 1000 | ${system.score.toFixed(4)} | ${markdownBar(system.score, 18)} | ${system.proofLevel} | ${system.scenarioCount} | ${system.metrics.repeatedMistakeRate.toFixed(4)} | ${system.capabilityGaps.length} |`)
     .join("\n");
   const checkRows = systems
     .map((system) => {
@@ -135,21 +156,26 @@ function renderArenaMarkdown(report: PublishedArenaReport) {
     .map((system) => `| ${system.displayName} | ${system.capabilityGaps.length ? system.capabilityGaps.join("; ") : "none"} |`)
     .join("\n");
   const publicRows = (report.publicBenchmarkGate?.benchmarks ?? [])
-    .map((benchmark) => `| ${benchmark.dataset} | ${benchmark.metric} | ${points(benchmark.ours.accuracy)} / 1000 | ${benchmark.ours.correct}/${benchmark.ours.total} | ${markdownBar(benchmark.ours.accuracy, 18)} | ${benchmark.bestBaseline.name} ${benchmark.bestBaseline.correct}/${benchmark.bestBaseline.total} | ${signed(benchmark.margin)} | ${benchmark.questionCount} |`)
+    .map((benchmark) => `| ${benchmark.dataset} | ${benchmark.metric} | ${benchmark.proof} | ${benchmark.passed ? "Yes" : "No"} | ${benchmark.diagnosticPassed ? "Yes" : "No"} | ${points(benchmark.ours.accuracy)} / 1000 | ${benchmark.ours.correct}/${benchmark.ours.total} | ${markdownBar(benchmark.ours.accuracy, 18)} | ${benchmark.bestBaseline.name} ${benchmark.bestBaseline.correct}/${benchmark.bestBaseline.total} | ${signed(benchmark.margin)} | ${benchmark.questionCount} |`)
     .join("\n");
+  const publicClaimBlockers = report.publicBenchmarkGate?.claimBlockers?.length
+    ? report.publicBenchmarkGate.claimBlockers.map((item) => `- ${item}`).join("\n")
+    : "- none";
   const proofRows = Object.entries(report.adapterContract.proofLevels)
     .map(([level, meaning]) => `| ${level} | ${meaning} |`)
     .join("\n");
-  return `# Latest Benchmark Arena
+  return `# Latest Benchmark Arena Diagnostic
 
 Generated from \`artifacts/arena/run.json\` at ${report.publication.publishedAt}.
 
-Recall is not enough. The next code change has to prove the memory worked.
+Claim allowed: ${report.publication.claimAllowed ? "yes" : "no"}. Proof level: \`${report.publication.proofLevel}\`. Diagnostic passed: ${report.publication.diagnosticPassed ? "yes" : "no"}.
 
-## Marketing Scorecard
+Recall is not enough. The next code change has to prove the memory worked. These synthetic scores are diagnostics unless the claim gate allows them.
 
-| System | Points | Score | Bar | Proof level | Scenarios | Repeated mistake rate | Gaps |
-| --- | ---: | ---: | --- | --- | ---: | ---: | ---: |
+## Synthetic Diagnostic Scorecard
+
+| System | Claim status | Points | Score | Bar | Proof level | Scenarios | Repeated mistake rate | Gaps |
+| --- | --- | ---: | ---: | --- | --- | ---: | ---: | ---: |
 ${rows}
 
 ## Capability Score Breakdown
@@ -174,11 +200,15 @@ ${gapRows}
 
 ${publicRows ? `## Public Benchmark Gate
 
-Generated from \`artifacts/market-gate.json\`${report.publicBenchmarkGate?.generatedAt ? ` at ${report.publicBenchmarkGate.generatedAt}` : ""}. Proof level: \`${report.publicBenchmarkGate?.proofLevel ?? "unknown"}\`.
+Generated from \`artifacts/market-gate.json\`${report.publicBenchmarkGate?.generatedAt ? ` at ${report.publicBenchmarkGate.generatedAt}` : ""}. Proof level: \`${report.publicBenchmarkGate?.proofLevel ?? "unknown"}\`. Claim allowed: ${report.publicBenchmarkGate?.claimAllowed ? "yes" : "no"}. Diagnostic passed: ${report.publicBenchmarkGate?.diagnosticPassed ? "yes" : "no"}.
 
-| Dataset | Metric | Points | Cognibrain | Bar | Best local baseline | Margin | Questions |
-| --- | --- | ---: | ---: | --- | ---: | ---: | ---: |
+| Dataset | Metric | Proof | Claim | Diagnostic | Points | Cognibrain | Bar | Best local baseline | Margin | Questions |
+| --- | --- | --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: |
 ${publicRows}
+
+Claim blockers:
+
+${publicClaimBlockers}
 
 ` : ""}Boundary: competitor rows are only as strong as their proof level. \`same-run-api-shape\` is a local compatibility model. \`credential-blocked\` means the real runner exists but could not execute without required credentials or services. \`same-run-native\`, \`same-run-cloud-api\` and \`same-run-cli\` require configured external runners.
 
@@ -200,7 +230,7 @@ npm run internal -- benchmark:arena:publish
 function renderArenaHtml(report: PublishedArenaReport) {
   const systems = orderedSystems(report);
   const rows = systems
-    .map((system) => `<tr><td><strong>${escapeHtml(system.displayName)}</strong></td><td class="numeric">${points(system.score)} / 1000</td><td>${barHtml(system.score)}</td><td><span class="badge">${escapeHtml(system.proofLevel)}</span></td><td class="numeric">${system.scenarioCount}</td><td class="numeric">${system.metrics.repeatedMistakeRate.toFixed(4)}</td><td class="numeric">${system.capabilityGaps.length}</td></tr>`)
+    .map((system) => `<tr><td><strong>${escapeHtml(system.displayName)}</strong></td><td>${escapeHtml(systemClaimStatus(system.proofLevel))}</td><td class="numeric">${points(system.score)} / 1000</td><td>${barHtml(system.score)}</td><td><span class="badge">${escapeHtml(system.proofLevel)}</span></td><td class="numeric">${system.scenarioCount}</td><td class="numeric">${system.metrics.repeatedMistakeRate.toFixed(4)}</td><td class="numeric">${system.capabilityGaps.length}</td></tr>`)
     .join("\n");
   const checkRows = systems
     .map((system) => `<tr><td><strong>${escapeHtml(system.displayName)}</strong></td>${CHECK_LABELS.map(({ key }) => {
@@ -218,8 +248,11 @@ function renderArenaHtml(report: PublishedArenaReport) {
     .map((system) => `<tr><td><strong>${escapeHtml(system.displayName)}</strong></td><td>${system.capabilityGaps.length ? system.capabilityGaps.map((gap) => `<span class="gap">${escapeHtml(gap)}</span>`).join(" ") : "<span class=\"ok\">none</span>"}</td></tr>`)
     .join("\n");
   const publicRows = (report.publicBenchmarkGate?.benchmarks ?? [])
-    .map((benchmark) => `<tr><td><strong>${escapeHtml(benchmark.dataset)}</strong></td><td>${escapeHtml(benchmark.metric)}</td><td class="numeric">${points(benchmark.ours.accuracy)} / 1000</td><td class="numeric">${benchmark.ours.correct}/${benchmark.ours.total}</td><td>${barHtml(benchmark.ours.accuracy)}</td><td>${escapeHtml(benchmark.bestBaseline.name)} <span class="numeric">${benchmark.bestBaseline.correct}/${benchmark.bestBaseline.total}</span></td><td class="numeric ${benchmark.margin >= 0 ? "ok" : "bad"}">${signed(benchmark.margin)}</td><td class="numeric">${benchmark.questionCount}</td></tr>`)
+    .map((benchmark) => `<tr><td><strong>${escapeHtml(benchmark.dataset)}</strong></td><td>${escapeHtml(benchmark.metric)}</td><td><span class="badge">${escapeHtml(benchmark.proof)}</span></td><td class="${benchmark.passed ? "ok" : "bad"}">${benchmark.passed ? "Yes" : "No"}</td><td class="${benchmark.diagnosticPassed ? "ok" : "bad"}">${benchmark.diagnosticPassed ? "Yes" : "No"}</td><td class="numeric">${points(benchmark.ours.accuracy)} / 1000</td><td class="numeric">${benchmark.ours.correct}/${benchmark.ours.total}</td><td>${barHtml(benchmark.ours.accuracy)}</td><td>${escapeHtml(benchmark.bestBaseline.name)} <span class="numeric">${benchmark.bestBaseline.correct}/${benchmark.bestBaseline.total}</span></td><td class="numeric ${benchmark.margin >= 0 ? "ok" : "bad"}">${signed(benchmark.margin)}</td><td class="numeric">${benchmark.questionCount}</td></tr>`)
     .join("\n");
+  const publicClaimBlockers = report.publicBenchmarkGate?.claimBlockers?.length
+    ? `<ul>${report.publicBenchmarkGate.claimBlockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+    : "<p class=\"muted\">none</p>";
   const proofRows = Object.entries(report.adapterContract.proofLevels)
     .map(([level, meaning]) => `<tr><td><span class="badge">${escapeHtml(level)}</span></td><td>${escapeHtml(meaning)}</td></tr>`)
     .join("\n");
@@ -266,18 +299,19 @@ function renderArenaHtml(report: PublishedArenaReport) {
 </head>
 <body>
   <main>
-    <h1>Hard Benchmark Scorecard</h1>
-    <p>Recall is not enough. The next code change has to prove the memory worked. This page is generated from the checked benchmark artifacts, with points, proof levels, capability gaps and per-scenario bars.</p>
+    <h1>Hard Benchmark Diagnostic</h1>
+    <p>Recall is not enough. The next code change has to prove the memory worked. This page is generated from checked benchmark artifacts; synthetic scores remain diagnostics unless the claim gate allows them.</p>
     <section class="hero-grid">
       <div class="stat"><span>Winner</span><strong>${escapeHtml(report.winner)}</strong></div>
-      <div class="stat"><span>Best score</span><strong>${points(systems[0]?.score ?? 0)} / 1000</strong></div>
+      <div class="stat"><span>Top diagnostic score</span><strong>${points(systems[0]?.score ?? 0)} / 1000</strong></div>
+      <div class="stat"><span>Market claim</span><strong>${report.publication.claimAllowed ? "Allowed" : "Blocked"}</strong></div>
       <div class="stat"><span>Systems</span><strong>${systems.length}</strong></div>
       <div class="stat"><span>Scenarios</span><strong>${systems[0]?.scenarioCount ?? 0}</strong></div>
     </section>
-    <div class="callout">Generated at ${escapeHtml(report.publication.publishedAt)} from <code>artifacts/arena/run.json</code>. ${escapeHtml(report.publication.claimScope)}</div>
-    <h2>Marketing Scorecard</h2>
+    <div class="callout">Generated at ${escapeHtml(report.publication.publishedAt)} from <code>artifacts/arena/run.json</code>. Proof level: <code>${escapeHtml(report.publication.proofLevel)}</code>. Claim allowed: <strong>${report.publication.claimAllowed ? "yes" : "no"}</strong>. Diagnostic passed: <strong>${report.publication.diagnosticPassed ? "yes" : "no"}</strong>. ${escapeHtml(report.publication.claimScope)}</div>
+    <h2>Synthetic Diagnostic Scorecard</h2>
     <table>
-      <thead><tr><th>System</th><th>Points</th><th>Bar</th><th>Proof level</th><th>Scenarios</th><th>Repeated mistake rate</th><th>Gaps</th></tr></thead>
+      <thead><tr><th>System</th><th>Claim status</th><th>Points</th><th>Bar</th><th>Proof level</th><th>Scenarios</th><th>Repeated mistake rate</th><th>Gaps</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
     <h2>Capability Score Breakdown</h2>
@@ -301,13 +335,15 @@ function renderArenaHtml(report: PublishedArenaReport) {
       <tbody>${gapRows}</tbody>
     </table>
     ${publicRows ? `<h2>Public Benchmark Gate</h2>
-    <p>Generated from <code>artifacts/market-gate.json</code>${report.publicBenchmarkGate?.generatedAt ? ` at ${escapeHtml(report.publicBenchmarkGate.generatedAt)}` : ""}. Proof level: <code>${escapeHtml(report.publicBenchmarkGate?.proofLevel ?? "unknown")}</code>.</p>
+    <p>Generated from <code>artifacts/market-gate.json</code>${report.publicBenchmarkGate?.generatedAt ? ` at ${escapeHtml(report.publicBenchmarkGate.generatedAt)}` : ""}. Proof level: <code>${escapeHtml(report.publicBenchmarkGate?.proofLevel ?? "unknown")}</code>. Claim allowed: <strong>${report.publicBenchmarkGate?.claimAllowed ? "yes" : "no"}</strong>. Diagnostic passed: <strong>${report.publicBenchmarkGate?.diagnosticPassed ? "yes" : "no"}</strong>.</p>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Dataset</th><th>Metric</th><th>Points</th><th>Cognibrain</th><th>Bar</th><th>Best local baseline</th><th>Margin</th><th>Questions</th></tr></thead>
+        <thead><tr><th>Dataset</th><th>Metric</th><th>Proof</th><th>Claim</th><th>Diagnostic</th><th>Points</th><th>Cognibrain</th><th>Bar</th><th>Best local baseline</th><th>Margin</th><th>Questions</th></tr></thead>
         <tbody>${publicRows}</tbody>
       </table>
-    </div>` : ""}
+    </div>
+    <h3>Public benchmark claim blockers</h3>
+    ${publicClaimBlockers}` : ""}
     <h2>Proof levels</h2>
     <table>
       <thead><tr><th>Level</th><th>Meaning</th></tr></thead>
@@ -325,10 +361,16 @@ function readPublicBenchmarkSummary(path: string): PublicBenchmarkGate | undefin
     generatedAt?: string;
     proofLevel?: string;
     passed?: boolean;
+    diagnosticPassed?: boolean;
+    claimAllowed?: boolean;
+    claimBlockers?: string[];
     benchmarks?: Array<{
       dataset?: string;
       metric?: string;
       passed?: boolean;
+      diagnosticPassed?: boolean;
+      scoreable?: boolean;
+      proof?: string;
       ours?: { correct?: number; total?: number; accuracy?: number };
       bestBaseline?: { name?: string; correct?: number; total?: number; accuracy?: number };
       margin?: number;
@@ -339,10 +381,16 @@ function readPublicBenchmarkSummary(path: string): PublicBenchmarkGate | undefin
     generatedAt: raw.generatedAt,
     proofLevel: raw.proofLevel,
     passed: raw.passed,
+    diagnosticPassed: raw.diagnosticPassed,
+    claimAllowed: raw.claimAllowed,
+    claimBlockers: Array.isArray(raw.claimBlockers) ? raw.claimBlockers.map(String) : [],
     benchmarks: (raw.benchmarks ?? []).map((benchmark) => ({
       dataset: benchmark.dataset ?? "unknown",
       metric: benchmark.metric ?? "unknown",
       passed: Boolean(benchmark.passed),
+      diagnosticPassed: Boolean(benchmark.diagnosticPassed ?? benchmark.passed),
+      scoreable: benchmark.scoreable === true,
+      proof: benchmark.proof ?? (benchmark.scoreable === true ? "llm-harness" : "local-diagnostic"),
       ours: {
         correct: Number(benchmark.ours?.correct ?? 0),
         total: Number(benchmark.ours?.total ?? 0),

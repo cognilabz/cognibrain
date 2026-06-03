@@ -205,7 +205,14 @@ describe("TypeScript memory core integrations", () => {
     try {
       const report = runNextgenBenchmarkSuites(join(dir, "nextgen-benchmarks.json"), join(dir, "benchmark-trend.json"));
       expect(report.passed).toBe(true);
+      expect(report.diagnosticPassed).toBe(true);
+      expect(report.proof).toBe("local-lifecycle-diagnostic");
+      expect(report.qualityClaimAllowed).toBe(false);
+      expect(report.marketClaimAllowed).toBe(false);
+      expect(report.claimBoundary.claimBlockers[0]).toContain("local lifecycle diagnostics");
       expect(report.suites.map((suite) => suite.id)).toEqual(["answer-generation", "multi-hop-temporal", "behavioral-patterns", "retrieval-calibration", "usp-evidence-pack"]);
+      expect(report.suites.every((suite) => suite.proof === "local-lifecycle-diagnostic" && suite.qualityClaimAllowed === false && suite.marketClaimAllowed === false)).toBe(true);
+      expect(report.suites.flatMap((suite) => suite.details).every((detail) => detail.diagnosticPassed === detail.passed && detail.scorer.endsWith("-diagnostic"))).toBe(true);
       expect(report.trend.points.at(-1)?.meanScore).toBeGreaterThan(0.9);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -243,12 +250,20 @@ describe("TypeScript memory core integrations", () => {
       runNextgenBenchmarkSuites(nextgenPath, join(dir, "benchmark-trend.json"));
       const answers = runAnswerGenerationBenchmark({ reports: [nextgenPath], outputPath: answerGenerationPath });
       expect(answers.datasets[0].questions[0].generatedAnswer).toBeTruthy();
+      expect(answers.proof).toBe("local-diagnostic");
+      expect(answers.qualityClaimAllowed).toBe(false);
+      expect(answers.datasets.every((dataset) => dataset.proof === "local-diagnostic" && dataset.qualityClaimAllowed === false)).toBe(true);
       const artifact = buildLeaderboardArtifact({ nextgenPath, answerGenerationPath, outputPath, evaluationPath: join(dir, "missing-eval.json") });
       expect(validateLeaderboardArtifact(artifact)).toBe(true);
       expect(artifact.privacy).toMatchObject({ anonymized: true, noRawPrompts: true, noRawEvidence: true });
       expect(artifact.publication.anonymized).toBe(true);
       expect(artifact.entries.some((entry) => entry.category === "answer_generation")).toBe(true);
       expect(artifact.entries.filter((entry) => entry.proof === "local-diagnostic").every((entry) => entry.claimAllowed === false && entry.claimClass === "diagnostic-only")).toBe(true);
+      const nextgenEntries = artifact.entries.filter((entry) => entry.artifact === nextgenPath);
+      expect(nextgenEntries.every((entry) => entry.methodology.proof === "local-lifecycle-diagnostic" && entry.methodology.qualityClaimAllowed === false)).toBe(true);
+      expect(nextgenEntries.every((entry) => String(entry.methodology.scorer).endsWith("-diagnostic"))).toBe(true);
+      const answerEntries = artifact.entries.filter((entry) => entry.artifact === answerGenerationPath);
+      expect(answerEntries.every((entry) => entry.methodology.proof === "local-diagnostic" && entry.methodology.qualityClaimAllowed === false)).toBe(true);
       expect(JSON.stringify(artifact.entries)).not.toContain("local-deterministic");
       expect(JSON.stringify(artifact)).not.toContain("rawPrompt");
       expect(JSON.stringify(artifact)).not.toContain("rawEvidence");
@@ -258,6 +273,19 @@ describe("TypeScript memory core integrations", () => {
       const publication = publishLeaderboardArtifact({ inputPath: outputPath, outputDir: join(dir, "public") });
       expect(publication.entries).toBeGreaterThan(0);
       expect(publication.anonymized).toBe(true);
+      expect(publication.claimAllowed).toBe(false);
+      expect(publication.proofLevel).toBe("diagnostic-publication");
+      const publicJson = JSON.parse(readFileSync(join(dir, "public", "leaderboard.json"), "utf8"));
+      const html = readFileSync(join(dir, "public", "index.html"), "utf8");
+      expect(publicJson.publication.claimAllowed).toBe(false);
+      expect(publicJson.publication.proofLevel).toBe("diagnostic-publication");
+      expect(publicJson.publication.claimSummary.diagnosticEntries).toBeGreaterThan(0);
+      expect(publicJson.publication.claimSummary.claimedEntries).toBe(0);
+      expect(html).toContain("cognibrain diagnostic leaderboard");
+      expect(html).toContain("Claim allowed: no");
+      expect(html).toContain("Diagnostic entries");
+      expect(html).toContain("Diagnostic/claim score");
+      expect(html).toContain("Diagnostic publication only");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

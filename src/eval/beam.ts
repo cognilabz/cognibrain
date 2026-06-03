@@ -63,6 +63,8 @@ interface BeamResult extends BenchmarkResult {
   details: BeamDetail[];
 }
 
+type BeamProof = "local-diagnostic" | "llm-harness";
+
 export async function runBeamBenchmark(options: Partial<BeamRunOptions> = {}) {
   const resolved: BeamRunOptions = {
     split: options.split ?? "100K",
@@ -102,8 +104,24 @@ export async function runBeamBenchmark(options: Partial<BeamRunOptions> = {}) {
     evaluateBeamMemoryRetriever("recency-only", selectedQuestions, memories, recencyOnly, resolved)
   ];
   const bestBaseline = Math.max(...baselines.map((baseline) => baseline.accuracy));
+  const diagnosticPassed = ours.accuracy > bestBaseline;
+  const qualityClaimAllowed = Boolean(evidenceJudge);
+  const proof: BeamProof = qualityClaimAllowed ? "llm-harness" : "local-diagnostic";
   const report = {
-    passed: ours.accuracy > bestBaseline,
+    passed: qualityClaimAllowed && diagnosticPassed,
+    diagnosticPassed,
+    proof,
+    qualityClaimAllowed,
+    marketClaimAllowed: false,
+    claimBoundary: {
+      scorer: qualityClaimAllowed ? "provider-evidence-support" : "beam-rubric-support-diagnostic",
+      qualityClaimAllowed,
+      marketClaimAllowed: false,
+      claimBlockers: qualityClaimAllowed ? [] : [
+        "BEAM deterministic rubric/entity/evidence-support scoring is diagnostic only.",
+        "Quality claims require MEMORY_INTELLIGENCE_COMMAND or an equivalent LLM/harness evidence judge."
+      ]
+    },
     generatedAt: new Date().toISOString(),
     source: {
       name: "BEAM",
@@ -123,6 +141,10 @@ export async function runBeamBenchmark(options: Partial<BeamRunOptions> = {}) {
       outputPath: resolved.outputPath,
       evidenceJudgeRequired: Boolean(resolved.requireEvidenceJudge),
       evidenceJudgeConfigured: Boolean(evidenceJudge)
+    },
+    judge: {
+      kind: qualityClaimAllowed ? "provider-evidence-support" : "deterministic-rubric-support",
+      status: qualityClaimAllowed ? "passed" : "diagnostic-only"
     },
     ours,
     baselines
@@ -521,7 +543,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     requireEvidenceJudge: args.has("--require-evidence-judge")
   });
   console.log(JSON.stringify(report, null, 2));
-  process.exit(report.passed ? 0 : 1);
+  process.exit(report.passed || (!args.has("--strict") && report.diagnosticPassed) ? 0 : 1);
 }
 
 function parseCliArgs(argv: string[]): Map<string, string> {

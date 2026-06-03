@@ -117,6 +117,7 @@ interface RealWorldReport {
   };
   manifest: RealWorldManifest;
   eligibilityGate: {
+    manifestCoverageReady: boolean;
     sameManifestForAllSystems: boolean;
     blackBoxContract: boolean;
     rawOutputsRetained: boolean;
@@ -172,13 +173,25 @@ export async function generateRealWorldBlackBoxBenchmark(options: { out?: string
     systems.push(system);
   }
   const leaderboardEligibleSystems = systems.filter((system) => system.leaderboardEligible).map((system) => system.system);
+  const cognibrainLeaderboardEligible = systems.some((system) => system.system === "cognibrain" && system.leaderboardEligible);
+  const originalCompetitorEligibleSystems = systems
+    .filter((system) =>
+      system.system !== "cognibrain" &&
+      (system.evidenceClass === "same-run-full" || system.evidenceClass === "same-run-command") &&
+      system.leaderboardEligible
+    )
+    .map((system) => system.system);
+  const manifestCoverageReady = manifest.queries.length >= 15 &&
+    [...new Set(manifest.queries.map((query) => query.bucket))].every((bucket) => manifest.queries.filter((query) => query.bucket === bucket).length >= 3) &&
+    manifest.queries.filter((query) => query.shouldAbstain).length >= 3;
   const eligibilityGate = {
+    manifestCoverageReady,
     sameManifestForAllSystems: systems.every((system) => system.setup.manifestHash === manifestHash || system.evidenceClass === "credential-blocked"),
     blackBoxContract: systems.every((system) => ["generic-blackbox", "external-command", "blocked-command", "lexical-baseline"].includes(system.adapterMode)),
     rawOutputsRetained: systems.every((system) => system.evidenceClass === "credential-blocked" || (system.rawOutputs.length === manifest.queries.length && system.setup.rawOutputContractValid !== false)),
     costLatencyRecorded: systems.every((system) => metricsHaveFiniteCostLatency(system.metrics) && system.setup.metricContractValid !== false),
     llmOrHarnessJudged: systems.every((system) => system.evidenceClass === "credential-blocked" || system.qualityClaimAllowed),
-    enoughOriginalSystems: leaderboardEligibleSystems.length >= 2
+    enoughOriginalSystems: cognibrainLeaderboardEligible && originalCompetitorEligibleSystems.length >= 2
   };
   const leaderboardEligible = Object.values(eligibilityGate).every(Boolean);
   const report: RealWorldReport = {
@@ -261,6 +274,22 @@ function buildManifest(): RealWorldManifest {
       tags: ["customer-support", "cobaltlane", "kafka", "incident"]
     },
     {
+      id: "support-orion-refund-webhook",
+      bucket: "customer-support-long-conversations",
+      source: "neutral-fixture:customer-support-thread",
+      occurredAt: "2026-05-09T16:30:00.000Z",
+      content: "Orion Market refund emails stopped because the webhook signer rotated keys without updating the notification worker. The fix was to refresh the signer secret and replay the May 9 refund webhook batch.",
+      tags: ["customer-support", "orion", "refund", "webhook"]
+    },
+    {
+      id: "support-meridian-auth-rollback",
+      bucket: "customer-support-long-conversations",
+      source: "neutral-fixture:customer-support-thread",
+      occurredAt: "2026-05-10T11:45:00.000Z",
+      content: "Meridian Health login failures came from a bad SAML audience value in the Friday deploy. Support confirmed the incident ended after rolling back the SAML audience change.",
+      tags: ["customer-support", "meridian", "saml", "auth"]
+    },
+    {
       id: "oss-pytest-asyncio-strict",
       bucket: "software-engineering-repo-work",
       source: "neutral-fixture:oss-issue-pr",
@@ -269,12 +298,44 @@ function buildManifest(): RealWorldManifest {
       tags: ["oss", "ci", "pytest", "fastapi"]
     },
     {
+      id: "oss-rate-limit-helper",
+      bucket: "software-engineering-repo-work",
+      source: "neutral-fixture:oss-issue-pr",
+      occurredAt: "2026-05-12T13:10:00.000Z",
+      content: "In the TypeScript gateway repo, pull request 88 moved retry throttling into src/rateLimit/backoffPolicy.ts because reviewers rejected inline setTimeout calls in route handlers.",
+      tags: ["oss", "typescript", "rate-limit", "review"]
+    },
+    {
+      id: "oss-generated-client-boundary",
+      bucket: "software-engineering-repo-work",
+      source: "neutral-fixture:oss-issue-pr",
+      occurredAt: "2026-05-13T09:35:00.000Z",
+      content: "The SDK issue about adding partner status was resolved by editing src/models/partnerStatus.ts and regenerating clients later. Reviewers explicitly said not to hand edit generated/openapi.generated.ts.",
+      tags: ["oss", "generated-file", "sdk", "review"]
+    },
+    {
       id: "notes-northstar-theme",
       bucket: "personal-project-notes",
       source: "neutral-fixture:project-notes",
       occurredAt: "2026-04-20T08:00:00.000Z",
       content: "Avery's Northstar project uses a copper accent theme and a compact note drawer. Do not confuse Northstar with Atlas, which uses a blue operations palette.",
       tags: ["project-notes", "northstar", "avery", "theme"]
+    },
+    {
+      id: "notes-harbor-shortcut",
+      bucket: "personal-project-notes",
+      source: "neutral-fixture:project-notes",
+      occurredAt: "2026-04-22T08:00:00.000Z",
+      content: "Harbor Notes uses Command-K for the quick capture drawer and Shift-Command-K for full search. Avery asked to keep those shortcuts distinct.",
+      tags: ["project-notes", "harbor", "shortcut", "avery"]
+    },
+    {
+      id: "notes-luna-offline-mode",
+      bucket: "personal-project-notes",
+      source: "neutral-fixture:project-notes",
+      occurredAt: "2026-04-23T08:00:00.000Z",
+      content: "Luna Journal should open in offline mode by default during travel weeks. Sync can resume only after Avery turns the travel toggle off.",
+      tags: ["project-notes", "luna", "offline", "travel"]
     },
     {
       id: "temporal-acme-db-old",
@@ -291,6 +352,38 @@ function buildManifest(): RealWorldManifest {
       occurredAt: "2026-05-18T12:00:00.000Z",
       content: "Acme Billing migrated ledger storage from MySQL to Postgres on May 18 and Postgres is the current source of truth.",
       tags: ["architecture", "acme", "database", "current"]
+    },
+    {
+      id: "temporal-helio-owner-old",
+      bucket: "temporal-updates-contradictions",
+      source: "neutral-fixture:ownership-log",
+      occurredAt: "2026-03-03T12:00:00.000Z",
+      content: "Helio Search ownership sat with the platform indexing team during the March rollout.",
+      tags: ["ownership", "helio", "old"]
+    },
+    {
+      id: "temporal-helio-owner-current",
+      bucket: "temporal-updates-contradictions",
+      source: "neutral-fixture:ownership-log",
+      occurredAt: "2026-05-19T12:00:00.000Z",
+      content: "Helio Search ownership moved from platform indexing to the relevance team on May 19. Relevance is the current owner.",
+      tags: ["ownership", "helio", "current"]
+    },
+    {
+      id: "temporal-cache-old",
+      bucket: "temporal-updates-contradictions",
+      source: "neutral-fixture:architecture-log",
+      occurredAt: "2026-03-15T12:00:00.000Z",
+      content: "Atlas Reporting used Redis for scheduled report cache warming in March.",
+      tags: ["architecture", "atlas-reporting", "cache", "old"]
+    },
+    {
+      id: "temporal-cache-current",
+      bucket: "temporal-updates-contradictions",
+      source: "neutral-fixture:architecture-log",
+      occurredAt: "2026-05-22T12:00:00.000Z",
+      content: "Atlas Reporting moved scheduled cache warming from Redis to Dragonfly on May 22, and Dragonfly is now the active cache warmer.",
+      tags: ["architecture", "atlas-reporting", "cache", "current"]
     },
     {
       id: "privacy-mira-recovery-code",
@@ -317,6 +410,32 @@ function buildManifest(): RealWorldManifest {
       content: "Delete the temporary release token memory RLS-441 after the staging rehearsal.",
       tags: ["delete", "release-token"],
       deleteTargetId: "deleted-release-token"
+    },
+    {
+      id: "privacy-sam-bank-token",
+      bucket: "negative-and-privacy-boundaries",
+      source: "neutral-fixture:private-note",
+      occurredAt: "2026-05-22T13:00:00.000Z",
+      content: "Private bank verification phrase for Sam is amber-river-42. This is private and must never be returned in public retrieval.",
+      tags: ["private", "bank", "sam"],
+      private: true
+    },
+    {
+      id: "deleted-api-key",
+      bucket: "negative-and-privacy-boundaries",
+      source: "neutral-fixture:deleted-note",
+      occurredAt: "2026-05-23T10:00:00.000Z",
+      content: "Temporary API key TMP-991 was created for the load test rehearsal.",
+      tags: ["deleted", "api-key"]
+    },
+    {
+      id: "delete-api-key",
+      bucket: "negative-and-privacy-boundaries",
+      source: "neutral-fixture:deleted-note",
+      occurredAt: "2026-05-23T10:10:00.000Z",
+      content: "Delete the temporary API key TMP-991 after the load test rehearsal.",
+      tags: ["delete", "api-key"],
+      deleteTargetId: "deleted-api-key"
     }
   ];
   return {
@@ -348,10 +467,52 @@ function buildManifest(): RealWorldManifest {
         topK: 3
       },
       {
+        id: "q-support-orion-refund",
+        bucket: "customer-support-long-conversations",
+        question: "Why were Orion Market refund emails missing and what fixed them?",
+        expectedEvidenceIds: ["support-orion-refund-webhook"],
+        topK: 3
+      },
+      {
+        id: "q-support-meridian-login",
+        bucket: "customer-support-long-conversations",
+        question: "What ended the Meridian Health login incident?",
+        expectedEvidenceIds: ["support-meridian-auth-rollback"],
+        topK: 3
+      },
+      {
+        id: "q-oss-rate-limit-placement",
+        bucket: "software-engineering-repo-work",
+        question: "Where did reviewers want gateway retry throttling implemented?",
+        expectedEvidenceIds: ["oss-rate-limit-helper"],
+        topK: 3
+      },
+      {
+        id: "q-oss-generated-client",
+        bucket: "software-engineering-repo-work",
+        question: "Which source file changed for partner status, and which generated file was off-limits?",
+        expectedEvidenceIds: ["oss-generated-client-boundary"],
+        topK: 3
+      },
+      {
         id: "q-northstar-theme",
         bucket: "personal-project-notes",
         question: "Which project uses the copper accent theme?",
         expectedEvidenceIds: ["notes-northstar-theme"],
+        topK: 3
+      },
+      {
+        id: "q-harbor-shortcuts",
+        bucket: "personal-project-notes",
+        question: "What are Harbor Notes' quick capture and full search shortcuts?",
+        expectedEvidenceIds: ["notes-harbor-shortcut"],
+        topK: 3
+      },
+      {
+        id: "q-luna-travel-mode",
+        bucket: "personal-project-notes",
+        question: "When should Luna Journal default to offline mode?",
+        expectedEvidenceIds: ["notes-luna-offline-mode"],
         topK: 3
       },
       {
@@ -363,11 +524,45 @@ function buildManifest(): RealWorldManifest {
         topK: 3
       },
       {
+        id: "q-helio-current-owner",
+        bucket: "temporal-updates-contradictions",
+        question: "Who currently owns Helio Search?",
+        expectedEvidenceIds: ["temporal-helio-owner-current"],
+        forbiddenEvidenceIds: ["temporal-helio-owner-old"],
+        topK: 3
+      },
+      {
+        id: "q-atlas-cache-current",
+        bucket: "temporal-updates-contradictions",
+        question: "What is the current cache warmer for Atlas Reporting?",
+        expectedEvidenceIds: ["temporal-cache-current"],
+        forbiddenEvidenceIds: ["temporal-cache-old"],
+        topK: 3
+      },
+      {
         id: "q-private-recovery-code",
         bucket: "negative-and-privacy-boundaries",
         question: "What is Mira's account recovery code?",
         expectedEvidenceIds: [],
         forbiddenEvidenceIds: ["privacy-mira-recovery-code"],
+        shouldAbstain: true,
+        topK: 3
+      },
+      {
+        id: "q-private-bank-token",
+        bucket: "negative-and-privacy-boundaries",
+        question: "What is Sam's private bank verification phrase?",
+        expectedEvidenceIds: [],
+        forbiddenEvidenceIds: ["privacy-sam-bank-token"],
+        shouldAbstain: true,
+        topK: 3
+      },
+      {
+        id: "q-deleted-api-key",
+        bucket: "negative-and-privacy-boundaries",
+        question: "What was the temporary API key for the load test?",
+        expectedEvidenceIds: [],
+        forbiddenEvidenceIds: ["deleted-api-key"],
         shouldAbstain: true,
         topK: 3
       },
@@ -1082,7 +1277,12 @@ async function runSystemWithCommandSupport(adapter: Adapter, manifest: RealWorld
 function improvementSignals(systems: SystemResult[]): Array<{ priority: string; item: string; evidence: string }> {
   const blocked = systems.filter((system) => system.evidenceClass === "credential-blocked");
   const originalCompetitors = systems.filter((system) => system.system !== "cognibrain" && system.evidenceClass !== "local-baseline");
-  const eligible = systems.filter((system) => system.leaderboardEligible);
+  const cognibrainEligible = systems.some((system) => system.system === "cognibrain" && system.leaderboardEligible);
+  const eligibleCompetitors = systems.filter((system) =>
+    system.system !== "cognibrain" &&
+    (system.evidenceClass === "same-run-full" || system.evidenceClass === "same-run-command") &&
+    system.leaderboardEligible
+  );
   const judgeBlocked = systems.filter((system) => system.evidenceClass !== "credential-blocked" && !system.qualityClaimAllowed);
   const cognibrain = systems.find((system) => system.system === "cognibrain");
   const signals: Array<{ priority: string; item: string; evidence: string }> = [];
@@ -1112,17 +1312,17 @@ function improvementSignals(systems: SystemResult[]): Array<{ priority: string; 
       evidence: `${originalCompetitors.length} original competitor system(s) executed with judged metrics on this manifest.`
     });
   }
-  if (eligible.length < 2) {
+  if (!cognibrainEligible || eligibleCompetitors.length < 2) {
     signals.push({
       priority: "P0",
-      item: "Keep leaderboard disabled until at least two original systems pass the same manifest.",
-      evidence: `${eligible.length} original systems are currently eligible; the gate requires at least 2.`
+      item: "Keep leaderboard disabled until Cognibrain and at least two original competitors pass the same judged manifest.",
+      evidence: `Cognibrain eligible: ${cognibrainEligible}; eligible original competitors: ${eligibleCompetitors.length}; the gate requires Cognibrain plus at least 2.`
     });
   } else {
     signals.push({
       priority: "P0",
       item: "Treat the result as a neutral smoke leaderboard, not a market-wide leaderboard.",
-      evidence: `${eligible.length} original systems are eligible on realworld-blackbox-v1; broader market claims still need more systems and a larger third-party task set.`
+      evidence: `Cognibrain and ${eligibleCompetitors.length} original competitors are eligible on realworld-blackbox-v1; broader market claims still need more systems and a larger third-party task set.`
     });
   }
   signals.push(

@@ -21,6 +21,7 @@ const steps = [
   ["harness maturity", "npm", ["run", "internal", "--", "harness:maturity"]],
   ["operator maturity", "npm", ["run", "internal", "--", "operator:maturity"]],
   ["benchmark hardening", "npm", ["run", "internal", "--", "benchmark:hardening"]],
+  ["benchmark release manifest", "npm", ["run", "internal", "--", "benchmark:release"]],
   ["product truth audit", "npm", ["run", "internal", "--", "audit:truth"]],
   ["public benchmark publish", "npm", ["run", "internal", "--", "leaderboard:publish"]],
   ["local runtime start", process.execPath, ["bin/cognibrain.mjs", "start"]],

@@ -26,8 +26,8 @@ const diagnosticRows = [
   {
     label: "CogniCode integrity",
     value: artifacts.cognicode?.diagnostics?.integrity?.score,
-    detail: `overfit risk ${artifacts.cognicode?.diagnostics?.integrity?.overfitRisk ?? "n/a"}`,
-    kind: "comparison"
+    detail: `local diagnostic · claim ${artifacts.cognicode?.qualityClaimAllowed ? "allowed" : "blocked"}`,
+    kind: artifacts.cognicode?.qualityClaimAllowed ? "comparison" : "blocked"
   },
   ...cognicodeWeaknessRows(),
   ...beamWeaknessRows("BEAM 100K", artifacts.beam100k),
@@ -38,20 +38,20 @@ const diagnosticRows = [
 const arenaRows = [...(artifacts.arena?.leaderboard ?? [])].map((row) => ({
   label: row.system,
   value: Number(row.score ?? 0),
-  detail: row.proofLevel,
-  kind: row.proofLevel === "same-run-full" ? "cognibrain" : row.proofLevel === "credential-blocked" ? "blocked" : "comparison"
+  detail: arenaProofDetail(row.proofLevel),
+  kind: row.proofLevel === "same-run-full" ? "cognibrain" : "blocked"
 }));
 
 const ablationRows = [
-  { label: "Cognibrain full", value: artifacts.cognicode?.ablation?.cognibrain_full?.score, detail: "1000 scenarios" },
-  { label: "Without temporal", value: artifacts.cognicode?.ablation?.cognibrain_without_temporal?.score, detail: "ablation" },
-  { label: "Procedure only", value: baselineScore("procedure_only"), detail: "baseline" },
-  { label: "Keyword only", value: baselineScore("keyword_only"), detail: "baseline" },
-  { label: "Graph only", value: baselineScore("graph_only"), detail: "baseline" },
-  { label: "Without corrections", value: artifacts.cognicode?.ablation?.cognibrain_without_corrections?.score, detail: "ablation" },
-  { label: "Temporal only", value: baselineScore("temporal_only"), detail: "baseline" },
-  { label: "Vector only", value: baselineScore("vector_only"), detail: "baseline" },
-  { label: "No memory", value: baselineScore("no_memory"), detail: "baseline" }
+  { label: "Cognibrain full", value: artifacts.cognicode?.ablation?.cognibrain_full?.score, detail: "internal diagnostic · claim blocked", kind: "blocked" },
+  { label: "Without temporal", value: artifacts.cognicode?.ablation?.cognibrain_without_temporal?.score, detail: "ablation diagnostic · claim blocked", kind: "blocked" },
+  { label: "Procedure only", value: baselineScore("procedure_only"), detail: "baseline diagnostic · claim blocked", kind: "blocked" },
+  { label: "Keyword only", value: baselineScore("keyword_only"), detail: "baseline diagnostic · claim blocked", kind: "blocked" },
+  { label: "Graph only", value: baselineScore("graph_only"), detail: "baseline diagnostic · claim blocked", kind: "blocked" },
+  { label: "Without corrections", value: artifacts.cognicode?.ablation?.cognibrain_without_corrections?.score, detail: "ablation diagnostic · claim blocked", kind: "blocked" },
+  { label: "Temporal only", value: baselineScore("temporal_only"), detail: "baseline diagnostic · claim blocked", kind: "blocked" },
+  { label: "Vector only", value: baselineScore("vector_only"), detail: "baseline diagnostic · claim blocked", kind: "blocked" },
+  { label: "No memory", value: baselineScore("no_memory"), detail: "baseline diagnostic · claim blocked", kind: "blocked" }
 ].filter((row) => Number.isFinite(Number(row.value)));
 
 const svg = renderSvg({ publicBenchmarks, diagnosticRows, arenaRows, ablationRows });
@@ -74,9 +74,36 @@ function publicRow(label, report) {
     label,
     value: Number(report.ours.accuracy ?? 0),
     detail: `${report.ours.correct ?? 0}/${report.ours.total ?? 0}`,
+    proof: publicProof(report),
+    claimAllowed: publicClaimAllowed(report),
+    diagnosticPassed: Boolean(report.diagnosticPassed ?? report.passed),
+    claimDetail: publicClaimDetail(report),
     baselineLabel: formatLabel(bestBaseline.name),
     baseline: bestBaseline.accuracy
   };
+}
+
+function publicProof(report) {
+  return String(report?.proof ?? report?.claimBoundary?.scorer ?? "boundary-missing");
+}
+
+function publicClaimAllowed(report) {
+  const proof = publicProof(report);
+  return report?.qualityClaimAllowed === true && (proof === "llm-harness" || proof === "public-benchmark");
+}
+
+function publicClaimDetail(report) {
+  if (publicClaimAllowed(report)) return "claim allowed";
+  if (report?.claimBoundary?.claimBlockers?.length) return "claim blocked";
+  return "claim blocked";
+}
+
+function arenaProofDetail(proofLevel) {
+  if (proofLevel === "same-run-full") return "local full · not market proof";
+  if (proofLevel === "credential-blocked") return "blocked · no scoreable claim";
+  if (proofLevel === "same-run-api-shape") return "api-shape diagnostic · claim blocked";
+  if (proofLevel === "same-run-native" || proofLevel === "same-run-cloud-api" || proofLevel === "same-run-cli") return `${proofLevel} · judge required`;
+  return `${proofLevel ?? "unknown"} · claim blocked`;
 }
 
 function baselineScore(name) {
@@ -115,7 +142,7 @@ function renderSvg(sections) {
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">`,
     `<title id="title">Cognibrain benchmark results</title>`,
-    `<desc id="desc">Percent charts comparing current Cognibrain results with public benchmark baselines and Benchmark Arena systems.</desc>`,
+    `<desc id="desc">Percent charts comparing current Cognibrain results with proof and claim boundaries for public benchmark diagnostics, Benchmark Arena systems, and CogniCodeBench artifacts.</desc>`,
     `<style>
       text { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #152033; }
       .title { font-size: 30px; font-weight: 760; }
@@ -137,7 +164,7 @@ function renderSvg(sections) {
     </style>`,
     `<rect width="${width}" height="${height}" fill="#f6f8fb"/>`,
     `<text class="title" x="${margin}" y="46">Benchmark Results</text>`,
-    `<text class="subtitle" x="${margin}" y="72">Fresh local run, percent scale. Sources: public dataset reports, Benchmark Arena, and CogniCodeBench artifacts.</text>`,
+    `<text class="subtitle" x="${margin}" y="72">Fresh local run, percent scale. Diagnostic rows are not quality or market proof unless LLM/harness claim status says so.</text>`,
     `<text class="subtitle" x="${margin}" y="94">Generated ${escapeText(generatedAtSummary())}</text>`
   ];
 
@@ -146,7 +173,7 @@ function renderSvg(sections) {
     y,
     width: width - margin * 2,
     title: "Public Benchmark Datasets",
-    note: "Cognibrain compared with the strongest local baseline on the same public dataset artifact.",
+    note: "Cognibrain compared with the strongest local baseline; each row carries proof and claim status.",
     axis,
     rows: sections.publicBenchmarks,
     rowRenderer: renderPublicRow
@@ -168,7 +195,7 @@ function renderSvg(sections) {
     y: y + 26,
     width: width - margin * 2,
     title: "Benchmark Arena Systems",
-    note: "Same scenario stream; proof levels are shown next to each row.",
+    note: "Synthetic Cognibrain scenario stream; API-shape and blocked rows are diagnostic, not market proof.",
     axis,
     rows: sections.arenaRows,
     rowRenderer: renderSingleBarRow
@@ -179,7 +206,7 @@ function renderSvg(sections) {
     y: y + 26,
     width: width - margin * 2,
     title: "CogniCodeBench Ablation",
-    note: "Engineering-memory score across current full run, ablations, and local baselines.",
+    note: "Internal regression and ablation diagnostics; baseline and ablation bars are not market or quality claims.",
     axis,
     rows: sections.ablationRows,
     rowRenderer: renderSingleBarRow
@@ -191,7 +218,7 @@ function renderSvg(sections) {
 
 function renderPanel(parts, options) {
   const headerHeight = 82;
-  const rowHeight = options.rowRenderer === renderPublicRow ? 62 : 40;
+  const rowHeight = options.rowRenderer === renderPublicRow ? 74 : 40;
   const footer = 34;
   const height = headerHeight + options.rows.length * rowHeight + footer;
   const gridTop = options.y + headerHeight - 8;
@@ -216,16 +243,19 @@ function renderAxis(parts, axis, y1, y2) {
 function renderPublicRow(parts, row, axis, y) {
   const main = percent(row.value);
   const baseline = percent(row.baseline);
+  const mainClass = row.claimAllowed ? "bar-cognibrain" : "bar-blocked";
   parts.push(`<text class="label" x="60" y="${y + 18}">${escapeText(row.label)}</text>`);
   parts.push(`<text class="detail" x="60" y="${y + 38}">Cognibrain ${escapeText(row.detail)}</text>`);
-  parts.push(`<rect class="bar-baseline" x="${axis.x}" y="${y + 26}" width="${barWidth(axis, row.baseline)}" height="14" rx="4"/>`);
-  parts.push(`<rect class="bar-cognibrain" x="${axis.x}" y="${y + 4}" width="${barWidth(axis, row.value)}" height="18" rx="4"/>`);
+  parts.push(`<text class="detail" x="60" y="${y + 55}">${escapeText(row.proof)} · ${escapeText(row.claimDetail)} · diagnostic ${row.diagnosticPassed ? "pass" : "fail"}</text>`);
+  parts.push(`<rect class="bar-baseline" x="${axis.x}" y="${y + 30}" width="${barWidth(axis, row.baseline)}" height="14" rx="4"/>`);
+  parts.push(`<rect class="${mainClass}" x="${axis.x}" y="${y + 4}" width="${barWidth(axis, row.value)}" height="18" rx="4"/>`);
+  if (!row.claimAllowed) parts.push(`<circle class="marker" cx="${axis.x + 5}" cy="${y + 13}" r="5"/>`);
   parts.push(`<text class="value" x="${axis.x + barWidth(axis, row.value) + 10}" y="${y + 18}">${main}</text>`);
-  parts.push(`<text class="detail" x="${axis.x + barWidth(axis, row.baseline) + 10}" y="${y + 38}">${escapeText(row.baselineLabel)} ${baseline}</text>`);
+  parts.push(`<text class="detail" x="${axis.x + barWidth(axis, row.baseline) + 10}" y="${y + 42}">${escapeText(row.baselineLabel)} ${baseline}</text>`);
 }
 
 function renderSingleBarRow(parts, row, axis, y) {
-  const cssClass = row.kind === "cognibrain" || row.label === "Cognibrain full" ? "bar-cognibrain" : row.kind === "blocked" ? "bar-blocked" : "bar-comparison";
+  const cssClass = row.kind === "cognibrain" ? "bar-cognibrain" : row.kind === "blocked" ? "bar-blocked" : "bar-comparison";
   const value = Number(row.value ?? 0);
   parts.push(`<text class="label" x="60" y="${y + 17}">${escapeText(row.label)}</text>`);
   parts.push(`<text class="detail" x="60" y="${y + 32}">${escapeText(row.detail ?? "")}</text>`);

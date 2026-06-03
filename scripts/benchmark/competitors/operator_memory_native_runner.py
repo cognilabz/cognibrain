@@ -36,7 +36,6 @@ def main() -> int:
         output = {
             "proofLevel": "credential-blocked",
             "adapterMode": "blocked-command",
-            "checks": empty_checks(),
             "capabilityGaps": [f"{args.system} operator-memory native runner failed: {exc}"],
             "latencyMs": elapsed_ms(started),
             "evidence": {
@@ -78,12 +77,9 @@ def run_mem0(scenario: dict[str, Any], started: float) -> dict[str, Any]:
     for text in memory_inputs(scenario):
         written.append(memory.add(text, user_id=user_id, infer=False, metadata=metadata(scenario)))
     found = memory.search(scenario["query"], filters={"user_id": user_id}, top_k=5)
-    haystack = haystack_from(scenario, written, found)
-    checks = score_haystack(scenario, haystack, has_source_revision=False, has_connector_refresh=False)
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
-        "checks": checks,
         "capabilityGaps": [
             "Mem0 OSS run used real mem0ai add/search with infer=false and local Qdrant/FastEmbed",
             "Mem0 retrieved memories but did not run source-aware Dream, sourceRef revalidation or connector failure accounting",
@@ -96,6 +92,7 @@ def run_mem0(scenario: dict[str, Any], started: float) -> dict[str, Any]:
             "vectorStore": "qdrant-local",
             "embedder": "fastembed/BAAI/bge-small-en-v1.5",
             "llm": "openai client constructed but not called because infer=false",
+            "note": "Raw runner evidence only. Source-aware checks must be produced by MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND; this runner does not self-score.",
             "written": compact(written),
             "search": compact(found),
         },
@@ -112,12 +109,9 @@ def run_langmem(scenario: dict[str, Any], started: float) -> dict[str, Any]:
     search = create_search_memory_tool(namespace, store=store)
     written = [manage.invoke({"content": text, "action": "create"}) for text in memory_inputs(scenario)]
     found = search.invoke({"query": scenario["query"], "limit": 5})
-    haystack = haystack_from(scenario, written, found)
-    checks = score_haystack(scenario, haystack, has_source_revision=False, has_connector_refresh=False)
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
-        "checks": checks,
         "capabilityGaps": [
             "LangMem run used real create_manage_memory_tool/create_search_memory_tool with LangGraph InMemoryStore",
             "LangMem retrieved memories but did not run source-aware Dream, sourceRef revalidation or connector failure accounting",
@@ -128,6 +122,7 @@ def run_langmem(scenario: dict[str, Any], started: float) -> dict[str, Any]:
             "runner": "operator-memory-langmem-python",
             "package": f"langmem=={version('langmem')}",
             "store": "langgraph.store.memory.InMemoryStore",
+            "note": "Raw runner evidence only. Source-aware checks must be produced by MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND; this runner does not self-score.",
             "written": compact(written),
             "search": compact(found),
         },
@@ -170,12 +165,9 @@ async def run_graphiti(scenario: dict[str, Any], started: float, system: str) ->
             group_id=group_id,
         ))
     found = await graphiti.search(scenario["query"], group_ids=[group_id], num_results=5)
-    haystack = haystack_from(scenario, episodes, found)
-    checks = score_haystack(scenario, haystack, has_source_revision=False, has_connector_refresh=False)
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
-        "checks": checks,
         "capabilityGaps": [
             "Graphiti run used real graphiti-core with local Kuzu driver",
             "Graphiti retrieved graph memories but did not run Cognibrain source-aware Dream or connector failure accounting in this adapter",
@@ -185,6 +177,7 @@ async def run_graphiti(scenario: dict[str, Any], started: float, system: str) ->
             "runner": "operator-memory-graphiti-python-kuzu",
             "package": f"graphiti-core=={version('graphiti-core')}",
             "graphDriver": "kuzu-local",
+            "note": "Raw runner evidence only. Source-aware checks must be produced by MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND; this runner does not self-score.",
             "episodes": compact(episodes),
             "search": compact(found),
         },
@@ -205,12 +198,9 @@ async def run_cognee(scenario: dict[str, Any], started: float) -> dict[str, Any]
     for text in memory_inputs(scenario):
         remembered.append(await cognee.remember(text, dataset_name=dataset, self_improvement=False))
     recalled = await cognee.recall(scenario["query"], datasets=[dataset], only_context=True, auto_route=False, top_k=5)
-    haystack = haystack_from(scenario, remembered, recalled)
-    checks = score_haystack(scenario, haystack, has_source_revision=False, has_connector_refresh=False)
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
-        "checks": checks,
         "capabilityGaps": [
             "Cognee run used real remember/recall API with operator-supplied LLM credentials",
             "Cognee retrieved knowledge but did not run Cognibrain source-aware Dream or connector failure accounting in this adapter",
@@ -219,6 +209,7 @@ async def run_cognee(scenario: dict[str, Any], started: float) -> dict[str, Any]
         "evidence": {
             "runner": "operator-memory-cognee-python",
             "package": f"cognee=={version('cognee')}",
+            "note": "Raw runner evidence only. Source-aware checks must be produced by MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND; this runner does not self-score.",
             "remember": compact(remembered),
             "recall": compact(recalled),
         },
@@ -246,33 +237,10 @@ def metadata(scenario: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def haystack_from(scenario: dict[str, Any], written: Any, found: Any) -> str:
-    return "\n".join([
-        scenario["query"],
-        compact(written, 12000),
-        compact(found, 12000),
-    ]).lower()
-
-
-def score_haystack(scenario: dict[str, Any], haystack: str, *, has_source_revision: bool, has_connector_refresh: bool) -> dict[str, bool]:
-    current = all(term.lower() in haystack for term in scenario["expectedTerms"])
-    stale_suppressed = all(term.lower() not in haystack for term in scenario["staleTerms"])
-    failure_contained = scenario["kind"] != "connector_failure" or (current and stale_suppressed)
-    return {
-        "currentTruthSelected": current,
-        "staleTruthSuppressed": stale_suppressed,
-        "sourceRefRevalidated": bool(has_source_revision),
-        "connectorRefreshAccounted": bool(has_connector_refresh),
-        "beliefRevisionApplied": bool(has_source_revision and stale_suppressed),
-        "failureContained": failure_contained,
-    }
-
-
 def blocked(system: str, started: float, reason: str) -> dict[str, Any]:
     return {
         "proofLevel": "credential-blocked",
         "adapterMode": "blocked-command",
-        "checks": empty_checks(),
         "capabilityGaps": [reason],
         "latencyMs": elapsed_ms(started),
         "evidence": {
@@ -294,17 +262,6 @@ def package_versions(system: str) -> dict[str, str | None]:
         "cognee": ["cognee"],
     }.get(system, [])
     return {name: version(name) for name in names}
-
-
-def empty_checks() -> dict[str, bool]:
-    return {
-        "currentTruthSelected": False,
-        "staleTruthSuppressed": False,
-        "sourceRefRevalidated": False,
-        "connectorRefreshAccounted": False,
-        "beliefRevisionApplied": False,
-        "failureContained": False,
-    }
 
 
 def native_root() -> Path:

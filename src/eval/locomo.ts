@@ -95,8 +95,18 @@ export function runLocomoBenchmark(options: Partial<LocomoRunOptions> = {}) {
     evaluateLocomoMemoryRetriever("recency-only", selected, memories, recencyOnly, resolved)
   ];
   const bestBaseline = Math.max(...baselines.map((baseline) => baseline.accuracy));
+  const diagnosticPassed = ours.accuracy > bestBaseline;
+  const claimBoundary = publicDatasetIdRecallBoundary(
+    "locomo-evidence-id-recall-diagnostic",
+    "LoCoMo evidence-id recall uses dialog IDs as retrieval diagnostics; it is not an LLM/harness quality judge."
+  );
   const report = {
-    passed: ours.accuracy > bestBaseline,
+    passed: diagnosticPassed,
+    diagnosticPassed,
+    proof: claimBoundary.proof,
+    qualityClaimAllowed: claimBoundary.qualityClaimAllowed,
+    judge: claimBoundary.judge,
+    claimBoundary,
     generatedAt: new Date().toISOString(),
     source: {
       name: "LoCoMo",
@@ -278,6 +288,20 @@ function finalizeLocomoResult(
     meanLatencyMs: (performance.now() - started) / Math.max(1, details.length),
     categories,
     details
+  };
+}
+
+function publicDatasetIdRecallBoundary(scorer: string, note: string) {
+  return {
+    proof: "local-diagnostic" as const,
+    scorer,
+    judge: { kind: "missing" as const, requiredForQualityClaim: true },
+    qualityClaimAllowed: false,
+    marketClaimAllowed: false,
+    claimBlockers: [
+      note,
+      "Comparable quality or market claims require LLM/harness judging or an official same-protocol public benchmark artifact."
+    ]
   };
 }
 

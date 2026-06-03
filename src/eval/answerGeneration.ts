@@ -26,6 +26,10 @@ interface BenchmarkDetail {
   score?: number;
 }
 
+type AnswerProof = "local-diagnostic" | "llm-harness";
+type AnswerJudgeKind = "deterministic-diagnostic" | "llm-harness" | "blocked";
+type AnswerJudgeDecision = { kind: AnswerJudgeKind; score: number; passed: boolean; reason?: string; qualityClaimAllowed: boolean };
+
 interface AnswerQuestionArtifact {
   id: string;
   dataset: string;
@@ -35,7 +39,7 @@ interface AnswerQuestionArtifact {
   expected: string[];
   retrievedEvidenceIds: string[];
   retrievedEvidence: string[];
-  judge: { name: string; score: number; passed: boolean; reason: string };
+  judge: { name: string; kind: AnswerJudgeKind; score: number; passed: boolean; reason: string; qualityClaimAllowed: boolean };
 }
 
 interface AnswerDatasetArtifact {
@@ -44,6 +48,15 @@ interface AnswerDatasetArtifact {
   metric: "answer_generation_quality";
   answerer: string;
   judge: string;
+  proof: AnswerProof;
+  qualityClaimAllowed: boolean;
+  marketClaimAllowed: false;
+  claimBoundary: {
+    scorer: "deterministic-coverage-diagnostic" | "external-llm-harness-judge";
+    qualityClaimAllowed: boolean;
+    marketClaimAllowed: false;
+    claimBlockers: string[];
+  };
   methodology: {
     sameDataset: boolean;
     sameQuestionSet: boolean;
@@ -62,6 +75,15 @@ export interface AnswerGenerationArtifact {
   generatedAt: string;
   mode: "answer-generation";
   privacy: { benchmarkQuestionsOnly: boolean; includesUserData: boolean };
+  proof: AnswerProof;
+  qualityClaimAllowed: boolean;
+  marketClaimAllowed: false;
+  claimBoundary: {
+    scorer: "deterministic-coverage-diagnostic" | "external-llm-harness-judge";
+    qualityClaimAllowed: boolean;
+    marketClaimAllowed: false;
+    claimBlockers: string[];
+  };
   datasets: AnswerDatasetArtifact[];
   summary: { totalQuestions: number; meanScore: number };
 }
@@ -77,11 +99,24 @@ export function runAnswerGenerationBenchmark(options: { reports?: string[]; outp
   const datasets = reports.filter(existsSync).flatMap((path) => datasetArtifacts(path, options.tokenBudget ?? 1200));
   const totalQuestions = datasets.reduce((sum, dataset) => sum + dataset.total, 0);
   const meanScore = datasets.reduce((sum, dataset) => sum + dataset.score * dataset.total, 0) / Math.max(1, totalQuestions);
+  const qualityClaimAllowed = datasets.length > 0 && datasets.every((dataset) => dataset.qualityClaimAllowed);
   const artifact: AnswerGenerationArtifact = {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
     mode: "answer-generation",
     privacy: { benchmarkQuestionsOnly: true, includesUserData: false },
+    proof: qualityClaimAllowed ? "llm-harness" : "local-diagnostic",
+    qualityClaimAllowed,
+    marketClaimAllowed: false,
+    claimBoundary: {
+      scorer: qualityClaimAllowed ? "external-llm-harness-judge" : "deterministic-coverage-diagnostic",
+      qualityClaimAllowed,
+      marketClaimAllowed: false,
+      claimBlockers: qualityClaimAllowed ? [] : [
+        "Answer-generation artifacts require a successful external LLM/harness judge command before quality scores are claimable.",
+        "Deterministic expected-term coverage and blocked judge-command rows are diagnostics only."
+      ]
+    },
     datasets,
     summary: { totalQuestions, meanScore }
   };
@@ -103,16 +138,26 @@ function datasetArtifacts(path: string, tokenBudget: number): AnswerDatasetArtif
 }
 
 function buildDataset(path: string, dataset: string, details: BenchmarkDetail[], topK: number | undefined, tokenBudget: number): AnswerDatasetArtifact {
-  const answerer = process.env.MEMORY_BENCHMARK_ANSWERER ?? "deterministic-extractive-v1";
-  const judge = process.env.MEMORY_BENCHMARK_JUDGE ?? "deterministic-coverage-v1";
+  const answerer = process.env.MEMORY_BENCHMARK_ANSWERER ?? (process.env.MEMORY_BENCHMARK_ANSWERER_COMMAND ? "external-answerer-command" : "deterministic-extractive-v1");
+  const judge = process.env.MEMORY_BENCHMARK_JUDGE ?? (process.env.MEMORY_BENCHMARK_JUDGE_COMMAND ? "external-llm-harness-command" : "deterministic-coverage-v1");
   const questions = details.map((detail) => questionArtifact(dataset, detail, answerer, judge));
   const score = questions.reduce((sum, item) => sum + item.judge.score, 0) / Math.max(1, questions.length);
+  const qualityClaimAllowed = questions.length > 0 && questions.every((item) => item.judge.qualityClaimAllowed);
   return {
     dataset,
     sourceArtifact: path,
     metric: "answer_generation_quality",
     answerer,
     judge,
+    proof: qualityClaimAllowed ? "llm-harness" : "local-diagnostic",
+    qualityClaimAllowed,
+    marketClaimAllowed: false,
+    claimBoundary: {
+      scorer: qualityClaimAllowed ? "external-llm-harness-judge" : "deterministic-coverage-diagnostic",
+      qualityClaimAllowed,
+      marketClaimAllowed: false,
+      claimBlockers: qualityClaimAllowed ? [] : answerGenerationClaimBlockers(questions)
+    },
     methodology: {
       sameDataset: true,
       sameQuestionSet: true,
@@ -149,7 +194,12 @@ function questionArtifact(dataset: string, detail: BenchmarkDetail, answerer: st
     expected,
     retrievedEvidence
   });
-  const judge: { score: number; passed: boolean; reason?: string } = providerJudge ? normalizeJudge(providerJudge, judgeName) : judgeAnswer(generatedAnswer, expected, detail);
+  const judgeCommandConfigured = Boolean(process.env.MEMORY_BENCHMARK_JUDGE_COMMAND);
+  const judge = providerJudge
+    ? normalizeJudge(providerJudge, judgeName)
+    : judgeCommandConfigured
+      ? blockedJudge(judgeName, "judge command returned no valid JSON object")
+      : judgeAnswer(generatedAnswer, expected, detail);
   return {
     id: detail.id,
     dataset,
@@ -183,17 +233,29 @@ function splitArgs(value: string | undefined): string[] {
   return value ? value.split(/\s+/).filter(Boolean) : [];
 }
 
-function normalizeJudge(output: Record<string, any>, judgeName: string) {
+function normalizeJudge(output: Record<string, any>, judgeName: string): AnswerJudgeDecision {
   if (typeof output.score !== "number" || !Number.isFinite(output.score) || output.score < 0 || output.score > 1) {
-    return { score: 0, passed: false, reason: `${judgeName} provider contract invalid: score must be a finite 0..1 number` };
+    return blockedJudge(judgeName, "score must be a finite 0..1 number");
   }
   if (typeof output.passed !== "boolean") {
-    return { score: 0, passed: false, reason: `${judgeName} provider contract invalid: passed must be a boolean` };
+    return blockedJudge(judgeName, "passed must be a boolean");
   }
   return {
+    kind: "llm-harness" as const,
     score: output.score,
     passed: output.passed,
-    reason: typeof output.reason === "string" ? output.reason : `${judgeName} provider score`
+    reason: typeof output.reason === "string" ? output.reason : `${judgeName} provider score`,
+    qualityClaimAllowed: true
+  };
+}
+
+function blockedJudge(judgeName: string, reason: string): AnswerJudgeDecision {
+  return {
+    kind: "blocked" as const,
+    score: 0,
+    passed: false,
+    reason: `${judgeName} provider contract invalid: ${reason}`,
+    qualityClaimAllowed: false
   };
 }
 
@@ -203,13 +265,22 @@ function expectedTerms(detail: BenchmarkDetail): string[] {
   return detail.expectedEvidence ?? [];
 }
 
-function judgeAnswer(answer: string, expected: string[], detail: BenchmarkDetail) {
-  if (typeof detail.score === "number") return { score: Math.max(0, Math.min(1, detail.score)), passed: detail.score >= 0.5 };
-  if (detail.passed === true && expected.length === 0) return { score: 1, passed: true };
+function judgeAnswer(answer: string, expected: string[], detail: BenchmarkDetail): AnswerJudgeDecision {
+  if (typeof detail.score === "number") return { kind: "deterministic-diagnostic" as const, score: Math.max(0, Math.min(1, detail.score)), passed: detail.score >= 0.5, qualityClaimAllowed: false };
+  if (detail.passed === true && expected.length === 0) return { kind: "deterministic-diagnostic" as const, score: 1, passed: true, qualityClaimAllowed: false };
   const normalized = answer.toLowerCase();
   const hits = expected.filter((term) => normalized.includes(term.toLowerCase()));
   const score = expected.length ? hits.length / expected.length : detail.passed ? 1 : 0;
-  return { score, passed: score >= 0.5 };
+  return { kind: "deterministic-diagnostic" as const, score, passed: score >= 0.5, qualityClaimAllowed: false };
+}
+
+function answerGenerationClaimBlockers(questions: AnswerQuestionArtifact[]): string[] {
+  const blocked = questions.filter((question) => question.judge.kind === "blocked").length;
+  return [
+    ...(blocked ? [`${blocked} question(s) had blocked or invalid external judge evidence.`] : []),
+    "Deterministic expected-term coverage is diagnostic only and cannot support answer-quality claims.",
+    "Configure MEMORY_BENCHMARK_JUDGE_COMMAND with a strict LLM/harness judge to make answer-generation scores claimable."
+  ];
 }
 
 function tokenizeExpected(value: string): string[] {

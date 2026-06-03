@@ -45,8 +45,18 @@ export function buildLeaderboardArtifact(options: { nextgenPath?: string; evalua
         metric: "suite_score",
         score: Number(suite.score),
         artifact: nextgenPath,
-        methodology: { dataset: "deterministic-fixture", topK: 3 },
-        notes: ["Deterministic fixture suite; no user data included."]
+        methodology: {
+          dataset: "deterministic-fixture",
+          topK: 3,
+          proof: String(suite.proof ?? report.proof ?? "local-lifecycle-diagnostic"),
+          scorer: String(suite.claimBoundary?.scorer ?? report.claimBoundary?.scorer ?? "deterministic-fixture-diagnostic"),
+          qualityClaimAllowed: Boolean(suite.qualityClaimAllowed ?? report.qualityClaimAllowed),
+          marketClaimAllowed: Boolean(suite.marketClaimAllowed ?? report.marketClaimAllowed)
+        },
+        notes: [
+          "Local lifecycle diagnostic suite; no user data included.",
+          "Not quality-claim eligible without LLM/harness or comparable public-benchmark proof."
+        ]
       }));
     }
   }
@@ -58,14 +68,17 @@ export function buildLeaderboardArtifact(options: { nextgenPath?: string; evalua
       metric: "accuracy",
       score: Number(report.ours?.accuracy ?? 0),
       artifact: evaluationPath,
-      methodology: { dataset: "synthetic", topK: 4 },
-      notes: ["Local synthetic gate calibrated for compact retrieval context."]
+      methodology: { dataset: "synthetic", topK: 4, scorer: report.claimBoundary?.scorer ?? "deterministic-expected-id-substring-diagnostic" },
+      notes: [
+        "Local synthetic expected-id diagnostic calibrated for compact retrieval context.",
+        report.claimBoundary?.qualityClaimAllowed === false ? "Not quality-claim eligible without LLM/harness or comparable public-benchmark proof." : "Claim boundary missing; treat as diagnostic only."
+      ]
     }));
   }
   if (existsSync(answerGenerationPath)) {
     const artifact = JSON.parse(readFileSync(answerGenerationPath, "utf8"));
     for (const dataset of artifact.datasets ?? []) {
-      const judgedByHarness = !String(dataset.judge ?? "").startsWith("deterministic-");
+      const judgedByHarness = dataset.qualityClaimAllowed === true && dataset.proof === "llm-harness";
       entries.push({
         suite: String(dataset.dataset),
         category: "answer_generation",
@@ -75,7 +88,13 @@ export function buildLeaderboardArtifact(options: { nextgenPath?: string; evalua
         proof: judgedByHarness ? "llm-harness" : "local-diagnostic",
         claimAllowed: judgedByHarness,
         claimClass: judgedByHarness ? "artifact-quality" : "diagnostic-only",
-        methodology: { ...(dataset.methodology ?? {}), judgeContract: judgedByHarness ? "external-provider-command" : "deterministic-coverage-diagnostic" },
+        methodology: {
+          ...(dataset.methodology ?? {}),
+          proof: dataset.proof ?? "local-diagnostic",
+          qualityClaimAllowed: dataset.qualityClaimAllowed === true,
+          marketClaimAllowed: dataset.marketClaimAllowed === true,
+          judgeContract: judgedByHarness ? "external-provider-command" : "deterministic-coverage-diagnostic"
+        },
         notes: [
           `answerer=${dataset.answerer}`,
           `judge=${dataset.judge}`,

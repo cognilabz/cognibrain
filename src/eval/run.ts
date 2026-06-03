@@ -21,12 +21,31 @@ export function runEvaluation() {
   const bestBaseline = Math.max(...baselines.map((item) => item.accuracy));
   const marketGate = {
     name: "synthetic-token-efficiency-threshold",
-    reference: "Local synthetic gate calibrated for high retrieval accuracy with a compact context budget. Direct market claims live in benchmark:market.",
+    reference: "Local synthetic diagnostic calibrated for high retrieval accuracy with a compact context budget. Direct market claims live in benchmark:market and require LLM/harness or comparable public-benchmark proof.",
     requiredAccuracy: 0.94,
     requiredMeanTokensUnder: 900
   };
-  const passed = ours.accuracy > bestBaseline && ours.accuracy >= marketGate.requiredAccuracy && ours.meanTokens < marketGate.requiredMeanTokensUnder;
-  const report = { passed, generatedAt: new Date().toISOString(), marketGate, ours, baselines };
+  const diagnosticPassed = ours.accuracy > bestBaseline && ours.accuracy >= marketGate.requiredAccuracy && ours.meanTokens < marketGate.requiredMeanTokensUnder;
+  const claimBoundary = {
+    proof: "local-diagnostic" as const,
+    scorer: "deterministic-expected-id-substring-diagnostic",
+    judge: { kind: "missing" as const, requiredForQualityClaim: true },
+    qualityClaimAllowed: false,
+    marketClaimAllowed: false,
+    claimBlockers: [
+      "Synthetic fixture expected-id substring scoring is diagnostic only.",
+      "Set a neutral LLM/harness judge or comparable public-benchmark artifact before quality or market claims."
+    ]
+  };
+  const report = {
+    passed: diagnosticPassed,
+    diagnosticPassed,
+    generatedAt: new Date().toISOString(),
+    marketGate,
+    claimBoundary,
+    ours,
+    baselines
+  };
   mkdirSync(resolve("artifacts"), { recursive: true });
   writeFileSync(resolve("artifacts/evaluation-report.json"), JSON.stringify(report, null, 2));
   return report;

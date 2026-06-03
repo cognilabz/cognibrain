@@ -44,7 +44,6 @@ if (result.status === 0 && result.stdout.trim()) {
 console.log(JSON.stringify({
   proofLevel: "credential-blocked",
   adapterMode: "blocked-command",
-  checks: emptyChecks(),
   capabilityGaps: [`${system} native runner failed before producing JSON`],
   latencyMs: Date.now() - started,
   evidence: {
@@ -61,7 +60,6 @@ function printBlocked(blockedSystem, reason) {
   console.log(JSON.stringify({
     proofLevel: "credential-blocked",
     adapterMode: "blocked-command",
-    checks: emptyChecks(),
     capabilityGaps: [reason],
     latencyMs: Date.now() - started,
     evidence: {
@@ -71,17 +69,6 @@ function printBlocked(blockedSystem, reason) {
       reason
     }
   }));
-}
-
-function emptyChecks() {
-  return {
-    correctionCarryover: false,
-    repeatedMistakeAvoided: false,
-    procedureRecall: false,
-    patchCorrectness: false,
-    evidenceCompleteness: false,
-    wrongMemorySuppression: false
-  };
 }
 
 function optionValue(name) {

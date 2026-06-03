@@ -17,6 +17,7 @@ const files = {
   connectorWebhooks: readJson("artifacts/connector-webhooks.json", { rows: [], summary: {} }),
   operatorOs: readJson("artifacts/operator-os-maturity.json", { rows: [], summary: {}, passed: false }),
   benchmarkHardening: readJson("artifacts/benchmark-hardening.json", { checks: {}, dataset: {}, passed: false }),
+  benchmarkRelease: readJson("artifacts/public/cognicodebench-release.json", { releases: [], scorecardProofLevels: [], publication: {}, passed: false }),
   releaseContract: readJson("artifacts/release-contract-audit.json", { summary: {}, checks: [] }),
   harnessMaturity: readJson("artifacts/harness-maturity.json", { rows: [], summary: {} }),
   vendorApiSpecs: readJson("artifacts/vendor-api-specs.json", { rows: [], summary: {} }),
@@ -27,11 +28,29 @@ const files = {
   arenaSource: read("src/eval/arena.ts"),
   arenaOpenAiJudge: read("scripts/benchmark/arena-openai-judge.mjs"),
   nativeCompetitorBenchmark: read("scripts/benchmark/benchmark-native-competitors.mjs"),
+  arenaMem0Runner: read("scripts/benchmark/competitors/mem0-runner.mjs"),
+  arenaGbrainRunner: read("scripts/benchmark/competitors/gbrain-runner.mjs"),
+  arenaNativePythonRunner: read("scripts/benchmark/competitors/native_python_runner.py"),
+  arenaNativePythonRunnerWrapper: read("scripts/benchmark/competitors/native-python-runner.mjs"),
   operatorMemoryBenchmarkSource: read("src/eval/operatorMemoryBenchmark.ts"),
+  cognicodeBenchSource: read("src/eval/cognicodeBench.ts"),
   operatorMemoryOpenAiJudge: read("scripts/benchmark/operator-memory-openai-judge.mjs"),
   operatorMemoryNativeCompetitorBenchmark: read("scripts/benchmark/operator-memory-native-competitors.mjs"),
+  operatorMemoryNativePythonRunner: read("scripts/benchmark/competitors/operator_memory_native_runner.py"),
+  operatorMemoryNativePythonRunnerWrapper: read("scripts/benchmark/competitors/operator-memory-native-python-runner.mjs"),
   basicMemoryExternalRunner: read("scripts/benchmark/competitors/basic_memory_external_runner.py"),
+  realworldBlackboxSource: read("src/eval/realworldBlackbox.ts"),
   marketGateSource: read("src/eval/marketGate.ts"),
+  evaluationRunSource: read("src/eval/run.ts"),
+  locomoSource: read("src/eval/locomo.ts"),
+  longMemEvalSource: read("src/eval/longmemeval.ts"),
+  beamSource: read("src/eval/beam.ts"),
+  externalHardSource: read("src/eval/externalHard.ts"),
+  nextgenBenchmarksSource: read("src/eval/nextgenBenchmarks.ts"),
+  publishArenaSource: read("src/eval/publishArena.ts"),
+  publishLeaderboardSource: read("src/eval/publishLeaderboard.ts"),
+  benchmarkSvgSource: read("scripts/release/render-benchmark-svg.mjs"),
+  benchmarkSvg: read("docs/assets/benchmark-results.svg"),
   leaderboardSource: read("src/eval/leaderboard.ts"),
   answerGenerationSource: read("src/eval/answerGeneration.ts"),
   releaseCheck: read("scripts/release/release-check.mjs"),
@@ -121,17 +140,87 @@ const realworldAllClassified = realworldArtifacts.length >= 6 && realworldArtifa
 const realworldBlackboxSystems = Array.isArray(files.realworldBlackbox.systems) ? files.realworldBlackbox.systems : [];
 const realworldBlackboxCognibrain = realworldBlackboxSystems.find((system) => system.system === "cognibrain");
 const realworldBlackboxBlocked = realworldBlackboxSystems.filter((system) => system.evidenceClass === "credential-blocked");
-const realworldBlackboxRawRetained = realworldBlackboxCognibrain && Array.isArray(realworldBlackboxCognibrain.rawOutputs) && realworldBlackboxCognibrain.rawOutputs.length >= 6;
+const realworldBlackboxRawRetained = realworldBlackboxCognibrain && Array.isArray(realworldBlackboxCognibrain.rawOutputs) && realworldBlackboxCognibrain.rawOutputs.length >= 15;
 const realworldBlackboxJudgeBlocked = realworldBlackboxCognibrain?.qualityClaimAllowed === false && realworldBlackboxCognibrain?.judge?.kind === "missing" && realworldBlackboxCognibrain?.metrics?.score === null && files.realworldBlackbox.eligibilityGate?.llmOrHarnessJudged === false;
-const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked;
+const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked;
+const realworldBlackboxMarketGateStrict = files.realworldBlackboxSource.includes("cognibrainLeaderboardEligible") &&
+  files.realworldBlackboxSource.includes("originalCompetitorEligibleSystems.length >= 2") &&
+  files.realworldBlackboxSource.includes('system.system !== "cognibrain"') &&
+  files.realworldBlackboxSource.includes('system.evidenceClass === "same-run-command"') &&
+  files.realworldBlackboxSource.includes("Cognibrain plus at least 2");
+const benchmarkReleaseRows = Array.isArray(files.benchmarkRelease.releases) ? files.benchmarkRelease.releases : [];
+const benchmarkReleaseClaimBoundary = files.benchmarkRelease.passed === true &&
+  files.benchmarkRelease.publication?.qualityClaimAllowed === false &&
+  files.benchmarkRelease.publication?.marketClaimAllowed === false &&
+  files.benchmarkRelease.publication?.leaderboardEligible === false &&
+  Array.isArray(files.benchmarkRelease.scorecardProofLevels) &&
+  files.benchmarkRelease.scorecardProofLevels.includes("same-run-api-shape") &&
+  !files.benchmarkRelease.scorecardProofLevels.includes("api-shape") &&
+  benchmarkReleaseRows.length >= 3 &&
+  benchmarkReleaseRows.every((release) =>
+    release?.claimBoundary?.claimAllowed === false &&
+    release?.claimBoundary?.qualityClaimAllowed === false &&
+    release?.claimBoundary?.marketClaimAllowed === false &&
+    release?.claimBoundary?.leaderboardEligible === false &&
+    typeof release?.claimBoundary?.proof === "string" &&
+    Array.isArray(release?.claimBoundary?.claimBlockers) &&
+    release.claimBoundary.claimBlockers.length > 0
+  );
 const arenaRunnerChecksFailClosed = !files.arenaSource.includes("checksFromRunnerText") && !files.arenaSource.includes("haystack.includes") && files.arenaSource.includes("runnerSelfChecksIgnored") && files.arenaSource.includes("MEMORY_ARENA_JUDGE_COMMAND") && files.arenaSource.includes("runner supplied self-scored checks");
 const arenaOpenAiJudgeStrict = files.arenaOpenAiJudge.includes("Do not trust runner-proposed checks") && files.arenaOpenAiJudge.includes("Do not use exact string overlap") && files.arenaOpenAiJudge.includes("must be a JSON boolean") && files.nativeCompetitorBenchmark.includes("arena-openai-judge.mjs");
+const arenaBundledRunnersRawOnly = [files.arenaMem0Runner, files.arenaGbrainRunner, files.arenaNativePythonRunner, files.arenaNativePythonRunnerWrapper].every((source) =>
+  !source.includes("haystack") &&
+  !source.includes("score_haystack") &&
+  !source.includes("checks:") &&
+  !source.includes('"checks"') &&
+  !source.includes("emptyChecks") &&
+  !source.includes("empty_checks") &&
+  !source.includes(".includes(scenario")
+) && [files.arenaMem0Runner, files.arenaGbrainRunner, files.arenaNativePythonRunner].every((source) =>
+  source.includes("Raw runner evidence only") &&
+  source.includes("MEMORY_ARENA_JUDGE_COMMAND")
+);
 const operatorMemoryNativeJudgeBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("runnerSelfChecksIgnored") && files.operatorMemoryBenchmarkSource.includes("raw native evidence is unjudged") && files.operatorMemoryBenchmarkSource.includes("native/cloud artifact is unjudged") && files.operatorMemoryOpenAiJudge.includes("Do not trust runner-proposed checks") && files.operatorMemoryOpenAiJudge.includes("Do not use exact string overlap") && files.operatorMemoryOpenAiJudge.includes("must be a JSON boolean") && files.operatorMemoryNativeCompetitorBenchmark.includes("operator-memory-openai-judge.mjs");
+const operatorMemoryBundledRunnersRawOnly = [files.operatorMemoryNativePythonRunner, files.operatorMemoryNativePythonRunnerWrapper].every((source) =>
+  !source.includes("haystack") &&
+  !source.includes("score_haystack") &&
+  !source.includes("checks:") &&
+  !source.includes('"checks"') &&
+  !source.includes("emptyChecks") &&
+  !source.includes("empty_checks")
+) && files.operatorMemoryNativePythonRunner.includes("Raw runner evidence only") && files.operatorMemoryNativePythonRunner.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND");
+const operatorMemoryQualityClaimBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("operator-memory-quality-llm-harness-judge-v1") && files.operatorMemoryBenchmarkSource.includes("operator-memory-local-check-diagnostic") && files.operatorMemoryBenchmarkSource.includes("operator-memory-llm-harness-judge") && files.operatorMemoryBenchmarkSource.includes("Local operator-memory scenario checks are deterministic diagnostics only") && files.operatorMemoryBenchmarkSource.includes("Quality claims require") && files.operatorMemoryBenchmarkSource.includes("Do not rely on exact string overlap, check names, or runner-proposed scores");
+const cognicodeQualityClaimBoundary = files.cognicodeBenchSource.includes("MEMORY_COGNICODEBENCH_QUALITY_JUDGE_COMMAND") && files.cognicodeBenchSource.includes("cognibrain-cognicodebench-quality-llm-harness-judge-v1") && files.cognicodeBenchSource.includes("MEMORY_COGNICODEBENCH_PATCH_COMMAND") && files.cognicodeBenchSource.includes("cognibrain-cognicodebench-patch-proposal-harness-v1") && files.cognicodeBenchSource.includes("expectedDirectPatchHarness") && files.cognicodeBenchSource.includes("cognicodebench-local-scenario-diagnostic") && files.cognicodeBenchSource.includes("cognicodebench-llm-harness-judge") && files.cognicodeBenchSource.includes("CogniCodeBench local scenario checks, ablations, token overlap leakage diagnostics and synthetic patch checks are deterministic diagnostics only") && files.cognicodeBenchSource.includes("Do not rely on exact string overlap, token overlap, regex matches, check names, or runner-proposed scores");
 const externalBasicMemoryHeuristicsBounded = files.basicMemoryExternalRunner.includes("MEMORY_EXTERNAL_PUBLIC_JUDGE_COMMAND") && files.basicMemoryExternalRunner.includes('"qualityClaimAllowed"') && files.basicMemoryExternalRunner.includes('"heuristicDiagnostics"') && files.basicMemoryExternalRunner.includes("Diagnostic only. These values are produced by evidence-id, token, or substring heuristics") && files.basicMemoryExternalRunner.includes('"accuracy": None');
 const marketGateClaimBoundary = files.marketGateSource.includes("diagnostic-public-benchmark-baseline") && files.marketGateSource.includes("claimAllowed") && files.marketGateSource.includes("claimBlockers") && files.marketGateSource.includes("local-diagnostic") && files.marketGateSource.includes("provider-evidence-support");
+const syntheticEvaluationClaimBoundary = files.evaluationRunSource.includes("deterministic-expected-id-substring-diagnostic") && files.evaluationRunSource.includes("qualityClaimAllowed: false") && files.evaluationRunSource.includes("marketClaimAllowed: false") && files.evaluationRunSource.includes("Synthetic fixture expected-id substring scoring is diagnostic only") && files.leaderboardSource.includes("Not quality-claim eligible without LLM/harness or comparable public-benchmark proof");
+const publicDatasetIdRecallBoundaries = files.locomoSource.includes("locomo-evidence-id-recall-diagnostic") && files.locomoSource.includes("qualityClaimAllowed: false") && files.locomoSource.includes("marketClaimAllowed: false") && files.longMemEvalSource.includes("longmemeval-answer-session-id-recall-diagnostic") && files.longMemEvalSource.includes("qualityClaimAllowed: false") && files.longMemEvalSource.includes("marketClaimAllowed: false") && files.marketGateSource.includes("Local evidence-id or deterministic recall reports are diagnostics only");
+const beamClaimBoundary = files.beamSource.includes("beam-rubric-support-diagnostic") && files.beamSource.includes("qualityClaimAllowed") && files.beamSource.includes("marketClaimAllowed: false") && files.beamSource.includes("BEAM deterministic rubric/entity/evidence-support scoring is diagnostic only") && files.beamSource.includes("MEMORY_INTELLIGENCE_COMMAND") && files.beamSource.includes("report.passed || (!args.has(\"--strict\") && report.diagnosticPassed)") && docsContainAll([
+  "BEAM raw artifacts now carry this boundary directly",
+  "local BEAM rubric-support scoring is not quality or market proof",
+  "`local-diagnostic`"
+]);
+const externalHardClaimBoundary = files.externalHardSource.includes("diagnostic-public-dataset-stress") && files.externalHardSource.includes("claimAllowed") && files.externalHardSource.includes("External-hard public dataset stress rows are diagnostics unless their child benchmark artifact carries LLM/harness") && files.externalHardSource.includes("Local evidence-id, session-id, deterministic or rubric recall wins") && files.externalHardSource.includes("scoreable && diagnosticPassed") && docsContainAll([
+  "External-hard public dataset stress is diagnostic-only",
+  "`claimAllowed=false`",
+  "diagnostic retrieval stress rows"
+]);
+const nextgenLifecycleDiagnosticBoundary = files.nextgenBenchmarksSource.includes("local-lifecycle-diagnostic") && files.nextgenBenchmarksSource.includes("qualityClaimAllowed: false") && files.nextgenBenchmarksSource.includes("marketClaimAllowed: false") && files.nextgenBenchmarksSource.includes("deterministic-fixture-diagnostic") && files.nextgenBenchmarksSource.includes("structural-lifecycle-diagnostic") && files.nextgenBenchmarksSource.includes("harness-review-diagnostic") && files.leaderboardSource.includes("Not quality-claim eligible without LLM/harness or comparable public-benchmark proof") && docsContainAll([
+  "`nextgen-benchmarks.json` lifecycle suite is also diagnostic-only",
+  "`qualityClaimAllowed=false`",
+  "`marketClaimAllowed=false`"
+]);
+const arenaPublishPublicGateBoundary = files.publishArenaSource.includes("claimAllowed") && files.publishArenaSource.includes("diagnosticPassed") && files.publishArenaSource.includes("claimBlockers") && files.publishArenaSource.includes("Public benchmark claim blockers") && files.publishArenaSource.includes("scoreable") && files.publishArenaSource.includes("local-diagnostic") && files.publishArenaSource.includes("systemClaimStatus") && files.publishArenaSource.includes("Synthetic Diagnostic Scorecard") && files.publishArenaSource.includes("Top diagnostic score") && files.publishArenaSource.includes("market and quality claims require publicBenchmarkGate.claimAllowed=true");
+const benchmarkSvgClaimBoundary = files.benchmarkSvgSource.includes("publicClaimAllowed") && files.benchmarkSvgSource.includes("publicClaimDetail") && files.benchmarkSvgSource.includes("boundary-missing") && files.benchmarkSvgSource.includes("arenaProofDetail") && files.benchmarkSvgSource.includes("API-shape and blocked rows are diagnostic, not market proof") && files.benchmarkSvgSource.includes("Internal regression and ablation diagnostics") && files.benchmarkSvgSource.includes("Diagnostic rows are not quality or market proof unless LLM/harness claim status says so") && !files.benchmarkSvgSource.includes('row.label === "Cognibrain full"') && files.benchmarkSvg.includes("claim blocked") && files.benchmarkSvg.includes("diagnostic pass") && files.benchmarkSvg.includes("api-shape diagnostic") && files.benchmarkSvg.includes("not market proof") && files.benchmarkSvg.includes("ablation diagnostic") && files.benchmarkSvg.includes("internal diagnostic");
 const leaderboardDiagnosticClaimsBounded = files.leaderboardSource.includes('"local-diagnostic"') && files.leaderboardSource.includes("claimAllowed") && files.leaderboardSource.includes("cannot allow quality claims") && files.leaderboardSource.includes('"llm-harness"') && files.leaderboardSource.includes('"public-benchmark"');
+const leaderboardPublishClaimBoundary = files.publishLeaderboardSource.includes("cognibrain diagnostic leaderboard") && files.publishLeaderboardSource.includes("claimSummary") && files.publishLeaderboardSource.includes("diagnostic-publication") && files.publishLeaderboardSource.includes("Claim allowed:") && files.publishLeaderboardSource.includes("Diagnostic entries") && files.publishLeaderboardSource.includes("Diagnostic/claim score") && files.publishLeaderboardSource.includes("local diagnostic entries are not quality or market proof");
 const answerGenerationNormalizeJudge = functionBody(files.answerGenerationSource, "normalizeJudge");
 const answerGenerationJudgeStrict = answerGenerationNormalizeJudge.includes("passed must be a boolean") && answerGenerationNormalizeJudge.includes("score must be a finite 0..1 number") && !answerGenerationNormalizeJudge.includes("score >= 0.5");
+const answerGenerationClaimBoundary = files.answerGenerationSource.includes("qualityClaimAllowed") && files.answerGenerationSource.includes("marketClaimAllowed: false") && files.answerGenerationSource.includes("judgeCommandConfigured") && files.answerGenerationSource.includes("blockedJudge") && files.answerGenerationSource.includes("deterministic-coverage-diagnostic") && files.answerGenerationSource.includes("external-llm-harness-judge") && files.answerGenerationSource.includes("Deterministic expected-term coverage is diagnostic only") && files.leaderboardSource.includes("dataset.qualityClaimAllowed === true && dataset.proof === \"llm-harness\"") && docsContainAll([
+  "Answer-generation artifacts carry the same boundary",
+  "configured judge-command failures fail closed",
+  "`qualityClaimAllowed=true`"
+]);
 const honestDbBackedBoundary = docsContainAll([
   "MemoryRepository paths for SQLite and Postgres",
   "target database"
@@ -179,8 +268,9 @@ const checks = [
     classifiedArtifacts: realworldArtifacts.map((artifact) => `${artifact.path}:${artifact.className}:${artifact.leaderboardEligible ? "eligible" : "not-eligible"}`),
     leaderboardEligibleArtifacts: realworldEligibleArtifacts
   }),
-  check("realworld-blackbox-harness-proof", "Neutral real-world black-box harness retains raw outputs, latency/cost fields and refuses quality scoring without an LLM/harness judge.", realworldBlackboxHarnessReady && realworldBlackboxBlocked.length >= 5 && docsContainAll([
+  check("realworld-blackbox-harness-proof", "Neutral real-world black-box harness has broad bucket coverage, retains raw outputs, latency/cost fields and refuses quality scoring without an LLM/harness judge.", realworldBlackboxHarnessReady && realworldBlackboxBlocked.length >= 5 && docsContainAll([
     "Real-World Black-Box Smoke",
+    "at least 15 queries",
     "export-raw-outputs",
     "MEMORY_REALWORLD_JUDGE_COMMAND",
     "not scored",
@@ -195,25 +285,68 @@ const checks = [
     cognibrainScore: realworldBlackboxCognibrain?.metrics?.score,
     rawOutputs: realworldBlackboxCognibrain?.rawOutputs?.length ?? 0
   }),
+  check("realworld-blackbox-market-gate-strict", "Real-world leaderboard eligibility requires Cognibrain plus at least two judged original competitor same-run systems, so local baselines and single-opponent smokes cannot become market proof.", realworldBlackboxMarketGateStrict, "fail", {
+    source: "src/eval/realworldBlackbox.ts"
+  }),
   check("leaderboard-diagnostic-claim-boundary", "Public leaderboard artifacts mark local deterministic scores as diagnostic-only and allow claims only for LLM/harness or comparable public benchmark proof.", leaderboardDiagnosticClaimsBounded, "fail", {
     source: "src/eval/leaderboard.ts"
   }),
+  check("leaderboard-publish-claim-boundary", "Public leaderboard publishing exposes claimAllowed, proofLevel and diagnostic entry counts in the first viewport instead of presenting local diagnostics as a market leaderboard.", leaderboardPublishClaimBoundary, "fail", {
+    source: "src/eval/publishLeaderboard.ts"
+  }),
   check("answer-generation-judge-contract", "External answer-generation judges fail closed unless score is finite 0..1 and passed is a strict boolean.", answerGenerationJudgeStrict, "fail", {
+    source: "src/eval/answerGeneration.ts"
+  }),
+  check("answer-generation-claim-boundary", "Answer-generation artifacts expose deterministic coverage as diagnostic-only and fail closed when a configured LLM/harness judge command is invalid.", answerGenerationClaimBoundary, "fail", {
     source: "src/eval/answerGeneration.ts"
   }),
   check("arena-external-runner-judge-contract", "External Arena competitor runners cannot score themselves; native same-run outputs require an explicit LLM/harness judge command for scoreable checks.", arenaRunnerChecksFailClosed && arenaOpenAiJudgeStrict, "fail", {
     source: "src/eval/arena.ts",
     judge: "scripts/benchmark/arena-openai-judge.mjs"
   }),
+  check("arena-bundled-runner-raw-evidence-only", "Bundled Mem0 and GBrain Arena runners emit raw evidence only and do not compute string/substring self-checks.", arenaBundledRunnersRawOnly, "fail", {
+    sources: ["scripts/benchmark/competitors/mem0-runner.mjs", "scripts/benchmark/competitors/gbrain-runner.mjs", "scripts/benchmark/competitors/native_python_runner.py", "scripts/benchmark/competitors/native-python-runner.mjs"]
+  }),
   check("operator-memory-native-judge-boundary", "Operator Memory native competitor runners cannot score themselves; same-run native/cloud outputs require an explicit LLM/harness judge command for scoreable source-aware checks.", operatorMemoryNativeJudgeBoundary, "fail", {
     source: "src/eval/operatorMemoryBenchmark.ts",
     judge: "scripts/benchmark/operator-memory-openai-judge.mjs"
+  }),
+  check("operator-memory-bundled-runner-raw-evidence-only", "Bundled Operator Memory native runners emit raw evidence only and do not compute string/substring self-checks.", operatorMemoryBundledRunnersRawOnly, "fail", {
+    sources: ["scripts/benchmark/competitors/operator_memory_native_runner.py", "scripts/benchmark/competitors/operator-memory-native-python-runner.mjs"]
+  }),
+  check("operator-memory-quality-claim-boundary", "Operator Memory local source-aware checks remain diagnostic-only unless a report-level LLM/harness judge validates quality claims.", operatorMemoryQualityClaimBoundary, "fail", {
+    source: "src/eval/operatorMemoryBenchmark.ts"
+  }),
+  check("cognicodebench-quality-claim-boundary", "CogniCodeBench local scenario, ablation and patch-proposal diagnostics remain claim-blocked unless a report-level LLM/harness judge validates quality; patch planning is separated from hidden expected actions.", cognicodeQualityClaimBoundary, "fail", {
+    source: "src/eval/cognicodeBench.ts"
   }),
   check("external-basic-memory-score-boundary", "Basic Memory external public-dataset adapter keeps evidence-id/token/substr heuristics as diagnostics and requires an external LLM/harness judge before accuracy/delta become scoreable.", externalBasicMemoryHeuristicsBounded, "fail", {
     source: "scripts/benchmark/competitors/basic_memory_external_runner.py"
   }),
   check("market-gate-claim-boundary", "MarketGate keeps local public-dataset ID/recall victories diagnostic until included benchmark artifacts carry LLM/harness or comparable public-benchmark proof.", marketGateClaimBoundary, "fail", {
     source: "src/eval/marketGate.ts"
+  }),
+  check("synthetic-evaluation-claim-boundary", "Synthetic retrieval evaluation keeps expected-id substring scoring diagnostic-only and blocks quality or market claims without LLM/harness proof.", syntheticEvaluationClaimBoundary, "fail", {
+    source: "src/eval/run.ts"
+  }),
+  check("public-dataset-id-recall-boundary", "LoCoMo and LongMemEval local public-dataset ID-recall reports expose diagnostic scores while blocking quality or market claims without LLM/harness or same-protocol public proof.", publicDatasetIdRecallBoundaries, "fail", {
+    sources: ["src/eval/locomo.ts", "src/eval/longmemeval.ts", "src/eval/marketGate.ts"]
+  }),
+  check("beam-rubric-diagnostic-boundary", "BEAM deterministic rubric-support scoring is diagnostic-only and reserves passed quality claims for LLM/harness evidence-judge runs.", beamClaimBoundary, "fail", {
+    source: "src/eval/beam.ts"
+  }),
+  check("external-hard-claim-boundary", "External-hard public dataset stress summaries keep local diagnostic wins separate from scoreable quality or market claims.", externalHardClaimBoundary, "fail", {
+    source: "src/eval/externalHard.ts"
+  }),
+  check("nextgen-lifecycle-diagnostic-boundary", "Nextgen lifecycle benchmark suites expose deterministic/structural local checks as diagnostic-only and block quality or market claims without LLM/harness proof.", nextgenLifecycleDiagnosticBoundary, "fail", {
+    source: "src/eval/nextgenBenchmarks.ts"
+  }),
+  check("arena-publish-public-gate-boundary", "Arena publishing surfaces public benchmark gate claimAllowed, diagnosticPassed, scoreable proof and claim blockers instead of displaying diagnostic scores as quality claims.", arenaPublishPublicGateBoundary, "fail", {
+    source: "src/eval/publishArena.ts"
+  }),
+  check("benchmark-svg-claim-boundary", "Benchmark SVG surfaces proof and claim status for public dataset rows instead of displaying diagnostic bars as market or quality proof.", benchmarkSvgClaimBoundary, "fail", {
+    source: "scripts/release/render-benchmark-svg.mjs",
+    artifact: "docs/assets/benchmark-results.svg"
   }),
   check("connector-hermetic-drivers", "Connector registry has first-party driver and fixture coverage for the native connector set.", maturityRows.length >= 19 && hermeticRows.length >= 19, "fail", {
     artifact: "artifacts/connector-maturity.json",
@@ -319,6 +452,12 @@ const checks = [
   check("benchmark-hardening-proof", "Benchmark hardening artifact pins CogniCodeBench scenarios with hashes, schema evidence, real-repo workflow fixtures and native competitor boundaries.", files.benchmarkHardening.passed === true && files.benchmarkHardening.dataset?.sha256?.length === 64 && files.benchmarkHardening.dataset?.scenarioCount >= 100, "fail", {
     artifact: "artifacts/benchmark-hardening.json",
     scenarioCount: files.benchmarkHardening.dataset?.scenarioCount ?? 0
+  }),
+  check("benchmark-release-claim-boundary", "Benchmark release manifests expose dataset identity and split metadata only; every split blocks quality, market and leaderboard claims until LLM/harness or comparable public proof exists.", benchmarkReleaseClaimBoundary, "fail", {
+    artifact: "artifacts/public/cognicodebench-release.json",
+    releases: benchmarkReleaseRows.map((release) => `${release.id}:${release.split}:${release.claimBoundary?.proof ?? "missing"}`),
+    publication: files.benchmarkRelease.publication,
+    scorecardProofLevels: files.benchmarkRelease.scorecardProofLevels
   }),
   check("dream-job-worker-proof", "Dream job worker lifecycle supports persisted start, status, cancel, retry and live source revalidation paths across service, HTTP, MCP and tests.", dreamJobWorkerControl && liveSourceRevalidation, "fail", {
     code: ["src/api/service.ts", "src/api/server/dreamRoutes.ts", "src/connectors/mcpTools.ts", "tests/core.test.ts"],

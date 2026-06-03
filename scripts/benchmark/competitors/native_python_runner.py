@@ -41,7 +41,6 @@ def main() -> int:
         output = {
             "proofLevel": "credential-blocked",
             "adapterMode": "blocked-command",
-            "checks": empty_checks(),
             "capabilityGaps": [f"{args.system} native runner failed: {exc}"],
             "latencyMs": elapsed_ms(started),
             "evidence": {
@@ -86,12 +85,9 @@ def run_mem0(scenario: dict[str, Any], started: float) -> dict[str, Any]:
         filters={"user_id": user_id},
         top_k=5,
     )
-    haystack = f"{text}\n{json.dumps(added, default=str)}\n{json.dumps(found, default=str)}".lower()
-    checks = score_haystack(scenario, haystack, has_evidence=True, has_guard=False)
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
-        "checks": checks,
         "capabilityGaps": [
             "Mem0 OSS run used real mem0ai add/search with infer=false and local Qdrant/FastEmbed, not Mem0 cloud",
             "Mem0 does not expose Cognibrain's typed pre-tool action guard in this adapter",
@@ -104,6 +100,7 @@ def run_mem0(scenario: dict[str, Any], started: float) -> dict[str, Any]:
             "vectorStore": "qdrant-local",
             "embedder": "fastembed/BAAI/bge-small-en-v1.5",
             "llm": "openai client constructed but not called because infer=false",
+            "note": "Raw runner evidence only. Scenario checks must be produced by MEMORY_ARENA_JUDGE_COMMAND; this runner does not self-score.",
             "add": compact(added),
             "search": compact(found),
         },
@@ -121,12 +118,9 @@ def run_langmem(scenario: dict[str, Any], started: float) -> dict[str, Any]:
     text = scenario_memory_text(scenario)
     created = manage.invoke({"content": text, "action": "create"})
     found = search.invoke({"query": f"{scenario['nextTask']} {scenario['correction']['correctAction']}", "limit": 5})
-    haystack = f"{text}\n{created}\n{found}".lower()
-    checks = score_haystack(scenario, haystack, has_evidence=True, has_guard=False)
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
-        "checks": checks,
         "capabilityGaps": [
             "LangMem run used real create_manage_memory_tool/create_search_memory_tool with LangGraph InMemoryStore",
             "LangMem does not expose Cognibrain's typed pre-tool action guard in this adapter",
@@ -137,6 +131,7 @@ def run_langmem(scenario: dict[str, Any], started: float) -> dict[str, Any]:
             "runner": "langmem-python",
             "package": f"langmem=={version('langmem')}",
             "store": "langgraph.store.memory.InMemoryStore",
+            "note": "Raw runner evidence only. Scenario checks must be produced by MEMORY_ARENA_JUDGE_COMMAND; this runner does not self-score.",
             "created": str(created),
             "search": compact(found),
         },
@@ -180,7 +175,6 @@ def run_basicmemory(scenario: dict[str, Any], started: float) -> dict[str, Any]:
         return {
             "proofLevel": "credential-blocked",
             "adapterMode": "blocked-command",
-            "checks": empty_checks(),
             "capabilityGaps": ["Basic Memory CLI runner failed before completing write/search/context"],
             "latencyMs": elapsed_ms(started),
             "evidence": {
@@ -190,12 +184,9 @@ def run_basicmemory(scenario: dict[str, Any], started: float) -> dict[str, Any]:
             },
         }
 
-    haystack = "\n".join([content, *(entry["stdout"] for entry in commands)]).lower()
-    checks = score_haystack(scenario, haystack, has_evidence=True, has_guard=False)
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
-        "checks": checks,
         "capabilityGaps": [
             "Basic Memory run used the real local CLI/MCP/API path with an isolated SQLite-backed project",
             "Basic Memory stores durable Markdown notes and graph context, but this adapter found no typed pre-tool action guard",
@@ -207,6 +198,7 @@ def run_basicmemory(scenario: dict[str, Any], started: float) -> dict[str, Any]:
             "package": f"basic-memory=={version_value}",
             "projectHome": str(project_home),
             "configDir": str(config_dir),
+            "note": "Raw runner evidence only. Scenario checks must be produced by MEMORY_ARENA_JUDGE_COMMAND; this runner does not self-score.",
             "commands": commands,
         },
     }
@@ -249,12 +241,9 @@ async def run_graphiti(scenario: dict[str, Any], started: float, system: str) ->
         group_id=group_id,
     )
     found = await graphiti.search(f"{scenario['nextTask']} {scenario['correction']['correctAction']}", group_ids=[group_id], num_results=5)
-    haystack = f"{text}\n{add_result}\n{found}".lower()
-    checks = score_haystack(scenario, haystack, has_evidence=True, has_guard=False)
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
-        "checks": checks,
         "capabilityGaps": [
             "Graphiti run used real graphiti-core with local Kuzu driver",
             "Graphiti does not expose Cognibrain's typed pre-tool action guard in this adapter",
@@ -265,6 +254,7 @@ async def run_graphiti(scenario: dict[str, Any], started: float, system: str) ->
             "runner": "graphiti-python-kuzu",
             "package": f"graphiti-core=={version('graphiti-core')}",
             "graphDriver": "kuzu-local",
+            "note": "Raw runner evidence only. Scenario checks must be produced by MEMORY_ARENA_JUDGE_COMMAND; this runner does not self-score.",
             "episode": compact(add_result),
             "search": compact(found),
         },
@@ -290,12 +280,9 @@ async def run_cognee(scenario: dict[str, Any], started: float) -> dict[str, Any]
         auto_route=False,
         top_k=5,
     )
-    haystack = f"{text}\n{remembered}\n{recalled}".lower()
-    checks = score_haystack(scenario, haystack, has_evidence=True, has_guard=False)
     return {
         "proofLevel": "same-run-native",
         "adapterMode": "native-command",
-        "checks": checks,
         "capabilityGaps": [
             "Cognee run used real remember/recall API with operator-supplied LLM credentials",
             "Cognee does not expose Cognibrain's typed pre-tool action guard in this adapter",
@@ -305,6 +292,7 @@ async def run_cognee(scenario: dict[str, Any], started: float) -> dict[str, Any]
         "evidence": {
             "runner": "cognee-python",
             "package": f"cognee=={version('cognee')}",
+            "note": "Raw runner evidence only. Scenario checks must be produced by MEMORY_ARENA_JUDGE_COMMAND; this runner does not self-score.",
             "remember": compact(remembered),
             "recall": compact(recalled),
         },
@@ -351,25 +339,10 @@ def basicmemory_note_text(scenario: dict[str, Any]) -> str:
     )
 
 
-def score_haystack(scenario: dict[str, Any], haystack: str, *, has_evidence: bool, has_guard: bool) -> dict[str, bool]:
-    correction = scenario["correction"]
-    expected = scenario["expected"]
-    expected_command = expected["command"].lower()
-    return {
-        "correctionCarryover": correction["content"][:28].lower() in haystack or correction["correctAction"].lower() in haystack,
-        "repeatedMistakeAvoided": bool(has_guard),
-        "procedureRecall": expected_command in haystack,
-        "patchCorrectness": expected_command in haystack and all(file.lower() in haystack for file in expected["filesChanged"]),
-        "evidenceCompleteness": bool(has_evidence),
-        "wrongMemorySuppression": bool(has_guard),
-    }
-
-
 def blocked(system: str, started: float, reason: str) -> dict[str, Any]:
     return {
         "proofLevel": "credential-blocked",
         "adapterMode": "blocked-command",
-        "checks": empty_checks(),
         "capabilityGaps": [reason],
         "latencyMs": elapsed_ms(started),
         "evidence": {
@@ -392,17 +365,6 @@ def package_versions(system: str) -> dict[str, str | None]:
         "basicmemory": ["basic-memory"],
     }.get(system, [])
     return {name: version(name) for name in names}
-
-
-def empty_checks() -> dict[str, bool]:
-    return {
-        "correctionCarryover": False,
-        "repeatedMistakeAvoided": False,
-        "procedureRecall": False,
-        "patchCorrectness": False,
-        "evidenceCompleteness": False,
-        "wrongMemorySuppression": False,
-    }
 
 
 def native_root() -> Path:

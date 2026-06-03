@@ -13,7 +13,6 @@ const gaps = [
 
 if (!apiKey) {
   console.log(JSON.stringify({
-    checks: emptyChecks(),
     capabilityGaps: ["MEM0_API_KEY is not configured, so no cloud/API same-run was executed", ...gaps],
     latencyMs: Date.now() - started,
     evidence: {
@@ -61,18 +60,7 @@ try {
   const search = spawnSync("npm", searchArgs, { encoding: "utf8", timeout: 120_000, maxBuffer: 20 * 1024 * 1024 });
   if (search.status !== 0) throw new Error(`mem0 search failed: ${tail(search.stderr || search.stdout)}`);
 
-  const haystack = `${memoryText}\n${add.stdout}\n${search.stdout}`.toLowerCase();
-  const expectedCommand = scenario.expected.command.toLowerCase();
-  const checks = {
-    correctionCarryover: haystack.includes(scenario.correction.content.slice(0, 28).toLowerCase()) || haystack.includes(scenario.correction.correctAction.toLowerCase()),
-    repeatedMistakeAvoided: false,
-    procedureRecall: haystack.includes(expectedCommand),
-    patchCorrectness: haystack.includes(expectedCommand) && scenario.expected.filesChanged.every((file) => haystack.includes(file.toLowerCase())),
-    evidenceCompleteness: haystack.includes("id") || haystack.includes("memory"),
-    wrongMemorySuppression: false
-  };
   console.log(JSON.stringify({
-    checks,
     capabilityGaps: gaps,
     latencyMs: Date.now() - started,
     evidence: {
@@ -80,13 +68,13 @@ try {
       proofLevel: "same-run-cloud-api",
       package: "@mem0/cli@0.2.7",
       baseUrlConfigured: Boolean(baseUrl),
+      note: "Raw runner evidence only. Scenario checks must be produced by MEMORY_ARENA_JUDGE_COMMAND; this runner does not self-score.",
       add: parseJson(add.stdout),
       search: parseJson(search.stdout) ?? tail(search.stdout, 1200)
     }
   }));
 } catch (error) {
   console.log(JSON.stringify({
-    checks: emptyChecks(),
     capabilityGaps: [`Mem0 runner failed: ${error.message}`, ...gaps],
     latencyMs: Date.now() - started,
     evidence: {
@@ -103,17 +91,6 @@ function parseJson(value) {
   } catch {
     return undefined;
   }
-}
-
-function emptyChecks() {
-  return {
-    correctionCarryover: false,
-    repeatedMistakeAvoided: false,
-    procedureRecall: false,
-    patchCorrectness: false,
-    evidenceCompleteness: false,
-    wrongMemorySuppression: false
-  };
 }
 
 function tail(value, limit = 2000) {

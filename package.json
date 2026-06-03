@@ -19,6 +19,8 @@
   "files": [
     "bin/",
     "scripts/",
+    "!scripts/**/__pycache__/",
+    "!scripts/**/*.pyc",
     "sdk/python/README.md",
     "sdk/python/cognibrain_client.py",
     "sdk/python/pyproject.toml",

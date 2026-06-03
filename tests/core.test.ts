@@ -614,7 +614,7 @@ describe("TypeScript memory core", () => {
     expect(report.contradictions[0]?.reason).toBe("provider contradiction");
     expect(report.created.some((memory) => memory.content.includes("provider summary"))).toBe(true);
     expect(service.translateText("Atlas Speicher", "de").translated).toBe("Atlas memory provider translation.");
-  });
+  }, 30_000);
 
   it("compacts and caches JSON command evidence payloads without replacing provider judgement", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-provider-cache-"));

@@ -73,6 +73,13 @@ interface OperatorMemoryJudgeResult {
   evidence?: Record<string, unknown>;
 }
 
+interface OperatorMemoryQualityJudgeResult {
+  passed: boolean;
+  score: number;
+  reason: string;
+  evidence?: Record<string, unknown>;
+}
+
 interface SystemResult {
   system: SystemId;
   displayName: string;
@@ -97,9 +104,27 @@ interface OperatorMemoryBenchmarkReport {
   generatedAt: string;
   benchmark: "OperatorMemoryDreamBenchmark";
   claimScope: "engineering-memory-dreaming";
+  proof: "local-diagnostic" | "llm-harness";
+  diagnosticPassed: boolean;
+  qualityClaimAllowed: boolean;
+  marketClaimAllowed: boolean;
+  claimBoundary: {
+    proof: "local-diagnostic" | "llm-harness";
+    scorer: "operator-memory-local-check-diagnostic" | "operator-memory-llm-harness-judge";
+    qualityClaimAllowed: boolean;
+    marketClaimAllowed: boolean;
+    claimBlockers: string[];
+  };
+  judge: {
+    kind: "missing" | "llm-harness-command";
+    status: "missing" | "passed" | "failed";
+    score?: number;
+    reason: string;
+    evidence?: Record<string, unknown>;
+  };
   methodology: {
     sameScenarioStream: boolean;
-    deterministic: boolean;
+    deterministicDiagnostics: boolean;
     metrics: string[];
     requiredExternalProofForMarketClaim: string[];
   };
@@ -139,13 +164,22 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
   const unjudgedRealCompetitors = realCompetitors.filter((system) => system.scenarios.some((scenario) => scenario.evidence.structuredChecks !== true));
   const requiredNative = ["mem0-native", "langmem-native", "graphiti-native"] as const;
   const missingNative = requiredNative.filter((system) => !systems.some((result) => result.system === system && ["same-run-native", "same-run-cloud-api"].includes(result.proofLevel)));
+  const diagnosticPassed = Boolean(cognibrain && cognibrain.score > bestBaseline && cognibrain.score >= 0.55 && cognibrainHasFailures);
+  const qualityJudge = judgeOperatorMemoryQuality({ systems, leaderboard, scenarioCount: scenarios.length, cognibrainScore: cognibrain?.score ?? 0, bestBaselineScore: bestBaseline });
+  const qualityClaimAllowed = Boolean(qualityJudge?.passed && diagnosticPassed);
+  const qualityClaimBlockers = qualityClaimAllowed ? [] : [
+    "Local operator-memory scenario checks are deterministic diagnostics only; set MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND for LLM/harness report judging before quality claims.",
+    ...(qualityJudge && !qualityJudge.passed ? [`Configured operator-memory quality judge did not pass: ${qualityJudge.reason}`] : [])
+  ];
   const marketSuperiorityBlockers = [
+    ...qualityClaimBlockers,
     ...missingNative.map((system) => `${displayName(system)} same-run native/cloud artifact is missing or credential-blocked.`),
     ...unjudgedRealCompetitors.map((system) => `${system.displayName} native/cloud artifact is unjudged; set MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND before market claims.`),
     ...(process.env.MEMORY_OPERATOR_MEMORY_LIVE_CONNECTOR_PROOF === "true" ? [] : ["No live GitHub/Jira/Confluence/Notion credentialed tenant run was supplied."]),
     ...(process.env.MEMORY_OPERATOR_MEMORY_INDEPENDENT_PROOF === "true" ? [] : ["No vendor-signed or independently reproduced artifact was supplied."])
   ];
   const marketSuperiorityClaimAllowed = Boolean(
+    qualityClaimAllowed &&
     cognibrain &&
     realCompetitors.length >= 3 &&
     missingNative.length === 0 &&
@@ -158,9 +192,33 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
     generatedAt: new Date().toISOString(),
     benchmark: "OperatorMemoryDreamBenchmark",
     claimScope: "engineering-memory-dreaming",
+    proof: qualityClaimAllowed ? "llm-harness" : "local-diagnostic",
+    diagnosticPassed,
+    qualityClaimAllowed,
+    marketClaimAllowed: marketSuperiorityClaimAllowed,
+    claimBoundary: {
+      proof: qualityClaimAllowed ? "llm-harness" : "local-diagnostic",
+      scorer: qualityClaimAllowed ? "operator-memory-llm-harness-judge" : "operator-memory-local-check-diagnostic",
+      qualityClaimAllowed,
+      marketClaimAllowed: marketSuperiorityClaimAllowed,
+      claimBlockers: marketSuperiorityClaimAllowed ? [] : marketSuperiorityBlockers
+    },
+    judge: qualityJudge
+      ? {
+        kind: "llm-harness-command",
+        status: qualityJudge.passed ? "passed" : "failed",
+        score: qualityJudge.score,
+        reason: qualityJudge.reason,
+        evidence: qualityJudge.evidence
+      }
+      : {
+        kind: "missing",
+        status: "missing",
+        reason: "MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND is not configured."
+      },
     methodology: {
       sameScenarioStream: true,
-      deterministic: true,
+      deterministicDiagnostics: true,
       metrics: [
         "current truth selected",
         "stale truth suppressed",
@@ -188,7 +246,7 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
       marketSuperiorityClaimAllowed,
       marketSuperiorityBlockers: marketSuperiorityClaimAllowed ? [] : marketSuperiorityBlockers
     },
-    passed: Boolean(cognibrain && cognibrain.score > bestBaseline && cognibrain.score >= 0.55 && cognibrainHasFailures)
+    passed: diagnosticPassed
   };
   if (options.out) {
     mkdirSync(dirname(options.out), { recursive: true });
@@ -517,6 +575,49 @@ function judgeNativeScenario(system: SystemId, scenario: OperatorMemoryScenario,
   };
 }
 
+function judgeOperatorMemoryQuality(payload: {
+  systems: SystemResult[];
+  leaderboard: Array<{ system: string; score: number; proofLevel: string }>;
+  scenarioCount: number;
+  cognibrainScore: number;
+  bestBaselineScore: number;
+}): OperatorMemoryQualityJudgeResult | undefined {
+  const judgeCommand = process.env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND;
+  if (!judgeCommand) return undefined;
+  const result = spawnSync(judgeCommand, {
+    cwd: process.cwd(),
+    input: JSON.stringify({
+      schemaVersion: "1.0",
+      contract: "cognibrain-operator-memory-quality-llm-harness-judge-v1",
+      instructions: [
+        "Judge semantic support for source-aware memory behavior from the supplied scenario evidence.",
+        "Do not rely on exact string overlap, check names, or runner-proposed scores.",
+        "Return strict JSON with boolean passed, finite score in 0..1, and reason."
+      ],
+      ...payload
+    }),
+    encoding: "utf8",
+    shell: true,
+    timeout: Number(process.env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_TIMEOUT_MS ?? 120_000),
+    maxBuffer: 20 * 1024 * 1024
+  });
+  if (result.status !== 0) {
+    return { passed: false, score: 0, reason: `operator-memory quality judge command failed with status ${result.status ?? 1}`, evidence: { stderrTail: tail(result.stderr), stdoutTail: tail(result.stdout) } };
+  }
+  const parsed = parseJsonLine(result.stdout);
+  const passed = typeof parsed?.passed === "boolean" ? parsed.passed : undefined;
+  const score = typeof parsed?.score === "number" && Number.isFinite(parsed.score) && parsed.score >= 0 && parsed.score <= 1 ? parsed.score : undefined;
+  if (passed === undefined || score === undefined) {
+    return { passed: false, score: 0, reason: "operator-memory quality judge must return boolean passed and finite score in 0..1", evidence: { stdoutTail: tail(result.stdout) } };
+  }
+  return {
+    passed,
+    score,
+    reason: typeof parsed?.reason === "string" ? parsed.reason.slice(0, 1000) : "operator-memory quality judge decision",
+    evidence: parsed?.evidence && typeof parsed.evidence === "object" ? parsed.evidence as Record<string, unknown> : undefined
+  };
+}
+
 function parseJsonLine(stdout: string): Record<string, unknown> | undefined {
   const trimmed = stdout.trim();
   if (!trimmed) return undefined;
@@ -750,7 +851,12 @@ Generated at ${report.generatedAt}.
 
 Claim scope: \`${report.claimScope}\`.
 
-This benchmark proves same-scenario superiority against configured baselines and native competitors. It allows market-superiority claims only when native/cloud competitor runs, credentialed connector tenant runs and independent artifacts are all present.
+Diagnostic status: ${report.diagnosticPassed ? "passed" : "failed"}.
+Quality claim allowed: ${report.qualityClaimAllowed ? "yes" : "no"}.
+Market claim allowed: ${report.marketClaimAllowed ? "yes" : "no"}.
+Proof: \`${report.proof}\` / \`${report.claimBoundary.scorer}\`.
+
+Local operator-memory scores are diagnostics only. Quality claims require \`MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND\` LLM/harness report judging; market-superiority claims additionally require judged native/cloud competitor runs, credentialed connector tenant runs and independent artifacts.
 
 | System | Score | Proof | Adapter | Current truth | Stale suppression | Source revalidation |
 | --- | ---: | --- | --- | ---: | ---: | ---: |
@@ -760,10 +866,8 @@ ${rows}
 | --- | ---: | ---: | ---: | ---: | ---: |
 ${scenarioRows}
 
-Market claim allowed: ${report.summary.marketSuperiorityClaimAllowed ? "yes" : "no"}.
-
 Blockers:
-${report.summary.marketSuperiorityBlockers.map((item) => `- ${item}`).join("\n")}
+${report.claimBoundary.claimBlockers.map((item) => `- ${item}`).join("\n") || "- none"}
 
 Native runner evidence:
 ${report.systems.filter((system) => system.runner).map((system) => `- ${system.displayName}: \`${system.runner?.commandEnv}\`, ${system.proofLevel}`).join("\n") || "- none"}

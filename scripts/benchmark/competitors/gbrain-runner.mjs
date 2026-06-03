@@ -42,22 +42,9 @@ try {
   if (failedSearch) throw new Error(`gbrain search failed: ${tail(failedSearch.stderr || failedSearch.stdout)}`);
 
   const searchOutput = searches.map((search) => search.stdout).join("\n");
-  const get = searchOutput.includes(slug) ? runGBrain(["get", slug]) : { status: 0, stdout: "", stderr: "" };
+  const get = runGBrain(["get", slug]);
   if (get.status !== 0) throw new Error(`gbrain get failed: ${tail(get.stderr || get.stdout)}`);
-  const haystack = `${searchOutput}\n${get.stdout}`.toLowerCase();
-  const correctionNeedle = scenario.correction.content.slice(0, 28).toLowerCase();
-  const correctAction = scenario.correction.correctAction.toLowerCase();
-  const expectedCommand = scenario.expected.command.toLowerCase();
-  const checks = {
-    correctionCarryover: haystack.includes(correctionNeedle) || haystack.includes(correctAction),
-    repeatedMistakeAvoided: false,
-    procedureRecall: haystack.includes(expectedCommand),
-    patchCorrectness: haystack.includes(expectedCommand) && scenario.expected.filesChanged.every((file) => haystack.includes(file.toLowerCase())),
-    evidenceCompleteness: haystack.includes(slug.toLowerCase()) || haystack.includes("source_kind"),
-    wrongMemorySuppression: false
-  };
   console.log(JSON.stringify({
-    checks,
     capabilityGaps: gaps,
     latencyMs: Date.now() - started,
     evidence: {
@@ -66,6 +53,7 @@ try {
       repo,
       home,
       slug,
+      note: "Raw runner evidence only. Scenario checks must be produced by MEMORY_ARENA_JUDGE_COMMAND; this runner does not self-score.",
       capture: parseJson(capture.stdout),
       searchTail: tail(searchOutput, 1200),
       getTail: tail(get.stdout, 1200)
@@ -73,7 +61,6 @@ try {
   }));
 } catch (error) {
   console.log(JSON.stringify({
-    checks: emptyChecks(),
     capabilityGaps: [`GBrain runner failed: ${error.message}`, ...gaps],
     latencyMs: Date.now() - started,
     evidence: {
@@ -115,17 +102,6 @@ function parseJson(value) {
   } catch {
     return undefined;
   }
-}
-
-function emptyChecks() {
-  return {
-    correctionCarryover: false,
-    repeatedMistakeAvoided: false,
-    procedureRecall: false,
-    patchCorrectness: false,
-    evidenceCompleteness: false,
-    wrongMemorySuppression: false
-  };
 }
 
 function tail(value, limit = 2000) {

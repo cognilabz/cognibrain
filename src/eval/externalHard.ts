@@ -11,14 +11,24 @@ type ExternalHardRow = {
   config: Record<string, unknown>;
   outputPath: string;
   passed: boolean;
+  diagnosticPassed: boolean;
+  scoreable: boolean;
+  proof: "local-diagnostic" | "llm-harness" | "public-benchmark";
   cognibrain: number;
   bestBaseline: number;
   gapToBestBaseline: number;
   strongestBaseline: string;
+  claimBlockers: string[];
 };
 
 type BenchmarkReport = {
   passed?: boolean;
+  diagnosticPassed?: boolean;
+  proof?: string;
+  proofLevel?: string;
+  qualityClaimAllowed?: boolean;
+  judge?: { kind?: string; status?: string };
+  claimBoundary?: { scorer?: string; claimBlockers?: string[] };
   ours?: { accuracy?: number };
   baselines?: Array<{ name: string; accuracy?: number }>;
 };
@@ -71,37 +81,74 @@ export async function runExternalHardBenchmarks(options: { out?: string; markdow
     outputPath: "artifacts/external-hard/beam-1m-top5.json"
   })));
 
-  const report = {
-    schemaVersion: "1.0",
+  const report = buildExternalHardSummary(rows, {
     generatedAt: new Date().toISOString(),
-    mode: "external-hard",
-    description: "Public dataset stress run with stricter retrieval budgets than the default docs snapshot.",
-    strictGate: Boolean(options.strict),
-    passed: rows.every((row) => row.passed),
-    rows
-  };
+    strict: Boolean(options.strict)
+  });
 
   writeJson(outputPath, report);
   writeMarkdown(markdownPath, report);
   return report;
 }
 
-function summarize(id: string, dataset: string, metric: string, config: Record<string, unknown>, outputPath: string, report: BenchmarkReport): ExternalHardRow {
+export function buildExternalHardSummary(rows: ExternalHardRow[], options: { generatedAt?: string; strict?: boolean } = {}) {
+  const claimBlockers = rows.flatMap((row) => row.claimBlockers);
+  return {
+    schemaVersion: "1.0",
+    generatedAt: options.generatedAt ?? new Date().toISOString(),
+    mode: "external-hard",
+    description: "Public dataset stress run with stricter retrieval budgets than the default docs snapshot.",
+    strictGate: Boolean(options.strict),
+    proofLevel: rows.every((row) => row.scoreable) ? "scoreable-public-dataset-stress" : "diagnostic-public-dataset-stress",
+    passed: rows.every((row) => row.passed),
+    diagnosticPassed: rows.every((row) => row.diagnosticPassed),
+    claimAllowed: rows.every((row) => row.passed),
+    limitations: [
+      "External-hard public dataset stress rows are diagnostics unless their child benchmark artifact carries LLM/harness or comparable public-benchmark proof.",
+      "Local evidence-id, session-id, deterministic or rubric recall wins may guide engineering work but must not be presented as quality or market claims."
+    ],
+    claimBlockers,
+    rows
+  };
+}
+
+export function summarize(id: string, dataset: string, metric: string, config: Record<string, unknown>, outputPath: string, report: BenchmarkReport): ExternalHardRow {
   const cognibrain = report.ours?.accuracy ?? 0;
   const strongest = (report.baselines ?? []).reduce((best, baseline) => (baseline.accuracy ?? 0) > (best.accuracy ?? 0) ? baseline : best, { name: "none", accuracy: 0 });
   const bestBaseline = strongest.accuracy ?? 0;
+  const proof = benchmarkProof(report);
+  const scoreable = proof !== "local-diagnostic";
+  const diagnosticPassed = Boolean(report.diagnosticPassed ?? report.passed);
+  const scorer = report.claimBoundary?.scorer ? ` (${report.claimBoundary.scorer})` : "";
   return {
     id,
     dataset,
     metric,
     config,
     outputPath,
-    passed: Boolean(report.passed),
+    passed: scoreable && diagnosticPassed,
+    diagnosticPassed,
+    scoreable,
+    proof,
     cognibrain,
     bestBaseline,
     gapToBestBaseline: Number((cognibrain - bestBaseline).toFixed(4)),
-    strongestBaseline: strongest.name
+    strongestBaseline: strongest.name,
+    claimBlockers: scoreable ? [] : [
+      `${dataset} ${metric} is local-diagnostic${scorer}; require LLM/harness or comparable public-benchmark proof before quality or market claims.`
+    ]
   };
+}
+
+function benchmarkProof(report: BenchmarkReport): ExternalHardRow["proof"] {
+  const kind = report.ours && "judge" in report.ours ? (report.ours as { judge?: { kind?: string } }).judge?.kind : report.judge?.kind;
+  const proof = report.proof ?? report.proofLevel;
+  if (report.qualityClaimAllowed === true && (kind === "llm" || kind === "harness" || kind === "provider-evidence-support" || proof === "llm-harness" || proof === "public-benchmark")) {
+    return proof === "public-benchmark" ? "public-benchmark" : "llm-harness";
+  }
+  if (kind === "llm" || kind === "harness" || kind === "provider-evidence-support" || proof === "llm-harness") return "llm-harness";
+  if (proof === "public-benchmark") return "public-benchmark";
+  return "local-diagnostic";
 }
 
 function writeJson(path: string, value: unknown): void {
@@ -109,17 +156,22 @@ function writeJson(path: string, value: unknown): void {
   writeFileSync(path, JSON.stringify(value, null, 2));
 }
 
-function writeMarkdown(path: string, report: { generatedAt: string; passed: boolean; rows: ExternalHardRow[] }): void {
+function writeMarkdown(path: string, report: { generatedAt: string; passed: boolean; diagnosticPassed?: boolean; claimAllowed?: boolean; proofLevel?: string; rows: ExternalHardRow[]; claimBlockers?: string[] }): void {
   const lines = [
     "# External Hard Benchmark",
     "",
     `Generated: ${report.generatedAt}`,
     "",
-    "| Dataset | Metric | Cognibrain | Strongest baseline | Gap | Result |",
-    "| --- | --- | ---: | ---: | ---: | --- |",
+    `Proof level: \`${report.proofLevel ?? "unknown"}\`. Claim allowed: ${report.claimAllowed ? "yes" : "no"}. Diagnostic passed: ${report.diagnosticPassed ? "yes" : "no"}.`,
+    "",
+    "| Dataset | Metric | Cognibrain | Strongest baseline | Gap | Proof | Claim | Diagnostic |",
+    "| --- | --- | ---: | ---: | ---: | --- | --- | --- |",
     ...report.rows.map((row) =>
-      `| ${row.dataset} | \`${row.metric}\` | ${percent(row.cognibrain)} | ${row.strongestBaseline} ${percent(row.bestBaseline)} | ${signedPercent(row.gapToBestBaseline)} | ${row.passed ? "Pass" : "Needs work"} |`
-    )
+      `| ${row.dataset} | \`${row.metric}\` | ${percent(row.cognibrain)} | ${row.strongestBaseline} ${percent(row.bestBaseline)} | ${signedPercent(row.gapToBestBaseline)} | \`${row.proof}\` | ${row.passed ? "Pass" : "Blocked"} | ${row.diagnosticPassed ? "Pass" : "Needs work"} |`
+    ),
+    "",
+    "Claim blockers:",
+    ...(report.claimBlockers?.length ? report.claimBlockers.map((item) => `- ${item}`) : ["- none"])
   ];
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${lines.join("\n")}\n`);
@@ -160,15 +212,21 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(JSON.stringify({
     generatedAt: report.generatedAt,
     passed: report.passed,
+    diagnosticPassed: report.diagnosticPassed,
+    claimAllowed: report.claimAllowed,
+    proofLevel: report.proofLevel,
+    claimBlockers: report.claimBlockers,
     rows: report.rows.map((row) => ({
       dataset: row.dataset,
       metric: row.metric,
+      proof: row.proof,
       cognibrain: row.cognibrain,
       strongestBaseline: row.strongestBaseline,
       bestBaseline: row.bestBaseline,
       gapToBestBaseline: row.gapToBestBaseline,
-      passed: row.passed
+      passed: row.passed,
+      diagnosticPassed: row.diagnosticPassed
     }))
   }, null, 2));
-  process.exit(report.passed || !args.has("--strict") ? 0 : 1);
+  process.exit(report.passed || (!args.has("--strict") && report.diagnosticPassed) ? 0 : 1);
 }

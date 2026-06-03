@@ -202,6 +202,30 @@ const realworldOperationalWeaknessReporting = files.realworldBlackboxSource.incl
   files.realworldBlackbox.operationalWeaknesses.rawErrorClasses.length >= 1 &&
   Array.isArray(files.realworldBlackbox?.operationalWeaknesses?.bucketWeaknesses) &&
   files.realworldBlackbox.operationalWeaknesses.bucketWeaknesses.length >= 5;
+const thirdPartyOssSources = [
+  "https://github.com/vercel/next.js/issues/84884",
+  "https://github.com/vercel/next.js/issues/78957",
+  "https://github.com/pytest-dev/pytest-asyncio/issues/293"
+];
+const realworldThirdPartyOssEvents = Array.isArray(files.realworldBlackbox?.manifest?.events)
+  ? files.realworldBlackbox.manifest.events.filter((event) => event?.bucket === "third-party-oss-workflows")
+  : [];
+const realworldThirdPartyOssQueries = Array.isArray(files.realworldBlackbox?.manifest?.queries)
+  ? files.realworldBlackbox.manifest.queries.filter((query) => query?.bucket === "third-party-oss-workflows")
+  : [];
+const protocolThirdPartyOssSources = Array.isArray(files.realworldProtocol?.thirdPartyOssSourceEvidence?.sources)
+  ? files.realworldProtocol.thirdPartyOssSourceEvidence.sources
+  : [];
+const realworldThirdPartyOssBucket =
+  files.realworldBlackboxSource.includes('bucket: "third-party-oss-workflows"') &&
+  thirdPartyOssSources.every((source) => files.realworldBlackboxSource.includes(source)) &&
+  realworldThirdPartyOssEvents.length >= 3 &&
+  realworldThirdPartyOssEvents.every((event) => typeof event?.source === "string" && event.source.startsWith("https://github.com/")) &&
+  realworldThirdPartyOssQueries.length >= 3 &&
+  files.realworldProtocol?.thirdPartyOssSourceEvidence?.present === true &&
+  thirdPartyOssSources.every((source) => protocolThirdPartyOssSources.includes(source)) &&
+  files.evaluationTests.includes("third-party-oss-workflows") &&
+  files.evaluationTests.includes("https://github.com/");
 const realworldSmokeMarketBoundary = files.realworldBlackboxSource.includes("comparativeSmokeEligible") &&
   files.realworldBlackboxSource.includes("marketClaimAllowed") &&
   files.realworldBlackboxSource.includes("leaderboardEligibleSystems: []") &&
@@ -409,6 +433,14 @@ const checks = [
     artifact: "artifacts/realworld-blackbox.json",
     summary: files.realworldBlackbox?.operationalWeaknesses?.summary,
     rawErrorClasses: files.realworldBlackbox?.operationalWeaknesses?.rawErrorClasses?.map((item) => item.className)
+  }),
+  check("realworld-third-party-oss-workflows", "Real-world black-box coverage includes a third-party OSS workflow bucket sourced from public GitHub issues, and protocol evidence keeps those source URLs visible without allowing market claims.", realworldThirdPartyOssBucket, "fail", {
+    source: "src/eval/realworldBlackbox.ts",
+    tests: "tests/evaluation.test.ts",
+    artifacts: ["artifacts/realworld-blackbox.json", "artifacts/realworld-benchmark-protocol.json"],
+    events: realworldThirdPartyOssEvents.length,
+    queries: realworldThirdPartyOssQueries.length,
+    sources: protocolThirdPartyOssSources
   }),
   check("realworld-smoke-market-claim-boundary", "Real-world centrally judged small-manifest results may become comparative smoke only; market and leaderboard claims stay blocked until a larger third-party-sourced protocol with more original systems and preregistered cost/latency budgets exists.", realworldSmokeMarketBoundary, "fail", {
     source: "src/eval/realworldBlackbox.ts",
@@ -730,7 +762,9 @@ const report = {
     httpHardened: runtimeStatus.summary.httpHardened,
     realWorldLeaderboardEligibleArtifacts: realworldEligibleArtifacts.length,
     realWorldBlackboxBlockedSystems: realworldBlackboxBlocked.length,
-    realWorldBlackboxJudgeBlocked: realworldBlackboxJudgeBlocked
+    realWorldBlackboxJudgeBlocked: realworldBlackboxJudgeBlocked,
+    realWorldThirdPartyOssEvents: realworldThirdPartyOssEvents.length,
+    realWorldThirdPartyOssQueries: realworldThirdPartyOssQueries.length
   },
   truthTuples: [
     ["arena.cognibrain.proof", cognibrainArena?.proofLevel ?? "missing", "artifacts/arena/run.json"],
@@ -740,6 +774,7 @@ const report = {
     ["benchmarks.realworld.leaderboardEligible", realworldEligibleArtifacts.length, "artifacts/realworld-benchmark-protocol.json"],
     ["benchmarks.realworld.blackboxBlocked", realworldBlackboxBlocked.length, "artifacts/realworld-blackbox.json"],
     ["benchmarks.realworld.qualityJudge", realworldBlackboxJudgeBlocked ? "missing-blocks-quality-claim" : realworldBlackboxCognibrain?.judge?.kind ?? "missing", "artifacts/realworld-blackbox.json"],
+    ["benchmarks.realworld.thirdPartyOssEvents", realworldThirdPartyOssEvents.length, "artifacts/realworld-blackbox.json"],
     ["connectors.hermeticDrivers", hermeticRows.length, "artifacts/connector-maturity.json"],
     ["connectors.liveSmokeReady", liveSmokeReadyRows.length, "artifacts/connector-maturity.json"],
     ["connectors.apiSpecVerified", apiSpecVerifiedRows.length, "artifacts/vendor-api-specs.json"],

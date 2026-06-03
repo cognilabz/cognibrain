@@ -10,6 +10,7 @@ type JudgeKind = "llm" | "harness" | "missing" | "external-system";
 type Bucket =
   | "customer-support-long-conversations"
   | "software-engineering-repo-work"
+  | "third-party-oss-workflows"
   | "personal-project-notes"
   | "temporal-updates-contradictions"
   | "negative-and-privacy-boundaries";
@@ -392,6 +393,30 @@ function buildManifest(): RealWorldManifest {
       tags: ["oss", "generated-file", "sdk", "review"]
     },
     {
+      id: "thirdparty-next-axios-abortsignal-memory-leak",
+      bucket: "third-party-oss-workflows",
+      source: "https://github.com/vercel/next.js/issues/84884",
+      occurredAt: "2025-10-15T00:00:00.000Z",
+      content: "In vercel/next.js issue 84884, the reporter described a memory leak in Next.js middleware when axios used AbortSignal.timeout with the fetch adapter. The reproduction used next-abort-signal-memory-leak-reproduction, built the app, ran node mockServer.js, sent 1,000 requests, captured heap snapshots with kill -USR2 against the next-server PID, and found that the middleware axios path retained signal/abort objects while fetch or removing AbortSignal avoided the leak.",
+      tags: ["third-party-oss", "github-issue", "nextjs", "middleware", "memory-leak", "axios", "abortsignal"]
+    },
+    {
+      id: "thirdparty-next-turbopack-fast-refresh-loop",
+      bucket: "third-party-oss-workflows",
+      source: "https://github.com/vercel/next.js/issues/78957",
+      occurredAt: "2025-05-08T00:00:00.000Z",
+      content: "In vercel/next.js issue 78957, the Turbopack dev-mode Fast Refresh bug was reproduced from elliason/fast-refresh-error-reproduction by starting the app in dev mode, visiting /grid, and reloading. The observed failure was repeated Fast Refresh logs plus repeated 404 requests for toast component files such as src/components/toast/index.ts and use-toast.ts; the reporter noted it affected next dev with --turbo on Next.js 15.2.0 through 15.4.0-canary.24, not production builds, not webpack, and not Next.js 15.1.7 or lower.",
+      tags: ["third-party-oss", "github-issue", "nextjs", "turbopack", "fast-refresh", "hmr"]
+    },
+    {
+      id: "thirdparty-pytest-asyncio-unused-mode-warning",
+      bucket: "third-party-oss-workflows",
+      source: "https://github.com/pytest-dev/pytest-asyncio/issues/293",
+      occurredAt: "2022-02-15T00:00:00.000Z",
+      content: "In pytest-dev/pytest-asyncio issue 293, the reporter showed pytest-asyncio 0.18.1 warning about asyncio_mode even when the test suite did not use asyncio. A clean directory with only def test_lala(): pass still emitted a DeprecationWarning that the asyncio_mode default would change to strict and suggested explicitly setting asyncio_mode=strict or auto; the requested behavior was to warn only when pytest-asyncio was actually used in a test.",
+      tags: ["third-party-oss", "github-issue", "pytest-asyncio", "configuration-warning", "strict-mode"]
+    },
+    {
       id: "notes-northstar-theme",
       bucket: "personal-project-notes",
       source: "neutral-fixture:project-notes",
@@ -570,6 +595,27 @@ function buildManifest(): RealWorldManifest {
         bucket: "software-engineering-repo-work",
         question: "Which source file changed for partner status, and which generated file was off-limits?",
         expectedEvidenceIds: ["oss-generated-client-boundary"],
+        topK: 3
+      },
+      {
+        id: "q-thirdparty-next-axios-memory-leak",
+        bucket: "third-party-oss-workflows",
+        question: "In the public Next.js issue about axios and AbortSignal, which middleware path leaked memory and what reproduction steps proved it?",
+        expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"],
+        topK: 3
+      },
+      {
+        id: "q-thirdparty-next-turbopack-refresh-loop",
+        bucket: "third-party-oss-workflows",
+        question: "What reproduced the Next.js Turbopack Fast Refresh loop and which route/component requests were involved?",
+        expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"],
+        topK: 3
+      },
+      {
+        id: "q-thirdparty-pytest-asyncio-warning",
+        bucket: "third-party-oss-workflows",
+        question: "What did pytest-asyncio issue 293 warn about even without asyncio tests, and what behavior did the reporter want instead?",
+        expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"],
         topK: 3
       },
       {

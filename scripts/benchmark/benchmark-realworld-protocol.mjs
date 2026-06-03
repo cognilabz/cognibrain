@@ -7,6 +7,7 @@ const root = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const outputPath = optionValue("--out") ?? "artifacts/realworld-benchmark-protocol.json";
 const markdownPath = optionValue("--markdown") ?? "artifacts/docs/realworld-benchmark-protocol.md";
 const openaiIntelligenceSummary = summarizeRealWorldArtifact("artifacts/realworld-blackbox-openai-intelligence.json");
+const thirdPartyOssSummary = summarizeThirdPartyOssBucket();
 
 const gate = [
   {
@@ -59,8 +60,13 @@ const realWorldBuckets = [
   },
   {
     id: "software-engineering-repo-work",
-    source: "Real OSS repos plus issues, PRs, failed commands, corrections, and follow-up tasks.",
+    source: "Neutral preregistered OSS-style fixtures with issues, PRs, failed commands, corrections, and follow-up tasks.",
     metrics: ["procedure recall", "wrong-action suppression", "patch evidence completeness", "source citation correctness"],
+  },
+  {
+    id: "third-party-oss-workflows",
+    source: "Public GitHub issues from external OSS projects, with source URLs retained in the frozen manifest.",
+    metrics: ["external-source recall", "workflow detail recall", "reproduction-step recall", "source citation correctness"],
   },
   {
     id: "personal-project-notes",
@@ -189,6 +195,7 @@ const report = {
       "Only documented default setup, credentials, endpoint URLs, and storage paths. Any API compatibility repair demotes the row to repaired/diagnostic unless preregistered.",
   },
   realWorldBuckets,
+  thirdPartyOssSourceEvidence: thirdPartyOssSummary,
   currentArtifacts,
   leaderboardEligibleArtifacts: currentArtifacts.filter((artifact) => artifact.leaderboardEligible).map((artifact) => artifact.path),
   nextCognibrainImprovements: [
@@ -236,8 +243,12 @@ const report = {
     },
     {
       priority: "P1",
-      item: "Add real OSS engineering workflows as a third-party-sourced bucket.",
-      reason: "Cognibrain's strongest internal story is coding lifecycle memory, so the fair version must come from external repos/issues rather than our own scenario generator.",
+      item: thirdPartyOssSummary.present
+        ? "Expand third-party OSS workflow coverage beyond the first public-issue smoke."
+        : "Add real OSS engineering workflows as a third-party-sourced bucket.",
+      reason: thirdPartyOssSummary.present
+        ? `${thirdPartyOssSummary.eventCount} public GitHub issue events are present; market claims still need a larger preregistered third-party corpus.`
+        : "Cognibrain's strongest internal story is coding lifecycle memory, so the fair version must come from external repos/issues rather than our own scenario generator.",
     },
     {
       priority: "P2",
@@ -302,8 +313,53 @@ function summarizeRealWorldArtifact(path) {
   }
 }
 
+function summarizeThirdPartyOssBucket() {
+  const requiredSources = [
+    "https://github.com/vercel/next.js/issues/84884",
+    "https://github.com/vercel/next.js/issues/78957",
+    "https://github.com/pytest-dev/pytest-asyncio/issues/293",
+  ];
+  const manifest = readJson("artifacts/realworld-blackbox.json", null);
+  const artifactEvents = Array.isArray(manifest?.manifest?.events)
+    ? manifest.manifest.events.filter((event) => event?.bucket === "third-party-oss-workflows")
+    : [];
+  const artifactQueries = Array.isArray(manifest?.manifest?.queries)
+    ? manifest.manifest.queries.filter((query) => query?.bucket === "third-party-oss-workflows")
+    : [];
+  const artifactSources = artifactEvents.map((event) => event.source).filter((source) => typeof source === "string");
+  const sourceText = read("src/eval/realworldBlackbox.ts");
+  const sourcePresent = requiredSources.filter((source) => sourceText.includes(source) || artifactSources.includes(source));
+  const sourceBacked = sourcePresent.length === requiredSources.length;
+  const sourceBucketPresent = sourceText.includes('bucket: "third-party-oss-workflows"') || artifactEvents.length > 0;
+  const eventCount = Math.max(artifactEvents.length, sourcePresent.length);
+  const queryCount = Math.max(artifactQueries.length, sourceText.includes("q-thirdparty-") ? sourcePresent.length : 0);
+  return {
+    present: sourceBacked && sourceBucketPresent && eventCount >= 3 && queryCount >= 3,
+    eventCount,
+    queryCount,
+    sourceCount: sourcePresent.length,
+    sources: sourcePresent,
+    evidence: artifactEvents.length > 0 ? "artifact-and-source" : "source-fallback-before-blackbox-regeneration",
+  };
+}
+
 function sha256(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function read(path) {
+  const absolute = join(root, path);
+  return existsSync(absolute) ? readFileSync(absolute, "utf8") : "";
+}
+
+function readJson(path, fallback) {
+  const absolute = join(root, path);
+  if (!existsSync(absolute)) return fallback;
+  try {
+    return JSON.parse(readFileSync(absolute, "utf8"));
+  } catch {
+    return fallback;
+  }
 }
 
 function writeJson(path, value) {
@@ -344,6 +400,14 @@ function writeMarkdown(path, report) {
     "| Bucket | Source | Metrics |",
     "| --- | --- | --- |",
     ...report.realWorldBuckets.map((bucket) => `| \`${bucket.id}\` | ${bucket.source} | ${bucket.metrics.join(", ")} |`),
+    "",
+    "## Third-Party OSS Source Evidence",
+    "",
+    `Present: ${report.thirdPartyOssSourceEvidence.present ? "Yes" : "No"}`,
+    "",
+    "| Source |",
+    "| --- |",
+    ...report.thirdPartyOssSourceEvidence.sources.map((source) => `| ${source} |`),
     "",
     "## Cognibrain Improvement Backlog",
     "",

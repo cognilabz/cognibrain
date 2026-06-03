@@ -590,9 +590,13 @@ describe("self verification benchmark loop", () => {
         counts[query.bucket] = (counts[query.bucket] ?? 0) + 1;
         return counts;
       }, {});
+      const thirdPartyOssEvents = report.manifest.events.filter((event) => event.bucket === "third-party-oss-workflows");
       expect(report.manifestHash).toHaveLength(64);
       expect(report.manifest.queries.length).toBeGreaterThanOrEqual(15);
       expect(Object.values(queriesByBucket).every((count) => count >= 3)).toBe(true);
+      expect(thirdPartyOssEvents).toHaveLength(3);
+      expect(thirdPartyOssEvents.every((event) => event.source.startsWith("https://github.com/"))).toBe(true);
+      expect(queriesByBucket["third-party-oss-workflows"]).toBe(3);
       expect(report.manifest.queries.filter((query) => query.shouldAbstain).length).toBeGreaterThanOrEqual(3);
       expect(report.leaderboardEligible).toBe(false);
       expect(report.eligibilityGate.manifestCoverageReady).toBe(true);
@@ -627,6 +631,7 @@ describe("self verification benchmark loop", () => {
       });
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Real-World Black-Box Benchmark");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Operational Weaknesses");
+      expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("third-party-oss-workflows");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("not scored");
       expect(existsSync("scripts/benchmark/realworld-openai-judge.mjs")).toBe(true);
     } finally {

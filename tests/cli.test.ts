@@ -921,6 +921,7 @@ describe("cognibrain CLI", () => {
         join(dir, ".cursor", "mcp.json"),
         join(dir, ".cursor", "rules", "open-memory.mdc"),
         join(dir, ".vscode", "mcp.json"),
+        join(dir, ".vscode", "settings.json"),
         join(dir, ".opencode", "cognibrain.md"),
         join(dir, ".openclaw", "cognibrain.md"),
         join(dir, "langgraph.cognibrain.json"),
@@ -975,6 +976,11 @@ describe("cognibrain CLI", () => {
       expect(manifest.harnesses.opencode.mcpConfig).toBeUndefined();
       expect(manifest.harnesses.continue.mcpConfig).toBeUndefined();
       expect(manifest.harnesses["roo-cline"].feedback).toContain("correction capture");
+      const vscodeMcp = JSON.parse(readFileSync(join(dir, ".vscode", "mcp.json"), "utf8"));
+      expect(vscodeMcp.servers.cognibrain.args.join(" ")).toContain("lightweightMcpServer.mjs");
+      const vscodeSettings = JSON.parse(readFileSync(join(dir, ".vscode", "settings.json"), "utf8"));
+      expect(vscodeSettings["files.watcherExclude"]["**/.cognibrain/**"]).toBe(true);
+      expect(vscodeSettings["search.exclude"]["**/data/benchmarks/**"]).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

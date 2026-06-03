@@ -148,7 +148,10 @@ switch (command) {
     break;
 
   case "mcp":
-    runTsxAndExit("src/connectors/mcpServer.ts", commandArgs);
+    if (commandArgs.includes("--local-direct") || ["local", "local-direct", "in-process"].includes(process.env.COGNIBRAIN_MCP_BACKEND ?? "")) {
+      runTsxAndExit("src/connectors/mcpServer.ts", commandArgs.filter((arg) => arg !== "--local-direct"));
+    }
+    runNodeAndExit("bin/lib/lightweightMcpServer.mjs", commandArgs);
     break;
 
   case "help":
@@ -211,7 +214,7 @@ async function statusCommand(statusArgs = []) {
     runNodeAndExit("scripts/runtime/start-local.mjs", ["--status"]);
     return;
   }
-  const result = await cliHomeData();
+  const result = statusArgs.includes("--full") ? await cliHomeData() : statusData();
   if (statusArgs.includes("--json")) {
     printJson(result);
     return;
@@ -1102,6 +1105,58 @@ async function cliHomeData() {
       "cognibrain service plan",
       "cognibrain service install --activate",
       "cognibrain dashboard"
+    ]
+  };
+}
+
+function statusData() {
+  const config = readConfigurationState();
+  const connections = connectionsDashboardData();
+  const service = servicePlan([]);
+  return {
+    schemaVersion: "1.0",
+    surface: "runtime-status",
+    package: packageInfo(),
+    runtime: runtimeStatus(),
+    config: {
+      runtimeRoot: config.runtimeRoot,
+      setupState: config.setupState,
+      skill: config.skill,
+      harnessManifest: config.harnessManifest ? "present" : "missing",
+      connectors: config.connectors.length,
+      adapters: config.adapters.length
+    },
+    memories: {
+      commands: ["cognibrain memories --json", "cognibrain memories search <query>"],
+      note: "Use cognibrain memories --json for full memory dashboard details."
+    },
+    connections: {
+      connectors: {
+        configured: connections.connectors.configured,
+        available: connections.connectors.available.length
+      },
+      adapters: {
+        configured: connections.adapters.configured,
+        available: connections.adapters.available.length
+      }
+    },
+    service: {
+      platform: service.platform,
+      manager: service.manager,
+      installed: service.installed,
+      dashboard: service.dashboard
+    },
+    dashboard: {
+      optional: true,
+      command: "cognibrain dashboard",
+      note: "The commercial Operator UI is opt-in; every operator surface is reachable from this CLI."
+    },
+    commands: [
+      "cognibrain status --full --json",
+      "cognibrain memories --json",
+      "cognibrain context --task <task> --json",
+      "cognibrain guard --action <command> --json",
+      "cognibrain service status"
     ]
   };
 }

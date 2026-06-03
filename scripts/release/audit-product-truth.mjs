@@ -62,7 +62,7 @@ const files = {
   answerGenerationSource: read("src/eval/answerGeneration.ts"),
   releaseCheck: read("scripts/release/release-check.mjs"),
   internalRunner: read("scripts/internal/run-task.mjs"),
-  cli: readMany(["bin/cognibrain.mjs", "bin/lib/render.mjs"]),
+  cli: readMany(["bin/cognibrain.mjs", "bin/lib/render.mjs", "bin/lib/cliRuntime.mjs", "bin/lib/harnessRuntime.mjs", "bin/lib/lightweightMcpServer.mjs"]),
   server: read("src/api/server.ts"),
   dreamRoutes: read("src/api/server/dreamRoutes.ts"),
   serverHelpers: read("src/api/server/helpers.ts"),
@@ -560,6 +560,15 @@ const checks = [
   check("cli-operator-primary", "The installable CLI uses stable compact text surfaces without the removed Ink TUI dependency.", !files.packageJson.dependencies?.ink && !existsSync(join(root, "src", "cli", "inkApp.mjs")) && files.cli.includes("function renderPlainSurface") && files.cli.includes("clipText"), "fail", {
     source: "bin/cognibrain.mjs",
     removed: ["animated terminal UI dependency", "src/cli/inkApp.mjs", "generated CLI screenshots"]
+  }),
+  check("runtime-resource-footprint", "MCP and status runtime paths avoid heavyweight TSX/process fan-out by default and VSCode harness setup excludes generated benchmark/runtime directories from watchers.", files.cli.includes("lightweightMcpServer.mjs") && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\""), "fail", {
+    code: ["bin/lib/cliRuntime.mjs", "bin/lib/harnessRuntime.mjs", "bin/lib/lightweightMcpServer.mjs"],
+    checks: [
+      "default MCP uses lightweight JS daemon proxy",
+      "local-direct TSX MCP remains explicit opt-in",
+      "status uses lightweight runtime payload unless --full is requested",
+      "VSCode watcher/search excludes generated runtime and benchmark directories"
+    ]
   }),
   check("operator-os-proof", "The terminal operator OS maturity artifact covers memory, connectors, runtime, config, benchmarks, policy, retention, logs and docs.", files.operatorOs.passed === true && Array.isArray(files.operatorOs.rows) && files.operatorOs.rows.length >= 10, "fail", {
     artifact: "artifacts/operator-os-maturity.json",

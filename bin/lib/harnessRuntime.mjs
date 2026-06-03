@@ -89,7 +89,9 @@ function writeCodexConfig() {
       "",
       "[mcp_servers.cognibrain]",
       `command = ${tomlString(process.execPath)}`,
-      `args = [${tomlString(join(root, "bin", "cognibrain.mjs"))}, "--runtime-root", ${tomlString(launchCwd)}, "mcp"]`,
+      `args = [${tomlString(join(root, "bin", "lib", "lightweightMcpServer.mjs"))}]`,
+      `[mcp_servers.cognibrain.env]`,
+      `COGNIBRAIN_RUNTIME_ROOT = ${tomlString(launchCwd)}`,
       ""
     ].join("\n");
     writeFileSync(configPath, `${current.trimEnd()}${block}`);
@@ -134,8 +136,29 @@ function writeVsCodeConfig() {
   json.servers.cognibrain = { type: "stdio", ...stdioServerConfig() };
   writeJson(path, json);
   console.log(`Wrote VS Code MCP config: ${path}`);
+  writeVsCodeResourceSettings();
   writeTemplateFile(join(launchCwd, ".vscode", "cognibrain.instructions.md"), "templates/vscode/cognibrain.instructions.md");
   writeHarnessPackageManifest();
+}
+
+function writeVsCodeResourceSettings() {
+  const path = join(launchCwd, ".vscode", "settings.json");
+  const json = readJson(path, {});
+  const excludes = {
+    "**/.cognibrain/**": true,
+    "**/.memory-harness.json": true,
+    "**/artifacts/**": true,
+    "**/data/benchmarks/**": true,
+    "**/dist/**": true,
+    "**/node_modules/**": true,
+    "**/operator-ui/.next/**": true,
+    "**/.playwright-cli/**": true,
+    "**/output/**": true
+  };
+  json["files.watcherExclude"] = { ...(json["files.watcherExclude"] ?? {}), ...excludes };
+  json["search.exclude"] = { ...(json["search.exclude"] ?? {}), ...excludes };
+  writeJson(path, json);
+  console.log(`Wrote VS Code resource excludes: ${path}`);
 }
 
 function writeOpenCodeConfig() {
@@ -504,7 +527,10 @@ function connectorProofAtLeast(actual, minimum) {
 function stdioServerConfig() {
   return {
     command: process.execPath,
-    args: [join(root, "bin", "cognibrain.mjs"), "--runtime-root", launchCwd, "mcp"]
+    args: [join(root, "bin", "lib", "lightweightMcpServer.mjs")],
+    env: {
+      COGNIBRAIN_RUNTIME_ROOT: launchCwd
+    }
   };
 }
 

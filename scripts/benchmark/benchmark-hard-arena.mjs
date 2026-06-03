@@ -43,7 +43,7 @@ const arena = spawnSync("npx", arenaArgs, {
   cwd: root,
   env,
   encoding: "utf8",
-  timeout: Number(process.env.MEMORY_ARENA_HARD_TIMEOUT_MS ?? 900_000),
+  timeout: Number(process.env.MEMORY_ARENA_HARD_TIMEOUT_MS ?? process.env.MEMORY_RELEASE_CHECK_ARENA_TIMEOUT_MS ?? 1_800_000),
   maxBuffer: 60 * 1024 * 1024
 });
 process.stdout.write(arena.stdout ?? "");

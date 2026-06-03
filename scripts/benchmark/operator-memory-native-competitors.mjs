@@ -13,9 +13,10 @@ const pythonBin = process.env.MEMORY_OPERATOR_MEMORY_COMPETITOR_PYTHON
   ?? process.env.MEMORY_ARENA_COMPETITOR_PYTHON
   ?? join(pythonVenv, "bin", "python");
 const runner = join(root, "scripts", "benchmark", "competitors", "operator-memory-native-python-runner.mjs");
+const skipInstall = process.argv.includes("--skip-install") || process.env.MEMORY_OPERATOR_MEMORY_SKIP_INSTALL === "true";
 
 const installations = {
-  pythonCompetitors: ensurePythonCompetitors(),
+  pythonCompetitors: skipInstall ? skippedPythonCompetitors() : ensurePythonCompetitors(),
   mem0: pythonPackageStatus("mem0ai"),
   graphiti: pythonPackageStatus("graphiti-core"),
   cognee: pythonPackageStatus("cognee"),
@@ -110,6 +111,15 @@ function ensurePythonCompetitors() {
     uv: commandEntry(uv),
     create: commandEntry(create),
     install: commandEntry(install)
+  };
+}
+
+function skippedPythonCompetitors() {
+  return {
+    installed: false,
+    blockedReason: "native Python competitor installation skipped; command runners still emit credential-blocked raw-evidence contracts when the venv is unavailable",
+    venv: pythonVenv,
+    install: null
   };
 }
 

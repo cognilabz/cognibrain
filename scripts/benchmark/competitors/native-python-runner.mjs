@@ -47,6 +47,7 @@ console.log(JSON.stringify({
   proofLevel: "credential-blocked",
   adapterMode: "blocked-command",
   capabilityGaps: [`${system} native runner failed before producing JSON`],
+  runnerContract: arenaRunnerContract(),
   latencyMs: Date.now() - started,
   evidence: {
     runner: "native-python-runner",
@@ -65,6 +66,7 @@ function printBlocked(blockedSystem, reason) {
     proofLevel: "credential-blocked",
     adapterMode: "blocked-command",
     capabilityGaps: [reason],
+    runnerContract: arenaRunnerContract(),
     latencyMs: Date.now() - started,
     evidence: {
       runner: "native-python-runner",
@@ -73,6 +75,16 @@ function printBlocked(blockedSystem, reason) {
       reason
     }
   }));
+}
+
+function arenaRunnerContract() {
+  return {
+    rawEvidenceOnly: true,
+    selfScoredChecksAllowed: false,
+    scoreableChecksRequireJudge: true,
+    judgeEnv: "MEMORY_ARENA_JUDGE_COMMAND",
+    judgeProtocol: "cognibrain-arena-llm-harness-judge-v1"
+  };
 }
 
 function optionValue(name) {

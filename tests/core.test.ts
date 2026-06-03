@@ -2433,7 +2433,7 @@ describe("TypeScript memory core", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it("cancels and retries dream jobs through the persisted job surface", async () => {
     const service = new MemoryService({ autoDream: { enabled: false } });

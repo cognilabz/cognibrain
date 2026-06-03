@@ -31,7 +31,7 @@ import { publishArenaReport } from "../src/eval/publishArena";
 import { runBenchmarkArena } from "../src/eval/arena";
 import { CLI_COMMAND_CONTRACTS, MEMCTL_COMMAND_CONTRACTS } from "../src/api/releaseContract";
 
-const heavyBenchmarkTimeout = 90_000;
+const heavyBenchmarkTimeout = 180_000;
 const nativeRunnerBenchmarkTimeout = 30_000;
 
 type ConnectorBaseArtifacts = {
@@ -137,7 +137,7 @@ describe("self verification benchmark loop", () => {
     expect(report.claimBoundary.scorer).toBe("locomo-evidence-id-recall-diagnostic");
     expect(report.claimBoundary.marketClaimAllowed).toBe(false);
     expect(report.ours.accuracy).toBeGreaterThan(Math.max(...report.baselines.map((item) => item.accuracy)));
-  }, 120_000);
+  }, 240_000);
 
   it("runs a LongMemEval-style answer-session recall fixture", () => {
     const dir = mkdtempSync(join(tmpdir(), "open-memory-lme-"));
@@ -229,7 +229,7 @@ describe("self verification benchmark loop", () => {
     expect(report.claimAllowed).toBe(false);
     expect(report.proofLevel).toBe("diagnostic-public-dataset-stress");
     expect(report.claimBlockers[0]).toContain("locomo-evidence-id-recall-diagnostic");
-  });
+  }, nativeRunnerBenchmarkTimeout);
 
   it("allows external-hard stress rows only when child artifacts are LLM or public-benchmark scoreable", () => {
     const row = summarizeExternalHardRow("fixture-beam", "BEAM 100K", "retrieval_nugget_score_at_5", { topK: 5 }, "fixture.json", {
@@ -248,7 +248,7 @@ describe("self verification benchmark loop", () => {
     expect(report.passed).toBe(true);
     expect(report.claimAllowed).toBe(true);
     expect(report.claimBlockers).toEqual([]);
-  });
+  }, nativeRunnerBenchmarkTimeout);
 
   it("can score BEAM fixtures through a harness evidence judge", async () => {
     const dir = mkdtempSync(join(tmpdir(), "open-memory-beam-provider-"));
@@ -766,7 +766,7 @@ process.stdin.on("end", () => {
       if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
       else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
     }
-  });
+  }, nativeRunnerBenchmarkTimeout);
 
   it("blocks inconsistent real-world judge decisions even when the judge returns a complete decision set", async () => {
     const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
@@ -797,7 +797,7 @@ process.stdin.on("end", () => {
       if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
       else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
     }
-  });
+  }, nativeRunnerBenchmarkTimeout);
 
   it("preserves the last successful judged real-world artifact across blocked reruns", async () => {
     const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;

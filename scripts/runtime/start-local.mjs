@@ -79,7 +79,7 @@ async function startDaemon() {
     dbPath: defaultDbPath
   };
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
-  await waitForUrl(`${state.api.url}/health`, 8_000);
+  await waitForUrl(`${state.api.url}/health`, Number(process.env.COGNIBRAIN_API_READY_TIMEOUT_MS ?? 30_000));
   if (state.ui?.url) await waitForUrl(state.ui.url, 20_000);
   console.log(`cognibrain API: ${state.api.url}`);
   console.log(state.ui?.url ? `cognibrain UI:  ${state.ui.url}` : "cognibrain UI:  optional; run cognibrain dashboard");

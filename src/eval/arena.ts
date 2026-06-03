@@ -585,6 +585,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
     stderrTail: string;
     stdoutTail: string;
     error?: string;
+    runnerContract?: RunnerContract;
   };
 
   constructor(
@@ -616,6 +617,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
           status: this.runnerDisabled.status,
           signal: this.runnerDisabled.signal,
           timeoutMs: this.runnerDisabled.timeoutMs,
+          runnerContract: this.runnerDisabled.runnerContract,
           stderrTail: this.runnerDisabled.stderrTail,
           stdoutTail: this.runnerDisabled.stdoutTail,
           error: this.runnerDisabled.error
@@ -642,6 +644,8 @@ class CommandRunnerAdapter extends ProfileAdapter {
     });
     if (result.status !== 0) {
       const checks = emptyChecks();
+      const parsedFailure = parseRunnerOutput(result.stdout);
+      const runnerContract = normalizeRunnerContract(parsedFailure?.runnerContract ?? parsedFailure?.evidence?.runnerContract);
       const failure = {
         reason: result.error?.message ? `runner failed for ${scenario.id}: ${result.error.message}` : `runner failed for ${scenario.id}`,
         scenarioId: scenario.id,
@@ -650,7 +654,8 @@ class CommandRunnerAdapter extends ProfileAdapter {
         timeoutMs,
         stderrTail: tail(result.stderr),
         stdoutTail: tail(result.stdout),
-        error: result.error?.message
+        error: result.error?.message,
+        runnerContract
       };
       this.runnerDisabled = failure;
       this.addCapabilityGaps([`${failure.reason}; disabling runner for remaining scenarios in this benchmark run`]);
@@ -667,6 +672,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
           status: failure.status,
           signal: failure.signal,
           timeoutMs: failure.timeoutMs,
+          runnerContract: failure.runnerContract,
           stderrTail: failure.stderrTail,
           stdoutTail: failure.stdoutTail,
           error: failure.error
@@ -691,7 +697,8 @@ class CommandRunnerAdapter extends ProfileAdapter {
         timeoutMs,
         stderrTail: tail(result.stderr),
         stdoutTail: tail(result.stdout),
-        error: typeof parsed?.evidence?.error === "string" ? parsed.evidence.error : result.error?.message
+        error: typeof parsed?.evidence?.error === "string" ? parsed.evidence.error : result.error?.message,
+        runnerContract
       };
       this.runnerDisabled = failure;
       this.addCapabilityGaps([...capabilityGaps, `${failure.reason}; disabling runner for remaining scenarios in this benchmark run`]);
@@ -710,7 +717,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
           timeoutMs: failure.timeoutMs,
           latencyMs: parsed?.latencyMs,
           capabilityGaps,
-          runnerContract,
+          runnerContract: failure.runnerContract,
           evidence: parsed?.evidence,
           stderrTail: failure.stderrTail,
           stdoutTail: failure.stdoutTail,

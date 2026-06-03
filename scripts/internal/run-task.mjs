@@ -68,7 +68,7 @@ const tasks = {
   "audit:plan-gaps": cmd("npx", ["tsx", "src/eval/planGaps.ts", "--out", "artifacts/plan-gaps-audit.json", "--markdown", "artifacts/docs/plan-gaps.md"]),
   "release:contract": cmd("npx", ["tsx", "src/eval/releaseContract.ts", "--out", "artifacts/release-contract-audit.json"]),
   "doctor:publish": cmd("node", ["bin/cognibrain.mjs", "doctor", "--publish"]),
-  "verify:nextgen": seq("test", "eval", "eval:nextgen", "benchmark:nextgen", "benchmark:cognicode", "benchmark:arena", "demo:first-win", ["node", "scripts/internal/run-task.mjs", "benchmark:answer-generation", "--reports", "artifacts/nextgen-benchmarks.json,artifacts/cognicodebench/run.json"], "leaderboard", "verify:compatibility", "harness:maturity", "operator:maturity", "benchmark:hardening", "verify:status", "audit:structure", "audit:docs", "release:contract", "audit:truth", "audit:plan-gaps", "build"),
+  "verify:nextgen": seq("test", "eval", "eval:nextgen", "benchmark:nextgen", "benchmark:cognicode", "benchmark:arena", "benchmark:realworld:protocol", "benchmark:realworld:blackbox", "benchmark:release", "demo:first-win", ["node", "scripts/internal/run-task.mjs", "benchmark:answer-generation", "--reports", "artifacts/nextgen-benchmarks.json,artifacts/cognicodebench/run.json"], "leaderboard", "verify:compatibility", "harness:maturity", "operator:maturity", "benchmark:hardening", "verify:status", "audit:structure", "audit:docs", "release:contract", "audit:truth", "audit:plan-gaps", "build"),
   "verify:selfhosted": seq("verify:nextgen", "verify:postgres", "verify:selfhosted:claims", "doctor:publish", ["npm", "pack", "--dry-run"], ["python3", "-m", "unittest", "discover", "-s", "sdk/python/tests"])
 };
 

@@ -2,14 +2,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { nativeRunnerRoot, vendorBenchmarkRoot } from "./cache-root.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
 const out = optionValue("--out") ?? "artifacts/arena/native-competitors.json";
 const count = optionValue("--count") ?? "30";
-const pythonVenv = process.env.MEMORY_ARENA_COMPETITOR_VENV ?? join(root, ".cognibrain", "native-runners", "competitors-venv");
+const pythonVenv = process.env.MEMORY_ARENA_COMPETITOR_VENV ?? nativeRunnerRoot("competitors-venv");
 const pythonBin = process.env.MEMORY_ARENA_COMPETITOR_PYTHON ?? join(pythonVenv, "bin", "python");
-const gbrainRepo = process.env.MEMORY_ARENA_GBRAIN_REPO ?? join(root, ".cognibrain", "vendor", "gbrain");
-const gbrainHome = process.env.MEMORY_ARENA_GBRAIN_HOME ?? join(root, ".cognibrain", "native-runners", "gbrain-home");
+const gbrainRepo = process.env.MEMORY_ARENA_GBRAIN_REPO ?? vendorBenchmarkRoot("gbrain");
+const gbrainHome = process.env.MEMORY_ARENA_GBRAIN_HOME ?? nativeRunnerRoot("gbrain-home");
 
 const installations = {
   pythonCompetitors: installPythonCompetitors(),
@@ -23,6 +24,7 @@ const installations = {
 
 const env = {
   ...process.env,
+  COGNIBRAIN_NATIVE_RUNNER_ROOT: process.env.COGNIBRAIN_NATIVE_RUNNER_ROOT ?? nativeRunnerRoot(),
   MEMORY_ARENA_COMPETITOR_PYTHON: pythonBin,
   MEMORY_ARENA_MEM0_COMMAND: `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "native-python-runner.mjs")} --system mem0`,
   MEMORY_ARENA_MEM0_PROOF_LEVEL: "same-run-native",

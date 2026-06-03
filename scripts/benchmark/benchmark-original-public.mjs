@@ -2,9 +2,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { originalBenchmarkRoot } from "./cache-root.mjs";
 
 const root = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
-const upstreamRoot = join(root, ".cognibrain/original-benchmarks");
+const upstreamRoot = originalBenchmarkRoot();
 const outputPath = join(root, "artifacts/original-public-benchmarks.json");
 const markdownPath = join(root, "artifacts/docs/original-public-benchmarks.md");
 

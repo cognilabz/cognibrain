@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { MemoryService } from "../../api/service";
+import type { BeliefState, ConsentVisibility, MemoryInput, MemoryLayer, MemoryType, SourceKind } from "../../core";
 import { buildLeaderboardArtifact } from "../../eval/leaderboard";
 import { runNextgenBenchmarkSuites } from "../../eval/nextgenBenchmarks";
 import {
@@ -26,7 +27,7 @@ import {
 type CommandContext = { service: MemoryService; userId: string };
 
 const COMMAND_USAGE: Record<string, string> = {
-  add: "Usage: memctl add <content>",
+  add: "Usage: memctl add <content> [--source-kind <kind>] [--source-confidence <n>] [--tags <a,b>] [--metadata-json <json>]",
   list: "Usage: memctl list [--limit <n>] [--include-archived]",
   extract: "Usage: memctl extract <conversation-or-event-text>",
   action: "Usage: memctl action <command-or-action-summary>",
@@ -54,9 +55,9 @@ export async function handleMemoryCommands(command: string | undefined, args: st
   }
   switch (command) {
   case "add": {
-    const content = args.join(" ");
-    if (!content) fail("Usage: memctl add <content>");
-    const memory = service.add({ userId, content, source: { kind: "human", confidence: 0.95 } });
+    const input = parseAddInput(args, userId);
+    if (!input.content) fail(COMMAND_USAGE.add);
+    const memory = service.add(input);
     console.log(JSON.stringify(memory, null, 2));
     return true;
   }
@@ -309,6 +310,198 @@ export async function handleMemoryCommands(command: string | undefined, args: st
     }), null, 2));
     return true;
   }
+}
+
+function parseAddInput(args: string[], userId: string): MemoryInput {
+  const content: string[] = [];
+  const metadata = { ...(metadataFromEnv() ?? {}) };
+  const tags = new Set<string>();
+  const source: MemoryInput["source"] = { kind: "human", confidence: 0.95 };
+  const input: MemoryInput = { userId, content: "", source, metadata };
+  let sourceRef: NonNullable<MemoryInput["sourceRef"]> | undefined;
+  let rawContent = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (rawContent) {
+      content.push(arg);
+      continue;
+    }
+    if (arg === "--") {
+      rawContent = true;
+      continue;
+    }
+    if (!arg.startsWith("--")) {
+      content.push(arg);
+      continue;
+    }
+
+    const next = () => {
+      const value = args[index + 1];
+      if (value === undefined) fail(`Missing value for ${arg}`);
+      index += 1;
+      return value;
+    };
+
+    switch (arg) {
+    case "--source-kind":
+      source.kind = sourceKind(next(), arg);
+      break;
+    case "--source-confidence":
+      source.confidence = boundedNumber(next(), arg);
+      break;
+    case "--source-uri":
+      source.uri = next();
+      break;
+    case "--source-commit":
+      source.commit = next();
+      break;
+    case "--line-start":
+      source.lineStart = integerValue(next(), arg);
+      break;
+    case "--line-end":
+      source.lineEnd = integerValue(next(), arg);
+      break;
+    case "--tags":
+      for (const tag of csvList(next())) tags.add(tag);
+      break;
+    case "--tag":
+      tags.add(next());
+      break;
+    case "--metadata-json":
+    case "--metadata":
+      Object.assign(metadata, parseJsonObject(next(), arg));
+      break;
+    case "--type":
+      input.type = memoryType(next(), arg);
+      break;
+    case "--layer":
+      input.layer = memoryLayer(next(), arg);
+      break;
+    case "--confidence":
+      input.confidence = boundedNumber(next(), arg);
+      break;
+    case "--belief-state":
+      input.beliefState = beliefState(next(), arg);
+      break;
+    case "--visibility":
+      input.consent = { ...(input.consent ?? {}), visibility: consentVisibility(next(), arg) };
+      break;
+    case "--allow-training":
+      input.consent = { ...(input.consent ?? {}), allowTraining: booleanValue(next(), arg) };
+      break;
+    case "--delete-on-request":
+      input.consent = { ...(input.consent ?? {}), deleteOnRequest: booleanValue(next(), arg) };
+      break;
+    case "--source-ref-json":
+      sourceRef = { ...(sourceRef ?? {}), ...parseJsonObject(next(), arg) } as NonNullable<MemoryInput["sourceRef"]>;
+      break;
+    case "--source-ref-connector-id":
+      sourceRef = { ...(sourceRef ?? {}), connectorId: next() };
+      break;
+    case "--source-ref-external-id":
+      sourceRef = { ...(sourceRef ?? {}), externalId: next() };
+      break;
+    case "--source-ref-url":
+    case "--source-ref-uri":
+      sourceRef = { ...(sourceRef ?? {}), url: next() };
+      break;
+    case "--source-ref-version":
+      sourceRef = { ...(sourceRef ?? {}), version: next() };
+      break;
+    case "--source-ref-hash":
+      sourceRef = { ...(sourceRef ?? {}), hash: next() };
+      break;
+    case "--brain-id":
+      input.brainId = next();
+      break;
+    case "--source-id":
+      input.sourceId = next();
+      break;
+    case "--agent-id":
+      input.agentId = next();
+      break;
+    case "--session-id":
+      input.sessionId = next();
+      break;
+    case "--app-id":
+      input.appId = next();
+      break;
+    case "--org-id":
+      input.orgId = next();
+      break;
+    case "--project-id":
+      input.projectId = next();
+      break;
+    case "--device-id":
+      input.deviceId = next();
+      break;
+    case "--run-id":
+      input.runId = next();
+      break;
+    default:
+      fail(`Unknown memctl add option ${arg}; use -- before literal content that starts with --`);
+    }
   }
+
+  input.content = content.join(" ").trim();
+  input.tags = [...tags];
+  if (!Object.keys(metadata).length) delete input.metadata;
+  if (sourceRef && (sourceRef.connectorId || sourceRef.externalId || sourceRef.url)) input.sourceRef = sourceRef;
+  return input;
+}
+
+function sourceKind(value: string, option: string): SourceKind {
+  if (value === "human" || value === "reviewed_code" || value === "tool" || value === "agent" || value === "transcript" || value === "import") return value;
+  fail(`${option} must be one of human, reviewed_code, tool, agent, transcript, import`);
+}
+
+function memoryType(value: string, option: string): MemoryType {
+  if (value === "user" || value === "feedback" || value === "project" || value === "reference" || value === "episodic" || value === "procedural") return value;
+  fail(`${option} must be one of user, feedback, project, reference, episodic, procedural`);
+}
+
+function memoryLayer(value: string, option: string): MemoryLayer {
+  if (value === "working" || value === "episodic" || value === "long_term" || value === "procedural" || value === "reflection") return value;
+  fail(`${option} must be one of working, episodic, long_term, procedural, reflection`);
+}
+
+function beliefState(value: string, option: string): BeliefState {
+  if (value === "active" || value === "stale" || value === "superseded" || value === "contradicted" || value === "needs_verification" || value === "retracted" || value === "archived") return value;
+  fail(`${option} must be one of active, stale, superseded, contradicted, needs_verification, retracted, archived`);
+}
+
+function consentVisibility(value: string, option: string): ConsentVisibility {
+  if (value === "private" || value === "user" || value === "org" || value === "public") return value;
+  fail(`${option} must be one of private, user, org, public`);
+}
+
+function boundedNumber(value: string, option: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) fail(`${option} must be a number from 0 to 1`);
+  return parsed;
+}
+
+function integerValue(value: string, option: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) fail(`${option} must be a positive integer`);
+  return parsed;
+}
+
+function booleanValue(value: string, option: string): boolean {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  fail(`${option} must be true or false`);
+}
+
+function parseJsonObject(value: string, option: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+  } catch {
+    // fall through to the common error
+  }
+  fail(`${option} must be a JSON object`);
+}
   return false;
 }

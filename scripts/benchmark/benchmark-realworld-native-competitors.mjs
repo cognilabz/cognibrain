@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { nativeRunnerRoot } from "./cache-root.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
 const out = optionValue("--out") ?? "artifacts/realworld-blackbox-openai-intelligence.json";
@@ -12,7 +13,7 @@ const installOut = optionValue("--install-out") ?? "artifacts/realworld-native-c
 const systems = optionValue("--systems") ?? "cognibrain,basicmemory,langmem,keyword";
 const pythonVenv = process.env.MEMORY_REALWORLD_COMPETITOR_VENV
   ?? process.env.MEMORY_ARENA_COMPETITOR_VENV
-  ?? join(root, ".cognibrain", "native-runners", "competitors-venv");
+  ?? nativeRunnerRoot("competitors-venv");
 const pythonBin = process.env.MEMORY_REALWORLD_COMPETITOR_PYTHON
   ?? process.env.MEMORY_ARENA_COMPETITOR_PYTHON
   ?? join(pythonVenv, "bin", "python");
@@ -25,6 +26,7 @@ const installations = {
 
 const env = {
   ...process.env,
+  COGNIBRAIN_NATIVE_RUNNER_ROOT: process.env.COGNIBRAIN_NATIVE_RUNNER_ROOT ?? nativeRunnerRoot(),
   MEMORY_REALWORLD_BASICMEMORY_COMMAND: process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND
     ?? `${pythonBin} ${join(root, "scripts", "benchmark", "competitors", "basic_memory_realworld_runner.py")}`,
   MEMORY_REALWORLD_LANGMEM_COMMAND: process.env.MEMORY_REALWORLD_LANGMEM_COMMAND

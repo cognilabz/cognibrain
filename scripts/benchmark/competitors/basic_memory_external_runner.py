@@ -24,13 +24,25 @@ QUESTION_NOISE = {
 }
 
 
+def native_runner_root() -> Path:
+    explicit = os.environ.get("COGNIBRAIN_NATIVE_RUNNER_ROOT")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    benchmark_root = os.environ.get("COGNIBRAIN_BENCHMARK_CACHE_ROOT")
+    if benchmark_root:
+        return (Path(benchmark_root).expanduser() / "native-runners").resolve()
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".cache"
+    return (base / "cognibrain" / "native-runners").resolve()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="artifacts/external-basic-memory.json")
     parser.add_argument("--markdown", default="artifacts/docs/external-basic-memory.md")
     parser.add_argument("--limit-longmemeval", type=int, default=100)
     parser.add_argument("--limit-locomo", type=int, default=0)
-    parser.add_argument("--work-dir", default=".cognibrain/native-runners/external-basic-memory")
+    parser.add_argument("--work-dir", default=str(native_runner_root() / "external-basic-memory"))
     args = parser.parse_args()
 
     started = time.perf_counter()

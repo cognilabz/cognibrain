@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { nativeRunnerRoot } from "../benchmark/cache-root.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
 const [taskName, ...passthrough] = process.argv.slice(2);
@@ -13,7 +14,7 @@ const tasks = {
   "benchmark:longmemeval": cmd("npx", ["tsx", "src/eval/longmemeval.ts"]),
   "benchmark:beam": cmd("npx", ["tsx", "src/eval/beam.ts"]),
   "benchmark:external:hard": cmd("npx", ["tsx", "src/eval/externalHard.ts", "--out", "artifacts/external-hard-summary.json", "--markdown", "artifacts/docs/external-hard.md"]),
-  "benchmark:external:basic-memory": cmd(".cognibrain/native-runners/competitors-venv/bin/python", ["scripts/benchmark/competitors/basic_memory_external_runner.py", "--out", "artifacts/external-basic-memory.json", "--markdown", "artifacts/docs/external-basic-memory.md"]),
+  "benchmark:external:basic-memory": cmd(nativeRunnerRoot("competitors-venv", "bin", "python"), ["scripts/benchmark/competitors/basic_memory_external_runner.py", "--out", "artifacts/external-basic-memory.json", "--markdown", "artifacts/docs/external-basic-memory.md"]),
   "benchmark:original:public": cmd("node", ["scripts/benchmark/benchmark-original-public.mjs"]),
   "benchmark:realworld:protocol": cmd("node", ["scripts/benchmark/benchmark-realworld-protocol.mjs"]),
   "benchmark:realworld:blackbox": cmd("npx", ["tsx", "src/eval/realworldBlackbox.ts", "--out", "artifacts/realworld-blackbox.json", "--markdown", "artifacts/docs/realworld-blackbox.md"]),

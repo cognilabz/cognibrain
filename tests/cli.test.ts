@@ -34,10 +34,16 @@ describe("cognibrain CLI", () => {
 
   it("measures and prunes reinstallable benchmark caches without deleting memory data", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-resources-"));
+    const cacheRoot = mkdtempSync(join(tmpdir(), "cognibrain-cli-cache-"));
     try {
-      const env = { ...process.env, MEMORY_AUTO_DREAM: "false", MEMORY_DB_PATH: join(dir, ".memory-harness.json") };
+      const env = { ...process.env, MEMORY_AUTO_DREAM: "false", MEMORY_DB_PATH: join(dir, ".memory-harness.json"), COGNIBRAIN_BENCHMARK_CACHE_ROOT: cacheRoot };
       const writeGenerated = (relative: string, content = "generated-cache") => {
         const path = join(dir, relative);
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, content);
+      };
+      const writeCache = (relative: string, content = "generated-cache") => {
+        const path = join(cacheRoot, relative);
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, content);
       };
@@ -46,9 +52,11 @@ describe("cognibrain CLI", () => {
       writeGenerated(".cognibrain/original-benchmarks/fixture/result.txt");
       writeGenerated(".cognibrain/native-runners/fixture/output.txt");
       writeGenerated(".cognibrain/vendor/fixture/package.txt");
+      writeCache("native-runners/fixture/output.txt");
 
       const before = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "resources", "--json"], { cwd: dir, env, encoding: "utf8" }));
       expect(before.generated.benchmarkCacheBytes).toBeGreaterThan(0);
+      expect(before.generated.rows).toEqual(expect.arrayContaining([expect.objectContaining({ name: "user-cache/native-runners", exists: true })]));
       expect(before.localRuntimeState).toMatchObject({ present: true, parseable: true });
       expect(before.prune.requested).toBe(false);
       expect(before.vscode.settingsPresent).toBe(false);
@@ -62,10 +70,13 @@ describe("cognibrain CLI", () => {
       expect(existsSync(join(dir, ".cognibrain", "original-benchmarks"))).toBe(false);
       expect(existsSync(join(dir, ".cognibrain", "native-runners"))).toBe(false);
       expect(existsSync(join(dir, ".cognibrain", "vendor"))).toBe(false);
+      expect(existsSync(join(cacheRoot, "native-runners"))).toBe(false);
+      expect(pruned.generated.benchmarkCacheBytes).toBe(0);
       expect(existsSync(join(dir, ".memory-harness.json"))).toBe(true);
       expect(existsSync(join(dir, ".cognibrain", "connectors", "github.json"))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
+      rmSync(cacheRoot, { recursive: true, force: true });
     }
   }, slowCliTimeout);
 
@@ -105,7 +116,7 @@ describe("cognibrain CLI", () => {
       for (const item of commands) {
         const result = spawnSync(process.execPath, [cli, "--runtime-root", dir, ...item.args], { cwd: dir, env, encoding: "utf8" });
         expect(result.status).toBe(0);
-        expect(result.stdout.trim()).toBe(item.usage);
+        expect(result.stdout.trim()).toContain(item.usage);
         expect(result.stderr).toBe("");
       }
 
@@ -118,6 +129,56 @@ describe("cognibrain CLI", () => {
       const memories = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories", "--json"], { cwd: dir, env, encoding: "utf8" }));
       expect(memories.recent).toEqual([]);
       if (existsSync(join(dir, "memory.json"))) expect(readFileSync(join(dir, "memory.json"), "utf8")).not.toContain("--help");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("stores memory add CLI flags as structured provenance instead of raw content", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-memory-add-flags-"));
+    try {
+      const env = { ...process.env, MEMORY_AUTO_DREAM: "false", MEMORY_DB_PATH: join(dir, "memory.json") };
+      const created = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "memory",
+        "add",
+        "Runtime footprint proof is source-backed.",
+        "--source-kind",
+        "tool",
+        "--source-confidence",
+        "0.82",
+        "--source-uri",
+        "file://runtime-report.json",
+        "--line-start",
+        "7",
+        "--tags",
+        "runtime,proof",
+        "--metadata-json",
+        "{\"proof\":\"resources\"}",
+        "--source-ref-connector-id",
+        "github",
+        "--source-ref-external-id",
+        "run-26918810816",
+        "--visibility",
+        "user",
+        "--delete-on-request",
+        "true"
+      ], { cwd: dir, env, encoding: "utf8" }));
+
+      expect(created.content).toBe("Runtime footprint proof is source-backed.");
+      expect(created.content).not.toContain("--source-kind");
+      expect(created.source).toMatchObject({ kind: "tool", confidence: 0.82, uri: "file://runtime-report.json", lineStart: 7 });
+      expect(created.tags).toEqual(expect.arrayContaining(["runtime", "proof"]));
+      expect(created.metadata).toMatchObject({ proof: "resources" });
+      expect(created.consent).toMatchObject({ visibility: "user", deleteOnRequest: true });
+      expect(created.provenance.citations).toContain("file://runtime-report.json:7");
+
+      const persisted = JSON.parse(readFileSync(join(dir, "memory.json"), "utf8"));
+      const saved = persisted.memories.find((memory: { id: string }) => memory.id === created.id);
+      expect(saved.content).not.toContain("--source-kind");
+      expect(saved.provenance.sourceRef).toMatchObject({ connectorId: "github", externalId: "run-26918810816" });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

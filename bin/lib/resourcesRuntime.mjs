@@ -1,8 +1,9 @@
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { HEAVY_GENERATED_EXCLUDE_PATTERNS } from "./harnessRuntime.mjs";
+import { nativeRunnerRoot, originalBenchmarkRoot, vendorBenchmarkRoot } from "../../scripts/benchmark/cache-root.mjs";
 
-const BENCHMARK_CACHE_TARGETS = Object.freeze([
+const WORKSPACE_BENCHMARK_CACHE_TARGETS = Object.freeze([
   ".cognibrain/original-benchmarks",
   ".cognibrain/native-runners",
   ".cognibrain/vendor"
@@ -24,21 +25,21 @@ const RESOURCE_FOOTPRINT_TARGETS = Object.freeze([
 
 export function resourceFootprint({ root, runtimeRoot, launchCwd, readJson, runtimeStatus, pruneRequested = false, dryRun = false }) {
   const developerArtifactRoot = runtimeRoot === root ? runtimeRoot : root;
-  const rows = RESOURCE_FOOTPRINT_TARGETS.map((name) => {
-    const base = name.startsWith("artifacts") || name.startsWith("data/") || name === "dist" || name === "output" || name === ".playwright-cli"
-      ? developerArtifactRoot
-      : runtimeRoot;
-    const path = join(base, name);
-    return { name, path, ...pathFootprint(path) };
-  });
-  const pruneTargets = BENCHMARK_CACHE_TARGETS.map((name) => {
-    const path = join(runtimeRoot, name);
-    return { name, path, ...pathFootprint(path) };
-  }).filter((row) => row.exists);
+  const pruneTargets = benchmarkCacheTargets(runtimeRoot).map((target) => ({ ...target, ...pathFootprint(target.path) })).filter((row) => row.exists);
   const reclaimedBytes = pruneTargets.reduce((sum, row) => sum + row.bytes, 0);
   if (pruneRequested && !dryRun) {
     for (const row of pruneTargets) rmSync(row.path, { recursive: true, force: true });
   }
+  const rows = resourceFootprintTargets(runtimeRoot).map((target) => {
+    const { name, path } = typeof target === "string" ? {
+      name: target,
+      path: join(target.startsWith("artifacts") || target.startsWith("data/") || target === "dist" || target === "output" || target === ".playwright-cli" ? developerArtifactRoot : runtimeRoot, target)
+    } : target;
+    return { name, path, ...pathFootprint(path) };
+  });
+  const remainingBenchmarkCacheBytes = benchmarkCacheTargets(runtimeRoot)
+    .map((target) => pathFootprint(target.path))
+    .reduce((sum, row) => sum + row.bytes, 0);
   return {
     schemaVersion: "1.0",
     runtimeRoot,
@@ -46,7 +47,7 @@ export function resourceFootprint({ root, runtimeRoot, launchCwd, readJson, runt
     runtime: runtimeStatus(),
     generated: {
       totalBytes: rows.reduce((sum, row) => sum + row.bytes, 0),
-      benchmarkCacheBytes: pruneTargets.reduce((sum, row) => sum + row.bytes, 0),
+      benchmarkCacheBytes: remainingBenchmarkCacheBytes,
       rows
     },
     localRuntimeState: localRuntimeStateBreakdown(join(runtimeRoot, ".memory-harness.json")),
@@ -63,6 +64,29 @@ export function resourceFootprint({ root, runtimeRoot, launchCwd, readJson, runt
       "cognibrain resources --prune-benchmark-caches"
     ]
   };
+}
+
+function resourceFootprintTargets(runtimeRoot) {
+  return [
+    ...RESOURCE_FOOTPRINT_TARGETS,
+    ...externalBenchmarkCacheTargets(runtimeRoot)
+  ];
+}
+
+function benchmarkCacheTargets(runtimeRoot) {
+  return [
+    ...WORKSPACE_BENCHMARK_CACHE_TARGETS.map((name) => ({ name, path: join(runtimeRoot, name) })),
+    ...externalBenchmarkCacheTargets(runtimeRoot)
+  ];
+}
+
+function externalBenchmarkCacheTargets(runtimeRoot) {
+  const externalTargets = [
+    { name: "user-cache/original-benchmarks", path: originalBenchmarkRoot() },
+    { name: "user-cache/native-runners", path: nativeRunnerRoot() },
+    { name: "user-cache/vendor", path: vendorBenchmarkRoot() }
+  ];
+  return externalTargets.filter((target) => !target.path.startsWith(`${runtimeRoot}/`));
 }
 
 export function formatResourceFootprint(result) {

@@ -3,10 +3,11 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { nativeRunnerRoot } from "../cache-root.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const system = optionValue("--system") ?? process.env.COGNIBRAIN_COMPETITOR_SYSTEM;
-const python = process.env.MEMORY_ARENA_COMPETITOR_PYTHON ?? join(root, ".cognibrain", "native-runners", "competitors-venv", "bin", "python");
+const python = process.env.MEMORY_ARENA_COMPETITOR_PYTHON ?? join(nativeRunnerRoot("competitors-venv"), "bin", "python");
 const script = join(root, "scripts", "benchmark", "competitors", "native_python_runner.py");
 const started = Date.now();
 const stdin = await readStdin();
@@ -31,7 +32,7 @@ const result = spawnSync(python, [script, "--system", system], {
     ...process.env,
     PYTHONUNBUFFERED: "1",
     MEM0_TELEMETRY: process.env.MEM0_TELEMETRY ?? "false",
-    COGNIBRAIN_NATIVE_RUNNER_ROOT: process.env.COGNIBRAIN_NATIVE_RUNNER_ROOT ?? join(root, ".cognibrain", "native-runners")
+    COGNIBRAIN_NATIVE_RUNNER_ROOT: process.env.COGNIBRAIN_NATIVE_RUNNER_ROOT ?? nativeRunnerRoot()
   },
   timeout: timeoutMs,
   maxBuffer: 20 * 1024 * 1024

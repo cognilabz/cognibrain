@@ -386,7 +386,15 @@ def package_versions(system: str) -> dict[str, str | None]:
 
 
 def native_root() -> Path:
-    return Path(os.environ.get("COGNIBRAIN_NATIVE_RUNNER_ROOT", ".cognibrain/native-runners")).resolve()
+    explicit = os.environ.get("COGNIBRAIN_NATIVE_RUNNER_ROOT")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    benchmark_root = os.environ.get("COGNIBRAIN_BENCHMARK_CACHE_ROOT")
+    if benchmark_root:
+        return (Path(benchmark_root).expanduser() / "native-runners").resolve()
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".cache"
+    return (base / "cognibrain" / "native-runners").resolve()
 
 
 def slug(value: str) -> str:

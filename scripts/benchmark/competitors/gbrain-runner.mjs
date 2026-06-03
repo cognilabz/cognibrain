@@ -3,10 +3,11 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { nativeRunnerRoot, vendorBenchmarkRoot } from "../cache-root.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const repo = resolve(process.env.MEMORY_ARENA_GBRAIN_REPO ?? join(root, ".cognibrain", "vendor", "gbrain"));
-const home = resolve(process.env.MEMORY_ARENA_GBRAIN_HOME ?? join(root, ".cognibrain", "native-runners", "gbrain-home"));
+const repo = resolve(process.env.MEMORY_ARENA_GBRAIN_REPO ?? vendorBenchmarkRoot("gbrain"));
+const home = resolve(process.env.MEMORY_ARENA_GBRAIN_HOME ?? nativeRunnerRoot("gbrain-home"));
 
 const input = JSON.parse(await readStdin());
 const scenario = input.scenario;

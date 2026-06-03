@@ -2,13 +2,14 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { nativeRunnerRoot } from "./cache-root.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
 const out = optionValue("--out") ?? "artifacts/operator-memory-native-competitors.json";
 const markdown = optionValue("--markdown") ?? "artifacts/docs/operator-memory-native-competitors.md";
 const pythonVenv = process.env.MEMORY_OPERATOR_MEMORY_COMPETITOR_VENV
   ?? process.env.MEMORY_ARENA_COMPETITOR_VENV
-  ?? join(root, ".cognibrain", "native-runners", "competitors-venv");
+  ?? nativeRunnerRoot("competitors-venv");
 const pythonBin = process.env.MEMORY_OPERATOR_MEMORY_COMPETITOR_PYTHON
   ?? process.env.MEMORY_ARENA_COMPETITOR_PYTHON
   ?? join(pythonVenv, "bin", "python");
@@ -25,6 +26,7 @@ const installations = {
 
 const env = {
   ...process.env,
+  COGNIBRAIN_NATIVE_RUNNER_ROOT: process.env.COGNIBRAIN_NATIVE_RUNNER_ROOT ?? nativeRunnerRoot(),
   MEMORY_OPERATOR_MEMORY_COMPETITOR_PYTHON: pythonBin,
   MEMORY_OPERATOR_MEMORY_MEM0_COMMAND: `${process.execPath} ${runner} --system mem0`,
   MEMORY_OPERATOR_MEMORY_LANGMEM_COMMAND: `${process.execPath} ${runner} --system langmem`,

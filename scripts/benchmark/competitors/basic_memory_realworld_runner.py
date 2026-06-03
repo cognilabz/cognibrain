@@ -20,7 +20,7 @@ def main() -> int:
     payload = json.loads(sys.stdin.read() or "{}")
     manifest = payload.get("manifest") or {}
     started = time.perf_counter()
-    work_dir = Path(os.environ.get("MEMORY_REALWORLD_BASICMEMORY_WORK_DIR", ".cognibrain/native-runners/realworld-basic-memory"))
+    work_dir = Path(os.environ.get("MEMORY_REALWORLD_BASICMEMORY_WORK_DIR", native_runner_root() / "realworld-basic-memory"))
     configure_environment(work_dir)
     from loguru import logger
 
@@ -46,6 +46,18 @@ def configure_environment(work_dir: Path) -> None:
     os.environ["BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED"] = os.environ.get("BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED", "false")
     os.environ["LOGFIRE_IGNORE_NO_CONFIG"] = "1"
     os.environ.pop("BASIC_MEMORY_HOME", None)
+
+
+def native_runner_root() -> Path:
+    explicit = os.environ.get("COGNIBRAIN_NATIVE_RUNNER_ROOT")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    benchmark_root = os.environ.get("COGNIBRAIN_BENCHMARK_CACHE_ROOT")
+    if benchmark_root:
+        return (Path(benchmark_root).expanduser() / "native-runners").resolve()
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".cache"
+    return (base / "cognibrain" / "native-runners").resolve()
 
 
 def reset_project(work_dir: Path) -> Path:

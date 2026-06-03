@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -146,6 +146,8 @@ describe("cognibrain CLI", () => {
       };
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories", "add", "The terminal CLI is the primary product surface."], { cwd: dir, env, encoding: "utf8" });
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "connections", "add", "github", "--set", "repo=cognilabz/cognibrain", "--token-env", "MEMORY_GITHUB_TOKEN"], { cwd: dir, env, encoding: "utf8" });
+      mkdirSync(join(dir, ".cognibrain"), { recursive: true });
+      writeFileSync(join(dir, ".cognibrain", "local-runtime.json"), JSON.stringify({ api: { pid: process.pid, url: "http://127.0.0.1:8787" }, ui: {} }));
 
       const home = execFileSync(process.execPath, [cli, "--runtime-root", dir], { cwd: dir, env, encoding: "utf8" });
       const homeJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "--json"], { cwd: dir, env, encoding: "utf8" }));
@@ -171,6 +173,8 @@ describe("cognibrain CLI", () => {
       expect(homeJson.commands).toContain("cognibrain proof");
       expect(status.dashboard.optional).toBe(true);
       expect(status.runtime.dashboard.optional).toBe(true);
+      expect(status.runtime.api.resources.rssMb).toBeGreaterThan(0);
+      expect(status.runtime.api.resources.cpuPercent).toBeGreaterThanOrEqual(0);
       expect(memoriesJson.recent.length).toBeGreaterThan(0);
       expect(connectionsJson.connectors.configured).toContain("github");
     } finally {

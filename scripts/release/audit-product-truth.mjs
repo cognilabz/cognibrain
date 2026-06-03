@@ -71,6 +71,7 @@ const files = {
   dreamRuntime: read("src/api/service/dreamRuntime.ts"),
   mcpTools: read("src/connectors/mcpTools.ts"),
   mcpHandlers: read("src/connectors/mcpHandlers.ts"),
+  cliTests: read("tests/cli.test.ts"),
   coreTests: read("tests/core.test.ts"),
   evaluationTests: read("tests/evaluation.test.ts"),
   storageAdapter: read("src/core/storageAdapter.ts"),
@@ -186,6 +187,21 @@ const realworldLlmJudgeCostAccounting = files.realworldBlackboxSource.includes("
   files.realworldOpenAiJudge.includes("perQueryLatencyMs") &&
   files.evaluationTests.includes("records OpenAI real-world judge usage and estimated scorer cost") &&
   files.evaluationTests.includes("blocks LLM real-world judge decisions that omit scorer cost evidence");
+const realworldOperationalWeaknessReporting = files.realworldBlackboxSource.includes("buildOperationalWeaknessReport") &&
+  files.realworldBlackboxSource.includes("rawErrorClasses") &&
+  files.realworldBlackboxSource.includes("bucketWeaknesses") &&
+  files.realworldBlackboxSource.includes("systemWeaknesses") &&
+  files.realworldBlackboxSource.includes("setupFailureRate") &&
+  files.realworldBlackboxSource.includes("rawOutputCoverageRate") &&
+  files.evaluationTests.includes("Operational Weaknesses") &&
+  files.evaluationTests.includes("central-judge-blocked") &&
+  files.evaluationTests.includes("external-system-not-configured") &&
+  files.realworldBlackbox?.operationalWeaknesses?.summary?.requestedSystems >= 2 &&
+  files.realworldBlackbox?.operationalWeaknesses?.summary?.blockedSystems >= 1 &&
+  Array.isArray(files.realworldBlackbox?.operationalWeaknesses?.rawErrorClasses) &&
+  files.realworldBlackbox.operationalWeaknesses.rawErrorClasses.length >= 1 &&
+  Array.isArray(files.realworldBlackbox?.operationalWeaknesses?.bucketWeaknesses) &&
+  files.realworldBlackbox.operationalWeaknesses.bucketWeaknesses.length >= 5;
 const realworldSmokeMarketBoundary = files.realworldBlackboxSource.includes("comparativeSmokeEligible") &&
   files.realworldBlackboxSource.includes("marketClaimAllowed") &&
   files.realworldBlackboxSource.includes("leaderboardEligibleSystems: []") &&
@@ -387,6 +403,13 @@ const checks = [
     judge: "scripts/benchmark/realworld-openai-judge.mjs",
     tests: "tests/evaluation.test.ts"
   }),
+  check("realworld-operational-weakness-reporting", "Real-world black-box results expose setup failure rate, raw-output coverage, raw error classes, bucket weakness rows, scorer cost and latency beside quality metrics.", realworldOperationalWeaknessReporting, "fail", {
+    source: "src/eval/realworldBlackbox.ts",
+    tests: "tests/evaluation.test.ts",
+    artifact: "artifacts/realworld-blackbox.json",
+    summary: files.realworldBlackbox?.operationalWeaknesses?.summary,
+    rawErrorClasses: files.realworldBlackbox?.operationalWeaknesses?.rawErrorClasses?.map((item) => item.className)
+  }),
   check("realworld-smoke-market-claim-boundary", "Real-world centrally judged small-manifest results may become comparative smoke only; market and leaderboard claims stay blocked until a larger third-party-sourced protocol with more original systems and preregistered cost/latency budgets exists.", realworldSmokeMarketBoundary, "fail", {
     source: "src/eval/realworldBlackbox.ts",
     tests: "tests/evaluation.test.ts"
@@ -575,12 +598,13 @@ const checks = [
     source: "bin/cognibrain.mjs",
     removed: ["animated terminal UI dependency", "src/cli/inkApp.mjs", "generated CLI screenshots"]
   }),
-  check("runtime-resource-footprint", "MCP and status runtime paths avoid heavyweight TSX/process fan-out by default and VSCode harness setup excludes generated benchmark/runtime directories from watchers.", files.cli.includes("lightweightMcpServer.mjs") && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\""), "fail", {
+  check("runtime-resource-footprint", "MCP and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers, and status exposes API/dashboard RSS and CPU.", files.cli.includes("lightweightMcpServer.mjs") && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cliTests.includes("status.runtime.api.resources.rssMb"), "fail", {
     code: ["bin/lib/cliRuntime.mjs", "bin/lib/harnessRuntime.mjs", "bin/lib/lightweightMcpServer.mjs"],
     checks: [
       "default MCP uses lightweight JS daemon proxy",
       "local-direct TSX MCP remains explicit opt-in",
       "status uses lightweight runtime payload unless --full is requested",
+      "status reports API/dashboard RSS and CPU for live runtime PIDs",
       "VSCode watcher/search excludes generated runtime and benchmark directories"
     ]
   }),

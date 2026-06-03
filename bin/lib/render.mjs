@@ -297,6 +297,7 @@ function surfaceLines(kind, payload, options = {}) {
     metrics: [
       ["package", `${payload.package?.name ?? "cognibrain"} ${payload.package?.version ?? ""}`.trim(), "cyan"],
       ["runtime", runtime.mode ?? "unknown", runtime.api?.alive ? "green" : "yellow"],
+      ["api rss", runtime.api?.resources ? `${runtime.api.resources.rssMb} MB` : "n/a", runtime.api?.resources ? "green" : "gray"],
       ["dashboard", runtime.dashboard?.alive ? "running" : "optional", runtime.dashboard?.alive ? "green" : "gray"],
       ["setup", config.setupState?.profile ?? "missing", config.setupState ? "green" : "yellow"]
     ],

@@ -608,7 +608,25 @@ describe("self verification benchmark loop", () => {
       expect(cognibrain?.rawOutputs.flatMap((output) => output.retrievedText).join("\n")).not.toMatch(/evidence_id:/);
       expect(cognibrain?.metrics.p95LatencyMs).toBeGreaterThanOrEqual(0);
       expect(report.systems.find((system) => system.system === "mem0")?.evidenceClass).toBe("credential-blocked");
+      expect(report.operationalWeaknesses.summary).toMatchObject({
+        requestedSystems: 3,
+        executedSystems: 2,
+        blockedSystems: 1,
+        judgedSystems: 0,
+        qualityClaimableSystems: 0
+      });
+      expect(report.operationalWeaknesses.summary.setupFailureRate).toBeGreaterThan(0);
+      expect(report.operationalWeaknesses.summary.rawOutputCoverageRate).toBeGreaterThan(0);
+      expect(report.operationalWeaknesses.rawErrorClasses.map((item) => item.className)).toEqual(expect.arrayContaining(["central-judge-blocked", "external-system-not-configured"]));
+      expect(report.operationalWeaknesses.bucketWeaknesses.every((bucket) => bucket.scoredSystems === 0 && bucket.judgeBlockedSystems === 2)).toBe(true);
+      expect(report.operationalWeaknesses.systemWeaknesses.find((system) => system.system === "cognibrain")).toMatchObject({
+        setupStatus: "executed",
+        judgeStatus: "missing:blocked",
+        blockerClass: "central-judge-blocked",
+        rawOutputCoverage: report.manifest.queries.length
+      });
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Real-World Black-Box Benchmark");
+      expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Operational Weaknesses");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("not scored");
       expect(existsSync("scripts/benchmark/realworld-openai-judge.mjs")).toBe(true);
     } finally {
@@ -724,6 +742,16 @@ process.stdin.on("end", () => {
       expect(report.claimBoundary.claimBlockers.join(" ")).toContain("larger third-party-sourced task set");
       expect(report.systems.find((system) => system.system === "basicmemory")?.evidenceClass).toBe("same-run-command");
       expect(report.systems.find((system) => system.system === "langmem")?.evidenceClass).toBe("same-run-command");
+      expect(report.operationalWeaknesses.summary).toMatchObject({
+        requestedSystems: 4,
+        executedSystems: 4,
+        blockedSystems: 0,
+        judgedSystems: 4,
+        judgeBlockedSystems: 0,
+        qualityClaimableSystems: 4
+      });
+      expect(report.operationalWeaknesses.rawErrorClasses).toEqual([]);
+      expect(report.operationalWeaknesses.bucketWeaknesses.every((bucket) => bucket.scoredSystems === 4 && bucket.bestScore === 1 && bucket.worstScore === 1)).toBe(true);
       expect(report.improvementSignals.some((signal) => signal.evidence.includes("Cognibrain and 2 original competitors"))).toBe(true);
     } finally {
       if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;

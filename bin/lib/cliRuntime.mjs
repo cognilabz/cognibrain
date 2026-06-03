@@ -1263,6 +1263,8 @@ function runtimeStatus() {
   const state = readRuntimeState();
   const apiAlive = state?.api?.pid ? isAlive(state.api.pid) : false;
   const uiAlive = state?.ui?.pid ? isAlive(state.ui.pid) : false;
+  const apiResources = apiAlive ? processResources(state.api.pid) : null;
+  const uiResources = uiAlive ? processResources(state.ui.pid) : null;
   return {
     runtimeRoot,
     statePath: join(runtimeRoot, ".cognibrain", "local-runtime.json"),
@@ -1270,15 +1272,58 @@ function runtimeStatus() {
     api: {
       alive: apiAlive,
       url: state?.api?.url ?? null,
-      pid: state?.api?.pid ?? null
+      pid: state?.api?.pid ?? null,
+      resources: apiResources
     },
     dashboard: {
       alive: uiAlive,
       url: state?.ui?.url ?? null,
       pid: state?.ui?.pid ?? null,
+      resources: uiResources,
       optional: true
     },
     mode: apiAlive ? (uiAlive ? "api+optional-dashboard" : "api-only") : "stopped"
+  };
+}
+
+function processResources(pid) {
+  if (!pid) return null;
+  const result = spawnSync("ps", ["-axo", "pid=,ppid=,rss=,pcpu="], { encoding: "utf8" });
+  if (result.status !== 0) return null;
+  const rows = result.stdout
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => {
+      const [rowPid, parentPid, rssKb, cpuPercent] = line.trim().split(/\s+/).map(Number);
+      return { pid: rowPid, parentPid, rssKb, cpuPercent };
+    })
+    .filter((row) => [row.pid, row.parentPid, row.rssKb, row.cpuPercent].every(Number.isFinite));
+  const childrenByParent = new Map();
+  for (const row of rows) {
+    const children = childrenByParent.get(row.parentPid) ?? [];
+    children.push(row.pid);
+    childrenByParent.set(row.parentPid, children);
+  }
+  const treePids = new Set([Number(pid)]);
+  const queue = [Number(pid)];
+  while (queue.length) {
+    const current = queue.shift();
+    for (const child of childrenByParent.get(current) ?? []) {
+      if (treePids.has(child)) continue;
+      treePids.add(child);
+      queue.push(child);
+    }
+  }
+  const treeRows = rows.filter((row) => treePids.has(row.pid));
+  if (!treeRows.length) return null;
+  const rssKb = treeRows.reduce((sum, row) => sum + row.rssKb, 0);
+  const cpuPercent = treeRows.reduce((sum, row) => sum + row.cpuPercent, 0);
+  return {
+    rssKb,
+    rssMb: Number((rssKb / 1024).toFixed(1)),
+    cpuPercent: Number(cpuPercent.toFixed(1)),
+    processCount: treeRows.length,
+    source: "ps"
   };
 }
 

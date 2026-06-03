@@ -140,6 +140,48 @@ interface RealWorldReport {
     marketClaimAllowed: boolean;
     claimBlockers: string[];
   };
+  operationalWeaknesses: {
+    summary: {
+      requestedSystems: number;
+      executedSystems: number;
+      blockedSystems: number;
+      setupFailureRate: number;
+      rawOutputCoverageRate: number;
+      judgedSystems: number;
+      judgeBlockedSystems: number;
+      qualityClaimableSystems: number;
+      totalEstimatedCostUsd: number;
+      p50LatencyMs: number;
+      p95LatencyMs: number;
+      maxP95LatencyMs: number;
+      maxIngestLatencyMs: number;
+    };
+    rawErrorClasses: Array<{ className: string; count: number; systems: string[]; examples: string[] }>;
+    bucketWeaknesses: Array<{
+      bucket: string;
+      totalQueries: number;
+      scoredSystems: number;
+      judgeBlockedSystems: number;
+      missingBucketMetricsSystems: string[];
+      bestScore: number | null;
+      worstScore: number | null;
+      systemsWithLeakage: string[];
+      systemsWithZeroScore: string[];
+    }>;
+    systemWeaknesses: Array<{
+      system: string;
+      displayName: string;
+      evidenceClass: EvidenceClass;
+      setupStatus: "executed" | "blocked";
+      judgeStatus: string;
+      blockerClass: string | null;
+      rawOutputCoverage: number;
+      rawOutputCoverageRate: number;
+      weakBuckets: string[];
+      p95LatencyMs: number;
+      estimatedCostUsd: number;
+    }>;
+  };
   improvementSignals: Array<{ priority: string; item: string; evidence: string }>;
 }
 
@@ -225,6 +267,7 @@ export async function generateRealWorldBlackBoxBenchmark(options: { out?: string
     leaderboardEligible,
     marketClaimAllowed,
     claimBoundary,
+    operationalWeaknesses: buildOperationalWeaknessReport(manifest, systems),
     improvementSignals: improvementSignals(systems)
   };
   if (options.out) writeJson(options.out, report);
@@ -1313,6 +1356,90 @@ async function runSystemWithCommandSupport(adapter: Adapter, manifest: RealWorld
   return runSystem(adapter, manifest, judge);
 }
 
+function buildOperationalWeaknessReport(manifest: RealWorldManifest, systems: SystemResult[]): RealWorldReport["operationalWeaknesses"] {
+  const totalQueries = manifest.queries.length;
+  const executedSystems = systems.filter((system) => system.evidenceClass !== "credential-blocked").length;
+  const blockedSystems = systems.length - executedSystems;
+  const rawOutputSystems = systems.filter((system) => system.rawOutputs.length === totalQueries).length;
+  const latencies = systems.flatMap((system) => system.rawOutputs.map((output) => output.latencyMs)).sort((a, b) => a - b);
+  const bucketWeaknesses = [...new Set(manifest.queries.map((query) => query.bucket))].map((bucket) => {
+    const total = manifest.queries.filter((query) => query.bucket === bucket).length;
+    const scored = systems.filter((system) => system.qualityClaimAllowed && system.buckets[bucket]);
+    const scores = scored.map((system) => system.buckets[bucket].score);
+    return {
+      bucket,
+      totalQueries: total,
+      scoredSystems: scored.length,
+      judgeBlockedSystems: systems.filter((system) => system.evidenceClass !== "credential-blocked" && !system.qualityClaimAllowed).length,
+      missingBucketMetricsSystems: systems.filter((system) => !system.buckets[bucket]).map((system) => system.system),
+      bestScore: scores.length ? Math.max(...scores) : null,
+      worstScore: scores.length ? Math.min(...scores) : null,
+      systemsWithLeakage: systems.filter((system) => (system.metrics.forbiddenLeakageRate ?? 0) > 0).map((system) => system.system),
+      systemsWithZeroScore: systems.filter((system) => system.qualityClaimAllowed && system.buckets[bucket]?.score === 0).map((system) => system.system)
+    };
+  });
+  return {
+    summary: {
+      requestedSystems: systems.length,
+      executedSystems,
+      blockedSystems,
+      setupFailureRate: ratio(blockedSystems, systems.length),
+      rawOutputCoverageRate: ratio(rawOutputSystems, systems.length),
+      judgedSystems: systems.filter((system) => system.judge.status === "passed").length,
+      judgeBlockedSystems: systems.filter((system) => system.judge.status === "blocked").length,
+      qualityClaimableSystems: systems.filter((system) => system.qualityClaimAllowed).length,
+      totalEstimatedCostUsd: Number(systems.reduce((sum, system) => sum + system.metrics.estimatedCostUsd, 0).toFixed(6)),
+      p50LatencyMs: percentile(latencies, 0.5),
+      p95LatencyMs: percentile(latencies, 0.95),
+      maxP95LatencyMs: Math.max(0, ...systems.map((system) => system.metrics.p95LatencyMs)),
+      maxIngestLatencyMs: Math.max(0, ...systems.map((system) => system.metrics.ingestLatencyMs))
+    },
+    rawErrorClasses: groupedRawErrorClasses(systems, totalQueries),
+    bucketWeaknesses,
+    systemWeaknesses: systems.map((system) => {
+      const blockerClass = classifyOperationalBlocker(system, totalQueries);
+      return {
+        system: system.system,
+        displayName: system.displayName,
+        evidenceClass: system.evidenceClass,
+        setupStatus: system.evidenceClass === "credential-blocked" ? "blocked" : "executed",
+        judgeStatus: `${system.judge.kind}:${system.judge.status}`,
+        blockerClass,
+        rawOutputCoverage: system.rawOutputs.length,
+        rawOutputCoverageRate: ratio(system.rawOutputs.length, totalQueries),
+        weakBuckets: Object.entries(system.buckets).filter(([, bucket]) => bucket.score < 1).map(([bucket]) => bucket),
+        p95LatencyMs: system.metrics.p95LatencyMs,
+        estimatedCostUsd: system.metrics.estimatedCostUsd
+      };
+    })
+  };
+}
+
+function groupedRawErrorClasses(systems: SystemResult[], totalQueries: number): Array<{ className: string; count: number; systems: string[]; examples: string[] }> {
+  const groups = new Map<string, { className: string; count: number; systems: string[]; examples: string[] }>();
+  for (const system of systems) {
+    const className = classifyOperationalBlocker(system, totalQueries);
+    if (!className) continue;
+    const group = groups.get(className) ?? { className, count: 0, systems: [], examples: [] };
+    group.count += 1;
+    group.systems.push(system.system);
+    if (system.blockedReason && group.examples.length < 3) group.examples.push(system.blockedReason);
+    groups.set(className, group);
+  }
+  return [...groups.values()].sort((a, b) => b.count - a.count || a.className.localeCompare(b.className));
+}
+
+function classifyOperationalBlocker(system: SystemResult, totalQueries: number): string | null {
+  if (system.evidenceClass === "credential-blocked") return "external-system-not-configured";
+  if (system.setup.commandBlocked === true) return "external-command-failed";
+  if (system.setup.rawOutputContractValid === false) return "raw-output-contract-invalid";
+  if (system.setup.metricContractValid === false) return "metric-contract-invalid";
+  if (system.rawOutputs.length > 0 && totalQueries > 0 && system.rawOutputs.length < totalQueries) return "partial-raw-output";
+  if (system.rawOutputs.length > 0 && system.judge.status === "blocked") return "central-judge-blocked";
+  if (system.rawOutputs.length === 0 && system.judge.status === "blocked") return "no-raw-output";
+  return null;
+}
+
 function improvementSignals(systems: SystemResult[]): Array<{ priority: string; item: string; evidence: string }> {
   const blocked = systems.filter((system) => system.evidenceClass === "credential-blocked");
   const originalCompetitors = systems.filter((system) => system.system !== "cognibrain" && system.evidenceClass !== "local-baseline");
@@ -1405,6 +1532,32 @@ function writeMarkdown(path: string, report: RealWorldReport): void {
     "| System | Evidence class | Mode | Judge | Score | Recall | Abstention | Leakage | p95 latency | Smoke eligible |",
     "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
     ...report.systems.map((system) => `| ${system.displayName} | \`${system.evidenceClass}\` | \`${system.adapterMode}\` | \`${system.judge.kind}:${system.judge.status}\` | ${percent(system.metrics.score)} | ${percent(system.metrics.recall)} | ${percent(system.metrics.abstentionPrecision)} | ${percent(system.metrics.forbiddenLeakageRate)} | ${system.metrics.p95LatencyMs} ms | ${system.comparativeSmokeEligible ? "Yes" : "No"} |`),
+    "",
+    "## Operational Weaknesses",
+    "",
+    "| Metric | Value |",
+    "| --- | ---: |",
+    `| Requested systems | ${report.operationalWeaknesses.summary.requestedSystems} |`,
+    `| Executed systems | ${report.operationalWeaknesses.summary.executedSystems} |`,
+    `| Blocked systems | ${report.operationalWeaknesses.summary.blockedSystems} |`,
+    `| Setup failure rate | ${percent(report.operationalWeaknesses.summary.setupFailureRate)} |`,
+    `| Raw-output coverage rate | ${percent(report.operationalWeaknesses.summary.rawOutputCoverageRate)} |`,
+    `| Judged systems | ${report.operationalWeaknesses.summary.judgedSystems} |`,
+    `| Judge-blocked systems | ${report.operationalWeaknesses.summary.judgeBlockedSystems} |`,
+    `| Total estimated scorer/system cost | $${report.operationalWeaknesses.summary.totalEstimatedCostUsd.toFixed(6)} |`,
+    `| p95 query latency | ${report.operationalWeaknesses.summary.p95LatencyMs} ms |`,
+    "",
+    "### Raw Error Classes",
+    "",
+    "| Class | Count | Systems |",
+    "| --- | ---: | --- |",
+    ...report.operationalWeaknesses.rawErrorClasses.map((item) => `| \`${item.className}\` | ${item.count} | ${item.systems.join(", ")} |`),
+    "",
+    "### Bucket Weaknesses",
+    "",
+    "| Bucket | Scored systems | Judge-blocked systems | Best score | Worst score | Missing metrics |",
+    "| --- | ---: | ---: | ---: | ---: | --- |",
+    ...report.operationalWeaknesses.bucketWeaknesses.map((bucket) => `| \`${bucket.bucket}\` | ${bucket.scoredSystems} | ${bucket.judgeBlockedSystems} | ${percent(bucket.bestScore)} | ${percent(bucket.worstScore)} | ${bucket.missingBucketMetricsSystems.join(", ") || "none"} |`),
     "",
     "## Improvement Signals",
     "",

@@ -8,6 +8,7 @@ const baseUrl = (process.env.MEMORY_OPENAI_BASE_URL ?? "https://api.openai.com/v
 const model = process.env.MEMORY_REALWORLD_JUDGE_MODEL ?? "gpt-4.1-mini";
 const timeoutMs = Number(process.env.MEMORY_REALWORLD_JUDGE_TIMEOUT_MS ?? 120_000);
 const endpoint = `${baseUrl}/chat/completions`;
+const pricing = pricingForModel(model);
 const judgingPayload = buildJudgingPayload(payload);
 const judgedResponses = [];
 for (const query of judgingPayload.queries) {
@@ -28,6 +29,7 @@ const decisions = judged.decisions
   }));
 
 validateDecisionSet(decisions, validQueryIds);
+const estimatedCostUsd = estimateCostUsd(judged.usage, pricing);
 
 console.log(JSON.stringify({
   decisions,
@@ -36,11 +38,17 @@ console.log(JSON.stringify({
     provider: "openai-compatible",
     model,
     endpoint,
-    usage: judged.usage
+    usage: judged.usage,
+    estimatedCostUsd,
+    pricing,
+    requestCount: judgingPayload.queries.length,
+    latencyMs: judgedResponses.reduce((total, item) => total + item.latencyMs, 0),
+    perQueryLatencyMs: Object.fromEntries(judgedResponses.map((item) => [item.queryId, item.latencyMs]))
   }
 }));
 
 async function judgeQuery(query) {
+  const started = Date.now();
   const body = await chatJson({
     task: judgingPayload.task,
     rubric: judgingPayload.rubric,
@@ -56,7 +64,7 @@ async function judgeQuery(query) {
   }
   const decisions = Array.isArray(parsed.decisions) ? parsed.decisions : parsed.decision ? [parsed.decision] : [];
   if (!decisions.length) fail("OpenAI-compatible judge must return { decision: {...} } or { decisions: [...] }");
-  return { decisions, usage: body.usage ?? null };
+  return { queryId: query.queryId, decisions, usage: body.usage ?? null, latencyMs: Date.now() - started };
 }
 
 async function chatJson(userPayload) {
@@ -163,6 +171,37 @@ function mergeUsage(usages) {
     }
   }
   return Object.keys(total).length ? total : null;
+}
+
+function pricingForModel(modelName) {
+  const inputOverride = Number(process.env.MEMORY_REALWORLD_JUDGE_INPUT_COST_PER_MILLION_USD ?? NaN);
+  const outputOverride = Number(process.env.MEMORY_REALWORLD_JUDGE_OUTPUT_COST_PER_MILLION_USD ?? NaN);
+  if (Number.isFinite(inputOverride) && Number.isFinite(outputOverride) && inputOverride >= 0 && outputOverride >= 0) {
+    return {
+      source: "env",
+      inputCostPerMillionUsd: inputOverride,
+      outputCostPerMillionUsd: outputOverride
+    };
+  }
+  const defaults = {
+    "gpt-4.1-mini": { inputCostPerMillionUsd: 0.4, outputCostPerMillionUsd: 1.6 },
+    "gpt-4.1-nano": { inputCostPerMillionUsd: 0.1, outputCostPerMillionUsd: 0.4 },
+    "gpt-4.1": { inputCostPerMillionUsd: 2, outputCostPerMillionUsd: 8 }
+  };
+  const match = defaults[modelName];
+  if (match) return { source: "openai-pricing-2026-06-03", ...match };
+  fail(`No judge pricing configured for ${modelName}; set MEMORY_REALWORLD_JUDGE_INPUT_COST_PER_MILLION_USD and MEMORY_REALWORLD_JUDGE_OUTPUT_COST_PER_MILLION_USD`);
+}
+
+function estimateCostUsd(usage, price) {
+  if (!usage) fail("OpenAI-compatible judge response must include token usage for cost accounting");
+  const inputTokens = Number(usage.prompt_tokens ?? usage.input_tokens ?? 0);
+  const outputTokens = Number(usage.completion_tokens ?? usage.output_tokens ?? 0);
+  if (!Number.isFinite(inputTokens) || !Number.isFinite(outputTokens) || inputTokens < 0 || outputTokens < 0) {
+    fail("OpenAI-compatible judge usage must include non-negative input/output token counts");
+  }
+  const cost = (inputTokens * price.inputCostPerMillionUsd + outputTokens * price.outputCostPerMillionUsd) / 1_000_000;
+  return Number(cost.toFixed(8));
 }
 
 function strictBoolField(item, names) {

@@ -1134,6 +1134,105 @@ process.stdin.on("end", () => {
     }
   });
 
+  it("records OpenAI real-world judge usage and estimated scorer cost", async () => {
+    const server = createServer((request, response) => {
+      request.resume();
+      request.on("end", () => {
+        response.setHeader("content-type", "application/json");
+        response.setHeader("connection", "close");
+        response.end(JSON.stringify({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                decision: {
+                  queryId: "q1",
+                  score: 1,
+                  passed: true,
+                  supportsAnswer: true,
+                  abstained: false,
+                  leakedForbiddenEvidence: false,
+                  reason: "fixture semantic judge decision",
+                  confidence: 0.9
+                }
+              })
+            }
+          }],
+          usage: { prompt_tokens: 1000, completion_tokens: 500 }
+        }));
+      });
+    });
+    await listenOnAllowedPort(server);
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("fixture server did not expose a port");
+      const payload = {
+        manifest: {
+          queries: [{ id: "q1", question: "What fixed NovaRetail?", expectedEvidenceIds: ["e1"], topK: 3 }],
+          events: [{ id: "e1", content: "Redis pipeline batching fixed NovaRetail checkout timeouts." }]
+        },
+        rawOutputs: [{ queryId: "q1", retrievedText: ["Redis pipeline batching fixed NovaRetail checkout timeouts."] }]
+      };
+      const result = await runNodeScript(["scripts/benchmark/realworld-openai-judge.mjs"], {
+        cwd: process.cwd(),
+        input: `${JSON.stringify(payload)}\n`,
+        timeout: 10_000,
+        env: {
+          ...process.env,
+          MEMORY_OPENAI_API_KEY: "fixture-key",
+          MEMORY_OPENAI_BASE_URL: `http://127.0.0.1:${address.port}`,
+          MEMORY_REALWORLD_JUDGE_MODEL: "gpt-4.1-mini"
+        }
+      });
+      expect(result.status).toBe(0);
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.judge).toMatchObject({
+        kind: "llm",
+        model: "gpt-4.1-mini",
+        usage: { prompt_tokens: 1000, completion_tokens: 500 },
+        pricing: {
+          source: "openai-pricing-2026-06-03",
+          inputCostPerMillionUsd: 0.4,
+          outputCostPerMillionUsd: 1.6
+        },
+        requestCount: 1
+      });
+      expect(parsed.judge.estimatedCostUsd).toBe(0.0012);
+      expect(parsed.judge.perQueryLatencyMs.q1).toBeGreaterThanOrEqual(0);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("blocks LLM real-world judge decisions that omit scorer cost evidence", async () => {
+    const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+    const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-llm-cost-gate-"));
+    const judgePath = join(dir, "llm-no-cost-judge.mjs");
+    writeFileSync(
+      judgePath,
+      `let input = ""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => { const payload = JSON.parse(input); const decisions = payload.manifest.queries.map(query => ({ queryId: query.id, score: 1, passed: true, supportsAnswer: query.expectedEvidenceIds.length > 0, abstained: query.shouldAbstain === true, leakedForbiddenEvidence: false, reason: "fixture llm judge decision without cost", confidence: 0.99 })); console.log(JSON.stringify({ decisions, judge: { kind: "llm", usage: { prompt_tokens: 10, completion_tokens: 2 } } })); });`
+    );
+    try {
+      process.env.MEMORY_REALWORLD_JUDGE_COMMAND = `${process.execPath} ${judgePath}`;
+      process.env.MEMORY_REALWORLD_JUDGE_KIND = "llm";
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-llm-no-cost.json"),
+        systems: ["cognibrain"]
+      });
+      const cognibrain = report.systems[0];
+      expect(cognibrain.qualityClaimAllowed).toBe(false);
+      expect(cognibrain.metrics.score).toBeNull();
+      expect(cognibrain.metrics.estimatedCostUsd).toBe(0);
+      expect(cognibrain.blockedReason).toContain("positive estimatedCostUsd");
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
+    } finally {
+      if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
+      if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+    }
+  });
+
   it("exports only delivered real-world retrieval evidence while retaining excluded diagnostics", async () => {
     const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
     const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;

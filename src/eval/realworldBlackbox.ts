@@ -672,8 +672,10 @@ function scoreSystem(adapter: Adapter, manifest: RealWorldManifest, setup: Recor
     return judgeBlockedSystem(adapter, setup, rawOutputs, ingestLatencyMs, diagnostics, reason);
   }
   let decisions: JudgeDecision[];
+  let estimatedCostUsd: number;
   try {
     decisions = validateJudgeDecisions(manifest, judged.decisions);
+    estimatedCostUsd = judgeEstimatedCostUsd(judged.raw, judge.kind);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     return judgeBlockedSystem(adapter, setup, rawOutputs, ingestLatencyMs, diagnostics, reason);
@@ -711,13 +713,26 @@ function scoreSystem(adapter: Adapter, manifest: RealWorldManifest, setup: Recor
       p50LatencyMs: percentile(latencies, 0.5),
       p95LatencyMs: percentile(latencies, 0.95),
       ingestLatencyMs,
-      estimatedCostUsd: 0
+      estimatedCostUsd
     },
     buckets,
     retrievalDiagnostics: diagnostics,
     rawOutputs,
     setup: { ...setup, judgeRaw: judged.raw }
   };
+}
+
+function judgeEstimatedCostUsd(raw: unknown, kind: RealWorldJudge["kind"]): number {
+  if (kind === "harness") return 0;
+  const cost = isRecord(raw) && isRecord(raw.judge) ? raw.judge.estimatedCostUsd : undefined;
+  if (typeof cost !== "number" || !Number.isFinite(cost) || cost <= 0) {
+    throw new Error("LLM real-world judge must report positive estimatedCostUsd for cost accounting");
+  }
+  const usage = isRecord(raw) && isRecord(raw.judge) ? raw.judge.usage : undefined;
+  if (!isRecord(usage)) {
+    throw new Error("LLM real-world judge must report token usage for cost accounting");
+  }
+  return cost;
 }
 
 function judgeBlockedSystem(adapter: Adapter, setup: Record<string, unknown>, rawOutputs: QueryOutput[], ingestLatencyMs: number, diagnostics: SystemResult["retrievalDiagnostics"], reason: string): SystemResult {

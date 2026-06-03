@@ -44,6 +44,7 @@ const files = {
   operatorMemoryNativePythonRunnerWrapper: read("scripts/benchmark/competitors/operator-memory-native-python-runner.mjs"),
   basicMemoryExternalRunner: read("scripts/benchmark/competitors/basic_memory_external_runner.py"),
   realworldNativeCompetitorBenchmark: read("scripts/benchmark/benchmark-realworld-native-competitors.mjs"),
+  realworldOpenAiJudge: read("scripts/benchmark/realworld-openai-judge.mjs"),
   realworldBasicMemoryRunner: read("scripts/benchmark/competitors/basic_memory_realworld_runner.py"),
   realworldLangMemRunner: read("scripts/benchmark/competitors/langmem_realworld_runner.py"),
   realworldBlackboxSource: read("src/eval/realworldBlackbox.ts"),
@@ -177,6 +178,14 @@ const realworldCentralJudgeRecompute = files.realworldBlackboxSource.includes("c
   files.realworldBlackboxSource.includes("forbidden leakage must force passed=false") &&
   files.evaluationTests.includes("does not trust external command self-judged metrics") &&
   files.evaluationTests.includes("blocks inconsistent real-world judge decisions");
+const realworldLlmJudgeCostAccounting = files.realworldBlackboxSource.includes("judgeEstimatedCostUsd") &&
+  files.realworldBlackboxSource.includes("LLM real-world judge must report positive estimatedCostUsd") &&
+  files.realworldBlackboxSource.includes("LLM real-world judge must report token usage") &&
+  files.realworldOpenAiJudge.includes("pricingForModel") &&
+  files.realworldOpenAiJudge.includes("estimateCostUsd") &&
+  files.realworldOpenAiJudge.includes("perQueryLatencyMs") &&
+  files.evaluationTests.includes("records OpenAI real-world judge usage and estimated scorer cost") &&
+  files.evaluationTests.includes("blocks LLM real-world judge decisions that omit scorer cost evidence");
 const realworldSmokeMarketBoundary = files.realworldBlackboxSource.includes("comparativeSmokeEligible") &&
   files.realworldBlackboxSource.includes("marketClaimAllowed") &&
   files.realworldBlackboxSource.includes("leaderboardEligibleSystems: []") &&
@@ -371,6 +380,11 @@ const checks = [
   }),
   check("realworld-central-judge-recompute", "Real-world external commands cannot self-certify quality metrics; raw outputs must be recomputed by the central LLM/harness judge and semantically inconsistent judge decisions fail closed.", realworldCentralJudgeRecompute, "fail", {
     source: "src/eval/realworldBlackbox.ts",
+    tests: "tests/evaluation.test.ts"
+  }),
+  check("realworld-llm-judge-cost-accounting", "Real-world LLM judge quality claims fail closed unless scorer token usage, pricing and positive estimated cost are recorded by the central judge.", realworldLlmJudgeCostAccounting, "fail", {
+    source: "src/eval/realworldBlackbox.ts",
+    judge: "scripts/benchmark/realworld-openai-judge.mjs",
     tests: "tests/evaluation.test.ts"
   }),
   check("realworld-smoke-market-claim-boundary", "Real-world centrally judged small-manifest results may become comparative smoke only; market and leaderboard claims stay blocked until a larger third-party-sourced protocol with more original systems and preregistered cost/latency budgets exists.", realworldSmokeMarketBoundary, "fail", {

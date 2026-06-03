@@ -2,6 +2,28 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+export const HEAVY_GENERATED_EXCLUDE_PATTERNS = Object.freeze([
+  "**/.cognibrain/**",
+  "**/.memory-harness.json",
+  "**/.venv/**",
+  "**/__pycache__/**",
+  "**/.pytest_cache/**",
+  "**/.ruff_cache/**",
+  "**/.mypy_cache/**",
+  "**/.next/**",
+  "**/.turbo/**",
+  "**/.playwright-cli/**",
+  "**/artifacts/**",
+  "**/coverage/**",
+  "**/data/benchmarks/**",
+  "**/dist/**",
+  "**/node_modules/**",
+  "**/operator-ui/.next/**",
+  "**/output/**",
+  "**/playwright-report/**",
+  "**/test-results/**"
+]);
+
 export function createHarnessRuntime({ root, launchCwd, rawArgs, readJson, writeJson }) {
 function writeHarnessConfig(target) {
   switch (target) {
@@ -144,17 +166,7 @@ function writeVsCodeConfig() {
 function writeVsCodeResourceSettings() {
   const path = join(launchCwd, ".vscode", "settings.json");
   const json = readJson(path, {});
-  const excludes = {
-    "**/.cognibrain/**": true,
-    "**/.memory-harness.json": true,
-    "**/artifacts/**": true,
-    "**/data/benchmarks/**": true,
-    "**/dist/**": true,
-    "**/node_modules/**": true,
-    "**/operator-ui/.next/**": true,
-    "**/.playwright-cli/**": true,
-    "**/output/**": true
-  };
+  const excludes = Object.fromEntries(HEAVY_GENERATED_EXCLUDE_PATTERNS.map((pattern) => [pattern, true]));
   json["files.watcherExclude"] = { ...(json["files.watcherExclude"] ?? {}), ...excludes };
   json["search.exclude"] = { ...(json["search.exclude"] ?? {}), ...excludes };
   writeJson(path, json);

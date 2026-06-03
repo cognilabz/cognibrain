@@ -133,6 +133,23 @@ const dbPrimaryAliasesBypassLegacyPersistence = files.persistence.includes("DB-p
 const hardWiredServiceStore = /readonly\s+store\s*=\s*new\s+MemoryStore\s*\(/.test(files.service);
 const memoryRepositoryBoundary = files.storageAdapter.includes("export interface MemoryRepository") && files.service.includes("readonly repository: MemoryRepository") && files.service.includes("repositoryFromStorage");
 const dbRepositoryImplementations = files.repositories.includes("class SQLiteMemoryRepository") && files.repositories.includes("class PostgresMemoryRepository") && files.repositories.includes("implements MemoryRepository");
+const requiredHeavyGeneratedExcludes = [
+  "**/.cognibrain/**",
+  "**/.memory-harness.json",
+  "**/.venv/**",
+  "**/__pycache__/**",
+  "**/.pytest_cache/**",
+  "**/.next/**",
+  "**/artifacts/**",
+  "**/coverage/**",
+  "**/data/benchmarks/**",
+  "**/node_modules/**",
+  "**/operator-ui/.next/**",
+  "**/playwright-report/**",
+  "**/test-results/**"
+];
+const vscodeHeavyGeneratedExcludes = files.cli.includes("HEAVY_GENERATED_EXCLUDE_PATTERNS") &&
+  requiredHeavyGeneratedExcludes.every((pattern) => files.cli.includes(pattern) && files.cliTests.includes(pattern));
 const dreamJobWorkerControl = files.service.includes("cancelDreamJob(") && files.service.includes("retryDreamJob(") && files.dreamRoutes.includes("/dream/jobs") && files.dreamRoutes.includes("cancel") && files.dreamRoutes.includes("retry") && files.mcpTools.includes("memory_dream_job_cancel") && files.mcpTools.includes("memory_dream_job_retry") && files.coreTests.includes("cancels and retries dream jobs");
 const liveSourceRevalidation = files.service.includes("revalidateSourceRefsAsync") && files.service.includes("await resolver.fetch") && files.service.includes("listExternalVendorItems") && files.dreamRoutes.includes("revalidateSourceRefsAsync") && files.coreTests.includes("uses live async source resolver fetch") && files.coreTests.includes("default GitHub source resolver fetches current provider state");
 const postgresVerifierPassed = files.postgresLive?.acceptance?.startsWithPostgresBackend === true && files.postgresLive?.storage?.active === "postgres-repository";
@@ -630,7 +647,7 @@ const checks = [
     source: "bin/cognibrain.mjs",
     removed: ["animated terminal UI dependency", "src/cli/inkApp.mjs", "generated CLI screenshots"]
   }),
-  check("runtime-resource-footprint", "MCP and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers, and status exposes API/dashboard RSS and CPU.", files.cli.includes("lightweightMcpServer.mjs") && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cliTests.includes("status.runtime.api.resources.rssMb"), "fail", {
+  check("runtime-resource-footprint", "MCP and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers, and status exposes API/dashboard RSS and CPU.", files.cli.includes("lightweightMcpServer.mjs") && vscodeHeavyGeneratedExcludes && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cliTests.includes("status.runtime.api.resources.rssMb"), "fail", {
     code: ["bin/lib/cliRuntime.mjs", "bin/lib/harnessRuntime.mjs", "bin/lib/lightweightMcpServer.mjs"],
     checks: [
       "default MCP uses lightweight JS daemon proxy",
@@ -638,7 +655,8 @@ const checks = [
       "status uses lightweight runtime payload unless --full is requested",
       "status reports API/dashboard RSS and CPU for live runtime PIDs",
       "VSCode watcher/search excludes generated runtime and benchmark directories"
-    ]
+    ],
+    requiredHeavyGeneratedExcludes
   }),
   check("operator-os-proof", "The terminal operator OS maturity artifact covers memory, connectors, runtime, config, benchmarks, policy, retention, logs and docs.", files.operatorOs.passed === true && Array.isArray(files.operatorOs.rows) && files.operatorOs.rows.length >= 10, "fail", {
     artifact: "artifacts/operator-os-maturity.json",

@@ -983,8 +983,25 @@ describe("cognibrain CLI", () => {
       const vscodeMcp = JSON.parse(readFileSync(join(dir, ".vscode", "mcp.json"), "utf8"));
       expect(vscodeMcp.servers.cognibrain.args.join(" ")).toContain("lightweightMcpServer.mjs");
       const vscodeSettings = JSON.parse(readFileSync(join(dir, ".vscode", "settings.json"), "utf8"));
-      expect(vscodeSettings["files.watcherExclude"]["**/.cognibrain/**"]).toBe(true);
-      expect(vscodeSettings["search.exclude"]["**/data/benchmarks/**"]).toBe(true);
+      const heavyGeneratedExcludes = [
+        "**/.cognibrain/**",
+        "**/.memory-harness.json",
+        "**/.venv/**",
+        "**/__pycache__/**",
+        "**/.pytest_cache/**",
+        "**/.next/**",
+        "**/artifacts/**",
+        "**/coverage/**",
+        "**/data/benchmarks/**",
+        "**/node_modules/**",
+        "**/operator-ui/.next/**",
+        "**/playwright-report/**",
+        "**/test-results/**"
+      ];
+      for (const pattern of heavyGeneratedExcludes) {
+        expect(vscodeSettings["files.watcherExclude"][pattern], pattern).toBe(true);
+        expect(vscodeSettings["search.exclude"][pattern], pattern).toBe(true);
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

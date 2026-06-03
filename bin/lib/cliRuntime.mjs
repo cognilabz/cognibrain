@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { adapterDefinitions, connectorDefinitions } from "./catalogs.mjs";
 import { handleHarnessCommand, handleLifecycleCommand, handleMemoryLifecycleCommand, isLifecycleCommand, isMemoryLifecycleCommand } from "./lifecycleCli.mjs";
 import { createHarnessRuntime } from "./harnessRuntime.mjs";
+import { formatResourceFootprint, resourceFootprint } from "./resourcesRuntime.mjs";
 import { renderCliPanel, renderCliSurface } from "./render.mjs";
 import { createServiceRuntime } from "./serviceRuntime.mjs";
 import { adapterUsage, configUsage, connectionsUsage, connectorUsage, initUsage, memoriesUsage, proofUsage, sdkUsage, serviceUsage, skillUsage, usage } from "./usage.mjs";
@@ -39,7 +40,6 @@ const {
   printServiceRemove,
   printServiceLogs
 } = createServiceRuntime({ root, runtimeRoot, hostPlatformName, optionValue, optionValues, readJson, writeJson, runtimeStatus, serviceUsage });
-
 if (isLifecycleCommand(command)) {
   await handleLifecycleCommand([command, ...commandArgs], { root, launchCwd, runtimeRoot });
   return;
@@ -79,6 +79,10 @@ switch (command) {
 
   case "status":
     await statusCommand(commandArgs);
+    break;
+
+  case "resources":
+    await resourcesCommand(commandArgs);
     break;
 
   case "proof":
@@ -220,6 +224,24 @@ async function statusCommand(statusArgs = []) {
     return;
   }
   await renderCliSurface("status", result, { title: "cognibrain status" });
+}
+
+async function resourcesCommand(resourceArgs = []) {
+  if (resourceArgs.includes("--help")) {
+    console.log(`Usage: cognibrain resources [--json] [--prune-benchmark-caches] [--dry-run]
+
+Measure Cognibrain runtime and generated benchmark cache footprint.
+--prune-benchmark-caches removes only reinstallable original benchmark, native runner, and vendor package caches under .cognibrain.`);
+    return;
+  }
+  const pruneRequested = resourceArgs.includes("--prune-benchmark-caches");
+  const dryRun = resourceArgs.includes("--dry-run");
+  const result = resourceFootprint({ root, runtimeRoot, launchCwd, readJson, runtimeStatus, pruneRequested, dryRun });
+  if (resourceArgs.includes("--json")) {
+    printJson(result);
+    return;
+  }
+  console.log(formatResourceFootprint(result).join("\n"));
 }
 
 async function proofCommand(proofArgs = []) {

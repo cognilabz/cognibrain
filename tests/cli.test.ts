@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createMcpRuntimeToolHandlers } from "../src/connectors/mcpRuntimeClient";
@@ -18,6 +18,7 @@ describe("cognibrain CLI", () => {
     expect(output).toContain("cognibrain tui|ui|home");
     expect(output).toContain("cognibrain setup");
     expect(output).toContain("cognibrain doctor");
+    expect(output).toContain("cognibrain resources");
     expect(output).toContain("cognibrain memories");
     expect(output).toContain("cognibrain context|guard|outcome|correction|patch-evidence|session-end|handoff|release-prepare|dream-plan|source-revalidate|conflicts|health --json");
     expect(output).toContain("cognibrain connections");
@@ -29,6 +30,42 @@ describe("cognibrain CLI", () => {
     expect(output).toContain("azure-devops");
     expect(output).toContain("cognibrain adapter list");
     expect(output).toContain("cognibrain skill install|status|doctor|path");
+  }, slowCliTimeout);
+
+  it("measures and prunes reinstallable benchmark caches without deleting memory data", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-resources-"));
+    try {
+      const env = { ...process.env, MEMORY_AUTO_DREAM: "false", MEMORY_DB_PATH: join(dir, ".memory-harness.json") };
+      const writeGenerated = (relative: string, content = "generated-cache") => {
+        const path = join(dir, relative);
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, content);
+      };
+      writeGenerated(".memory-harness.json", JSON.stringify({ memories: [] }));
+      writeGenerated(".cognibrain/connectors/github.json", JSON.stringify({ provider: "github" }));
+      writeGenerated(".cognibrain/original-benchmarks/fixture/result.txt");
+      writeGenerated(".cognibrain/native-runners/fixture/output.txt");
+      writeGenerated(".cognibrain/vendor/fixture/package.txt");
+
+      const before = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "resources", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      expect(before.generated.benchmarkCacheBytes).toBeGreaterThan(0);
+      expect(before.prune.requested).toBe(false);
+      expect(before.vscode.settingsPresent).toBe(false);
+
+      const dryRun = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "resources", "--prune-benchmark-caches", "--dry-run", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      expect(dryRun.prune.dryRun).toBe(true);
+      expect(existsSync(join(dir, ".cognibrain", "original-benchmarks"))).toBe(true);
+
+      const pruned = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "resources", "--prune-benchmark-caches", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      expect(pruned.prune.reclaimedBytes).toBeGreaterThan(0);
+      expect(existsSync(join(dir, ".cognibrain", "original-benchmarks"))).toBe(false);
+      expect(existsSync(join(dir, ".cognibrain", "native-runners"))).toBe(false);
+      expect(existsSync(join(dir, ".cognibrain", "vendor"))).toBe(false);
+      expect(existsSync(join(dir, ".memory-harness.json"))).toBe(true);
+      expect(existsSync(join(dir, ".cognibrain", "connectors", "github.json"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }, slowCliTimeout);
 
   it("does not treat memory subcommand help flags as memory content or ids", () => {

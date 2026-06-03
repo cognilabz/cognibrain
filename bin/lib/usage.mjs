@@ -19,6 +19,8 @@ Usage:
       Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
   cognibrain start [--dashboard] | dev [--dashboard] | dashboard | status | stop
       Manage the local API runtime; the commercial Operator UI starts only with dashboard opt-in
+  cognibrain resources [--json] [--prune-benchmark-caches] [--dry-run]
+      Measure runtime/generated footprint and prune reinstallable original benchmark caches without deleting memory data
   cognibrain proof|truth [--json] [--no-refresh]
       Render the code-first truth workbench from benchmark, connector, CLI, and packaging artifacts
   cognibrain service [plan|status] [--platform linux|macos|windows] [--json]

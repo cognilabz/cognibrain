@@ -1235,6 +1235,38 @@ describe("TypeScript memory core", () => {
     }
   });
 
+  it("compacts oversized evidence packs only in persisted local snapshots", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-evidence-compact-"));
+    const previousMaxBytes = process.env.MEMORY_EVIDENCE_PACK_PERSIST_MAX_BYTES;
+    const previousContentChars = process.env.MEMORY_EVIDENCE_PACK_PERSIST_RESULT_CONTENT_CHARS;
+    try {
+      process.env.MEMORY_EVIDENCE_PACK_PERSIST_MAX_BYTES = "1200";
+      process.env.MEMORY_EVIDENCE_PACK_PERSIST_RESULT_CONTENT_CHARS = "128";
+      const path = join(dir, "memory.json");
+      const service = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      const longContent = `Atlas release note ${"semantic evidence ".repeat(500)}`;
+      service.add({ userId: "u1", content: longContent, source: { kind: "human", confidence: 0.96 } });
+      const pack = service.evidencePack({ userId: "u1", query: "Atlas release note semantic evidence", limit: 3, tokenBudget: 20_000 });
+      expect(pack.results[0].content.length).toBeGreaterThan(8_000);
+      expect(pack.storage).toBeUndefined();
+
+      const persisted = JSON.parse(readFileSync(path, "utf8"));
+      const savedPack = persisted.evidencePacks.find((item: { id: string }) => item.id === pack.id);
+	      expect(savedPack.storage).toMatchObject({ compacted: true, maxPersistedBytes: 1200, resultContentMaxChars: 128 });
+	      expect(savedPack.storage.originalBytes).toBeGreaterThan(savedPack.storage.persistedBytes);
+	      expect(Buffer.byteLength(JSON.stringify(savedPack), "utf8")).toBeLessThanOrEqual(1200);
+	      expect(savedPack.results[0].content.length).toBeLessThan(pack.results[0].content.length);
+      expect(savedPack.results[0].memoryId).toBe(pack.results[0].memoryId);
+      expect(savedPack.hash).toBe(pack.hash);
+    } finally {
+      if (previousMaxBytes === undefined) delete process.env.MEMORY_EVIDENCE_PACK_PERSIST_MAX_BYTES;
+      else process.env.MEMORY_EVIDENCE_PACK_PERSIST_MAX_BYTES = previousMaxBytes;
+      if (previousContentChars === undefined) delete process.env.MEMORY_EVIDENCE_PACK_PERSIST_RESULT_CONTENT_CHARS;
+      else process.env.MEMORY_EVIDENCE_PACK_PERSIST_RESULT_CONTENT_CHARS = previousContentChars;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("stores MemoryRecordV2 fields and enforces belief-state retrieval decisions", () => {
     const service = new MemoryService();
     const active = service.add({

@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { HEAVY_GENERATED_EXCLUDE_PATTERNS } from "./harnessRuntime.mjs";
 
@@ -49,6 +49,7 @@ export function resourceFootprint({ root, runtimeRoot, launchCwd, readJson, runt
       benchmarkCacheBytes: pruneTargets.reduce((sum, row) => sum + row.bytes, 0),
       rows
     },
+    localRuntimeState: localRuntimeStateBreakdown(join(runtimeRoot, ".memory-harness.json")),
     vscode: vscodeResourceSettingsHealth({ launchCwd, readJson }),
     prune: {
       requested: pruneRequested,
@@ -68,11 +69,14 @@ export function formatResourceFootprint(result) {
   const lines = [
     "cognibrain resources",
     `runtime root: ${result.runtimeRoot}`,
-    `runtime: api ${result.runtime.api?.resources?.rssMb ?? "n/a"} MB RSS, cpu ${result.runtime.api?.resources?.cpuPercent ?? "n/a"}%, dashboard ${result.runtime.dashboard?.alive ? "on" : "off"}`,
+    `runtime: api ${result.runtime.api?.resources?.rssMb ?? "n/a"} MB RSS, cpu ${result.runtime.api?.resources?.cpuPercent ?? "n/a"}%, mode ${result.runtime.api?.runtime ?? "unknown"}, dashboard ${result.runtime.dashboard?.alive ? "on" : "off"}`,
     `generated total: ${formatBytes(result.generated.totalBytes)}`,
     `benchmark caches: ${formatBytes(result.generated.benchmarkCacheBytes)}`
   ];
   for (const row of result.generated.rows) lines.push(`- ${row.name}: ${formatBytes(row.bytes)} (${row.files} files)`);
+  if (result.localRuntimeState?.present) {
+    lines.push(`local state: ${formatBytes(result.localRuntimeState.bytes)}, evidence packs ${result.localRuntimeState.evidencePacks?.count ?? 0} (${formatBytes(result.localRuntimeState.evidencePacks?.bytes ?? 0)}), audit events ${result.localRuntimeState.auditEvents?.count ?? 0}`);
+  }
   if (result.vscode.settingsPresent) {
     lines.push(`VS Code excludes: watcher missing ${result.vscode.missingWatcherExcludes.length}, search missing ${result.vscode.missingSearchExcludes.length}`);
   } else {
@@ -83,6 +87,36 @@ export function formatResourceFootprint(result) {
     lines.push(`${verb} ${result.prune.targets.length} benchmark cache directories, reclaimed ${formatBytes(result.prune.reclaimedBytes)}.`);
   }
   return lines;
+}
+
+function localRuntimeStateBreakdown(path) {
+  if (!existsSync(path)) return { present: false, path, bytes: 0, arrays: [] };
+  const stat = lstatSync(path);
+  if (!stat.isFile()) return { present: false, path, bytes: stat.size, arrays: [] };
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    return { present: true, path, bytes: stat.size, parseable: false, error: error instanceof Error ? error.message : String(error), arrays: [] };
+  }
+  const arrays = Object.entries(parsed)
+    .filter(([, value]) => Array.isArray(value))
+    .map(([name, value]) => {
+      const bytes = Buffer.byteLength(JSON.stringify(value), "utf8");
+      return { name, count: value.length, bytes };
+    })
+    .sort((left, right) => right.bytes - left.bytes || right.count - left.count);
+  const evidencePacks = arrays.find((row) => row.name === "evidencePacks") ?? { name: "evidencePacks", count: 0, bytes: 0 };
+  const auditEvents = arrays.find((row) => row.name === "auditEvents") ?? { name: "auditEvents", count: 0, bytes: 0 };
+  return {
+    present: true,
+    path,
+    bytes: stat.size,
+    parseable: true,
+    topArrays: arrays.slice(0, 8),
+    evidencePacks,
+    auditEvents
+  };
 }
 
 function pathFootprint(path) {

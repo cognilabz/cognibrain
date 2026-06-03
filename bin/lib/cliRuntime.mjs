@@ -1295,6 +1295,9 @@ function runtimeStatus() {
       alive: apiAlive,
       url: state?.api?.url ?? null,
       pid: state?.api?.pid ?? null,
+      runtime: state?.api?.runtime ?? null,
+      processModel: state?.api?.processModel ?? null,
+      entrypoint: state?.api?.entrypoint ?? null,
       resources: apiResources
     },
     dashboard: {

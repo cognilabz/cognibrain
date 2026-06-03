@@ -30,7 +30,7 @@ if (args.has("--status")) {
 
 async function startDaemon() {
   mkdirSync(stateDir, { recursive: true });
-  const tsx = requireExecutable("tsx");
+  const apiRuntime = resolveApiRuntime();
   const next = withDashboard ? requireExecutable("next") : null;
   if (withDashboard) requireCommercialOperatorUi();
   const current = readState();
@@ -42,7 +42,7 @@ async function startDaemon() {
 
   const apiPort = await findOpenPort(apiStartPort);
   const apiLog = openSync(join(stateDir, "api.log"), "a");
-  const api = spawn(tsx, ["src/api/server.ts"], {
+  const api = spawn(apiRuntime.command, apiRuntime.args, {
     cwd: root,
     detached: true,
     env: {
@@ -74,7 +74,7 @@ async function startDaemon() {
     startedAt: new Date().toISOString(),
     root,
     runtimeRoot,
-    api: { pid: api.pid, port: apiPort, url: `http://127.0.0.1:${apiPort}` },
+    api: { pid: api.pid, port: apiPort, url: `http://127.0.0.1:${apiPort}`, runtime: apiRuntime.runtime, entrypoint: apiRuntime.entrypoint, processModel: apiRuntime.processModel },
     ui: ui ? { pid: ui.pid, port: uiPort, url: `http://127.0.0.1:${uiPort}` } : null,
     dbPath: defaultDbPath
   };
@@ -87,11 +87,11 @@ async function startDaemon() {
 }
 
 async function startForeground() {
-  const tsx = requireExecutable("tsx");
+  const apiRuntime = resolveApiRuntime();
   const next = withDashboard ? requireExecutable("next") : null;
   if (withDashboard) requireCommercialOperatorUi();
   const apiPort = await findOpenPort(apiStartPort);
-  const api = spawn(tsx, ["src/api/server.ts"], {
+  const api = spawn(apiRuntime.command, apiRuntime.args, {
     cwd: root,
     env: {
       ...process.env,
@@ -115,6 +115,7 @@ async function startForeground() {
   }
 
   console.log(`cognibrain API: http://127.0.0.1:${apiPort}`);
+  console.log(`cognibrain API runtime: ${apiRuntime.runtime}`);
   console.log(uiPort ? `cognibrain UI:  http://127.0.0.1:${uiPort}` : "cognibrain UI:  optional; rerun with --dashboard");
   const stop = () => {
     api.kill("SIGTERM");
@@ -142,6 +143,46 @@ function requireCommercialOperatorUi() {
   console.error("Cognibrain Operator UI is a commercial add-on and is not included in the OSS package.");
   console.error("Install or mount the licensed operator-ui add-on, then run with --dashboard again.");
   process.exit(2);
+}
+
+function resolveApiRuntime() {
+  const forced = process.env.COGNIBRAIN_API_RUNTIME ?? "auto";
+  const builtEntrypoint = join(root, "dist", "api", "server.mjs");
+  if (forced === "built" || (forced === "auto" && existsSync(builtEntrypoint))) {
+    if (!existsSync(builtEntrypoint)) {
+      console.error("COGNIBRAIN_API_RUNTIME=built requested, but dist/api/server.mjs is missing. Provide a built API entrypoint or unset COGNIBRAIN_API_RUNTIME.");
+      process.exit(1);
+    }
+    return {
+      runtime: "built-node",
+      entrypoint: builtEntrypoint,
+      processModel: "single-process",
+      command: process.execPath,
+      args: [builtEntrypoint]
+    };
+  }
+  if (forced === "tsx-cli") {
+    const tsx = requireExecutable("tsx");
+    return {
+      runtime: "source-tsx-cli",
+      entrypoint: "src/api/server.ts",
+      processModel: "may-fork",
+      command: tsx,
+      args: ["src/api/server.ts"]
+    };
+  }
+  if (forced !== "auto" && forced !== "source" && forced !== "node-import-tsx") {
+    console.error(`Unsupported COGNIBRAIN_API_RUNTIME=${forced}. Use auto, built, source, node-import-tsx, or tsx-cli.`);
+    process.exit(1);
+  }
+  requireExecutable("tsx");
+  return {
+    runtime: "source-node-import-tsx",
+    entrypoint: "src/api/server.ts",
+    processModel: "single-process",
+    command: process.execPath,
+    args: ["--import", "tsx", "src/api/server.ts"]
+  };
 }
 
 async function printStatus() {

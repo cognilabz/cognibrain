@@ -297,6 +297,17 @@ export interface EvidencePack {
     needsVerification: number;
     contradicted: number;
   };
+  storage?: {
+    compacted: boolean;
+    compactedAt?: string;
+    reason?: string;
+    originalBytes?: number;
+    persistedBytes?: number;
+    maxPersistedBytes?: number;
+    contextMaxChars?: number;
+    resultContentMaxChars?: number;
+    explanationMaxItems?: number;
+  };
   summary: {
     included: number;
     warnings: number;

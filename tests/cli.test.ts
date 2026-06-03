@@ -49,6 +49,7 @@ describe("cognibrain CLI", () => {
 
       const before = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "resources", "--json"], { cwd: dir, env, encoding: "utf8" }));
       expect(before.generated.benchmarkCacheBytes).toBeGreaterThan(0);
+      expect(before.localRuntimeState).toMatchObject({ present: true, parseable: true });
       expect(before.prune.requested).toBe(false);
       expect(before.vscode.settingsPresent).toBe(false);
 
@@ -63,6 +64,28 @@ describe("cognibrain CLI", () => {
       expect(existsSync(join(dir, ".cognibrain", "vendor"))).toBe(false);
       expect(existsSync(join(dir, ".memory-harness.json"))).toBe(true);
       expect(existsSync(join(dir, ".cognibrain", "connectors", "github.json"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("reports local JSON runtime state drivers for VS Code and memory-footprint debugging", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-resources-state-"));
+    try {
+      const env = { ...process.env, MEMORY_AUTO_DREAM: "false", MEMORY_DB_PATH: join(dir, ".memory-harness.json") };
+      writeFileSync(join(dir, ".memory-harness.json"), JSON.stringify({
+        version: 2,
+        memories: [{ id: "m1", content: "Atlas memory" }],
+        auditEvents: [{ id: "a1", type: "search.run" }, { id: "a2", type: "memory.write" }],
+        evidencePacks: [{ id: "ctx_1", query: "Atlas", context: "x".repeat(500), results: [] }],
+        maintenance: { users: {} }
+      }));
+
+      const report = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "resources", "--json"], { cwd: dir, env, encoding: "utf8" }));
+      expect(report.localRuntimeState.present).toBe(true);
+      expect(report.localRuntimeState.evidencePacks).toMatchObject({ name: "evidencePacks", count: 1 });
+      expect(report.localRuntimeState.auditEvents).toMatchObject({ name: "auditEvents", count: 2 });
+      expect(report.localRuntimeState.topArrays.map((row: { name: string }) => row.name)).toContain("evidencePacks");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -184,7 +207,7 @@ describe("cognibrain CLI", () => {
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "memories", "add", "The terminal CLI is the primary product surface."], { cwd: dir, env, encoding: "utf8" });
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "connections", "add", "github", "--set", "repo=cognilabz/cognibrain", "--token-env", "MEMORY_GITHUB_TOKEN"], { cwd: dir, env, encoding: "utf8" });
       mkdirSync(join(dir, ".cognibrain"), { recursive: true });
-      writeFileSync(join(dir, ".cognibrain", "local-runtime.json"), JSON.stringify({ api: { pid: process.pid, url: "http://127.0.0.1:8787" }, ui: {} }));
+      writeFileSync(join(dir, ".cognibrain", "local-runtime.json"), JSON.stringify({ api: { pid: process.pid, url: "http://127.0.0.1:8787", runtime: "source-node-import-tsx", processModel: "single-process", entrypoint: "src/api/server.ts" }, ui: {} }));
 
       const home = execFileSync(process.execPath, [cli, "--runtime-root", dir], { cwd: dir, env, encoding: "utf8" });
       const homeJson = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "--json"], { cwd: dir, env, encoding: "utf8" }));
@@ -212,6 +235,8 @@ describe("cognibrain CLI", () => {
       expect(status.runtime.dashboard.optional).toBe(true);
       expect(status.runtime.api.resources.rssMb).toBeGreaterThan(0);
       expect(status.runtime.api.resources.cpuPercent).toBeGreaterThanOrEqual(0);
+      expect(status.runtime.api.runtime).toBe("source-node-import-tsx");
+      expect(status.runtime.api.processModel).toBe("single-process");
       expect(memoriesJson.recent.length).toBeGreaterThan(0);
       expect(connectionsJson.connectors.configured).toContain("github");
     } finally {

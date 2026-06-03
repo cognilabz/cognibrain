@@ -276,7 +276,7 @@ export class MemoryServicePersistence extends MemoryServiceInsightsMaintenance {
     return this.repository instanceof InMemoryMemoryRepository || (this.repository as { store?: unknown }).store === this.store;
   }
 
-protected persist(): void {
+  protected persist(): void {
     const memories = this.store.export();
     if (!this.repositorySharesReadModel()) {
       this.repository.import(memories);
@@ -311,13 +311,47 @@ protected persist(): void {
       connectorSyncRecords: this.connectorSyncRecords,
       connectorSyncStates: [...this.connectorSyncStates.values()],
       dreamJobs: [...this.dreamJobs.values()],
-      evidencePacks: [...this.evidencePacks.values()],
+      evidencePacks: this.compactEvidencePacksForPersistence([...this.evidencePacks.values()]),
       policyRules: [...this.policyRules.values()],
       retentionRules: [...this.retentionRules.values()]
     };
     if (this.persistence) this.persistence.save(payload);
     else this.saveRepositoryState(payload);
   }
+
+  private compactEvidencePacksForPersistence(packs: EvidencePack[]): EvidencePack[] {
+    const maxPersistedBytes = envInteger("MEMORY_EVIDENCE_PACK_PERSIST_MAX_BYTES", 16_000);
+    if (maxPersistedBytes <= 0) return packs;
+    const contextMaxChars = envInteger("MEMORY_EVIDENCE_PACK_PERSIST_CONTEXT_CHARS", 4_000);
+    const resultContentMaxChars = envInteger("MEMORY_EVIDENCE_PACK_PERSIST_RESULT_CONTENT_CHARS", 1_200);
+    const explanationMaxItems = envInteger("MEMORY_EVIDENCE_PACK_PERSIST_EXPLANATION_ITEMS", 8);
+	    return packs.map((pack) => {
+	      const originalBytes = jsonBytes(pack);
+	      if (originalBytes <= maxPersistedBytes) return pack;
+	      const sourceOriginalBytes = pack.storage?.originalBytes ?? originalBytes;
+	      const compacted = compactEvidencePack(pack, {
+	        originalBytes: sourceOriginalBytes,
+	        maxPersistedBytes,
+	        contextMaxChars,
+	        resultContentMaxChars,
+	        explanationMaxItems
+	      });
+	      const storage = {
+	        compacted: true,
+	        compactedAt: new Date().toISOString(),
+	        reason: "c",
+	        originalBytes: sourceOriginalBytes,
+	        persistedBytes: 0,
+	        maxPersistedBytes,
+	        contextMaxChars,
+	        resultContentMaxChars,
+	        explanationMaxItems
+	      };
+	      let stored = attachEvidencePackStorage(compacted, storage);
+	      if (jsonBytes(stored) > maxPersistedBytes) stored = attachEvidencePackStorage(compactEvidencePackHardLimit(compacted, maxPersistedBytes), storage);
+	      return stored;
+	    });
+	  }
 
   protected loadRepositoryState(): PersistedMemoryFile | Memory[] | undefined {
     const state = (this.repository as MemoryRepository & RepositoryStatePersistence).loadState?.();
@@ -339,4 +373,307 @@ protected persist(): void {
       keyVersion: this.redactionPolicy.encryptionKeyVersion ?? process.env.MEMORY_ENCRYPTION_KEY_VERSION
     }];
   }
+}
+
+function compactEvidencePack(pack: EvidencePack, limits: { originalBytes: number; maxPersistedBytes: number; contextMaxChars: number; resultContentMaxChars: number; explanationMaxItems: number }): EvidencePack {
+  const compacted: EvidencePack = {
+    ...pack,
+    context: truncatePersistedText(pack.context, limits.contextMaxChars),
+    results: pack.results.map((result) => ({
+      ...result,
+      content: truncatePersistedText(result.content, limits.resultContentMaxChars),
+      provenance: compactProvenance(result.provenance),
+      retrieval: {
+        ...result.retrieval,
+        scoreBreakdown: compactScoreBreakdown(result.retrieval.scoreBreakdown),
+        explanation: compactStringList(result.retrieval.explanation, limits.explanationMaxItems),
+        whyIncluded: compactStringList(result.retrieval.whyIncluded, limits.explanationMaxItems),
+        whyNotExcluded: compactStringList(result.retrieval.whyNotExcluded, limits.explanationMaxItems),
+        graphPaths: compactStringList(result.retrieval.graphPaths, limits.explanationMaxItems),
+        plan: result.retrieval.plan ? {
+          queryType: result.retrieval.plan.queryType,
+          secondaryTypes: result.retrieval.plan.secondaryTypes,
+          intent: result.retrieval.plan.intent,
+          recommendedMode: result.retrieval.plan.recommendedMode,
+          strategies: result.retrieval.plan.strategies,
+          confidence: result.retrieval.plan.confidence
+        } as typeof result.retrieval.plan : undefined
+      },
+      policyDecision: result.policyDecision ? {
+        operation: result.policyDecision.operation,
+        allowed: result.policyDecision.allowed,
+        memoryId: result.policyDecision.memoryId,
+        reasons: compactStringList(result.policyDecision.reasons, limits.explanationMaxItems)
+      } as typeof result.policyDecision : undefined,
+      contradictionWarnings: compactStringList(result.contradictionWarnings ?? [], limits.explanationMaxItems),
+      truthDecision: result.truthDecision ? {
+        subject: result.truthDecision.subject,
+        predicate: result.truthDecision.predicate,
+        selectedClaimId: result.truthDecision.selectedClaimId,
+        selectedMemoryId: result.truthDecision.selectedMemoryId,
+        state: result.truthDecision.state,
+        reason: truncatePersistedText(result.truthDecision.reason, 500),
+        conflictSetId: result.truthDecision.conflictSetId,
+        scoreBreakdown: result.truthDecision.scoreBreakdown
+      } as typeof result.truthDecision : undefined
+    })),
+	    excludedResults: pack.excludedResults?.map((result) => ({
+	      ...result,
+      reason: truncatePersistedText(result.reason, 500),
+      policyDecision: result.policyDecision ? {
+        operation: result.policyDecision.operation,
+        allowed: result.policyDecision.allowed,
+        memoryId: result.policyDecision.memoryId,
+        reasons: compactStringList(result.policyDecision.reasons, limits.explanationMaxItems)
+      } as typeof result.policyDecision : undefined,
+      truthDecision: result.truthDecision ? {
+        subject: result.truthDecision.subject,
+        predicate: result.truthDecision.predicate,
+        selectedClaimId: result.truthDecision.selectedClaimId,
+        selectedMemoryId: result.truthDecision.selectedMemoryId,
+        state: result.truthDecision.state,
+        reason: truncatePersistedText(result.truthDecision.reason, 500),
+        conflictSetId: result.truthDecision.conflictSetId,
+        scoreBreakdown: result.truthDecision.scoreBreakdown
+      } as typeof result.truthDecision : undefined
+	    })),
+	    policyDecisions: pack.policyDecisions?.map((decision) => ({
+	      operation: decision.operation,
+	      allowed: decision.allowed,
+	      memoryId: decision.memoryId,
+	      matchedRules: decision.matchedRules,
+	      reasons: compactStringList(decision.reasons, limits.explanationMaxItems)
+	    } as typeof decision)),
+	    truthDecisions: pack.truthDecisions?.map((decision) => compactTruthDecision(decision, 500)),
+	    graphPaths: compactStringList(pack.graphPaths ?? [], 24)
+	  };
+	  if (jsonBytes(compacted) <= limits.maxPersistedBytes) return compacted;
+	  const tighter: EvidencePack = {
+	    ...compacted,
+	    context: truncatePersistedText(compacted.context, Math.min(limits.contextMaxChars, 1_500)),
+	    results: compacted.results.map((result) => ({
+	      ...result,
+	      content: truncatePersistedText(result.content, Math.min(limits.resultContentMaxChars, 360)),
+      retrieval: {
+        ...result.retrieval,
+        explanation: compactStringList(result.retrieval.explanation, 3),
+        whyIncluded: compactStringList(result.retrieval.whyIncluded, 3),
+        whyNotExcluded: compactStringList(result.retrieval.whyNotExcluded, 3),
+	        graphPaths: compactStringList(result.retrieval.graphPaths, 3)
+	      }
+	    })),
+	    truthDecisions: compacted.truthDecisions?.map((decision) => compactTruthDecision(decision, 240)),
+	    policyDecisions: compacted.policyDecisions?.slice(0, 12).map((decision) => ({
+	      operation: decision.operation,
+	      allowed: decision.allowed,
+	      memoryId: decision.memoryId,
+	      matchedRules: decision.matchedRules?.slice(0, 4),
+	      reasons: compactStringList(decision.reasons, 3)
+	    } as typeof decision)),
+	    graphPaths: compactStringList(compacted.graphPaths ?? [], 8)
+	  };
+	  if (jsonBytes(tighter) <= limits.maxPersistedBytes) return tighter;
+	  const aggressive: EvidencePack = {
+	    ...tighter,
+	    context: truncatePersistedText(tighter.context, 500),
+	    results: tighter.results.slice(0, 8).map((result) => compactEvidenceResult(result, 220)),
+	    excludedResults: tighter.excludedResults?.slice(0, 8).map((result) => ({
+	      memoryId: result.memoryId,
+	      reason: truncatePersistedText(result.reason, 180),
+	      policyDecision: result.policyDecision ? compactPolicyDecision(result.policyDecision, 2) : undefined,
+	      truthDecision: result.truthDecision ? compactTruthDecision(result.truthDecision, 180) : undefined
+	    } as typeof result)),
+	    policyDecisions: tighter.policyDecisions?.slice(0, 8).map((decision) => compactPolicyDecision(decision, 2)),
+	    truthDecisions: tighter.truthDecisions?.slice(0, 8).map((decision) => compactTruthDecision(decision, 180)),
+	    graphPaths: compactStringList(tighter.graphPaths ?? [], 4)
+	  };
+	  if (jsonBytes(aggressive) <= limits.maxPersistedBytes) return aggressive;
+	  return {
+	    ...aggressive,
+	    results: aggressive.results.slice(0, 4).map((result) => compactEvidenceResult(result, 120)),
+	    excludedResults: aggressive.excludedResults?.slice(0, 4),
+	    policyDecisions: aggressive.policyDecisions?.slice(0, 4),
+	    truthDecisions: aggressive.truthDecisions?.slice(0, 4),
+	    graphPaths: compactStringList(aggressive.graphPaths ?? [], 2)
+	  };
+	}
+
+function compactEvidencePackHardLimit(pack: EvidencePack, maxPersistedBytes: number): EvidencePack {
+  const resultLimit = maxPersistedBytes < 2_000 ? 1 : 4;
+  const contentChars = maxPersistedBytes < 2_000 ? 0 : 80;
+  return {
+    schemaVersion: pack.schemaVersion,
+    id: pack.id,
+    generatedAt: pack.generatedAt,
+    query: truncatePersistedText(pack.query, maxPersistedBytes < 2_000 ? 80 : 240),
+    userId: pack.userId,
+    tokenBudget: pack.tokenBudget,
+    hash: pack.hash,
+    context: "",
+    results: pack.results.slice(0, resultLimit).map((result) => compactEvidenceResultSkeleton(result, contentChars)),
+    excludedResults: [],
+    policyDecisions: [],
+    graphPaths: [],
+    truthDecisions: [],
+    summary: pack.summary
+  };
+}
+
+function attachEvidencePackStorage(pack: EvidencePack, storage: NonNullable<EvidencePack["storage"]>): EvidencePack {
+  const placeholder = { ...pack, storage: { ...storage, persistedBytes: 0 } };
+  const persistedBytes = jsonBytes(placeholder);
+  const stored = { ...pack, storage: { ...storage, persistedBytes } };
+  return {
+    ...stored,
+    storage: {
+      ...stored.storage,
+      persistedBytes: jsonBytes(stored)
+    }
+  };
+}
+
+function compactProvenance(provenance: EvidencePack["results"][number]["provenance"]): EvidencePack["results"][number]["provenance"] {
+  return {
+    source: provenance.source,
+    citations: compactStringList(provenance.citations ?? [], 6),
+    sourceRef: provenance.sourceRef
+  };
+}
+
+function compactScoreBreakdown(scoreBreakdown: EvidencePack["results"][number]["retrieval"]["scoreBreakdown"]): EvidencePack["results"][number]["retrieval"]["scoreBreakdown"] {
+  if (!scoreBreakdown) return undefined;
+  return {
+    semantic: scoreBreakdown.semantic,
+    keyword: scoreBreakdown.keyword,
+    entity: scoreBreakdown.entity,
+    temporal: scoreBreakdown.temporal,
+    behavioral: scoreBreakdown.behavioral,
+    trust: scoreBreakdown.trust,
+    graph: scoreBreakdown.graph,
+    access: scoreBreakdown.access,
+    finalScore: scoreBreakdown.finalScore,
+    initialScore: scoreBreakdown.initialScore,
+    confidence: scoreBreakdown.confidence
+  };
+}
+
+function compactEvidenceResult(result: EvidencePack["results"][number], contentChars: number): EvidencePack["results"][number] {
+  return {
+    memoryId: result.memoryId,
+    content: truncatePersistedText(result.content, contentChars),
+    source: result.source,
+    scope: { userId: result.scope.userId } as typeof result.scope,
+    consent: result.consent,
+    trust: result.trust,
+    confidence: result.confidence,
+    importance: result.importance,
+    beliefState: result.beliefState,
+    provenance: compactProvenance(result.provenance),
+    validity: result.validity,
+    retrieval: {
+      score: result.retrieval.score,
+      confidence: result.retrieval.confidence,
+      unsafeToInject: result.retrieval.unsafeToInject,
+      initialScore: result.retrieval.initialScore,
+      mode: result.retrieval.mode,
+      signals: {} as typeof result.retrieval.signals,
+      scoreBreakdown: compactScoreBreakdown(result.retrieval.scoreBreakdown),
+      explanation: compactStringList(result.retrieval.explanation, 2),
+      whyIncluded: compactStringList(result.retrieval.whyIncluded, 2),
+      whyNotExcluded: compactStringList(result.retrieval.whyNotExcluded, 2),
+      graphPaths: compactStringList(result.retrieval.graphPaths, 2),
+      citation: result.retrieval.citation,
+      contradiction: result.retrieval.contradiction,
+      plan: result.retrieval.plan ? {
+        queryType: result.retrieval.plan.queryType,
+        secondaryTypes: result.retrieval.plan.secondaryTypes,
+        intent: result.retrieval.plan.intent,
+        recommendedMode: result.retrieval.plan.recommendedMode,
+        strategies: result.retrieval.plan.strategies,
+        confidence: result.retrieval.plan.confidence
+      } as typeof result.retrieval.plan : undefined
+    },
+    policyDecision: result.policyDecision ? compactPolicyDecision(result.policyDecision, 2) : undefined,
+    contradictionWarnings: compactStringList(result.contradictionWarnings ?? [], 2),
+    truthDecision: result.truthDecision ? compactTruthDecision(result.truthDecision, 180) : undefined
+  } as typeof result;
+}
+
+function compactEvidenceResultSkeleton(result: EvidencePack["results"][number], contentChars: number): EvidencePack["results"][number] {
+  return {
+    memoryId: result.memoryId,
+    content: truncatePersistedText(result.content, contentChars),
+    source: {
+      kind: result.source.kind,
+      confidence: result.source.confidence
+    } as typeof result.source,
+    scope: result.scope,
+    consent: result.consent,
+    trust: result.trust,
+    confidence: result.confidence,
+    importance: result.importance,
+    beliefState: result.beliefState,
+    provenance: {
+      source: result.provenance.source,
+      citations: []
+    } as typeof result.provenance,
+    validity: {
+      stale: result.validity.stale
+    },
+    retrieval: {
+      score: result.retrieval.score,
+      confidence: result.retrieval.confidence,
+      unsafeToInject: result.retrieval.unsafeToInject,
+      signals: result.retrieval.signals,
+      explanation: [],
+      whyIncluded: [],
+      whyNotExcluded: [],
+      graphPaths: [],
+      citation: truncatePersistedText(result.retrieval.citation, 40)
+    },
+    contradictionWarnings: []
+  };
+}
+
+function compactPolicyDecision<T extends { operation?: unknown; allowed?: unknown; memoryId?: unknown; matchedRules?: unknown[]; reasons?: string[] }>(decision: T, reasonLimit: number): T {
+  return {
+    operation: decision.operation,
+    allowed: decision.allowed,
+    memoryId: decision.memoryId,
+    matchedRules: decision.matchedRules?.slice(0, 4),
+    reasons: compactStringList(decision.reasons ?? [], reasonLimit)
+  } as T;
+}
+
+function compactTruthDecision(decision: CurrentTruthDecision, reasonChars: number): CurrentTruthDecision {
+  return {
+    subject: decision.subject,
+    predicate: decision.predicate,
+    selectedClaimId: decision.selectedClaimId,
+    selectedMemoryId: decision.selectedMemoryId,
+    state: decision.state,
+    suppressedClaimIds: (decision.suppressedClaimIds ?? []).slice(0, 8),
+    conflictSetId: decision.conflictSetId,
+    reason: truncatePersistedText(decision.reason, reasonChars),
+    scoreBreakdown: decision.scoreBreakdown
+  };
+}
+
+function compactStringList(values: string[], limit: number): string[] {
+  return values.slice(0, Math.max(0, limit)).map((value) => truncatePersistedText(value, 240));
+}
+
+function truncatePersistedText(value: string | undefined, maxChars: number): string {
+  if (!value) return "";
+  if (maxChars <= 0) return "";
+  return value.length <= maxChars ? value : `${value.slice(0, maxChars)}...[truncated ${value.length - maxChars} chars]`;
+}
+
+function jsonBytes(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value), "utf8");
+}
+
+function envInteger(name: string, fallback: number): number {
+  const value = Number(process.env[name] ?? NaN);
+  return Number.isFinite(value) ? Math.floor(value) : fallback;
 }

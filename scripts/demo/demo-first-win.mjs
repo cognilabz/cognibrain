@@ -69,21 +69,23 @@ function runFirstWinDemo() {
       contextData.excludedStaleRules?.some((rule) => ["repo_policy", "forbidden_action", "procedure"].includes(rule.kind));
     const guardSeverity = guard.severity ?? guard.data?.severity;
     const trailData = trail.data ?? trail;
+    const checks = {
+      setupProfile: setupState.profile === "solo-dev",
+      connectorConfigured: connectorState.configured === true,
+      connectorSecretsAreEnvRefs: connectorState.requiredEnv.every((item) => item.valueRef?.startsWith("env:")),
+      secretNotSerialized: !serializedState.includes("demo-token-not-saved"),
+      contextHasActionEvidence,
+      wrongActionBlocked: guardSeverity !== "allow",
+      patchEvidenceCommandRecorded: trailData.summary?.commandsRun?.includes("npm test"),
+      patchEvidenceCorrectionLinked: trailData.correctionIds?.includes(correction.id)
+    };
     const report = {
       schemaVersion: "1.0",
       id: "first-win-demo",
       generatedAt: new Date().toISOString(),
       mode: "guided_self_hosted",
-      passed: Boolean(
-        setupState.profile === "solo-dev" &&
-        connectorState.configured === true &&
-        connectorState.requiredEnv.every((item) => item.valueRef?.startsWith("env:")) &&
-        !serializedState.includes("demo-token-not-saved") &&
-        contextHasActionEvidence &&
-        guardSeverity !== "allow" &&
-        trailData.summary?.commandsRun?.includes("npm test") &&
-        trailData.correctionIds?.includes(correction.id)
-      ),
+      passed: Object.values(checks).every(Boolean),
+      checks,
       install: {
         profile: setupState.profile,
         harnesses: setupState.harnesses,
@@ -98,6 +100,11 @@ function runFirstWinDemo() {
         contextPackId: contextData.id ?? context.id,
         contextInjectedSections: contextData.sections?.length ?? 0,
         contextSuppressedEvidence: contextData.excludedStaleRules?.length ?? 0,
+        contextEvidenceSections: (contextData.sections ?? []).map((section) => ({
+          id: section.id,
+          title: section.title,
+          evidenceCount: section.evidence?.length ?? 0
+        })),
         actionGuardSeverity: guardSeverity,
         patchEvidenceTrailId: trailData.id ?? trail.id
       }
@@ -113,8 +120,9 @@ function command(cwd, env, args) {
 }
 
 function memory(cwd, env, args, extraEnv = {}, options = {}) {
-  if (!options.allowFailure) return JSON.parse(command(cwd, { ...env, ...extraEnv }, ["memory", ...args]));
-  const result = spawnSync(process.execPath, [cli, "--runtime-root", cwd, "memory", ...args], {
+  const lifecycleArgs = ["memory", ...args, "--local-direct", "--no-autostart"];
+  if (!options.allowFailure) return JSON.parse(command(cwd, { ...env, ...extraEnv }, lifecycleArgs));
+  const result = spawnSync(process.execPath, [cli, "--runtime-root", cwd, ...lifecycleArgs], {
     cwd,
     env: { ...env, ...extraEnv },
     encoding: "utf8"

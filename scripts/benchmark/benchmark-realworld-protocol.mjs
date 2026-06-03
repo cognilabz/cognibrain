@@ -7,6 +7,7 @@ const root = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const outputPath = optionValue("--out") ?? "artifacts/realworld-benchmark-protocol.json";
 const markdownPath = optionValue("--markdown") ?? "artifacts/docs/realworld-benchmark-protocol.md";
 const openaiIntelligenceSummary = summarizeRealWorldArtifact("artifacts/realworld-blackbox-openai-intelligence.json");
+const nativeCompetitorSummary = summarizeNativeCompetitorArtifact("artifacts/realworld-native-competitors.json");
 const thirdPartyOssSummary = summarizeThirdPartyOssBucket();
 
 const gate = [
@@ -125,6 +126,22 @@ const currentArtifacts = [
     missingForLeaderboard: ["current latest attempt also scoreable", "larger third-party-sourced task set", "more original memory systems executed without repair", "latency and cost budget preregistered for LLM intelligence"],
   }),
   classifyArtifact({
+    path: "artifacts/realworld-native-competitors.json",
+    className: nativeCompetitorSummary.originalRawOutputRuns >= 2
+      ? "native-original-same-manifest-raw-output-proof"
+      : "native-original-same-manifest-setup-proof",
+    leaderboardEligible: false,
+    why: nativeCompetitorSummary.exists
+      ? `Runs ${nativeCompetitorSummary.originalRawOutputRuns} original non-baseline package runner(s) on the frozen manifest (${nativeCompetitorSummary.originalSystems.join(", ") || "none"}), with ${nativeCompetitorSummary.judgeBlockedOriginalRuns} still blocked from quality scoring until the shared LLM/harness judge succeeds.`
+      : "Configured as the original-package native competitor proof artifact, but no current artifact exists.",
+    allowedUse: nativeCompetitorSummary.originalRawOutputRuns >= 2
+      ? "Same-manifest original-package raw-output proof for Basic Memory and LangMem runner coverage; score, recall, abstention, leakage and market claims remain blocked."
+      : "Setup and runner-path proof only; original competitor raw outputs are not currently present.",
+    missingForLeaderboard: nativeCompetitorSummary.originalRawOutputRuns >= 2
+      ? ["LLM/harness judge command succeeds on original raw outputs", "larger third-party-sourced task set", "more original memory systems executed without repair", "preregistered latency and cost budgets"]
+      : ["at least two original non-baseline systems with retained raw outputs", "LLM/harness judge command succeeds on original raw outputs", "larger third-party-sourced task set", "more original memory systems executed without repair"],
+  }),
+  classifyArtifact({
     path: "artifacts/original-public-benchmarks.json",
     className: "upstream-original-evidence",
     leaderboardEligible: false,
@@ -215,6 +232,12 @@ const report = {
             priority: "P0",
             item: "Attach a successful LLM/harness judge to the current original raw-output competitor smoke.",
             reason: `Current checked smoke has ${openaiIntelligenceSummary.originalRawOutputSystems} original non-baseline raw-output systems (${openaiIntelligenceSummary.originalRawOutputSystemNames.join(", ")}), but quality metrics remain blocked until the shared judge succeeds.`,
+          }
+      : nativeCompetitorSummary.originalRawOutputRuns >= 2
+        ? {
+            priority: "P0",
+            item: "Promote the native original raw-output proof into a judged neutral smoke.",
+            reason: `Native original-package runners currently retain raw outputs for ${nativeCompetitorSummary.originalRawOutputRuns} systems (${nativeCompetitorSummary.originalSystems.join(", ")}), but all scoreable quality metrics remain blocked until the shared LLM/harness judge succeeds.`,
           }
       : {
           priority: "P0",
@@ -310,6 +333,24 @@ function summarizeRealWorldArtifact(path) {
     };
   } catch {
     return { exists: true, originalEligibleSystems: 0, originalSystemNames: [], originalRawOutputSystems: 0, originalRawOutputSystemNames: [] };
+  }
+}
+
+function summarizeNativeCompetitorArtifact(path) {
+  const absolute = join(root, path);
+  if (!existsSync(absolute)) return { exists: false, originalRawOutputRuns: 0, judgeBlockedOriginalRuns: 0, originalSystems: [] };
+  try {
+    const value = JSON.parse(readFileSync(absolute, "utf8"));
+    const systems = Array.isArray(value.systems) ? value.systems : [];
+    const originalSystems = systems.filter((system) => system?.system !== "cognibrain" && system?.system !== "keyword" && system?.evidenceClass === "same-run-command");
+    return {
+      exists: true,
+      originalRawOutputRuns: Number(value.originalRawOutputRuns ?? originalSystems.filter((system) => Number(system?.rawOutputCount ?? 0) > 0).length),
+      judgeBlockedOriginalRuns: Number(value.judgeBlockedOriginalRuns ?? originalSystems.filter((system) => system?.qualityClaimAllowed === false).length),
+      originalSystems: originalSystems.map((system) => system.displayName ?? system.system).filter(Boolean),
+    };
+  } catch {
+    return { exists: true, originalRawOutputRuns: 0, judgeBlockedOriginalRuns: 0, originalSystems: [] };
   }
 }
 

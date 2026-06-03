@@ -164,6 +164,7 @@ const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmark
 const realworldArtifacts = Array.isArray(files.realworldProtocol.currentArtifacts) ? files.realworldProtocol.currentArtifacts : [];
 const realworldEligibleArtifacts = Array.isArray(files.realworldProtocol.leaderboardEligibleArtifacts) ? files.realworldProtocol.leaderboardEligibleArtifacts : [];
 const realworldAllClassified = realworldArtifacts.length >= 6 && realworldArtifacts.every((artifact) => artifact?.path && artifact?.className && artifact.leaderboardEligible === false && Array.isArray(artifact.missingForLeaderboard));
+const realworldNativeProtocolArtifact = realworldArtifacts.find((artifact) => artifact?.path === "artifacts/realworld-native-competitors.json");
 const realworldBlackboxSystems = Array.isArray(files.realworldBlackbox.systems) ? files.realworldBlackbox.systems : [];
 const realworldBlackboxCognibrain = realworldBlackboxSystems.find((system) => system.system === "cognibrain");
 const realworldBlackboxBlocked = realworldBlackboxSystems.filter((system) => system.evidenceClass === "credential-blocked");
@@ -190,6 +191,18 @@ const realworldNativeCompetitorPath = files.internalRunner.includes("benchmark-r
   files.realworldBasicMemoryRunner.includes("Diagnostic only. Raw outputs were captured") &&
   files.realworldLangMemRunner.includes("langmem-original-package") &&
   files.realworldLangMemRunner.includes("Diagnostic only. Raw outputs were captured");
+const realworldNativeOriginalRawProof = realworldNativeProtocolArtifact?.className === "native-original-same-manifest-raw-output-proof" &&
+  realworldNativeProtocolArtifact?.leaderboardEligible === false &&
+  Array.isArray(realworldNativeProtocolArtifact?.missingForLeaderboard) &&
+  realworldNativeProtocolArtifact.missingForLeaderboard.includes("LLM/harness judge command succeeds on original raw outputs") &&
+  String(realworldNativeProtocolArtifact?.allowedUse ?? "").includes("Same-manifest original-package raw-output proof") &&
+  String(realworldNativeProtocolArtifact?.allowedUse ?? "").includes("market claims remain blocked") &&
+  files.realworldProtocol.currentArtifacts?.some?.((artifact) => artifact?.path === "artifacts/realworld-native-competitors.json") &&
+  files.realworldNativeCompetitors.originalRawOutputRuns >= 2 &&
+  files.realworldNativeCompetitors.judgeBlockedOriginalRuns >= 2 &&
+  files.realworldNativeCompetitors.marketClaimAllowed === false &&
+  files.realworldNativeCompetitors.leaderboardEligible === false &&
+  (files.realworldNativeCompetitors.systems ?? []).filter((system) => system?.evidenceClass === "same-run-command" && Number(system.rawOutputCount ?? 0) >= 15).length >= 2;
 const realworldCentralJudgeRecompute = files.realworldBlackboxSource.includes("central MEMORY_REALWORLD_JUDGE_COMMAND recomputation is required") &&
   files.realworldBlackboxSource.includes("scoreSystem(adapter, manifest, mergedSetup, external.rawOutputs") &&
   files.realworldBlackboxSource.includes("validateJudgeDecisionSemantics") &&
@@ -434,6 +447,12 @@ const checks = [
   check("realworld-native-competitor-runner", "Real-world competitor mode attaches Basic Memory and LangMem original package runners to the same manifest while keeping raw-output diagnostics claim-blocked until an LLM/harness judge succeeds.", realworldNativeCompetitorPath, "fail", {
     source: "scripts/benchmark/benchmark-realworld-native-competitors.mjs",
     runners: ["scripts/benchmark/competitors/basic_memory_realworld_runner.py", "scripts/benchmark/competitors/langmem_realworld_runner.py"]
+  }),
+  check("realworld-native-original-raw-proof", "Real-world protocol surfaces the native original-package raw-output proof as same-manifest diagnostic evidence while blocking score, market and leaderboard claims until the shared LLM/harness judge succeeds.", realworldNativeOriginalRawProof, "fail", {
+    artifact: "artifacts/realworld-native-competitors.json",
+    protocolArtifact: realworldNativeProtocolArtifact,
+    originalRawOutputRuns: files.realworldNativeCompetitors.originalRawOutputRuns ?? 0,
+    judgeBlockedOriginalRuns: files.realworldNativeCompetitors.judgeBlockedOriginalRuns ?? 0
   }),
   check("realworld-central-judge-recompute", "Real-world external commands cannot self-certify quality metrics; raw outputs must be recomputed by the central LLM/harness judge and semantically inconsistent judge decisions fail closed.", realworldCentralJudgeRecompute, "fail", {
     source: "src/eval/realworldBlackbox.ts",

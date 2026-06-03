@@ -77,7 +77,7 @@ function installPythonCompetitors() {
     return { installed: false, blockedReason: "uv is required to install isolated Python real-world competitor packages", uv: commandEntry(uv), venv: pythonVenv, install: null };
   }
 
-  const pythonCandidate = process.env.MEMORY_REALWORLD_PYTHON ?? process.env.MEMORY_ARENA_PYTHON ?? "/opt/homebrew/bin/python3.13";
+  const pythonCandidate = process.env.MEMORY_REALWORLD_PYTHON ?? process.env.MEMORY_ARENA_PYTHON ?? process.env.PYTHON ?? "python3";
   let venv = { status: 0, stdout: "already exists", stderr: "" };
   if (!existsSync(pythonBin)) {
     mkdirSync(dirname(pythonVenv), { recursive: true });

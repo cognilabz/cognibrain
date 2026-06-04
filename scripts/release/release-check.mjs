@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { runCommand } from "../benchmark/streaming-command.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
 const artifactPath = join(root, "artifacts", "release-check.json");
@@ -44,29 +44,29 @@ const results = [];
 for (const [name, command, args] of steps) {
   const startedAt = new Date();
   const timeoutMs = stepTimeouts.get(name) ?? defaultStepTimeoutMs;
-  const result = spawnSync(command, args, {
+  const result = await runCommand(command, args, {
     cwd: root,
-    encoding: "utf8",
     env: process.env,
     timeout: timeoutMs,
-    killSignal: "SIGTERM",
-    maxBuffer: 20 * 1024 * 1024
+    captureLimit: 20 * 1024 * 1024
   });
   const finishedAt = new Date();
-  const timedOut = Boolean(result.error && "code" in result.error && result.error.code === "ETIMEDOUT");
   const entry = {
     name,
     command: [command, ...args].join(" "),
     status: result.status ?? 1,
-    ok: result.status === 0 && !timedOut,
+    ok: result.status === 0 && !result.timedOut,
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     durationMs: finishedAt.getTime() - startedAt.getTime(),
     timeoutMs,
-    timedOut,
+    timedOut: result.timedOut,
+    signal: result.signal,
+    truncatedStdout: result.truncatedStdout,
+    truncatedStderr: result.truncatedStderr,
     stdoutTail: tail(result.stdout),
     stderrTail: tail(result.stderr),
-    error: result.error?.message
+    error: result.error
   };
   results.push(entry);
   writeReport(results);

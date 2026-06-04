@@ -113,8 +113,15 @@ function runCommand(command, args, extraArgs) {
     cwd: root,
     env: process.env,
     stdio: compactStdout ? ["inherit", "pipe", "pipe"] : "inherit",
+    detached: process.platform !== "win32",
     shell: process.platform === "win32"
   });
+  const forwardSignal = (signal) => {
+    terminateChildTree(child, signal);
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  };
+  process.once("SIGINT", forwardSignal);
+  process.once("SIGTERM", forwardSignal);
   if (compactStdout) {
     child.stdout?.setEncoding("utf8");
     child.stderr?.setEncoding("utf8");
@@ -123,6 +130,8 @@ function runCommand(command, args, extraArgs) {
   }
   return new Promise((resolve) => {
     child.on("close", (status) => {
+      process.off("SIGINT", forwardSignal);
+      process.off("SIGTERM", forwardSignal);
       stdout?.flush();
       stderr?.flush();
       if (status !== 0) process.exit(status ?? 1);
@@ -133,6 +142,23 @@ function runCommand(command, args, extraArgs) {
       process.exit(1);
     });
   });
+}
+
+function terminateChildTree(child, signal = "SIGTERM") {
+  if (!child.pid) return;
+  try {
+    if (process.platform !== "win32") {
+      process.kill(-child.pid, signal);
+      return;
+    }
+  } catch {
+    // Fall back to direct child signalling below.
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // Process already exited.
+  }
 }
 
 function createCompactStream(name, command, args) {

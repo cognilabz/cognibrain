@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { HEAVY_GENERATED_EXCLUDE_PATTERNS, VS_CODE_LOW_RESOURCE_SETTINGS } from "./harnessRuntime.mjs";
@@ -51,6 +52,7 @@ export function resourceFootprint({ root, runtimeRoot, launchCwd, readJson, runt
       rows
     },
     localRuntimeState: localRuntimeStateBreakdown(join(runtimeRoot, ".memory-harness.json")),
+    activeProcesses: activeNonRuntimeBenchmarkProcesses(runtimeRoot),
     vscode: vscodeResourceSettingsHealth({ launchCwd, readJson }),
     prune: {
       requested: pruneRequested,
@@ -101,6 +103,10 @@ export function formatResourceFootprint(result) {
   if (result.localRuntimeState?.present) {
     lines.push(`local state: ${formatBytes(result.localRuntimeState.bytes)}, evidence packs ${result.localRuntimeState.evidencePacks?.count ?? 0} (${formatBytes(result.localRuntimeState.evidencePacks?.bytes ?? 0)}), audit events ${result.localRuntimeState.auditEvents?.count ?? 0}`);
   }
+  lines.push(`active non-runtime benchmark processes: ${result.activeProcesses.benchmarkProcesses.length}`);
+  for (const row of result.activeProcesses.benchmarkProcesses.slice(0, 5)) {
+    lines.push(`- pid ${row.pid}: cpu ${row.cpuPercent}%, rss ${formatBytes(row.rssKb * 1024)}, ${row.command}`);
+  }
   if (result.vscode.settingsPresent) {
     lines.push(`VS Code excludes: watcher missing ${result.vscode.missingWatcherExcludes.length}, search missing ${result.vscode.missingSearchExcludes.length}`);
     lines.push(`VS Code low-resource settings: missing ${result.vscode.missingLowResourceSettings.length}`);
@@ -112,6 +118,48 @@ export function formatResourceFootprint(result) {
     lines.push(`${verb} ${result.prune.targets.length} benchmark cache directories, reclaimed ${formatBytes(result.prune.reclaimedBytes)}.`);
   }
   return lines;
+}
+
+function activeNonRuntimeBenchmarkProcesses(runtimeRoot) {
+  const rows = processRows();
+  const benchmarkProcesses = rows
+    .filter((row) => row.command.includes(runtimeRoot))
+    .filter((row) => /\b(benchmark|src\/eval|scripts\/benchmark|arena|release-check)\b/i.test(row.command))
+    .filter((row) => !/bin\/lib\/lightweightMcpServer\.mjs|dist\/api\/server\.mjs|src\/api\/server\.ts|scripts\/runtime\/start-local\.mjs/.test(row.command))
+    .map((row) => ({
+      ...row,
+      classification: "non-runtime-benchmark"
+    }));
+  return {
+    source: "ps",
+    benchmarkProcesses,
+    totalCpuPercent: round1(benchmarkProcesses.reduce((sum, row) => sum + row.cpuPercent, 0)),
+    totalRssKb: benchmarkProcesses.reduce((sum, row) => sum + row.rssKb, 0),
+    note: "These are developer verification or benchmark processes, not normal API/MCP/dashboard runtime."
+  };
+}
+
+function processRows() {
+  try {
+    const output = execFileSync("ps", ["-axo", "pid,ppid,pcpu,rss,command"], { encoding: "utf8", timeout: 2_000 });
+    return output.trim().split(/\r?\n/).slice(1).map((line) => {
+      const match = line.trim().match(/^(\d+)\s+(\d+)\s+([\d.]+)\s+(\d+)\s+(.+)$/);
+      if (!match) return undefined;
+      return {
+        pid: Number(match[1]),
+        parentPid: Number(match[2]),
+        cpuPercent: Number(match[3]),
+        rssKb: Number(match[4]),
+        command: match[5]
+      };
+    }).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function round1(value) {
+  return Math.round(value * 10) / 10;
 }
 
 function localRuntimeStateBreakdown(path) {

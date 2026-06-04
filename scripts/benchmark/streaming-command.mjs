@@ -8,18 +8,29 @@ export function runCommand(command, args = [], options = {}) {
   const started = Date.now();
   let timedOut = false;
   let errorMessage;
+  let killTimer;
+  const detached = process.platform !== "win32";
 
   const child = spawn(command, args, {
     cwd: options.cwd,
     env: options.env,
     shell: options.shell === true,
+    detached,
     stdio: ["pipe", "pipe", "pipe"]
   });
 
   const timer = setTimeout(() => {
     timedOut = true;
-    child.kill("SIGTERM");
+    terminateChildTree(child, "SIGTERM");
+    killTimer = setTimeout(() => terminateChildTree(child, "SIGKILL"), Number(options.killGraceMs ?? 2_500));
   }, timeoutMs);
+
+  const forwardSignal = (signal) => {
+    terminateChildTree(child, signal);
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  };
+  process.once("SIGINT", forwardSignal);
+  process.once("SIGTERM", forwardSignal);
 
   child.stdout?.setEncoding("utf8");
   child.stderr?.setEncoding("utf8");
@@ -39,6 +50,9 @@ export function runCommand(command, args = [], options = {}) {
   return new Promise((resolve) => {
     child.on("close", (status, signal) => {
       clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
+      process.off("SIGINT", forwardSignal);
+      process.off("SIGTERM", forwardSignal);
       resolve({
         ok: status === 0,
         status,
@@ -53,6 +67,23 @@ export function runCommand(command, args = [], options = {}) {
       });
     });
   });
+}
+
+export function terminateChildTree(child, signal = "SIGTERM") {
+  if (!child.pid) return;
+  try {
+    if (process.platform !== "win32") {
+      process.kill(-child.pid, signal);
+      return;
+    }
+  } catch {
+    // Fall back to direct child signalling below.
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // Process already exited.
+  }
 }
 
 export function commandEntry(result) {

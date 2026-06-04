@@ -56,6 +56,13 @@ describe("cognibrain CLI", () => {
 
       const before = JSON.parse(execFileSync(process.execPath, [cli, "--runtime-root", dir, "resources", "--json"], { cwd: dir, env, encoding: "utf8" }));
       expect(before.generated.benchmarkCacheBytes).toBeGreaterThan(0);
+      expect(before.activeProcesses).toMatchObject({
+        source: "ps",
+        totalCpuPercent: expect.any(Number),
+        totalRssKb: expect.any(Number),
+        note: expect.stringContaining("not normal API/MCP/dashboard runtime")
+      });
+      expect(Array.isArray(before.activeProcesses.benchmarkProcesses)).toBe(true);
       expect(before.generated.rows).toEqual(expect.arrayContaining([expect.objectContaining({ name: "user-cache/native-runners", exists: true })]));
       expect(before.localRuntimeState).toMatchObject({ present: true, parseable: true });
       expect(before.prune.requested).toBe(false);

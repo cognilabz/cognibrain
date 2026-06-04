@@ -201,8 +201,21 @@ const streamingBenchmarkOrchestrators = [
   files.streamingCommandHelper.includes("createTailBuffer") &&
   files.streamingCommandHelper.includes("captureLimit") &&
   files.streamingCommandHelper.includes("truncatedStdout") &&
+  files.streamingCommandHelper.includes("terminateChildTree") &&
+  files.streamingCommandHelper.includes("process.kill(-child.pid") &&
+  files.releaseCheck.includes("import { runCommand } from \"../benchmark/streaming-command.mjs\"") &&
+  files.releaseCheck.includes("timedOut: result.timedOut") &&
+  files.internalRunner.includes("terminateChildTree") &&
+  files.internalRunner.includes("process.kill(-child.pid") &&
   !files.streamingCommandHelper.includes("spawnSync") &&
-  !files.streamingCommandHelper.includes("maxBuffer");
+  !files.streamingCommandHelper.includes("maxBuffer") &&
+  !files.releaseCheck.includes("spawnSync");
+const runtimeBenchmarkProcessSeparation = files.cli.includes("activeNonRuntimeBenchmarkProcesses") &&
+  files.cli.includes("classification: \"non-runtime-benchmark\"") &&
+  files.cli.includes("not normal API/MCP/dashboard runtime") &&
+  files.cli.includes("active non-runtime benchmark processes") &&
+  files.cliTests.includes("before.activeProcesses") &&
+  files.cliTests.includes("not normal API/MCP/dashboard runtime");
 const streamingCompetitorWrappers = [
   files.arenaMem0Runner,
   files.arenaGbrainRunner,
@@ -794,7 +807,7 @@ const checks = [
     removed: ["animated terminal UI dependency", "src/cli/inkApp.mjs", "generated CLI screenshots"],
     structuredMemoryAdd: "src/cli/memctl/memoryCommands.ts"
   }),
-  check("runtime-resource-footprint", "MCP, lifecycle and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers and TypeScript language-server scans, status exposes API/dashboard RSS and CPU, heavyweight benchmark CLIs keep stdout compact by default, native/original benchmark orchestrators, Arena parent runners/judges and competitor wrappers stream command output instead of buffering large child output, Dream/Reflection reuses bounded active-memory snapshots, AutoDream due checks avoid full-store scans, and reinstallable benchmark caches have a measured prune path.", files.cli.includes("lightweightMcpServer.mjs") && vscodeHeavyGeneratedExcludes && vscodeLowResourceSettings && compactBenchmarkStdout && streamingBenchmarkOrchestrators && streamingCompetitorWrappers && streamingArenaParentCommands && reflectionSinglePassSnapshots && autoDreamMaintenanceIndexed && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cli.includes("function resourcesCommand") && files.cli.includes("WORKSPACE_BENCHMARK_CACHE_TARGETS") && files.cli.includes("user-cache/native-runners") && files.cli.includes("--prune-benchmark-caches") && files.benchmarkCacheRoot.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.benchmarkCacheRoot.includes("Library\", \"Caches\", \"cognibrain") && files.cli.includes("runtime: \"built-node\"") && files.cli.includes("runtime: \"source-node-import-tsx\"") && files.cli.includes("processModel: \"single-process\"") && files.cli.includes("runtime: \"source-tsx-cli\"") && files.cli.includes("COGNIBRAIN_API_RUNTIME") && files.cli.includes("dist/api/server.mjs") && files.cli.includes("entryPoints: [resolve(root, \"src\", \"api\", \"server.ts\")]") && files.packageJson.scripts?.["build:api"] === "node scripts/runtime/build-api.mjs" && files.packageJson.scripts?.build?.includes("npm run build:api") && packageFiles.has("dist/api/") && files.cliTests.includes("status.runtime.api.resources.rssMb") && files.cliTests.includes("status.runtime.api.runtime") && files.cliTests.includes("prunes reinstallable benchmark caches") && files.cliTests.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.cliTests.includes("user-cache/native-runners"), "fail", {
+  check("runtime-resource-footprint", "MCP, lifecycle and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers and TypeScript language-server scans, status exposes API/dashboard RSS and CPU, heavyweight benchmark CLIs keep stdout compact by default, native/original benchmark orchestrators, Arena parent runners/judges and competitor wrappers stream command output instead of buffering large child output, benchmark/release process trees are terminated on timeout or parent signal, resources separates active non-runtime benchmark processes from normal API/MCP/dashboard runtime, Dream/Reflection reuses bounded active-memory snapshots, AutoDream due checks avoid full-store scans, and reinstallable benchmark caches have a measured prune path.", files.cli.includes("lightweightMcpServer.mjs") && vscodeHeavyGeneratedExcludes && vscodeLowResourceSettings && compactBenchmarkStdout && streamingBenchmarkOrchestrators && streamingCompetitorWrappers && streamingArenaParentCommands && runtimeBenchmarkProcessSeparation && reflectionSinglePassSnapshots && autoDreamMaintenanceIndexed && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cli.includes("function resourcesCommand") && files.cli.includes("WORKSPACE_BENCHMARK_CACHE_TARGETS") && files.cli.includes("user-cache/native-runners") && files.cli.includes("--prune-benchmark-caches") && files.benchmarkCacheRoot.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.benchmarkCacheRoot.includes("Library\", \"Caches\", \"cognibrain") && files.cli.includes("runtime: \"built-node\"") && files.cli.includes("runtime: \"source-node-import-tsx\"") && files.cli.includes("processModel: \"single-process\"") && files.cli.includes("runtime: \"source-tsx-cli\"") && files.cli.includes("COGNIBRAIN_API_RUNTIME") && files.cli.includes("dist/api/server.mjs") && files.cli.includes("entryPoints: [resolve(root, \"src\", \"api\", \"server.ts\")]") && files.packageJson.scripts?.["build:api"] === "node scripts/runtime/build-api.mjs" && files.packageJson.scripts?.build?.includes("npm run build:api") && packageFiles.has("dist/api/") && files.cliTests.includes("status.runtime.api.resources.rssMb") && files.cliTests.includes("status.runtime.api.runtime") && files.cliTests.includes("prunes reinstallable benchmark caches") && files.cliTests.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.cliTests.includes("user-cache/native-runners"), "fail", {
     code: ["bin/lib/cliRuntime.mjs", "bin/lib/harnessRuntime.mjs", "bin/lib/lightweightMcpServer.mjs"],
     checks: [
       "default MCP uses lightweight JS daemon proxy",
@@ -808,6 +821,8 @@ const checks = [
       "VSCode TypeScript server avoids generated runtime and benchmark directories",
       "heavyweight benchmark CLIs emit compact stdout summaries while preserving full JSON artifacts",
       "native/original benchmark orchestrators keep only bounded stdout/stderr tails for child command reports",
+      "benchmark/release process trees are killed on timeout or parent signal so verification children cannot linger as runtime-looking CPU load",
+      "resources CLI reports active non-runtime benchmark processes separately from normal API/MCP/dashboard runtime",
       "Arena parent runner and LLM/harness judge commands keep only bounded stdout/stderr tails and fail closed on truncated trusted JSON",
       "competitor runner wrappers stream package/CLI/Python child output and fail closed on truncated native JSON",
       "Dream/Reflection reuses active-memory snapshots and has a bounded store-list regression test",
@@ -820,6 +835,7 @@ const checks = [
     streamingBenchmarkOrchestrators,
     streamingCompetitorWrappers,
     streamingArenaParentCommands,
+    runtimeBenchmarkProcessSeparation,
     reflectionSinglePassSnapshots,
     autoDreamMaintenanceIndexed
   }),

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const input = JSON.parse(await readStdin() || "{}");
-const apiKey = process.env.MEMORY_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
-if (!apiKey) fail("MEMORY_OPENAI_API_KEY or OPENAI_API_KEY is required");
+const apiKey = process.env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_OPENAI_API_KEY ?? process.env.MEMORY_OPERATOR_MEMORY_JUDGE_OPENAI_API_KEY;
+if (!apiKey) fail("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_OPENAI_API_KEY or MEMORY_OPERATOR_MEMORY_JUDGE_OPENAI_API_KEY is required for the explicit Operator Memory quality benchmark harness");
 
 const baseUrl = (process.env.MEMORY_OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "");
 const model = process.env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_MODEL

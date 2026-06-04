@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 const task = process.argv[2] || "unknown";
 const input = JSON.parse(await readStdin() || "{}");
-const apiKey = process.env.MEMORY_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
-if (!apiKey) fail("MEMORY_OPENAI_API_KEY or OPENAI_API_KEY is required");
+const apiKey = process.env.MEMORY_INTELLIGENCE_OPENAI_API_KEY;
+if (!apiKey) fail("MEMORY_INTELLIGENCE_OPENAI_API_KEY is required for the explicit memory-intelligence harness command");
 
 const baseUrl = (process.env.MEMORY_OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "");
 const model = process.env.MEMORY_INTELLIGENCE_MODEL ?? process.env.MEMORY_REALWORLD_JUDGE_MODEL ?? "gpt-4.1-mini";

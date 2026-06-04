@@ -613,7 +613,10 @@ describe("self verification benchmark loop", () => {
         autoActivationAllowed: false,
         keyEnvPresent: false,
         keyEnvIgnoredForActivation: true,
-        judgeScript: "scripts/benchmark/realworld-openai-judge.mjs"
+        keyEnvNames: ["MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY"],
+        ignoredGenericKeyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
+        judgeScript: "scripts/benchmark/realworld-openai-judge.mjs",
+        keyEnv: "MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY"
       });
       expect(report.judgeReadiness.blockedReason).toContain("No MEMORY_REALWORLD_JUDGE_COMMAND");
       expect(report.judgeReadiness.nextAction).toContain("Set MEMORY_REALWORLD_JUDGE_COMMAND");
@@ -700,9 +703,11 @@ describe("self verification benchmark loop", () => {
       expect(report.judgeReadiness.readyForThisRun).toBe(false);
       expect(report.judgeReadiness.openAiCompatibleHarnessJudge).toMatchObject({
         autoActivationAllowed: false,
-        keyEnvPresent: true,
+        keyEnvPresent: false,
+        genericKeyEnvPresent: true,
         keyEnvIgnoredForActivation: true,
-        keyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
+        keyEnvNames: ["MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY"],
+        ignoredGenericKeyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
         configuredBy: "MEMORY_REALWORLD_JUDGE_COMMAND"
       });
       expect(report.judgeReadiness.blockedReason).toContain("Generic OpenAI key env vars are ignored");
@@ -721,6 +726,21 @@ describe("self verification benchmark loop", () => {
     }
   });
 
+  it("does not let generic OpenAI key env vars satisfy the RealWorld OpenAI judge harness secret", async () => {
+    const env: NodeJS.ProcessEnv = { ...process.env, MEMORY_OPENAI_API_KEY: "generic-key-must-not-count" };
+    delete env.OPENAI_API_KEY;
+    delete env.MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY;
+    const result = await runNodeScript(["scripts/benchmark/realworld-openai-judge.mjs"], {
+      cwd: process.cwd(),
+      input: JSON.stringify({ manifest: { queries: [], events: [] }, rawOutputs: [] }),
+      timeout: 10_000,
+      env
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY is required");
+    expect(result.stderr).not.toContain("generic-key-must-not-count");
+  });
+
   it("does not auto-configure benchmark judges from generic OpenAI key env vars", () => {
     const arenaNative = readFileSync("scripts/benchmark/benchmark-native-competitors.mjs", "utf8");
     const operatorNative = readFileSync("scripts/benchmark/operator-memory-native-competitors.mjs", "utf8");
@@ -733,9 +753,11 @@ describe("self verification benchmark loop", () => {
     expect(sources).not.toContain("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND =");
     expect(sources).not.toContain("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND =");
     expect(realworldNative).toContain("openAiCompatibleJudgeScript");
+    expect(realworldNative).toContain("MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY");
     expect(realworldNative).toContain("keyEnvIgnoredForActivation: true");
     expect(realworldNative).toContain("autoActivationAllowed: false");
     expect(operatorNative).toContain("openAiCompatibleHarnessJudges");
+    expect(operatorNative).toContain("MEMORY_OPERATOR_MEMORY_JUDGE_OPENAI_API_KEY");
     expect(operatorNative).toContain("autoActivationAllowed: false");
   });
 
@@ -1267,7 +1289,7 @@ process.stdin.on("end", () => {
         timeout: 10_000,
         env: {
           ...process.env,
-          MEMORY_OPENAI_API_KEY: "fixture-key",
+          MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY: "fixture-key",
           MEMORY_OPENAI_BASE_URL: `http://127.0.0.1:${address.port}`
         }
       });
@@ -1322,7 +1344,7 @@ process.stdin.on("end", () => {
         timeout: 10_000,
         env: {
           ...process.env,
-          MEMORY_OPENAI_API_KEY: "fixture-key",
+          MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY: "fixture-key",
           MEMORY_OPENAI_BASE_URL: `http://127.0.0.1:${address.port}`,
           MEMORY_REALWORLD_JUDGE_MODEL: "gpt-4.1-mini"
         }

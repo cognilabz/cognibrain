@@ -138,7 +138,10 @@ function writeReport(details) {
       scenarioJudgeCommandConfigured: Boolean(env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND),
       qualityJudgeCommandConfigured: Boolean(env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND),
       openAiCompatibleHarnessJudges: {
-        keyEnvPresent: Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY),
+        keyEnvPresent: Boolean(process.env.MEMORY_OPERATOR_MEMORY_JUDGE_OPENAI_API_KEY || process.env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_OPENAI_API_KEY),
+        genericKeyEnvPresent: Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY),
+        keyEnvNames: ["MEMORY_OPERATOR_MEMORY_JUDGE_OPENAI_API_KEY", "MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_OPENAI_API_KEY"],
+        ignoredGenericKeyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
         keyEnvIgnoredForActivation: true,
         autoActivationAllowed: false,
         scenarioJudgeScript: "scripts/benchmark/operator-memory-openai-judge.mjs",

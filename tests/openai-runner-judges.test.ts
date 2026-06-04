@@ -108,7 +108,7 @@ describe("OpenAI-compatible runner judges", () => {
         cwd: process.cwd(),
         input: JSON.stringify({ system: "mem0-native", scenario: { id: "source-update" }, runnerOutput: { evidence: { text: "current source-backed evidence" } } }),
         timeout: 10_000,
-        env: { ...process.env, MEMORY_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, MEMORY_OPERATOR_MEMORY_JUDGE_MODEL: "gpt-4.1-mini" }
+        env: { ...process.env, MEMORY_OPERATOR_MEMORY_JUDGE_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, MEMORY_OPERATOR_MEMORY_JUDGE_MODEL: "gpt-4.1-mini" }
       });
       expect(result.status).toBe(0);
       expect(observed.authorization).toBe("Bearer fixture-key");
@@ -193,7 +193,7 @@ describe("OpenAI-compatible runner judges", () => {
           }]
         }),
         timeout: 10_000,
-        env: { ...process.env, MEMORY_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" }
+        env: { ...process.env, MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" }
       });
       expect(result.status).toBe(0);
       expect(observed.authorization).toBe("Bearer fixture-key");
@@ -288,7 +288,7 @@ describe("OpenAI-compatible runner judges", () => {
           }]
         }),
         timeout: 10_000,
-        env: { ...process.env, MEMORY_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, MEMORY_COGNICODEBENCH_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" }
+        env: { ...process.env, MEMORY_COGNICODEBENCH_QUALITY_JUDGE_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, MEMORY_COGNICODEBENCH_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" }
       });
       expect(result.status).toBe(0);
       expect(observed.authorization).toBe("Bearer fixture-key");
@@ -357,7 +357,7 @@ describe("OpenAI-compatible runner judges", () => {
         cwd: process.cwd(),
         input: JSON.stringify({ system: "mem0", scenario: { id: "cognicode-001" }, runnerOutput: { evidence: { text: "raw runner evidence" } } }),
         timeout: 10_000,
-        env: { ...process.env, MEMORY_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, MEMORY_ARENA_JUDGE_MODEL: "gpt-4.1-mini" }
+        env: { ...process.env, MEMORY_ARENA_JUDGE_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, MEMORY_ARENA_JUDGE_MODEL: "gpt-4.1-mini" }
       });
       expect(result.status).toBe(0);
       expect(observed.authorization).toBe("Bearer fixture-key");
@@ -382,7 +382,7 @@ describe("OpenAI-compatible runner judges", () => {
     const cases = [
       {
         script: "scripts/benchmark/arena-openai-judge.mjs",
-        env: { MEMORY_ARENA_JUDGE_MODEL: "gpt-4.1-mini" },
+        env: { MEMORY_ARENA_JUDGE_OPENAI_API_KEY: "fixture-key", MEMORY_ARENA_JUDGE_MODEL: "gpt-4.1-mini" },
         input: { system: "mem0", scenario: { id: "cognicode-001" }, runnerOutput: { evidence: { text: "raw runner evidence" } } },
         content: {
           checks: {
@@ -400,7 +400,7 @@ describe("OpenAI-compatible runner judges", () => {
       },
       {
         script: "scripts/benchmark/operator-memory-openai-judge.mjs",
-        env: { MEMORY_OPERATOR_MEMORY_JUDGE_MODEL: "gpt-4.1-mini" },
+        env: { MEMORY_OPERATOR_MEMORY_JUDGE_OPENAI_API_KEY: "fixture-key", MEMORY_OPERATOR_MEMORY_JUDGE_MODEL: "gpt-4.1-mini" },
         input: { system: "mem0-native", scenario: { id: "source-update" }, runnerOutput: { evidence: { text: "current source-backed evidence" } } },
         content: {
           checks: {
@@ -418,7 +418,7 @@ describe("OpenAI-compatible runner judges", () => {
       },
       {
         script: "scripts/benchmark/operator-memory-quality-openai-judge.mjs",
-        env: { MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" },
+        env: { MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_OPENAI_API_KEY: "fixture-key", MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" },
         input: {
           contract: "cognibrain-operator-memory-quality-llm-harness-judge-v1",
           scenarioCount: 1,
@@ -436,7 +436,7 @@ describe("OpenAI-compatible runner judges", () => {
       },
       {
         script: "scripts/benchmark/cognicodebench-quality-openai-judge.mjs",
-        env: { MEMORY_COGNICODEBENCH_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" },
+        env: { MEMORY_COGNICODEBENCH_QUALITY_JUDGE_OPENAI_API_KEY: "fixture-key", MEMORY_COGNICODEBENCH_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" },
         input: {
           contract: "cognibrain-cognicodebench-quality-llm-harness-judge-v1",
           scenarioCount: 1,
@@ -472,13 +472,78 @@ describe("OpenAI-compatible runner judges", () => {
           cwd: process.cwd(),
           input: JSON.stringify(item.input),
           timeout: 10_000,
-          env: { ...process.env, MEMORY_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, ...item.env }
+          env: { ...process.env, MEMORY_OPENAI_BASE_URL: baseUrl, ...item.env }
         });
         expect(result.status).toBe(1);
         expect(result.stderr).toContain(item.stderr);
       } finally {
         await close(server);
       }
+    }
+  });
+
+  it("does not let generic OpenAI key env vars satisfy runner judge harness secrets", async () => {
+    const cases = [
+      {
+        script: "scripts/benchmark/arena-openai-judge.mjs",
+        missingKey: "MEMORY_ARENA_JUDGE_OPENAI_API_KEY",
+        input: { system: "mem0", scenario: { id: "cognicode-001" }, runnerOutput: { evidence: { text: "raw runner evidence" } } }
+      },
+      {
+        script: "scripts/benchmark/operator-memory-openai-judge.mjs",
+        missingKey: "MEMORY_OPERATOR_MEMORY_JUDGE_OPENAI_API_KEY",
+        input: { system: "mem0-native", scenario: { id: "source-update" }, runnerOutput: { evidence: { text: "current source-backed evidence" } } }
+      },
+      {
+        script: "scripts/benchmark/operator-memory-quality-openai-judge.mjs",
+        missingKey: "MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_OPENAI_API_KEY",
+        input: {
+          contract: "cognibrain-operator-memory-quality-llm-harness-judge-v1",
+          scenarioCount: 1,
+          cognibrainScore: 1,
+          bestBaselineScore: 0.4,
+          leaderboard: [],
+          systems: []
+        }
+      },
+      {
+        script: "scripts/benchmark/cognicodebench-quality-openai-judge.mjs",
+        missingKey: "MEMORY_COGNICODEBENCH_QUALITY_JUDGE_OPENAI_API_KEY",
+        input: {
+          contract: "cognibrain-cognicodebench-quality-llm-harness-judge-v1",
+          scenarioCount: 1,
+          metrics: {},
+          diagnostics: {},
+          baselines: [],
+          ablation: {},
+          scenarios: [],
+          results: []
+        }
+      }
+    ];
+
+    for (const item of cases) {
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        MEMORY_OPENAI_API_KEY: "generic-memory-key-must-not-count",
+        OPENAI_API_KEY: "generic-openai-key-must-not-count"
+      };
+      delete env.MEMORY_ARENA_JUDGE_OPENAI_API_KEY;
+      delete env.MEMORY_OPERATOR_MEMORY_JUDGE_OPENAI_API_KEY;
+      delete env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_OPENAI_API_KEY;
+      delete env.MEMORY_COGNICODEBENCH_JUDGE_OPENAI_API_KEY;
+      delete env.MEMORY_COGNICODEBENCH_QUALITY_JUDGE_OPENAI_API_KEY;
+
+      const result = await runNodeScript([join(process.cwd(), item.script)], {
+        cwd: process.cwd(),
+        input: JSON.stringify(item.input),
+        timeout: 10_000,
+        env
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain(item.missingKey);
+      expect(result.stderr).not.toContain("generic-memory-key-must-not-count");
+      expect(result.stderr).not.toContain("generic-openai-key-must-not-count");
     }
   });
 });

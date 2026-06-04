@@ -154,11 +154,14 @@ interface RealWorldReport {
     openAiCompatibleHarnessJudge: {
       autoActivationAllowed: false;
       keyEnvPresent: boolean;
+      genericKeyEnvPresent: boolean;
       keyEnvIgnoredForActivation: true;
-      keyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"];
+      keyEnvNames: ["MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY"];
+      ignoredGenericKeyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"];
       judgeScript: "scripts/benchmark/realworld-openai-judge.mjs";
       configuredBy: "MEMORY_REALWORLD_JUDGE_COMMAND";
       kindEnv: "MEMORY_REALWORLD_JUDGE_KIND";
+      keyEnv: "MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY";
       timeoutEnv: "MEMORY_REALWORLD_JUDGE_TIMEOUT_MS";
     };
     blockedReason: string | null;
@@ -414,7 +417,8 @@ function createRealWorldEvidenceIntelligence(): MemoryServiceOptions["intelligen
 
 function buildJudgeReadiness(judge?: RealWorldJudge): RealWorldReport["judgeReadiness"] {
   const configuredJudgeCommand = Boolean(process.env.MEMORY_REALWORLD_JUDGE_COMMAND);
-  const keyEnvPresent = Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
+  const keyEnvPresent = Boolean(process.env.MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY);
+  const genericKeyEnvPresent = Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
   const readyForThisRun = Boolean(judge);
   return {
     readyForThisRun,
@@ -424,11 +428,14 @@ function buildJudgeReadiness(judge?: RealWorldJudge): RealWorldReport["judgeRead
     openAiCompatibleHarnessJudge: {
       autoActivationAllowed: false,
       keyEnvPresent,
+      genericKeyEnvPresent,
       keyEnvIgnoredForActivation: true,
-      keyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
+      keyEnvNames: ["MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY"],
+      ignoredGenericKeyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
       judgeScript: "scripts/benchmark/realworld-openai-judge.mjs",
       configuredBy: "MEMORY_REALWORLD_JUDGE_COMMAND",
       kindEnv: "MEMORY_REALWORLD_JUDGE_KIND",
+      keyEnv: "MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY",
       timeoutEnv: "MEMORY_REALWORLD_JUDGE_TIMEOUT_MS"
     },
     blockedReason: readyForThisRun
@@ -1916,6 +1923,7 @@ function writeMarkdown(path: string, report: RealWorldReport): void {
     `| Active kind | \`${report.judgeReadiness.activeKind}\` |`,
     `| Configured command env | \`${report.judgeReadiness.configuredCommandEnv}\` = ${report.judgeReadiness.configuredJudgeCommand ? "present" : "missing"} |`,
     `| OpenAI-compatible judge script | \`${report.judgeReadiness.openAiCompatibleHarnessJudge.judgeScript}\` |`,
+    `| OpenAI-compatible judge key env | \`${report.judgeReadiness.openAiCompatibleHarnessJudge.keyEnv}\` |`,
     `| Generic OpenAI key env ignored for activation | ${report.judgeReadiness.openAiCompatibleHarnessJudge.keyEnvIgnoredForActivation ? "yes" : "no"} |`,
     `| Runtime isolation | \`${report.judgeReadiness.runtimeIsolation}\` |`,
     `| Blocked reason | ${report.judgeReadiness.blockedReason ?? "none"} |`,

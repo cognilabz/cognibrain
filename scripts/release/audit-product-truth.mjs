@@ -54,6 +54,7 @@ const files = {
   hardArenaBenchmark: read("scripts/benchmark/benchmark-hard-arena.mjs"),
   streamingCommandHelper: read("scripts/benchmark/streaming-command.mjs"),
   realworldOpenAiJudge: read("scripts/benchmark/realworld-openai-judge.mjs"),
+  openAiMemoryIntelligence: read("scripts/benchmark/openai-memory-intelligence.mjs"),
   realworldBasicMemoryRunner: read("scripts/benchmark/competitors/basic_memory_realworld_runner.py"),
   realworldLangMemRunner: read("scripts/benchmark/competitors/langmem_realworld_runner.py"),
   benchmarkCacheRoot: read("scripts/benchmark/cache-root.mjs"),
@@ -350,19 +351,40 @@ const realworldJudgeReadinessProof = realworldJudgeReadiness.configuredCommandEn
   realworldJudgeReadiness.openAiCompatibleHarnessJudge?.autoActivationAllowed === false &&
   realworldJudgeReadiness.openAiCompatibleHarnessJudge?.keyEnvIgnoredForActivation === true &&
   Array.isArray(realworldJudgeReadiness.openAiCompatibleHarnessJudge?.keyEnvNames) &&
-  realworldJudgeReadiness.openAiCompatibleHarnessJudge.keyEnvNames.includes("MEMORY_OPENAI_API_KEY") &&
-  realworldJudgeReadiness.openAiCompatibleHarnessJudge.keyEnvNames.includes("OPENAI_API_KEY") &&
+  realworldJudgeReadiness.openAiCompatibleHarnessJudge.keyEnvNames.includes("MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY") &&
+  Array.isArray(realworldJudgeReadiness.openAiCompatibleHarnessJudge?.ignoredGenericKeyEnvNames) &&
+  realworldJudgeReadiness.openAiCompatibleHarnessJudge.ignoredGenericKeyEnvNames.includes("MEMORY_OPENAI_API_KEY") &&
+  realworldJudgeReadiness.openAiCompatibleHarnessJudge.ignoredGenericKeyEnvNames.includes("OPENAI_API_KEY") &&
   files.realworldBlackboxSource.includes("function buildJudgeReadiness") &&
   files.realworldBlackboxSource.includes("Only boolean env presence and static env names are reported") &&
   files.realworldBlackboxSource.includes("key presence never configures judge commands") &&
   files.realworldBlackboxSource.includes("Runtime isolation") &&
   files.evaluationTests.includes("reports secret-free OpenAI-compatible judge readiness while ignoring generic key env activation") &&
   files.evaluationTests.includes("test-secret-not-serialized");
+const benchmarkHarnessScopedOpenAiSecrets = files.realworldOpenAiJudge.includes("MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY") &&
+  !files.realworldOpenAiJudge.includes("process.env.MEMORY_OPENAI_API_KEY") &&
+  !files.realworldOpenAiJudge.includes("process.env.OPENAI_API_KEY") &&
+  files.arenaOpenAiJudge.includes("MEMORY_ARENA_JUDGE_OPENAI_API_KEY") &&
+  !files.arenaOpenAiJudge.includes("process.env.MEMORY_OPENAI_API_KEY") &&
+  !files.arenaOpenAiJudge.includes("process.env.OPENAI_API_KEY") &&
+  files.operatorMemoryOpenAiJudge.includes("MEMORY_OPERATOR_MEMORY_JUDGE_OPENAI_API_KEY") &&
+  !files.operatorMemoryOpenAiJudge.includes("process.env.MEMORY_OPENAI_API_KEY") &&
+  !files.operatorMemoryOpenAiJudge.includes("process.env.OPENAI_API_KEY") &&
+  files.operatorMemoryQualityOpenAiJudge.includes("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_OPENAI_API_KEY") &&
+  !files.operatorMemoryQualityOpenAiJudge.includes("process.env.MEMORY_OPENAI_API_KEY") &&
+  !files.operatorMemoryQualityOpenAiJudge.includes("process.env.OPENAI_API_KEY") &&
+  files.cognicodeQualityOpenAiJudge.includes("MEMORY_COGNICODEBENCH_QUALITY_JUDGE_OPENAI_API_KEY") &&
+  !files.cognicodeQualityOpenAiJudge.includes("process.env.MEMORY_OPENAI_API_KEY") &&
+  !files.cognicodeQualityOpenAiJudge.includes("process.env.OPENAI_API_KEY") &&
+  files.openAiMemoryIntelligence.includes("MEMORY_INTELLIGENCE_OPENAI_API_KEY") &&
+  !files.openAiMemoryIntelligence.includes("process.env.MEMORY_OPENAI_API_KEY") &&
+  !files.openAiMemoryIntelligence.includes("process.env.OPENAI_API_KEY") &&
+  files.evaluationTests.includes("does not let generic OpenAI key env vars satisfy the RealWorld OpenAI judge harness secret");
 const realworldEvidenceHarnessIsolation = files.realworldBlackboxSource.includes("MEMORY_REALWORLD_EVIDENCE_COMMAND") &&
   files.realworldBlackboxSource.includes("createRealWorldEvidenceIntelligence") &&
   !files.realworldBlackboxSource.includes("process.env.MEMORY_INTELLIGENCE_COMMAND") &&
   files.evaluationTests.includes("MEMORY_REALWORLD_EVIDENCE_COMMAND");
-const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && files.realworldBlackbox.eligibilityGate?.resourceTelemetryRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked && realworldJudgeReadinessProof && realworldEvidenceHarnessIsolation;
+const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && files.realworldBlackbox.eligibilityGate?.resourceTelemetryRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked && realworldJudgeReadinessProof && benchmarkHarnessScopedOpenAiSecrets && realworldEvidenceHarnessIsolation;
 const realworldBlackboxMarketGateStrict = files.realworldBlackboxSource.includes("cognibrainComparativeSmokeEligible") &&
   files.realworldBlackboxSource.includes("leaderboardEligibleSystems: []") &&
   files.realworldBlackboxSource.includes("originalCompetitorEligibleSystems.length >= 2") &&

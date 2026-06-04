@@ -138,7 +138,10 @@ function writeReport(details) {
       judgeCommandConfigured: Boolean(env.MEMORY_REALWORLD_JUDGE_COMMAND),
       configuredBy: "MEMORY_REALWORLD_JUDGE_COMMAND",
       openAiCompatibleJudgeScript: "scripts/benchmark/realworld-openai-judge.mjs",
-      keyEnvPresent: Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY),
+      keyEnv: "MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY",
+      keyEnvPresent: Boolean(process.env.MEMORY_REALWORLD_JUDGE_OPENAI_API_KEY),
+      genericKeyEnvPresent: Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY),
+      ignoredGenericKeyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
       keyEnvIgnoredForActivation: true,
       autoActivationAllowed: false,
       runtimeIsolation: "benchmark-only"

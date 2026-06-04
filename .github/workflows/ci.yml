@@ -29,18 +29,40 @@ jobs:
         run: |
           PACKAGE_NAME="$(node -p "require('./package.json').name")"
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          LATEST_TAG="$(npm dist-tag ls "$PACKAGE_NAME" --registry=https://registry.npmjs.org/ | awk '/^latest: / { print $2 }')"
-
-          if [ "$LATEST_TAG" = "$PACKAGE_VERSION" ]; then
-            echo "$PACKAGE_NAME@$PACKAGE_VERSION is already tagged latest on npm; skipping publish."
-            exit 0
-          fi
+          NPM_LATEST="$(npm dist-tag ls "$PACKAGE_NAME" --registry=https://registry.npmjs.org/ | awk '/^latest: / { print $2 }')"
+          export PACKAGE_VERSION NPM_LATEST
 
           if [ -z "$NODE_AUTH_TOKEN" ]; then
             echo "NPM_TOKEN secret is required to publish $PACKAGE_NAME@$PACKAGE_VERSION." >&2
             exit 1
           fi
 
+          NEXT_VERSION="$(node -e '
+            const current = process.env.PACKAGE_VERSION;
+            const latest = process.env.NPM_LATEST || "0.0.0";
+            const parse = (value) => String(value || "0.0.0").split(/[+-]/)[0].split(".").map((part) => Number(part));
+            const compare = (a, b) => {
+              for (let i = 0; i < 3; i += 1) {
+                const delta = (a[i] || 0) - (b[i] || 0);
+                if (delta !== 0) return delta;
+              }
+              return 0;
+            };
+            const currentParts = parse(current);
+            const latestParts = parse(latest);
+            if (compare(currentParts, latestParts) > 0) {
+              console.log(current);
+            } else {
+              latestParts[2] = (latestParts[2] || 0) + 1;
+              console.log(latestParts.slice(0, 3).join("."));
+            }
+          ')"
+
+          if [ "$NEXT_VERSION" != "$PACKAGE_VERSION" ]; then
+            npm version "$NEXT_VERSION" --no-git-tag-version
+          fi
+
+          echo "Publishing $PACKAGE_NAME@$NEXT_VERSION to npm."
           npm publish --access public
       - uses: actions/upload-artifact@v4
         if: always()

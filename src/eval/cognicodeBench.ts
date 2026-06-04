@@ -1175,6 +1175,28 @@ function writeJson(path: string, value: unknown): void {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+function printCliReport(report: Record<string, any>, outputPath: string | undefined, argv: string[]): void {
+  if (argv.includes("--json-stdout") || process.env.MEMORY_FULL_BENCHMARK_STDOUT === "true" || !outputPath) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+  console.log(JSON.stringify({
+    benchmark: report.benchmark ?? "CogniCodeBench",
+    passed: report.passed,
+    diagnosticPassed: report.diagnosticPassed,
+    scenarioCount: report.scenarioCount ?? report.scenarioFactory?.requestedScenarios,
+    score: report.metrics ? average(Object.values(report.metrics).filter((value): value is number => typeof value === "number")) : undefined,
+    claimBoundary: {
+      proof: report.claimBoundary?.proof,
+      scorer: report.claimBoundary?.scorer,
+      qualityClaimAllowed: report.claimBoundary?.qualityClaimAllowed,
+      marketClaimAllowed: report.claimBoundary?.marketClaimAllowed,
+      claimBlockers: report.claimBoundary?.claimBlockers
+    },
+    outputPath
+  }, null, 2));
+}
+
 function average(values: number[]): number {
   return values.length ? round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
 }
@@ -1211,5 +1233,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const options = parseCli();
   const report = runCogniCodeBench(options);
   if (options.generateOnly && options.scenariosPath && !existsSync(options.scenariosPath)) throw new Error("Scenario generation failed.");
-  console.log(JSON.stringify(report, null, 2));
+  printCliReport(report, options.outputPath, process.argv.slice(2));
 }

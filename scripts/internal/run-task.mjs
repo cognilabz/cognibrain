@@ -4,6 +4,8 @@ import { nativeRunnerRoot } from "../benchmark/cache-root.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
 const [taskName, ...passthrough] = process.argv.slice(2);
+const compactStdout = process.env.MEMORY_INTERNAL_COMPACT_STDOUT === "true" || taskName === "verify:nextgen" || taskName === "verify:selfhosted";
+const compactStdoutLimit = Number(process.env.MEMORY_INTERNAL_STDOUT_LIMIT ?? 16_000);
 
 const tasks = {
   "test": cmd("npm", ["test"]),
@@ -104,13 +106,36 @@ function runTask(task, extraArgs = []) {
 }
 
 function runCommand(command, args, extraArgs) {
-  const result = spawnSync(command, [...args, ...extraArgs], {
+  const allArgs = [...args, ...extraArgs];
+  const result = spawnSync(command, allArgs, {
     cwd: root,
     env: process.env,
-    stdio: "inherit",
+    encoding: compactStdout ? "utf8" : undefined,
+    maxBuffer: compactStdout ? 80 * 1024 * 1024 : undefined,
+    stdio: compactStdout ? ["inherit", "pipe", "pipe"] : "inherit",
     shell: process.platform === "win32"
   });
+  if (compactStdout) writeCompactOutput(command, allArgs, result);
   if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+function writeCompactOutput(command, args, result) {
+  writeStream("stdout", command, args, result.stdout ?? "");
+  writeStream("stderr", command, args, result.stderr ?? "");
+}
+
+function writeStream(name, command, args, output) {
+  const text = String(output ?? "");
+  if (!text) return;
+  if (text.length <= compactStdoutLimit) {
+    process[name === "stderr" ? "stderr" : "stdout"].write(text);
+    return;
+  }
+  const lines = text.split(/\r?\n/);
+  const tail = lines.slice(-80).join("\n").trimEnd();
+  const stream = process[name === "stderr" ? "stderr" : "stdout"];
+  stream.write(`[compact:${name}] ${command} ${args.join(" ")} emitted ${lines.length} lines / ${text.length} chars; showing last ${Math.min(80, lines.length)} lines. Full evidence is in the configured artifact files.\n`);
+  if (tail) stream.write(`${tail}\n`);
 }
 
 function printUsage(exitCode) {

@@ -203,9 +203,32 @@ function benchmarkTrend(suites: SuiteScore[], trendPath: string) {
   return { points: [...(previous.points ?? []), point].slice(-20) };
 }
 
+function printCliReport(report: Record<string, any>, outputPath: string | undefined, argv: string[]): void {
+  if (argv.includes("--json-stdout") || process.env.MEMORY_FULL_BENCHMARK_STDOUT === "true" || !outputPath) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+  const suites = Array.isArray(report.suites) ? report.suites : [];
+  console.log(JSON.stringify({
+    benchmark: "NextgenLifecycle",
+    passed: report.passed,
+    diagnosticPassed: report.diagnosticPassed,
+    suiteCount: suites.length,
+    suites: suites.map((suite: Record<string, any>) => ({
+      id: suite.id,
+      passed: suite.passed,
+      score: suite.score,
+      scorer: suite.claimBoundary?.scorer
+    })),
+    claimBoundary: report.claimBoundary,
+    outputPath
+  }, null, 2));
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const outIndex = process.argv.indexOf("--out");
-  const report = runNextgenBenchmarkSuites(outIndex >= 0 ? process.argv[outIndex + 1] : undefined);
-  console.log(JSON.stringify(report, null, 2));
+  const outputPath = outIndex >= 0 ? process.argv[outIndex + 1] : undefined;
+  const report = runNextgenBenchmarkSuites(outputPath);
+  printCliReport(report, outputPath, process.argv.slice(2));
   if (!report.passed) process.exit(1);
 }

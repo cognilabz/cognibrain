@@ -1057,6 +1057,38 @@ function ratio(numerator: number, denominator: number): number {
   return denominator ? Number((numerator / denominator).toFixed(4)) : 0;
 }
 
+function printCliReport(report: Record<string, any>, outputPath: string | undefined, argv: string[]): void {
+  if (argv.includes("--json-stdout") || process.env.MEMORY_FULL_BENCHMARK_STDOUT === "true" || !outputPath) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+  const systems = Array.isArray(report.systems) ? report.systems : [];
+  console.log(JSON.stringify({
+    benchmark: report.benchmark ?? "BenchmarkArena",
+    passed: report.passed,
+    diagnosticPassed: report.diagnosticPassed,
+    systemCount: systems.length,
+    systems: systems.map((system: Record<string, any>) => ({
+      system: system.system,
+      proofLevel: system.proofLevel,
+      adapterMode: system.adapterMode,
+      sameRun: system.sameRun,
+      score: system.score,
+      scenarioCount: system.scenarioCount,
+      capabilityGapCount: Array.isArray(system.capabilityGaps) ? system.capabilityGaps.length : 0,
+      capabilityGaps: Array.isArray(system.capabilityGaps) ? system.capabilityGaps.slice(0, 8) : [],
+      capabilityGapsTruncated: Array.isArray(system.capabilityGaps) && system.capabilityGaps.length > 8
+    })),
+    claimBoundary: {
+      proof: report.claimBoundary?.proof,
+      qualityClaimAllowed: report.claimBoundary?.qualityClaimAllowed,
+      marketClaimAllowed: report.claimBoundary?.marketClaimAllowed,
+      claimBlockers: report.claimBoundary?.claimBlockers
+    },
+    outputPath
+  }, null, 2));
+}
+
 function normalizeSystems(systems: string[]): MemorySystemId[] {
   return systems
     .flatMap((item) => item.split(","))
@@ -1101,9 +1133,11 @@ function optionValues(argv: string[], name: string): string[] | undefined {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  runBenchmarkArena(cliOptions(process.argv.slice(2)))
+  const argv = process.argv.slice(2);
+  const options = cliOptions(argv);
+  runBenchmarkArena(options)
     .then((report) => {
-      console.log(JSON.stringify(report, null, 2));
+      printCliReport(report, options.out, argv);
       if (!report.diagnosticPassed) process.exit(1);
     })
     .catch((error) => {

@@ -534,6 +534,23 @@ describe("TypeScript memory core", () => {
     }
   });
 
+  it("keeps runtime intelligence provider activation explicit to the harness", () => {
+    const previousCommand = process.env.MEMORY_INTELLIGENCE_COMMAND;
+    const previousArgs = process.env.MEMORY_INTELLIGENCE_ARGS;
+    try {
+      process.env.MEMORY_INTELLIGENCE_COMMAND = process.execPath;
+      process.env.MEMORY_INTELLIGENCE_ARGS = "-e console.log(JSON.stringify({}))";
+      const service = new MemoryService();
+      expect(service.providerStatus()).toMatchObject({ active: false, fallback: "deterministic" });
+      expect(service.providerStatus().command).toBeUndefined();
+    } finally {
+      if (previousCommand === undefined) delete process.env.MEMORY_INTELLIGENCE_COMMAND;
+      else process.env.MEMORY_INTELLIGENCE_COMMAND = previousCommand;
+      if (previousArgs === undefined) delete process.env.MEMORY_INTELLIGENCE_ARGS;
+      else process.env.MEMORY_INTELLIGENCE_ARGS = previousArgs;
+    }
+  });
+
   it("keeps scoped and private memories out of unrelated retrieval", () => {
     const store = new MemoryStore();
     store.add({
@@ -3075,7 +3092,13 @@ describe("TypeScript memory core", () => {
     expect(source).toContain("enable row level security");
     expect(serviceSource).toContain('backend === "postgres-production"');
     expect(serviceSource).toContain('backend === "postgres-async"');
-    expect(serviceSource).toContain("new PostgresMemoryRepository(process.env.MEMORY_POSTGRES_URL)");
+    expect(serviceSource).toContain('await import("../repositories/postgresRepository")');
+    expect(serviceSource).toContain('backend === "postgres-repository"');
+    expect(readFileSync("src/api/service/memoryServiceDeps.ts", "utf8")).not.toContain("PostgresMemoryRepository");
+    const buildSource = readFileSync("scripts/runtime/build-api.mjs", "utf8");
+    expect(buildSource).toContain('external: ["pg"]');
+    expect(buildSource).toContain("splitting: true");
+    expect(buildSource).toContain('chunkNames: "chunks/[name]-[hash]"');
   });
 
   it("runs Postgres repository live tests only with explicit test credentials", () => {

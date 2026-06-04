@@ -1380,8 +1380,8 @@ process.stdin.on("end", () => {
   it("exports only delivered real-world retrieval evidence while retaining excluded diagnostics", async () => {
     const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
     const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
-    const previousIntelligenceCommand = process.env.MEMORY_INTELLIGENCE_COMMAND;
-    const previousIntelligenceArgs = process.env.MEMORY_INTELLIGENCE_ARGS;
+    const previousEvidenceCommand = process.env.MEMORY_REALWORLD_EVIDENCE_COMMAND;
+    const previousEvidenceArgs = process.env.MEMORY_REALWORLD_EVIDENCE_ARGS;
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-delivered-"));
     const judgePath = join(dir, "judge.mjs");
     const intelligencePath = join(dir, "intelligence.mjs");
@@ -1418,8 +1418,8 @@ process.stdin.on("end", () => {
     try {
       process.env.MEMORY_REALWORLD_JUDGE_COMMAND = `${process.execPath} ${judgePath}`;
       process.env.MEMORY_REALWORLD_JUDGE_KIND = "harness";
-      process.env.MEMORY_INTELLIGENCE_COMMAND = process.execPath;
-      process.env.MEMORY_INTELLIGENCE_ARGS = intelligencePath;
+      process.env.MEMORY_REALWORLD_EVIDENCE_COMMAND = process.execPath;
+      process.env.MEMORY_REALWORLD_EVIDENCE_ARGS = intelligencePath;
       const report = await generateRealWorldBlackBoxBenchmark({
         out: join(dir, "realworld-blackbox-delivered.json"),
         markdown: join(dir, "realworld-blackbox-delivered.md"),
@@ -1445,10 +1445,10 @@ process.stdin.on("end", () => {
       else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
       if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
       else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
-      if (previousIntelligenceCommand === undefined) delete process.env.MEMORY_INTELLIGENCE_COMMAND;
-      else process.env.MEMORY_INTELLIGENCE_COMMAND = previousIntelligenceCommand;
-      if (previousIntelligenceArgs === undefined) delete process.env.MEMORY_INTELLIGENCE_ARGS;
-      else process.env.MEMORY_INTELLIGENCE_ARGS = previousIntelligenceArgs;
+      if (previousEvidenceCommand === undefined) delete process.env.MEMORY_REALWORLD_EVIDENCE_COMMAND;
+      else process.env.MEMORY_REALWORLD_EVIDENCE_COMMAND = previousEvidenceCommand;
+      if (previousEvidenceArgs === undefined) delete process.env.MEMORY_REALWORLD_EVIDENCE_ARGS;
+      else process.env.MEMORY_REALWORLD_EVIDENCE_ARGS = previousEvidenceArgs;
     }
   }, heavyBenchmarkTimeout);
 

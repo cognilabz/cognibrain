@@ -1,5 +1,4 @@
 import { createHmac } from "node:crypto";
-import { createJsonCommandIntelligenceFromEnv } from "../../core/providers";
 import type { RedactionPolicy } from "../../core/privacy";
 import { DOMAIN_MODULES, citationFor, conceptScore, normalizeRetrievalWeights, type MemoryStore } from "../../core";
 import type { ConnectorWritebackInput, ConnectorWritebackOperation, ContextEnrichmentInput, MemoryServiceOptions } from "../service";
@@ -58,20 +57,7 @@ export function linkStateChange(input: MemoryInput, existing: Memory[]): MemoryI
 }
 
 export function providerFromEnv(): NonNullable<MemoryServiceOptions["intelligence"]> {
-  const provider = createJsonCommandIntelligenceFromEnv();
-  if (!provider) return {};
-  return {
-    reranker: provider,
-    verifier: provider,
-    evidenceJudge: provider,
-    contradictionDetector: provider,
-    summarizer: provider,
-    evaluator: provider,
-    engineeringClassifier: provider,
-    extractor: provider,
-    queryExpander: provider,
-    translator: provider
-  };
+  return {};
 }
 
 export function inferCorrectionKind(content: string): EngineeringMemoryKind {

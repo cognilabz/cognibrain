@@ -1,9 +1,13 @@
 import { MemoryServicePersistence } from './memoryServicePersistence';
-import { AsyncPostgresMemoryRepository, JsonFilePersistenceAdapter, createPersistenceFromEnv, createRepositoryFromEnv, redactionModeFromEnv } from './memoryServiceDeps';
+import { JsonFilePersistenceAdapter, createPersistenceFromEnv, createRepositoryFromEnv, redactionModeFromEnv } from './memoryServiceDeps';
 import type { MemoryServiceOptions, PersistedMemoryFile } from './memoryServiceDeps';
 
 export class MemoryService extends MemoryServicePersistence {}
 export type { ConnectorWritebackInput, ConnectorWritebackOperation, ContextEnrichmentInput, MemoryMaintenanceStatus, MemoryServiceOptions } from './memoryServiceDeps';
+
+function isPostgresRepositoryBackend(backend: string): boolean {
+  return backend === "postgres-async" || backend === "postgres-production" || backend === "postgres-db-primary" || backend === "postgres-repository";
+}
 
 export function createDefaultMemoryService() {
   const persistencePath = process.env.NODE_ENV === "test" ? undefined : process.env.MEMORY_DB_PATH ?? ".memory-harness.json";
@@ -11,9 +15,10 @@ export function createDefaultMemoryService() {
   const repository = persistencePath ? createRepositoryFromEnv(persistencePath) : undefined;
   const storageBackend = process.env.MEMORY_STORAGE_BACKEND ?? "json";
   const sqliteBackend = storageBackend === "sqlite" || storageBackend === "sql" || storageBackend === "sqlite-repository";
+  const postgresRepositoryBackend = isPostgresRepositoryBackend(storageBackend);
   return new MemoryService({
     repository,
-    persistence: persistencePath && !repository ? (sqliteBackend ? new JsonFilePersistenceAdapter(persistencePath) : createPersistenceFromEnv(persistencePath)) : undefined,
+    persistence: persistencePath && !repository && !postgresRepositoryBackend ? (sqliteBackend ? new JsonFilePersistenceAdapter(persistencePath) : createPersistenceFromEnv(persistencePath)) : undefined,
     autoDream: {
       enabled: autoDreamEnabled,
       intervalHours: Number(process.env.MEMORY_DREAM_INTERVAL_HOURS ?? 6),
@@ -31,7 +36,8 @@ export function createDefaultMemoryService() {
 
 export async function createProductionMemoryService() {
   const backend = process.env.MEMORY_STORAGE_BACKEND ?? "json";
-  if ((backend === "postgres-async" || backend === "postgres-production" || backend === "postgres-db-primary") && process.env.MEMORY_POSTGRES_URL) {
+  if (isPostgresRepositoryBackend(backend) && process.env.MEMORY_POSTGRES_URL) {
+    const { AsyncPostgresMemoryRepository } = await import("../repositories/postgresRepository");
     const asyncRepository = new AsyncPostgresMemoryRepository(process.env.MEMORY_POSTGRES_URL, { enableRls: process.env.MEMORY_POSTGRES_RLS === "true" });
     await asyncRepository.initialize();
     const loadedState = await asyncRepository.loadStateAsync();

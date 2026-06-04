@@ -144,7 +144,7 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
       ["src/api/server.ts", "await initializeDefaultMemoryService()"],
       ["src/api/service.ts", "postgres-production"],
       ["src/api/service.ts", "postgres-async"],
-      ["src/api/service.ts", "new PostgresMemoryRepository(process.env.MEMORY_POSTGRES_URL)"],
+      ["src/api/service.ts", "await import(\"../repositories/postgresRepository\")"],
       ["src/api/persistence/factory.ts", "DB-primary MemoryRepository backend"],
       ["src/eval/postgresLive.ts", "new PostgresMemoryRepository(url)"],
       ["src/eval/postgresLive.ts", "storage.active === \"postgres-repository\""],

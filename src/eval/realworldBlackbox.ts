@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { MemoryService } from "../api/service";
+import { MemoryService, type MemoryServiceOptions } from "../api/service";
+import { JsonCommandMemoryIntelligence } from "../core/providers";
 
 type EvidenceClass = "same-run-full" | "same-run-command" | "credential-blocked" | "local-baseline";
 type AdapterMode = "generic-blackbox" | "external-command" | "blocked-command" | "lexical-baseline";
@@ -379,7 +380,7 @@ function buildRunProvenance(requestedSystems: string[], judge?: RealWorldJudge):
       commandFingerprint: command ? sha256Text(command) : null
     };
   }
-  const intelligenceCommand = process.env.MEMORY_INTELLIGENCE_COMMAND;
+  const evidenceCommand = process.env.MEMORY_REALWORLD_EVIDENCE_COMMAND;
   return {
     judge: {
       configured: Boolean(process.env.MEMORY_REALWORLD_JUDGE_COMMAND),
@@ -388,13 +389,27 @@ function buildRunProvenance(requestedSystems: string[], judge?: RealWorldJudge):
       commandFingerprint: process.env.MEMORY_REALWORLD_JUDGE_COMMAND ? sha256Text(process.env.MEMORY_REALWORLD_JUDGE_COMMAND) : null
     },
     intelligence: {
-      configured: Boolean(intelligenceCommand),
-      commandEnv: "MEMORY_INTELLIGENCE_COMMAND",
-      commandFingerprint: intelligenceCommand ? sha256Text(intelligenceCommand) : null
+      configured: Boolean(evidenceCommand),
+      commandEnv: "MEMORY_REALWORLD_EVIDENCE_COMMAND",
+      commandFingerprint: evidenceCommand ? sha256Text(evidenceCommand) : null
     },
     externalCommands,
     redaction: "command values and diagnostic text are secret-redacted; fingerprints are sha256 for reproducibility without exposing credentials"
   };
+}
+
+function createRealWorldEvidenceIntelligence(): MemoryServiceOptions["intelligence"] | undefined {
+  const command = process.env.MEMORY_REALWORLD_EVIDENCE_COMMAND;
+  if (!command) return undefined;
+  const provider = new JsonCommandMemoryIntelligence({
+    command,
+    args: process.env.MEMORY_REALWORLD_EVIDENCE_ARGS ? process.env.MEMORY_REALWORLD_EVIDENCE_ARGS.split(/\s+/).filter(Boolean) : undefined,
+    timeoutMs: Number(process.env.MEMORY_REALWORLD_EVIDENCE_TIMEOUT_MS ?? 3500),
+    cacheTtlMs: Number(process.env.MEMORY_REALWORLD_EVIDENCE_CACHE_TTL_MS ?? 30_000),
+    cacheMaxEntries: Number(process.env.MEMORY_REALWORLD_EVIDENCE_CACHE_MAX_ENTRIES ?? 128),
+    compactPayloads: process.env.MEMORY_REALWORLD_EVIDENCE_COMPACT_PAYLOADS !== "0" && process.env.MEMORY_REALWORLD_EVIDENCE_COMPACT_PAYLOADS !== "false"
+  });
+  return { evidenceJudge: provider };
 }
 
 function buildJudgeReadiness(judge?: RealWorldJudge): RealWorldReport["judgeReadiness"] {
@@ -1108,11 +1123,11 @@ class CognibrainBlackBoxAdapter implements Adapter {
   displayName = "Cognibrain";
   evidenceClass: EvidenceClass = "same-run-full";
   adapterMode: AdapterMode = "generic-blackbox";
-  private service = new MemoryService({ autoDream: { enabled: false } });
+  private service = new MemoryService({ autoDream: { enabled: false }, intelligence: createRealWorldEvidenceIntelligence() });
   private ids = new Map<string, string>();
 
   setup(manifest: RealWorldManifest): Record<string, unknown> {
-    this.service = new MemoryService({ autoDream: { enabled: false } });
+    this.service = new MemoryService({ autoDream: { enabled: false }, intelligence: createRealWorldEvidenceIntelligence() });
     this.ids = new Map();
     return { package: "@cognilabz/cognibrain", manifestId: manifest.id };
   }

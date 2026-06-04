@@ -1399,6 +1399,93 @@ describe("TypeScript memory core", () => {
     }
   });
 
+  it("bounds transient context pack retention in runtime and local snapshots", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-context-retention-"));
+    const previousEvidenceLimit = process.env.MEMORY_EVIDENCE_PACK_RETENTION_MAX;
+    const previousCodingLimit = process.env.MEMORY_CODING_CONTEXT_PACK_RETENTION_MAX;
+    try {
+      process.env.MEMORY_EVIDENCE_PACK_RETENTION_MAX = "3";
+      process.env.MEMORY_CODING_CONTEXT_PACK_RETENTION_MAX = "2";
+      const path = join(dir, "memory.json");
+      const service = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      service.add({
+        userId: "u1",
+        content: "Atlas release policy requires tests, source review, and patch evidence.",
+        type: "project",
+        tags: ["repo-policy"],
+        source: { kind: "reviewed_code", confidence: 0.96 },
+        metadata: { engineering: { kind: "repo_policy" } }
+      });
+
+      const evidenceIds = Array.from({ length: 5 }, (_, index) =>
+        service.evidencePack({ userId: "u1", query: `Atlas context retention evidence ${index}`, limit: 3 }).id
+      );
+      expect(() => service.getEvidencePack(evidenceIds[0])).toThrow("Evidence pack not found");
+      expect(service.getEvidencePack(evidenceIds.at(-1)!).id).toBe(evidenceIds.at(-1));
+
+      let persisted = JSON.parse(readFileSync(path, "utf8"));
+      expect(persisted.evidencePacks).toHaveLength(3);
+      expect(persisted.evidencePacks.map((pack: { id: string }) => pack.id)).toContain(evidenceIds.at(-1));
+      expect(JSON.stringify(persisted.evidencePacks)).not.toContain(evidenceIds[0]);
+
+      const codingIds = Array.from({ length: 4 }, (_, index) =>
+        service.codingContextPack({ userId: "u1", query: `Atlas context retention coding ${index}`, limit: 3 }).id
+      );
+      expect(() => service.getCodingContextPack(codingIds[0])).toThrow("Coding context pack not found");
+      expect(service.getCodingContextPack(codingIds.at(-1)!).id).toBe(codingIds.at(-1));
+
+      persisted = JSON.parse(readFileSync(path, "utf8"));
+      expect(persisted.evidencePacks).toHaveLength(3);
+    } finally {
+      if (previousEvidenceLimit === undefined) delete process.env.MEMORY_EVIDENCE_PACK_RETENTION_MAX;
+      else process.env.MEMORY_EVIDENCE_PACK_RETENTION_MAX = previousEvidenceLimit;
+      if (previousCodingLimit === undefined) delete process.env.MEMORY_CODING_CONTEXT_PACK_RETENTION_MAX;
+      else process.env.MEMORY_CODING_CONTEXT_PACK_RETENTION_MAX = previousCodingLimit;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("compacts over-retained transient context packs during startup load", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-startup-context-retention-"));
+    const previousEvidenceLimit = process.env.MEMORY_EVIDENCE_PACK_RETENTION_MAX;
+    const previousCodingLimit = process.env.MEMORY_CODING_CONTEXT_PACK_RETENTION_MAX;
+    try {
+      process.env.MEMORY_EVIDENCE_PACK_RETENTION_MAX = "0";
+      process.env.MEMORY_CODING_CONTEXT_PACK_RETENTION_MAX = "0";
+      const path = join(dir, "memory.json");
+      const service = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      service.add({
+        userId: "u1",
+        content: "Atlas startup retention policy requires loading compact transient context state.",
+        type: "project",
+        tags: ["repo-policy"],
+        source: { kind: "reviewed_code", confidence: 0.96 },
+        metadata: { engineering: { kind: "repo_policy" } }
+      });
+      const evidenceIds = Array.from({ length: 5 }, (_, index) =>
+        service.evidencePack({ userId: "u1", query: `Atlas startup context retention evidence ${index}`, limit: 3 }).id
+      );
+      let persisted = JSON.parse(readFileSync(path, "utf8"));
+      expect(persisted.evidencePacks).toHaveLength(5);
+
+      process.env.MEMORY_EVIDENCE_PACK_RETENTION_MAX = "3";
+      const reloaded = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      expect(() => reloaded.getEvidencePack(evidenceIds[0])).toThrow("Evidence pack not found");
+      expect(reloaded.getEvidencePack(evidenceIds.at(-1)!).id).toBe(evidenceIds.at(-1));
+
+      persisted = JSON.parse(readFileSync(path, "utf8"));
+      expect(persisted.evidencePacks).toHaveLength(3);
+      expect(persisted.evidencePacks.map((pack: { id: string }) => pack.id)).toContain(evidenceIds.at(-1));
+      expect(JSON.stringify(persisted.evidencePacks)).not.toContain(evidenceIds[0]);
+    } finally {
+      if (previousEvidenceLimit === undefined) delete process.env.MEMORY_EVIDENCE_PACK_RETENTION_MAX;
+      else process.env.MEMORY_EVIDENCE_PACK_RETENTION_MAX = previousEvidenceLimit;
+      if (previousCodingLimit === undefined) delete process.env.MEMORY_CODING_CONTEXT_PACK_RETENTION_MAX;
+      else process.env.MEMORY_CODING_CONTEXT_PACK_RETENTION_MAX = previousCodingLimit;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("stores MemoryRecordV2 fields and enforces belief-state retrieval decisions", () => {
     const service = new MemoryService();
     const active = service.add({

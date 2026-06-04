@@ -203,7 +203,7 @@ export class MemoryServicePersistence extends MemoryServiceInsightsMaintenance {
     };
   }
 
-  importMemoryFile(raw: PersistedMemoryFile, options: { persist?: boolean } = {}): void {
+  importMemoryFile(raw: PersistedMemoryFile, options: { persist?: boolean; persistPruned?: boolean } = {}): void {
     this.maintenance = raw.maintenance ?? { users: {} };
     this.metrics = raw.metrics ?? this.metrics;
     this.feedbackEvents = raw.feedback ?? [];
@@ -241,13 +241,14 @@ export class MemoryServicePersistence extends MemoryServiceInsightsMaintenance {
     this.connectorSyncStates = new Map((raw.connectorSyncStates ?? []).map((state) => [state.connectorId, state]));
     this.dreamJobs = new Map((raw.dreamJobs ?? []).map((job) => [job.jobId, job]));
     this.evidencePacks = new Map((raw.evidencePacks ?? []).map((pack) => [pack.id, pack]));
+    const prunedTransientContextPacks = this.pruneTransientContextPacks();
     this.policyRules = new Map((raw.policyRules ?? []).map((rule) => [rule.id, rule]));
     this.retentionRules = new Map((raw.retentionRules ?? []).map((rule) => [rule.id, rule]));
     this.repository.import(raw.memories ?? []);
     this.syncReadModelFromRepository();
     for (const memory of this.store.list()) this.entities.ingest(memory);
     if (!this.claims.size) for (const memory of this.store.list()) this.registerMemoryClaim(memory);
-    if (options.persist !== false) this.persist();
+    if (options.persist !== false || (options.persistPruned && prunedTransientContextPacks)) this.persist();
   }
 
   protected load(): void {
@@ -262,7 +263,7 @@ export class MemoryServicePersistence extends MemoryServiceInsightsMaintenance {
       this.syncReadModelFromRepository();
       return;
     }
-    this.importMemoryFile(raw, { persist: false });
+    this.importMemoryFile(raw, { persist: false, persistPruned: true });
   }
 
   protected syncReadModelFromRepository(): void {
@@ -277,6 +278,7 @@ export class MemoryServicePersistence extends MemoryServiceInsightsMaintenance {
   }
 
   protected persist(): void {
+    this.pruneTransientContextPacks();
     const memories = this.store.export();
     if (!this.repositorySharesReadModel()) {
       this.repository.import(memories);
@@ -354,6 +356,12 @@ export class MemoryServicePersistence extends MemoryServiceInsightsMaintenance {
 	      return stored;
 	    });
 	  }
+
+  protected pruneTransientContextPacks(): boolean {
+    const evidencePruned = pruneGeneratedMap(this.evidencePacks, envInteger("MEMORY_EVIDENCE_PACK_RETENTION_MAX", 64));
+    const codingPruned = pruneGeneratedMap(this.codingContextPacks, envInteger("MEMORY_CODING_CONTEXT_PACK_RETENTION_MAX", 64));
+    return evidencePruned || codingPruned;
+  }
 
   protected loadRepositoryState(): PersistedMemoryFile | Memory[] | undefined {
     const state = (this.repository as MemoryRepository & RepositoryStatePersistence).loadState?.();
@@ -680,6 +688,20 @@ function truncatePersistedText(value: string | undefined, maxChars: number): str
 
 function jsonBytes(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), "utf8");
+}
+
+function pruneGeneratedMap<T extends { generatedAt?: string }>(items: Map<string, T>, maxItems: number): boolean {
+  if (maxItems <= 0 || items.size <= maxItems) return false;
+  const initialSize = items.size;
+  const keep = new Set([...items.entries()]
+    .map(([id, value], index) => ({ id, index, time: Date.parse(value.generatedAt ?? "") || 0 }))
+    .sort((a, b) => b.time - a.time || b.index - a.index)
+    .slice(0, maxItems)
+    .map((item) => item.id));
+  for (const id of items.keys()) {
+    if (!keep.has(id)) items.delete(id);
+  }
+  return items.size !== initialSize;
 }
 
 function envInteger(name: string, fallback: number): number {

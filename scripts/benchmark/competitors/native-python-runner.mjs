@@ -2,8 +2,8 @@
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
 import { nativeRunnerRoot } from "../cache-root.mjs";
+import { runCommand } from "../streaming-command.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const system = optionValue("--system") ?? process.env.COGNIBRAIN_COMPETITOR_SYSTEM;
@@ -24,10 +24,9 @@ if (!existsSync(python) || !existsSync(script)) {
   process.exit(0);
 }
 
-const result = spawnSync(python, [script, "--system", system], {
+const result = await runCommand(python, [script, "--system", system], {
   cwd: root,
   input: stdin,
-  encoding: "utf8",
   env: {
     ...process.env,
     PYTHONUNBUFFERED: "1",
@@ -35,10 +34,10 @@ const result = spawnSync(python, [script, "--system", system], {
     COGNIBRAIN_NATIVE_RUNNER_ROOT: process.env.COGNIBRAIN_NATIVE_RUNNER_ROOT ?? nativeRunnerRoot()
   },
   timeout: timeoutMs,
-  maxBuffer: 20 * 1024 * 1024
+  captureLimit: Number(process.env.MEMORY_ARENA_PYTHON_RUNNER_OUTPUT_LIMIT ?? 200_000)
 });
 
-if (result.status === 0 && result.stdout.trim()) {
+if (result.status === 0 && result.stdout.trim() && !result.truncatedStdout) {
   process.stdout.write(result.stdout.trim());
   process.stdout.write("\n");
   process.exit(0);
@@ -47,7 +46,7 @@ if (result.status === 0 && result.stdout.trim()) {
 console.log(JSON.stringify({
   proofLevel: "credential-blocked",
   adapterMode: "blocked-command",
-  capabilityGaps: [`${system} native runner failed before producing JSON`],
+  capabilityGaps: [result.truncatedStdout ? `${system} native runner stdout exceeded bounded output capture before producing trusted JSON` : `${system} native runner failed before producing JSON`],
   runnerContract: arenaRunnerContract(),
   latencyMs: Date.now() - started,
   evidence: {
@@ -56,9 +55,11 @@ console.log(JSON.stringify({
     timeoutMs,
     signal: result.signal,
     status: result.status ?? 1,
+    truncatedStdout: result.truncatedStdout,
+    truncatedStderr: result.truncatedStderr,
     stderrTail: tail(result.stderr),
     stdoutTail: tail(result.stdout),
-    error: result.error?.message
+    error: result.error
   }
 }));
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { runCommand } from "../streaming-command.mjs";
 
 const input = JSON.parse(await readStdin());
 const scenario = input.scenario;
@@ -46,7 +46,7 @@ try {
     "-o", "json"
   ];
   if (baseUrl) addArgs.push("--base-url", baseUrl);
-  const add = spawnSync("npm", addArgs, { encoding: "utf8", timeout: 120_000, maxBuffer: 20 * 1024 * 1024 });
+  const add = await runCommand("npm", addArgs, { timeout: 120_000, captureLimit: 200_000 });
   if (add.status !== 0) throw new Error(`mem0 add failed: ${tail(add.stderr || add.stdout)}`);
 
   const searchArgs = [
@@ -58,7 +58,7 @@ try {
     "-o", "json"
   ];
   if (baseUrl) searchArgs.push("--base-url", baseUrl);
-  const search = spawnSync("npm", searchArgs, { encoding: "utf8", timeout: 120_000, maxBuffer: 20 * 1024 * 1024 });
+  const search = await runCommand("npm", searchArgs, { timeout: 120_000, captureLimit: 200_000 });
   if (search.status !== 0) throw new Error(`mem0 search failed: ${tail(search.stderr || search.stdout)}`);
 
   console.log(JSON.stringify({
@@ -71,6 +71,7 @@ try {
       package: "@mem0/cli@0.2.7",
       baseUrlConfigured: Boolean(baseUrl),
       note: "Raw runner evidence only. Scenario checks must be produced by MEMORY_ARENA_JUDGE_COMMAND; this runner does not self-score.",
+      outputTruncated: add.truncatedStdout || search.truncatedStdout,
       add: parseJson(add.stdout),
       search: parseJson(search.stdout) ?? tail(search.stdout, 1200)
     }

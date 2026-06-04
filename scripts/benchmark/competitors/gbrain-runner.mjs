@@ -2,8 +2,8 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
 import { nativeRunnerRoot, vendorBenchmarkRoot } from "../cache-root.mjs";
+import { runCommand } from "../streaming-command.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const repo = resolve(process.env.MEMORY_ARENA_GBRAIN_REPO ?? vendorBenchmarkRoot("gbrain"));
@@ -19,7 +19,7 @@ const gaps = [
 
 try {
   if (!existsSync(join(repo, "src", "cli.ts"))) throw new Error(`GBrain repo not found at ${repo}`);
-  ensureGBrainHome();
+  await ensureGBrainHome();
   const memoryText = [
     `CogniCode scenario: ${scenario.id}`,
     `Repository: ${scenario.repoSeed.name}`,
@@ -32,18 +32,18 @@ try {
     `Wrong action recorded for contrast only: ${scenario.wrongAction.command ?? scenario.wrongAction.reason}`
   ].filter(Boolean).join("\n");
   const slug = `cognicode/${scenario.id}/correction`;
-  const capture = runGBrain(["capture", memoryText, "--slug", slug, "--type", "note", "--json"]);
+  const capture = await runGBrain(["capture", memoryText, "--slug", slug, "--type", "note", "--json"]);
   if (capture.status !== 0) throw new Error(`gbrain capture failed: ${tail(capture.stderr || capture.stdout)}`);
   const searches = [
-    runGBrain(["search", `${scenario.repoSeed.name} ${scenario.nextTask} ${scenario.correction.correctAction}`]),
-    runGBrain(["search", scenario.correction.content]),
-    runGBrain(["search", scenario.correction.correctAction])
+    await runGBrain(["search", `${scenario.repoSeed.name} ${scenario.nextTask} ${scenario.correction.correctAction}`]),
+    await runGBrain(["search", scenario.correction.content]),
+    await runGBrain(["search", scenario.correction.correctAction])
   ];
   const failedSearch = searches.find((search) => search.status !== 0);
   if (failedSearch) throw new Error(`gbrain search failed: ${tail(failedSearch.stderr || failedSearch.stdout)}`);
 
   const searchOutput = searches.map((search) => search.stdout).join("\n");
-  const get = runGBrain(["get", slug]);
+  const get = await runGBrain(["get", slug]);
   if (get.status !== 0) throw new Error(`gbrain get failed: ${tail(get.stderr || get.stdout)}`);
   console.log(JSON.stringify({
     capabilityGaps: gaps,
@@ -86,16 +86,16 @@ function arenaRunnerContract() {
   };
 }
 
-function ensureGBrainHome() {
+async function ensureGBrainHome() {
   mkdirSync(home, { recursive: true });
   const expected = join(home, ".gbrain", "brain.pglite");
   if (existsSync(expected)) return;
-  const init = runGBrain(["init", "--pglite", "--no-embedding", "--yes", "--non-interactive", "--json"], { timeout: 120_000 });
+  const init = await runGBrain(["init", "--pglite", "--no-embedding", "--yes", "--non-interactive", "--json"], { timeout: 120_000 });
   if (init.status !== 0) throw new Error(`gbrain init failed: ${tail(init.stderr || init.stdout)}`);
 }
 
 function runGBrain(args, options = {}) {
-  return spawnSync("bun", ["run", "src/cli.ts", ...args], {
+  return runCommand("bun", ["run", "src/cli.ts", ...args], {
     cwd: repo,
     env: {
       ...process.env,
@@ -103,9 +103,8 @@ function runGBrain(args, options = {}) {
       GBRAIN_CONTRIBUTOR_MODE: "0",
       NO_COLOR: "1"
     },
-    encoding: "utf8",
     timeout: options.timeout ?? Number(process.env.MEMORY_ARENA_GBRAIN_TIMEOUT_MS ?? 60_000),
-    maxBuffer: 20 * 1024 * 1024
+    captureLimit: Number(process.env.MEMORY_ARENA_GBRAIN_OUTPUT_LIMIT ?? 200_000)
   });
 }
 

@@ -4,6 +4,10 @@
   "private": false,
   "type": "module",
   "description": "Self-hosted engineering memory for coding agents with a stable operator CLI, connectors and benchmark proof.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cognilabz/cognibrain.git"
+  },
   "bin": {
     "cognibrain": "bin/cognibrain.mjs",
     "cognibrain-connect": "bin/cognibrain-connect.mjs"

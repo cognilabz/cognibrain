@@ -146,6 +146,7 @@ export function syncConnectorEvents(service: any, connectorId: string, events: A
       }));
       const report = service.extract(mapped, scope) as ExtractionReport;
       const eventsByExternalId = new Map(events.map((event) => [event.externalId, event]));
+      const supplementalMemories: Memory[] = [];
       for (const memory of report.memories) {
         const externalId = typeof memory.metadata.externalId === "string" ? memory.metadata.externalId : undefined;
         const event = externalId ? eventsByExternalId.get(externalId) : undefined;
@@ -153,24 +154,38 @@ export function syncConnectorEvents(service: any, connectorId: string, events: A
         const reviewRequired = connectorReviewRequired(manifest, event);
         const visibility = connectorEventVisibility(event);
         const tags = connectorEventTags(manifest, event);
-        if (!reviewRequired && !visibility && !tags.length) continue;
+        const upstreamClaim = isRecord(event.metadata?.claim) ? event.metadata.claim : undefined;
+        const tenantVerificationRequired = event.metadata?.requiresTenantVerification === true;
+        if (!reviewRequired && !visibility && !tags.length && !upstreamClaim && !tenantVerificationRequired) continue;
         service.store.update(memory.id, {
-          beliefState: reviewRequired ? "needs_verification" : memory.beliefState,
+          beliefState: reviewRequired || tenantVerificationRequired ? "needs_verification" : memory.beliefState,
           consent: visibility ? { ...memory.consent, visibility } : memory.consent,
           tags: [...new Set([...memory.tags, ...tags])],
           metadata: {
             ...memory.metadata,
+            ...(upstreamClaim ? { claim: upstreamClaim, upstreamClaim } : {}),
+            ...(tenantVerificationRequired ? { tenantVerification: { status: "required", connectorId, externalId, at: new Date().toISOString() } } : {}),
             ...(reviewRequired ? { reviewQueue: { status: "pending", connectorId, reason: "connector_candidate_review" } } : {}),
             ...(visibility ? { channelVisibility: visibility } : {})
           }
         });
+        if (tenantVerificationRequired) {
+          supplementalMemories.push(service.add({
+            ...scope,
+            content: `External claim ${externalId ?? connectorId} requires live tenant verification before release.`,
+            type: "reference",
+            source: { kind: "tool", confidence: 0.84 },
+            tags: ["tenant-verification", "release-gate", connectorId],
+            metadata: { connectorId, externalId, tenantVerification: { status: "required", sourceMemoryId: memory.id } }
+          }));
+        }
       }
       const record: ConnectorSyncRecord = {
         id: `sync_${contentHash(`${connectorId}:${Date.now()}:${service.connectorSyncRecords.length}`).slice(2)}`,
         connectorId,
         direction: "ingest",
         status: "applied",
-        memoryIds: report.memories.map((memory) => memory.id),
+        memoryIds: [...report.memories, ...supplementalMemories].map((memory) => memory.id),
         externalIds: events.map((event) => event.externalId).filter((id): id is string => Boolean(id)),
         timestamp: new Date().toISOString()
       };
@@ -194,6 +209,40 @@ export function syncConnectorEvents(service: any, connectorId: string, events: A
       service.persist();
       return record;
     }
+  }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value && typeof value === "object" && !Array.isArray(value));
+  }
+
+function applyDeletedSourceRefs(service: any, connectorId: string, deletedExternalIds: string[], scope: Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId">): Memory[] {
+    const deleted = new Set(deletedExternalIds.filter(Boolean));
+    if (!deleted.size) return [];
+    const now = new Date().toISOString();
+    const updated: Memory[] = [];
+    for (const memory of (service.store.list(scope.userId) as Memory[])) {
+      const sourceRef = memory.provenance.sourceRef;
+      if (memory.archivedAt || sourceRef?.connectorId !== connectorId || !sourceRef.externalId || !deleted.has(sourceRef.externalId)) continue;
+      const next = service.store.update(memory.id, {
+        content: `Source ${sourceRef.externalId} was deleted; operator review is required before relying on prior connector evidence.`,
+        beliefState: "needs_verification",
+        temporal: {
+          ...memory.temporal,
+          verificationDueAt: memory.temporal.verificationDueAt ?? now,
+          stalenessRisk: Math.max(memory.temporal.stalenessRisk ?? 0, 0.92)
+        },
+        metadata: {
+          ...memory.metadata,
+          sourceDeletedAt: now,
+          verificationReason: "source_deleted",
+          sourceRevalidation: { status: "source_missing", at: now, reason: "connector poll reported deleted externalId" },
+          previousContent: memory.content
+        }
+      });
+      updated.push(next);
+      service.recordAudit("memory.update", { userId: next.userId, brainId: next.brainId, sourceId: next.sourceId, memoryId: next.id, metadata: { action: "source_deleted_revalidation", connectorId, externalId: sourceRef.externalId } });
+    }
+    return updated;
   }
 
 export async function listConnectorItems(service: any, connectorId: string, fetchImpl: typeof fetch = fetch, timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000)): Promise<ConnectorListResult> {
@@ -261,6 +310,7 @@ export async function pollConnector(service: any, connectorId: string, scope: Pi
         : { method: request.method, headers: request.headers, body: request.body, signal: AbortSignal.timeout(Math.max(1, timeoutMs)) });
       const json = await response.json().catch(() => ({})) as {
         events?: Array<MemoryExtractionEvent & { externalId?: string }>;
+        deletedExternalIds?: string[];
         cursor?: string;
         nextCursor?: string;
         lastExternalUpdatedAt?: string;
@@ -295,16 +345,21 @@ export async function pollConnector(service: any, connectorId: string, scope: Pi
         return record;
       }
       const events = Array.isArray(json.events) ? json.events : [];
+      const deletedExternalIds = Array.isArray(json.deletedExternalIds) ? json.deletedExternalIds.filter((id): id is string => typeof id === "string" && Boolean(id)) : [];
       const record = service.syncConnectorEvents(connectorId, events, scope);
+      const deletedMemories = applyDeletedSourceRefs(service, connectorId, deletedExternalIds, scope);
       record.responseStatusCode = response.status;
       record.request = request;
+      record.memoryIds = [...new Set([...record.memoryIds, ...deletedMemories.map((memory) => memory.id)])];
+      record.externalIds = [...new Set([...record.externalIds, ...deletedExternalIds])];
       record.payload = {
         ...(record.payload ?? {}),
         cursorBefore,
         cursorAfter: firstString(json.nextCursor, json.cursor),
         lastExternalUpdatedAt: json.lastExternalUpdatedAt,
         etag: json.etag,
-        sourceVersion: json.sourceVersion
+        sourceVersion: json.sourceVersion,
+        deletedExternalIds
       };
       updateConnectorSyncState(service, record);
       service.persist();

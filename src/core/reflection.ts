@@ -135,6 +135,7 @@ export class ReflectionEngine {
   private resolveContradictions(memories: Memory[], evaluations: Map<string, ReflectionMemoryEvaluation>): ReflectionReport["contradictions"] {
     const buckets = new Map<string, Array<{ memory: Memory; claim: ContradictionClaim }>>();
     for (const memory of memories) {
+      if (memory.beliefState !== "active") continue;
       for (const claim of contradictionClaims(memory, evaluations.get(memory.id))) {
         const group = buckets.get(claim.key) ?? [];
         group.push({ memory, claim });
@@ -158,6 +159,22 @@ export class ReflectionEngine {
       if (values.size < 2) continue;
       const ranked = [...group].sort((a, b) => evidenceWeight(b.memory) - evidenceWeight(a.memory));
       const kept = ranked[0];
+      const nearest = ranked[1];
+      if (!group.some((item) => item.claim.detector === "external") && nearest && shouldRequireOperatorReview(kept.memory, nearest.memory)) {
+        const now = new Date().toISOString();
+        const reviewMemoryIds: string[] = [];
+        for (const item of ranked) {
+          if (item.memory.pinned) continue;
+          const updated = this.store.update(item.memory.id, {
+            beliefState: item.memory.beliefState === "active" ? "needs_verification" : item.memory.beliefState,
+            temporal: { ...item.memory.temporal, verificationDueAt: item.memory.temporal.verificationDueAt ?? now, stalenessRisk: Math.max(item.memory.temporal.stalenessRisk ?? 0, 0.78) },
+            metadata: { conflictReview: { status: "needs_operator_review", at: now, claimKey: item.claim.key, reason: "conflicting claims have comparable evidence weight" } }
+          });
+          reviewMemoryIds.push(updated.id);
+        }
+        this.addConflictReviewSummary(kept.claim.key, reviewMemoryIds, now, kept.memory);
+        continue;
+      }
       for (const item of ranked.slice(1)) {
         const memory = item.memory;
         if (memory.id === kept.memory.id || memory.pinned) continue;
@@ -191,6 +208,26 @@ export class ReflectionEngine {
       }
     }
     return resolved;
+  }
+
+  private addConflictReviewSummary(claimKey: string, memoryIds: string[], now: string, exemplar: Memory): void {
+    const existing = this.store.list(exemplar.userId).some((memory) => (memory.metadata.conflictReviewSummary as { claimKey?: string } | undefined)?.claimKey === claimKey);
+    if (existing) return;
+    this.store.add({
+      userId: exemplar.userId,
+      brainId: exemplar.brainId,
+      sourceId: exemplar.sourceId,
+      orgId: exemplar.orgId,
+      projectId: exemplar.projectId,
+      content: `Conflicting claims for ${claimKey} require operator review before use.`,
+      type: "reference",
+      layer: "reflection",
+      source: { kind: "agent", confidence: 0.74 },
+      tags: ["conflict-review", "needs-review"],
+      entities: claimKey.split(":").filter(Boolean),
+      timestamp: now,
+      metadata: { conflictReviewSummary: { claimKey, memoryIds, status: "needs_operator_review", at: now } }
+    });
   }
 
   private summarizeClusters(userId: string, memories: Memory[], now: Date): Memory[] {
@@ -461,9 +498,23 @@ function evidenceWeight(memory: Memory): number {
   return memory.trust * 0.34 + memory.importance * 0.18 + memory.source.confidence * 0.16 + sourceQuality(memory) * 0.3 + recencyTieBreaker;
 }
 
+function shouldRequireOperatorReview(a: Memory, b: Memory): boolean {
+  const weightGap = Math.abs(evidenceWeight(a) - evidenceWeight(b));
+  if (weightGap > 0.035) return false;
+  const aRef = a.provenance.sourceRef;
+  const bRef = b.provenance.sourceRef;
+  if (aRef?.connectorId && bRef?.connectorId && aRef.connectorId !== bRef.connectorId) return true;
+  if (a.source.kind === b.source.kind && a.source.kind !== "agent") return true;
+  return false;
+}
+
 function sourceQuality(memory: Memory): number {
   const tags = new Set(memory.tags.map((tag) => tag.toLowerCase()));
   const connectorId = memory.provenance.sourceRef?.connectorId?.toLowerCase() ?? "";
+  const declaredQuality = typeof memory.metadata.sourceQuality === "string" ? memory.metadata.sourceQuality.toLowerCase() : undefined;
+  if (declaredQuality === "ci" || declaredQuality === "test" || declaredQuality === "release-gate") return 0.94;
+  if (declaredQuality === "adr" || declaredQuality === "spec") return 0.82;
+  if (declaredQuality === "chat") return 0.62;
   const sourceKind = memory.source.kind;
   const engineeringKind = (memory.metadata.engineering as { kind?: string } | undefined)?.kind;
   if (sourceKind === "human" && (tags.has("correction") || tags.has("engineering-correction") || tags.has("user-correction") || engineeringKind === "review_correction")) return 1;

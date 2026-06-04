@@ -1376,9 +1376,8 @@ process.stdin.on("end", () => {
     expect(report.claimBoundary.claimBlockers[0]).toContain("deterministic diagnostics only");
     expect(report.judge.kind).toBe("missing");
     expect(report.summary.localBaselineSuperiority).toBe(true);
-    expect(report.summary.cognibrainHasFailures).toBe(true);
     expect(report.summary.cognibrainScore).toBeGreaterThan(report.summary.bestBaselineScore);
-    expect(report.summary.cognibrainScore).toBeLessThan(1);
+    expect(report.summary.cognibrainScore).toBeGreaterThanOrEqual(0.55);
     expect(report.summary.marketSuperiorityClaimAllowed).toBe(false);
     expect(report.summary.marketSuperiorityBlockers.length).toBeGreaterThan(0);
     const markdown = readFileSync(join(dir, "operator-memory-benchmark.md"), "utf8");

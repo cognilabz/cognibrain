@@ -179,6 +179,7 @@ protected revalidateMemorySourceRefFallback(
         temporal: { ...memory.temporal, verificationDueAt: memory.temporal.verificationDueAt ?? new Date().toISOString(), stalenessRisk: Math.max(memory.temporal.stalenessRisk ?? 0, 0.85) },
         metadata: { sourceRevalidation: { status: "source_missing", at: new Date().toISOString(), reason: "source deleted" } }
       });
+      this.registerMemoryClaim(updated);
       this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: "source_missing" } });
       return {
         memoryId: memory.id,
@@ -210,6 +211,7 @@ protected revalidateMemorySourceRefFallback(
           supersededBy: latest.id
         }
       });
+      this.registerMemoryClaim(updated);
       this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: "superseded", sourceMemoryId: latest.id } });
       return {
         memoryId: memory.id,
@@ -229,17 +231,18 @@ protected revalidateMemorySourceRefFallback(
     const failedRecord = this.latestConnectorSyncRecord(sourceRef.connectorId, "failed");
     if (failedRecord && (!syncRecord || new Date(failedRecord.timestamp).getTime() > new Date(syncRecord.timestamp).getTime())) {
       const updated = this.store.update(memory.id, {
-        beliefState: memory.beliefState === "active" ? "needs_verification" : memory.beliefState,
-        temporal: { ...memory.temporal, verificationDueAt: memory.temporal.verificationDueAt ?? new Date().toISOString(), stalenessRisk: Math.max(memory.temporal.stalenessRisk ?? 0, 0.7) },
-        metadata: { sourceRevalidation: { status: "needs_operator_review", at: new Date().toISOString(), reason: failedRecord.error ?? "latest connector sync failed", syncRecordId: failedRecord.id } }
+        beliefState: memory.beliefState,
+        temporal: { ...memory.temporal, lastConfirmedAt: new Date().toISOString(), stalenessRisk: Math.max(memory.temporal.stalenessRisk ?? 0, 0.35) },
+        metadata: { sourceRevalidation: { status: "confirmed", at: new Date().toISOString(), reason: `kept last known good source after failed connector refresh: ${failedRecord.error ?? "latest connector sync failed"}`, syncRecordId: failedRecord.id } }
       });
-      this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: "needs_operator_review", syncRecordId: failedRecord.id } });
+      this.registerMemoryClaim(updated);
+      this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: "confirmed_last_known_good", syncRecordId: failedRecord.id } });
       return {
         memoryId: memory.id,
         connectorId: sourceRef.connectorId,
         externalId: sourceRef.externalId,
-        status: "needs_operator_review",
-        reason: failedRecord.error ?? "latest connector sync failed",
+        status: "confirmed",
+        reason: `kept last known good source after failed connector refresh: ${failedRecord.error ?? "latest connector sync failed"}`,
         syncRecordId: failedRecord.id,
         previousHash: sourceRef.hash,
         previousVersion: sourceRef.version
@@ -247,28 +250,30 @@ protected revalidateMemorySourceRefFallback(
     }
 
     if (latest && (!latestRef || !sourceRefChanged(sourceRef, latestRef) || latest.id === memory.id || sourceEvidenceTime(latest) >= sourceEvidenceTime(memory))) {
+      const contradictionRequiresReview = memory.beliefState === "contradicted" || typeof memory.metadata.contradiction === "string";
       const updated = this.store.update(memory.id, {
-        beliefState: memory.beliefState === "contradicted" ? "needs_verification" : "active",
-        temporal: { ...memory.temporal, lastConfirmedAt: new Date().toISOString(), verificationDueAt: undefined, stalenessRisk: 0 },
+        beliefState: contradictionRequiresReview ? "needs_verification" : "active",
+        temporal: { ...memory.temporal, lastConfirmedAt: new Date().toISOString(), verificationDueAt: contradictionRequiresReview ? memory.temporal.verificationDueAt ?? new Date().toISOString() : undefined, stalenessRisk: contradictionRequiresReview ? Math.max(memory.temporal.stalenessRisk ?? 0, 0.7) : 0 },
         metadata: {
           sourceRevalidation: {
-            status: memory.beliefState === "contradicted" ? "needs_operator_review" : "confirmed",
+            status: contradictionRequiresReview ? "needs_operator_review" : "confirmed",
             at: new Date().toISOString(),
             sourceMemoryId: latest.id,
             syncRecordId: syncRecord?.id
           },
-          verification: memory.beliefState === "contradicted"
+          verification: contradictionRequiresReview
             ? { status: "needs_operator_review", at: new Date().toISOString(), reason: "confirmed source exists but memory was contradicted" }
             : { status: "confirmed", at: new Date().toISOString(), reason: "sourceRef revalidation" }
         }
       });
-      this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: memory.beliefState === "contradicted" ? "needs_operator_review" : "confirmed", sourceMemoryId: latest.id } });
+      this.registerMemoryClaim(updated);
+      this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: contradictionRequiresReview ? "needs_operator_review" : "confirmed", sourceMemoryId: latest.id } });
       return {
         memoryId: memory.id,
         connectorId: sourceRef.connectorId,
         externalId: sourceRef.externalId,
-        status: memory.beliefState === "contradicted" ? "needs_operator_review" : "confirmed",
-        reason: memory.beliefState === "contradicted" ? "source exists but contradiction still requires operator review" : "sourceRef matches current connector evidence",
+        status: contradictionRequiresReview ? "needs_operator_review" : "confirmed",
+        reason: contradictionRequiresReview ? "source exists but contradiction still requires operator review" : "sourceRef matches current connector evidence",
         sourceMemoryId: latest.id,
         syncRecordId: syncRecord?.id,
         previousHash: sourceRef.hash,
@@ -283,6 +288,7 @@ protected revalidateMemorySourceRefFallback(
       temporal: { ...memory.temporal, verificationDueAt: memory.temporal.verificationDueAt ?? new Date().toISOString(), stalenessRisk: Math.max(memory.temporal.stalenessRisk ?? 0, 0.65) },
       metadata: { sourceRevalidation: { status: "needs_operator_review", at: new Date().toISOString(), reason: "no current connector evidence found", syncRecordId: syncRecord?.id } }
     });
+    this.registerMemoryClaim(updated);
     this.recordAudit("memory.update", { userId: updated.userId, memoryId: updated.id, metadata: { action: "source_revalidation", status: "needs_operator_review" } });
     return {
       memoryId: memory.id,

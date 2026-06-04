@@ -127,7 +127,9 @@ function applyRiskAwareInjection(result: SearchResult, query: string): SearchRes
     if (riskLevel === "low") return { ...result, risk: { riskLevel, warnings: [], verificationRequests: [], truthReason: result.truth?.reason } };
     const warnings: string[] = [];
     const verificationRequests: string[] = [];
-    if (result.stale) verificationRequests.push("memory is stale for this risk level");
+    const confirmedAt = result.memory.temporal?.lastConfirmedAt ? new Date(result.memory.temporal.lastConfirmedAt).getTime() : undefined;
+    const recentlyConfirmed = Boolean(confirmedAt && Date.now() - confirmedAt < 24 * 60 * 60 * 1000);
+    if (result.stale && !recentlyConfirmed) verificationRequests.push("memory is stale for this risk level");
     if (result.memory.trust < 0.75) warnings.push("memory trust below high-risk threshold");
     if (result.memory.beliefState === "needs_verification") verificationRequests.push("memory is verification-due before injection");
     if (result.memory.beliefState === "contradicted" || result.truth?.currentTruthState === "uncertain") warnings.push("memory is conflicted or truth-uncertain");

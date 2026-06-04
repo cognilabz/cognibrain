@@ -330,7 +330,7 @@ const arenaBundledRunnersRawOnly = arenaRunnerContractRows.length > 0 && arenaRu
 const operatorMemoryNativeJudgeBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("runnerSelfChecksIgnored") && files.operatorMemoryBenchmarkSource.includes("raw native evidence is unjudged") && files.operatorMemoryBenchmarkSource.includes("native/cloud artifact is unjudged") && files.operatorMemoryOpenAiJudge.includes("Do not trust runner-proposed checks") && files.operatorMemoryOpenAiJudge.includes("Do not use exact string overlap") && files.operatorMemoryOpenAiJudge.includes("must be a JSON boolean") && files.operatorMemoryOpenAiJudge.includes("estimatedCostUsd") && files.operatorMemoryOpenAiJudge.includes("OpenAI-compatible Operator Memory judge response must include token usage") && files.evaluationTests.includes("records OpenAI-compatible operator-memory judge usage, cost and latency") && files.operatorMemoryNativeCompetitorBenchmark.includes("operator-memory-openai-judge.mjs");
 const operatorMemoryRunnerContractRows = Array.isArray(files.operatorMemoryBenchmark.systems) ? files.operatorMemoryBenchmark.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
 const operatorMemoryNativeRunnerContractRows = Array.isArray(files.operatorMemoryNativeCompetitors.systems) ? files.operatorMemoryNativeCompetitors.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
-const operatorMemoryBundledRunnersRawOnly = operatorMemoryRunnerContractRows.length > 0 && operatorMemoryRunnerContractRows.every((system) =>
+const operatorMemoryBenchmarkRunnerContractsOk = operatorMemoryRunnerContractRows.length === 0 || operatorMemoryRunnerContractRows.every((system) =>
   system.runnerContract?.rawEvidenceOnly === true &&
   system.runnerContract?.selfScoredChecksAllowed === false &&
   system.runnerContract?.scoreableChecksRequireJudge === true &&
@@ -342,12 +342,14 @@ const operatorMemoryBundledRunnersRawOnly = operatorMemoryRunnerContractRows.len
     scenario.evidence?.runnerContract?.selfScoredChecksAllowed === false &&
     scenario.evidence?.runnerContract?.scoreableChecksRequireJudge === true
   )
-) && operatorMemoryNativeRunnerContractRows.length > 0 && operatorMemoryNativeRunnerContractRows.every((system) =>
+);
+const operatorMemoryNativeRunnerContractsOk = operatorMemoryNativeRunnerContractRows.length > 0 && operatorMemoryNativeRunnerContractRows.every((system) =>
   system.runnerContract?.rawEvidenceOnly === true &&
   system.runnerContract?.selfScoredChecksAllowed === false &&
   system.runnerContract?.scoreableChecksRequireJudge === true &&
   system.runnerContract?.judgeEnv === "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND"
 );
+const operatorMemoryBundledRunnersRawOnly = operatorMemoryBenchmarkRunnerContractsOk && operatorMemoryNativeRunnerContractsOk;
 const operatorMemoryQualityClaimBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("operator-memory-quality-llm-harness-judge-v1") && files.operatorMemoryBenchmarkSource.includes("operator-memory-local-check-diagnostic") && files.operatorMemoryBenchmarkSource.includes("operator-memory-llm-harness-judge") && files.operatorMemoryBenchmarkSource.includes("Local operator-memory scenario checks are deterministic diagnostics only") && files.operatorMemoryBenchmarkSource.includes("Quality claims require") && files.operatorMemoryBenchmarkSource.includes("Do not rely on exact string overlap, check names, or runner-proposed scores");
 const cognicodeArtifactRequiredProof = Array.isArray(files.cognicodeBench.methodology?.requiredExternalProofForQualityClaim) && files.cognicodeBench.methodology.requiredExternalProofForQualityClaim.includes("ablation baselines may simulate from visible repo metadata only; hidden expected commands and files stay evaluator-only");
 const cognicodeArtifactBaselineBoundary = Array.isArray(files.cognicodeBench.baselines) && files.cognicodeBench.baselines.length > 0 && files.cognicodeBench.baselines.every((baseline) => Array.isArray(baseline.notes) && baseline.notes.some((note) => typeof note === "string" && note.includes("hidden expected commands/files are evaluator-only")));

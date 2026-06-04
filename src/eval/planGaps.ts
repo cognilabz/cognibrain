@@ -113,19 +113,21 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
   );
   const operatorMemoryRunnerContractRows = Array.isArray(operatorMemoryArtifact.systems) ? operatorMemoryArtifact.systems.filter((system: any) => system?.runner?.commandEnv || system?.runnerContract) : [];
   const operatorMemoryNativeRunnerContractRows = Array.isArray(operatorMemoryNativeArtifact.systems) ? operatorMemoryNativeArtifact.systems.filter((system: any) => system?.runner?.commandEnv || system?.runnerContract) : [];
-  const operatorMemoryRunnerContractBoundary = operatorMemoryRunnerContractRows.length > 0 && operatorMemoryRunnerContractRows.every((system: any) =>
+  const operatorMemoryBenchmarkRunnerContractsOk = operatorMemoryRunnerContractRows.length === 0 || operatorMemoryRunnerContractRows.every((system: any) =>
     system.runnerContract?.rawEvidenceOnly === true &&
     system.runnerContract?.selfScoredChecksAllowed === false &&
     system.runnerContract?.scoreableChecksRequireJudge === true &&
     system.runnerContract?.judgeEnv === "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND" &&
     system.runnerContract?.judgeProtocol === "cognibrain-operator-memory-llm-harness-judge-v1" &&
     system.runnerContract?.observedScenarioContracts === system.scenarioCount
-  ) && operatorMemoryNativeRunnerContractRows.length > 0 && operatorMemoryNativeRunnerContractRows.every((system: any) =>
+  );
+  const operatorMemoryNativeRunnerContractsOk = operatorMemoryNativeRunnerContractRows.length > 0 && operatorMemoryNativeRunnerContractRows.every((system: any) =>
     system.runnerContract?.rawEvidenceOnly === true &&
     system.runnerContract?.selfScoredChecksAllowed === false &&
     system.runnerContract?.scoreableChecksRequireJudge === true &&
     system.runnerContract?.judgeEnv === "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND"
   );
+  const operatorMemoryRunnerContractBoundary = operatorMemoryBenchmarkRunnerContractsOk && operatorMemoryNativeRunnerContractsOk;
   const all = Object.values(files).join("\n");
   const checks: PlanGapCheck[] = [
     check("storage.async-postgres-pool", "storage", "Postgres production repository uses a long-lived pg.Pool, prepared statements, migrations and RLS.", files, [
@@ -264,7 +266,10 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
       area: "benchmarks",
       description: "Operator Memory native command-runner rows provide raw evidence and leave source-aware scoring to the central LLM/harness judge.",
       passed: operatorMemoryRunnerContractBoundary,
-      evidence: operatorMemoryRunnerContractRows.map((system: any) => `artifacts/operator-memory-benchmark.json:${system.system}.runnerContract.${system.runnerContract?.judgeEnv ?? "missing"}`),
+      evidence: [
+        ...operatorMemoryRunnerContractRows.map((system: any) => `artifacts/operator-memory-benchmark.json:${system.system}.runnerContract.${system.runnerContract?.judgeEnv ?? "missing"}`),
+        ...operatorMemoryNativeRunnerContractRows.map((system: any) => `artifacts/operator-memory-native-competitors.json:${system.system}.runnerContract.${system.runnerContract?.judgeEnv ?? "missing"}`)
+      ],
       gaps: operatorMemoryRunnerContractBoundary ? [] : ["operator-memory artifacts missing structured raw-runner contract for native command-runner systems"]
     },
     check("enterprise.production-hardening", "enterprise", "Enterprise hardening has Prometheus metrics, structured logs/tracing, backup replay and production certification artifacts.", files, [

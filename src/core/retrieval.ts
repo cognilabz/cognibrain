@@ -652,6 +652,10 @@ function heuristicVerify(query: string, results: SearchResult[]): SearchResult[]
     if (typeof result.memory.metadata.contradiction === "string") {
       return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "contradiction marker present"] };
     }
+    const conflictReview = result.memory.metadata.conflictReview as { status?: string } | undefined;
+    if (conflictReview?.status === "needs_operator_review") {
+      return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "conflict review pending"] };
+    }
     if (result.memory.beliefState === "contradicted" || result.memory.beliefState === "needs_verification") {
       return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), `belief state ${result.memory.beliefState}`] };
     }

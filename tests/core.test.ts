@@ -2541,6 +2541,96 @@ describe("TypeScript memory core", () => {
     });
   });
 
+  it("marks deleted connector sourceRefs as review-required and keeps stale content out of context", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.registerConnectorManifest({
+      id: "deleted-runbook",
+      name: "Deleted Runbook",
+      kind: "docs",
+      version: "1.0.0",
+      direction: "ingest",
+      capabilities: ["ingest", "poll"],
+      auth: "none",
+      defaultSourceKind: "tool",
+      metadataMapping: {},
+      poll: { endpoint: "https://example.invalid/poll", method: "GET" },
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z"
+    });
+    const initial = service.syncConnectorEvents("deleted-runbook", [{
+      role: "tool",
+      content: "Runbook RUN-4 says restart payments worker with legacy-restart.sh.",
+      externalId: "RUN-4",
+      timestamp: "2026-05-01T00:00:00.000Z",
+      metadata: { version: "1" }
+    }], { userId: "u1", projectId: "payments" });
+    const fetchImpl = async () => new Response(JSON.stringify({
+      nextCursor: "cursor-delete",
+      sourceVersion: "deleted",
+      deletedExternalIds: ["RUN-4"],
+      events: []
+    }), { status: 200, headers: { "content-type": "application/json" } });
+
+    const record = await service.pollConnector("deleted-runbook", { userId: "u1", projectId: "payments" }, fetchImpl as typeof fetch);
+    const memory = service.get(initial.memoryIds[0]);
+    const pack = service.evidencePack({ userId: "u1", projectId: "payments", query: "payments worker restart runbook", tokenBudget: 500 });
+
+    expect(record.externalIds).toContain("RUN-4");
+    expect(record.memoryIds).toContain(memory.id);
+    expect(record.payload?.deletedExternalIds).toEqual(["RUN-4"]);
+    expect(memory.beliefState).toBe("needs_verification");
+    expect(memory.content).toContain("operator review is required");
+    expect(memory.content).not.toContain("legacy-restart.sh");
+    expect(memory.metadata.previousContent).toContain("legacy-restart.sh");
+    expect(pack.context).not.toContain("legacy-restart.sh");
+  });
+
+  it("preserves upstream connector claims for semantic conflict review", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.registerConnectorManifest({
+      id: "claim-docs",
+      name: "Claim Docs",
+      kind: "docs",
+      version: "1.0.0",
+      direction: "ingest",
+      capabilities: ["ingest"],
+      auth: "none",
+      defaultSourceKind: "tool",
+      metadataMapping: {},
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z"
+    });
+    service.syncConnectorEvents("claim-docs", [{
+      role: "tool",
+      content: "Confluence ADR-31 says payment gateway is Stripe.",
+      externalId: "adr-31",
+      timestamp: "2026-05-01T00:00:00.000Z",
+      metadata: { claim: { subject: "payment gateway", predicate: "decision", object: "Stripe", confidence: 0.82 } }
+    }, {
+      role: "tool",
+      content: "Notion launch spec says payment gateway is Adyen.",
+      externalId: "launch-spec",
+      timestamp: "2026-05-02T00:00:00.000Z",
+      metadata: { claim: { subject: "payment gateway", predicate: "decision", object: "Adyen", confidence: 0.82 } }
+    }], { userId: "u1", projectId: "payments" });
+
+    const report = service.runDreamCycle({ userId: "u1", mode: "dream", trigger: "before_release", budget: "release", force: true });
+    const memories = service.listMemories("u1", { includeArchived: true });
+
+    expect(memories.map((memory) => memory.metadata.claim)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ subject: "payment gateway", predicate: "decision", object: "Stripe" }),
+      expect.objectContaining({ subject: "payment gateway", predicate: "decision", object: "Adyen" })
+    ]));
+    expect(report.contradictions).toHaveLength(0);
+    const connectorMemories = memories.filter((memory) => memory.metadata.externalId);
+    expect(connectorMemories.every((memory) => (memory.metadata.conflictReview as { status?: string } | undefined)?.status === "needs_operator_review")).toBe(true);
+    expect(memories.some((memory) => (memory.metadata.conflictReviewSummary as { claimKey?: string } | undefined)?.claimKey === "payment gateway:decision")).toBe(true);
+    const pack = service.evidencePack({ userId: "u1", projectId: "payments", query: "payment gateway decision", tokenBudget: 500 });
+    expect(pack.context).toContain("operator review");
+    expect(pack.context).not.toContain("Stripe");
+    expect(pack.context).not.toContain("Adyen");
+  });
+
   it("exposes connector review queue decisions as first-class memory operations", () => {
     const service = new MemoryService({ autoDream: { enabled: false } });
     service.registerConnectorManifest({

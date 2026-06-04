@@ -551,6 +551,31 @@ describe("TypeScript memory core", () => {
     }
   });
 
+  it("does not pass generic OpenAI provider secrets into runtime intelligence commands", () => {
+    const previousMemoryOpenAiKey = process.env.MEMORY_OPENAI_API_KEY;
+    const previousOpenAiKey = process.env.OPENAI_API_KEY;
+    try {
+      process.env.MEMORY_OPENAI_API_KEY = "runtime-provider-secret";
+      process.env.OPENAI_API_KEY = "generic-provider-secret";
+      const script = `
+        process.stdin.resume();
+        process.stdin.on("end", () => {
+          console.log(JSON.stringify({
+            content: process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY ? "leaked" : "sanitized",
+            confidence: 0.91
+          }));
+        });
+      `;
+      const provider = new JsonCommandMemoryIntelligence({ command: process.execPath, args: ["-e", script] });
+      expect(provider.summarize({ theme: "runtime env", memories: [], now: new Date("2026-06-04T00:00:00.000Z") }).content).toBe("sanitized");
+    } finally {
+      if (previousMemoryOpenAiKey === undefined) delete process.env.MEMORY_OPENAI_API_KEY;
+      else process.env.MEMORY_OPENAI_API_KEY = previousMemoryOpenAiKey;
+      if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previousOpenAiKey;
+    }
+  });
+
   it("keeps scoped and private memories out of unrelated retrieval", () => {
     const store = new MemoryStore();
     store.add({

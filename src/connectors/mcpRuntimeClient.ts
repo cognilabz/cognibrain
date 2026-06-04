@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } 
 import { dirname, join, resolve } from "node:path";
 import { createDefaultMemoryService, type MemoryService } from "../api/service";
 import type { DreamCycleInput, HarnessLifecycleEventInput, Memory, MemoryInput, MemoryPolicyOperation } from "../core";
+import { sanitizedRuntimeEnv } from "../core/runtimeEnv";
 import { createMemoryToolHandlers } from "./mcpHandlers";
 import type {
   ConnectorReviewDecisionArgs,
@@ -654,7 +655,7 @@ function autostartDaemon(root: string, runtimeRoot: string): void {
     writeFileSync(lockFd, `${process.pid}\n`);
     spawnSync(process.execPath, [join(root, "bin", "cognibrain.mjs"), "--runtime-root", runtimeRoot, "start"], {
       cwd: root,
-      env: process.env,
+      env: sanitizedRuntimeEnv(),
       stdio: "ignore",
       timeout: 12_000
     });

@@ -88,6 +88,8 @@ const files = {
   coreIntegrationTests: read("tests/core-integrations.test.ts"),
   evaluationTests: readMany(["tests/evaluation.test.ts", "tests/openai-runner-judges.test.ts"]),
   storageAdapter: read("src/core/storageAdapter.ts"),
+  runtimeEnvSource: read("src/core/runtimeEnv.ts"),
+  cliRuntimeEnvSource: read("bin/lib/runtimeEnv.mjs"),
   openAiEmbeddingsSource: read("src/core/openaiEmbeddings.ts"),
   repositories: readMany([
     "src/api/repositories/sqliteRepository.ts",
@@ -275,6 +277,19 @@ const dreamPlanNotDueFastPath = files.dreamRuntime.includes("canSkipMemoryScan")
   files.coreTests.includes("expect(listCalls).toBe(0)");
 const runtimeOpenAiEnvIsolation = !files.openAiEmbeddingsSource.includes("process.env.MEMORY_OPENAI_API_KEY") &&
   !files.openAiEmbeddingsSource.includes("process.env.OPENAI_API_KEY") &&
+  files.runtimeEnvSource.includes("RUNTIME_FORBIDDEN_LLM_ENV_KEYS") &&
+  files.runtimeEnvSource.includes("\"MEMORY_OPENAI_API_KEY\"") &&
+  files.runtimeEnvSource.includes("\"OPENAI_API_KEY\"") &&
+  files.runtimeEnvSource.includes("delete sanitized[key]") &&
+  files.cliRuntimeEnvSource.includes("RUNTIME_FORBIDDEN_LLM_ENV_KEYS") &&
+  files.cliRuntimeEnvSource.includes("delete sanitized[key]") &&
+  files.cli.includes("import { sanitizedRuntimeEnv } from \"./runtimeEnv.mjs\"") &&
+  files.cli.includes("import { sanitizedRuntimeEnv } from \"../../bin/lib/runtimeEnv.mjs\"") &&
+  files.cli.includes("...sanitizedRuntimeEnv()") &&
+  files.cli.includes("env: sanitizedRuntimeEnv()") &&
+  files.dreamRoutes.includes("env: sanitizedRuntimeEnv()") &&
+  files.coreTests.includes("does not pass generic OpenAI provider secrets into runtime intelligence commands") &&
+  files.cliTests.includes("sanitizes generic OpenAI provider secrets from runtime child process environments") &&
   files.openAiEmbeddingsSource.includes("return new LocalHashEmbeddingProvider()") &&
   files.coreTests.includes("does not auto-enable OpenAI-compatible embeddings from runtime API key env vars") &&
   files.coreTests.includes("runtime-key-must-not-enable-provider");

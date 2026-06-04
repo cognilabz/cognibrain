@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { z } from "zod";
 import { defaultService } from "../service";
 import type { DreamCycleTrigger } from "../../core";
+import { sanitizedRuntimeEnv } from "../../core/runtimeEnv";
 import { json, send, serialize, serializeDreamCycleReport, serializeHarnessLifecycleEvent } from "./helpers";
 
 const dreamTriggerSchema = z.enum(["manual_reflect", "manual_dream", "auto_write_threshold", "auto_interval", "harness_session_end", "harness_handoff", "before_release", "after_connector_sync", "after_negative_feedback", "after_contradiction_detected"]);
@@ -253,7 +254,7 @@ function executeHarnessCommand(command: string, options: { cwd: string; timeoutM
     const child = spawn(command, {
       cwd: options.cwd,
       shell: true,
-      env: process.env,
+      env: sanitizedRuntimeEnv(),
       stdio: ["ignore", "pipe", "pipe"]
     });
     const timer = setTimeout(() => {

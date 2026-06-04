@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { sanitizedRuntimeEnv } from "./runtimeEnv.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const runtimeRoot = resolve(process.env.COGNIBRAIN_RUNTIME_ROOT ?? process.env.COGNIBRAIN_HOME ?? process.cwd());
@@ -365,7 +366,7 @@ function autostartDaemon() {
     writeFileSync(lockFd, `${process.pid}\n`);
     spawnSync(process.execPath, [join(root, "bin", "cognibrain.mjs"), "--runtime-root", runtimeRoot, "start"], {
       cwd: root,
-      env: process.env,
+      env: sanitizedRuntimeEnv(),
       stdio: "ignore",
       timeout: 12_000
     });

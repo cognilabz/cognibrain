@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createMcpRuntimeToolHandlers } from "../src/connectors/mcpRuntimeClient";
+import { sanitizedRuntimeEnv } from "../src/core/runtimeEnv";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const cli = join(root, "bin", "cognibrain.mjs");
@@ -122,6 +123,32 @@ describe("cognibrain CLI", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, slowCliTimeout);
+
+  it("sanitizes generic OpenAI provider secrets from runtime child process environments", () => {
+    const env = sanitizedRuntimeEnv({
+      ...process.env,
+      MEMORY_OPENAI_API_KEY: "runtime-provider-secret",
+      OPENAI_API_KEY: "generic-provider-secret",
+      MEMORY_API_KEY: "local-api-key"
+    });
+    const cliEnv = JSON.parse(execFileSync(process.execPath, [
+      "--input-type=module",
+      "-e",
+      `import { sanitizedRuntimeEnv } from ${JSON.stringify(new URL("../bin/lib/runtimeEnv.mjs", import.meta.url).href)};
+       console.log(JSON.stringify(sanitizedRuntimeEnv({
+         MEMORY_OPENAI_API_KEY: "runtime-provider-secret",
+         OPENAI_API_KEY: "generic-provider-secret",
+         MEMORY_API_KEY: "local-api-key"
+       })));`
+    ], { cwd: root, encoding: "utf8" }));
+
+    expect(env.MEMORY_OPENAI_API_KEY).toBeUndefined();
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.MEMORY_API_KEY).toBe("local-api-key");
+    expect(cliEnv.MEMORY_OPENAI_API_KEY).toBeUndefined();
+    expect(cliEnv.OPENAI_API_KEY).toBeUndefined();
+    expect(cliEnv.MEMORY_API_KEY).toBe("local-api-key");
+  });
 
   it("does not treat memory subcommand help flags as memory content or ids", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-memory-help-"));

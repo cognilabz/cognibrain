@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { sanitizedRuntimeEnv } from "./runtimeEnv";
 import type {
   ContextReranker,
   ContextEvidenceJudge,
@@ -180,6 +181,7 @@ export class JsonCommandMemoryIntelligence implements ContradictionDetector, Con
       const stdout = execFileSync(this.options.command, [...(this.options.args ?? []), task], {
         input: JSON.stringify({ task, ...payload }),
         encoding: "utf8",
+        env: sanitizedRuntimeEnv(),
         timeout: this.options.timeoutMs ?? 3500,
         maxBuffer: 1_000_000
       });

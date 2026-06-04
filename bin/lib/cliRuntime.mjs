@@ -5,6 +5,7 @@ import { createHarnessRuntime } from "./harnessRuntime.mjs";
 import { formatResourceFootprint, resourceFootprint } from "./resourcesRuntime.mjs";
 import { renderCliPanel, renderCliSurface } from "./render.mjs";
 import { createServiceRuntime } from "./serviceRuntime.mjs";
+import { sanitizedRuntimeEnv } from "./runtimeEnv.mjs";
 import { adapterUsage, configUsage, connectionsUsage, connectorUsage, initUsage, memoriesUsage, proofUsage, sdkUsage, serviceUsage, skillUsage, usage } from "./usage.mjs";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import http from "node:http";
@@ -2479,7 +2480,7 @@ function parseGlobalArgs(input) {
 
 function runtimeEnv() {
   return {
-    ...process.env,
+    ...sanitizedRuntimeEnv(),
     COGNIBRAIN_RUNTIME_ROOT: runtimeRoot,
     MEMORY_DB_PATH: process.env.MEMORY_DB_PATH ?? join(runtimeRoot, ".memory-harness.json")
   };

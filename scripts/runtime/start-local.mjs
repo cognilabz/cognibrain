@@ -5,6 +5,7 @@ import http from "node:http";
 import net from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sanitizedRuntimeEnv } from "../../bin/lib/runtimeEnv.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const runtimeRoot = resolve(process.env.COGNIBRAIN_RUNTIME_ROOT ?? process.env.COGNIBRAIN_HOME ?? process.cwd());
@@ -46,7 +47,7 @@ async function startDaemon() {
     cwd: root,
     detached: true,
     env: {
-      ...process.env,
+      ...sanitizedRuntimeEnv(),
       NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV,
       COGNIBRAIN_RUNTIME_ROOT: runtimeRoot,
       HOST: process.env.HOST ?? "127.0.0.1",
@@ -63,7 +64,7 @@ async function startDaemon() {
     ui = spawn(next, ["dev", operatorUiPath, "-H", "127.0.0.1", "-p", String(uiPort)], {
       cwd: root,
       detached: true,
-      env: { ...process.env, NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? `http://127.0.0.1:${apiPort}` },
+      env: { ...sanitizedRuntimeEnv(), NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? `http://127.0.0.1:${apiPort}` },
       stdio: ["ignore", uiLog, uiLog]
     });
     ui.unref();
@@ -94,7 +95,7 @@ async function startForeground() {
   const api = spawn(apiRuntime.command, apiRuntime.args, {
     cwd: root,
     env: {
-      ...process.env,
+      ...sanitizedRuntimeEnv(),
       NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV,
       COGNIBRAIN_RUNTIME_ROOT: runtimeRoot,
       HOST: process.env.HOST ?? "127.0.0.1",
@@ -109,7 +110,7 @@ async function startForeground() {
     uiPort = await findOpenPort(uiStartPort);
     ui = spawn(next, ["dev", operatorUiPath, "-H", "127.0.0.1", "-p", String(uiPort)], {
       cwd: root,
-      env: { ...process.env, NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? `http://127.0.0.1:${apiPort}` },
+      env: { ...sanitizedRuntimeEnv(), NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV, COGNIBRAIN_RUNTIME_ROOT: runtimeRoot, NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? `http://127.0.0.1:${apiPort}` },
       stdio: "inherit"
     });
   }

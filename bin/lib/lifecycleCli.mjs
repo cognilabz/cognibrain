@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { dirname, join, resolve } from "node:path";
+import { sanitizedRuntimeEnv } from "./runtimeEnv.mjs";
 
 const EXIT_CODES = {
   success: 0,
@@ -404,7 +405,7 @@ class LocalDirectBackend {
     const result = spawnSync(tsx, [join(this.context.root, "src", "cli", "lifecycleLocalDirect.ts"), command], {
       cwd: this.context.launchCwd,
       env: {
-        ...process.env,
+        ...sanitizedRuntimeEnv(),
         NODE_ENV: process.env.NODE_ENV === "test" ? "development" : process.env.NODE_ENV,
         COGNIBRAIN_RUNTIME_ROOT: this.context.runtimeRoot,
         MEMORY_DB_PATH: process.env.MEMORY_DB_PATH ?? join(this.context.runtimeRoot, ".memory-harness.json"),
@@ -483,7 +484,7 @@ async function autostartDaemon(context) {
     writeFileSync(lockFd, `${process.pid}\n`);
     spawnSync(process.execPath, [join(context.root, "bin", "cognibrain.mjs"), "--runtime-root", context.runtimeRoot, "start"], {
       cwd: context.launchCwd,
-      env: process.env,
+      env: sanitizedRuntimeEnv(),
       encoding: "utf8",
       maxBuffer: 1024 * 1024
     });

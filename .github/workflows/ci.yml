@@ -38,7 +38,6 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TRUSTED_PUBLISHING: ${{ vars.NPM_TRUSTED_PUBLISHING }}
         run: |
           PACKAGE_NAME="$(node -p "require('./package.json').name")"
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
@@ -72,11 +71,6 @@ jobs:
 
           echo "Publishing $PACKAGE_NAME@$NEXT_VERSION to npm."
           if [ -z "$NODE_AUTH_TOKEN" ]; then
-            if [ "$NPM_TRUSTED_PUBLISHING" != "true" ]; then
-              echo "NPM_TOKEN is not set and NPM_TRUSTED_PUBLISHING is not true; skipping npm publish."
-              echo "Set the NPM_TOKEN repository secret or configure npm trusted publishing for cognilabz/cognibrain + ci.yml and set NPM_TRUSTED_PUBLISHING=true."
-              exit 0
-            fi
             echo "NPM_TOKEN is not set; using npm trusted publishing via GitHub OIDC."
           fi
           npm publish --access public

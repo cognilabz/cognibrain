@@ -29,6 +29,10 @@ const files = {
   realworldNativeCompetitors: readJson("artifacts/realworld-native-competitors.json", { systems: [], originalRawOutputRuns: 0 }),
   operatorMemoryBenchmark: readJson("artifacts/operator-memory-benchmark.json", { systems: [] }),
   operatorMemoryNativeCompetitors: readJson("artifacts/operator-memory-native-competitors.json", { systems: [] }),
+  retrievalSource: read("src/core/retrieval.ts"),
+  engineeringMemorySource: read("src/core/engineeringMemory.ts"),
+  engineeringTypes: read("src/core/types/engineering.ts"),
+  searchRuntimeSource: read("src/api/service/searchRuntime.ts"),
   arenaSource: read("src/eval/arena.ts"),
   arenaOpenAiJudge: read("scripts/benchmark/arena-openai-judge.mjs"),
   nativeCompetitorBenchmark: read("scripts/benchmark/benchmark-native-competitors.mjs"),
@@ -553,6 +557,15 @@ const nextgenLifecycleDiagnosticBoundary = files.nextgenBenchmarksSource.include
   "`qualityClaimAllowed=false`",
   "`marketClaimAllowed=false`"
 ]);
+const runtimeHarnessEvidenceInjectionBoundary = files.retrievalSource.includes("local relevance gate: not harness verification") &&
+  files.retrievalSource.includes("verification provenance") &&
+  files.retrievalSource.includes("claimSafe") &&
+  files.searchRuntimeSource.includes("explicit LLM/harness evidence judge is required before release-critical or destructive injection") &&
+  files.engineeringTypes.includes('delivery?: "injectable" | "review_required"') &&
+  files.engineeringMemorySource.includes('item.delivery !== "review_required"') &&
+  files.engineeringMemorySource.includes("reviewReason") &&
+  files.coreTests.includes("keeps release-critical context injection unsafe until an explicit harness evidence judge accepts it") &&
+  files.coreTests.includes("keeps unsafe harness-reviewed engineering memories out of injected coding context while retaining review evidence");
 const arenaPublishPublicGateBoundary = files.publishArenaSource.includes("claimAllowed") && files.publishArenaSource.includes("diagnosticPassed") && files.publishArenaSource.includes("claimBlockers") && files.publishArenaSource.includes("Public benchmark claim blockers") && files.publishArenaSource.includes("scoreable") && files.publishArenaSource.includes("local-diagnostic") && files.publishArenaSource.includes("systemClaimStatus") && files.publishArenaSource.includes("Synthetic Diagnostic Scorecard") && files.publishArenaSource.includes("Top diagnostic score") && files.publishArenaSource.includes("market and quality claims require publicBenchmarkGate.claimAllowed=true");
 const benchmarkSvgClaimBoundary = files.benchmarkSvgSource.includes("publicClaimAllowed") && files.benchmarkSvgSource.includes("publicClaimDetail") && files.benchmarkSvgSource.includes("boundary-missing") && files.benchmarkSvgSource.includes("arenaProofDetail") && files.benchmarkSvgSource.includes("API-shape and blocked rows are diagnostic, not market proof") && files.benchmarkSvgSource.includes("Internal regression and ablation diagnostics") && files.benchmarkSvgSource.includes("Diagnostic rows are not quality or market proof unless LLM/harness claim status says so") && !files.benchmarkSvgSource.includes('row.label === "Cognibrain full"') && files.benchmarkSvg.includes("claim blocked") && files.benchmarkSvg.includes("diagnostic pass") && files.benchmarkSvg.includes("api-shape diagnostic") && files.benchmarkSvg.includes("not market proof") && files.benchmarkSvg.includes("ablation diagnostic") && files.benchmarkSvg.includes("internal diagnostic");
 const leaderboardDiagnosticClaimsBounded = files.leaderboardSource.includes('"local-diagnostic"') && files.leaderboardSource.includes("claimAllowed") && files.leaderboardSource.includes("cannot allow quality claims") && files.leaderboardSource.includes('"llm-harness"') && files.leaderboardSource.includes('"public-benchmark"');
@@ -682,6 +695,10 @@ const checks = [
   }),
   check("answer-generation-claim-boundary", "Answer-generation artifacts expose deterministic coverage as diagnostic-only and fail closed when a configured LLM/harness judge command is invalid.", answerGenerationClaimBoundary, "fail", {
     source: "src/eval/answerGeneration.ts"
+  }),
+  check("runtime-harness-evidence-injection-boundary", "Runtime retrieval marks local relevance gates as not claim-safe; release-critical or destructive context injection requires explicit LLM/harness evidence judgement while coding packs retain unsafe evidence only as review-required metadata.", runtimeHarnessEvidenceInjectionBoundary, "fail", {
+    sources: ["src/core/retrieval.ts", "src/api/service/searchRuntime.ts", "src/core/engineeringMemory.ts"],
+    tests: "tests/core.test.ts"
   }),
   check("arena-external-runner-judge-contract", "External Arena competitor runners cannot score themselves; native same-run outputs require an explicit LLM/harness judge command for scoreable checks.", arenaRunnerChecksFailClosed && arenaOpenAiJudgeStrict, "fail", {
     source: "src/eval/arena.ts",

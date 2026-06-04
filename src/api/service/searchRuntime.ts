@@ -135,6 +135,9 @@ function applyRiskAwareInjection(result: SearchResult, query: string): SearchRes
     if (result.memory.beliefState === "contradicted" || result.truth?.currentTruthState === "uncertain") warnings.push("memory is conflicted or truth-uncertain");
     const verificationDueAt = result.memory.temporal?.verificationDueAt ? new Date(result.memory.temporal.verificationDueAt).getTime() : undefined;
     if (verificationDueAt && verificationDueAt <= Date.now()) verificationRequests.push("source verification is due");
+    if ((riskLevel === "destructive" || riskLevel === "release-critical") && result.verification?.claimSafe !== true) {
+      verificationRequests.push("explicit LLM/harness evidence judge is required before release-critical or destructive injection");
+    }
     const actionGuardBlock = (riskLevel === "destructive" || riskLevel === "release-critical") && (warnings.length > 0 || verificationRequests.length > 0);
     if (!warnings.length && !verificationRequests.length) return { ...result, risk: { riskLevel, warnings, verificationRequests, truthReason: result.truth?.reason } };
     const nextDecision: SearchResult["decision"] = result.decision === "exclude" ? "exclude" : actionGuardBlock ? "review" : "warn";
@@ -333,6 +336,7 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
           confidence: result.confidence,
           initialScore: result.initialScore,
           mode: result.retrievalMode,
+          verification: result.verification,
           signals: result.signals,
           scoreBreakdown: {
             ...result.signals,

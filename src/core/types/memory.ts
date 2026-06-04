@@ -207,6 +207,14 @@ export interface SearchResult {
     conflictSetId?: string;
   };
   evidence?: EvidenceJudgement;
+  verification?: {
+    reranker: "harness" | "local";
+    verifier: "harness" | "local_relevance_gate";
+    evidenceJudge: "harness" | "missing";
+    harnessVerified: boolean;
+    claimSafe: boolean;
+    reason: string;
+  };
   risk?: {
     riskLevel: "low" | "medium" | "high" | "release-critical" | "destructive";
     warnings: string[];
@@ -259,12 +267,13 @@ export interface EvidencePack {
       stale: boolean;
       decision?: SearchResult["decision"];
     };
-    retrieval: {
-      score: number;
-      confidence?: number;
-      unsafeToInject?: boolean;
-      initialScore?: number;
-      mode?: RetrievalMode;
+	      retrieval: {
+	      score: number;
+	      confidence?: number;
+	      unsafeToInject?: boolean;
+	      verification?: SearchResult["verification"];
+	      initialScore?: number;
+	      mode?: RetrievalMode;
       signals: SearchResult["signals"];
       scoreBreakdown?: SearchResult["signals"] & { finalScore: number; initialScore?: number; confidence?: number };
       explanation: string[];

@@ -167,10 +167,10 @@ export function buildCodingContextPackFromResults(input: {
       excludedStaleRules.push({ memoryId: result.memory.id, reason: `high-impact ${engineering.kind} requires revalidation before injection`, kind: engineering.kind });
       continue;
     }
-    if (result.unsafeToInject) {
-      excludedStaleRules.push({ memoryId: result.memory.id, reason: "unsafe to inject without review", kind: engineering.kind });
-      continue;
-    }
+    const delivery = result.unsafeToInject ? "review_required" as const : "injectable" as const;
+    const reviewReason = result.unsafeToInject
+      ? result.risk?.verificationRequests?.join("; ") || result.verification?.reason || "unsafe to inject without review"
+      : undefined;
     const section = sectionForKind(engineering.kind);
     const line = `[${result.memory.id}] ${engineering.kind}: ${result.memory.content}`;
     const cost = estimateTokens(line);
@@ -184,12 +184,21 @@ export function buildCodingContextPackFromResults(input: {
       trust: result.memory.trust,
       source: result.memory.source,
       stale: result.stale || result.memory.beliefState === "stale" || result.memory.beliefState === "needs_verification",
+      unsafeToInject: result.unsafeToInject,
+      delivery,
+      reviewReason,
+      verification: result.verification,
       graphPaths: result.graphPaths
     });
   }
   const activeSections = [...sections.values()].filter((section) => section.evidence.length);
   const context = activeSections
-    .map((section) => [`## ${section.title}`, ...section.evidence.map((item) => `- [${item.memoryId}] ${item.kind}: ${item.content}`)].join("\n"))
+    .map((section) => {
+      const injectable = section.evidence.filter((item) => item.delivery !== "review_required" && !item.unsafeToInject);
+      if (!injectable.length) return "";
+      return [`## ${section.title}`, ...injectable.map((item) => `- [${item.memoryId}] ${item.kind}: ${item.content}`)].join("\n");
+    })
+    .filter(Boolean)
     .join("\n\n");
   return {
     schemaVersion: "1.0",

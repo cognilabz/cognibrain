@@ -1,4 +1,5 @@
 import type { FeedbackKind, MemoryScope, Provenance } from "./base";
+import type { SearchResult } from "./memory";
 
 export type EngineeringMemoryKind =
   | "repo_policy"
@@ -94,10 +95,14 @@ export interface CodingContextPack {
       memoryId: string;
       kind?: EngineeringMemoryKind;
       content: string;
-      score: number;
-      trust: number;
+	      score: number;
+	      trust: number;
       source: Provenance;
       stale: boolean;
+      unsafeToInject?: boolean;
+      delivery?: "injectable" | "review_required";
+      reviewReason?: string;
+      verification?: SearchResult["verification"];
       graphPaths?: string[];
     }>;
   }>;

@@ -152,6 +152,47 @@ describe("TypeScript memory core", () => {
     expect(results[0].explanation?.some((item) => item.includes("rerank coverage"))).toBe(true);
   });
 
+  it("keeps release-critical context injection unsafe until an explicit harness evidence judge accepts it", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.add({
+      userId: "u1",
+      content: "Atlas production deploy must run npm test and npm run build before release.",
+      entities: ["atlas", "production", "release"],
+      source: { kind: "reviewed_code", confidence: 0.98 },
+      timestamp: "2026-06-04T00:00:00.000Z"
+    });
+
+    const localOnly = service.evidencePack({
+      userId: "u1",
+      query: "ship production release deploy gate for Atlas",
+      now: new Date("2026-06-04T01:00:00.000Z")
+    });
+    expect(localOnly.context).not.toContain("Atlas production deploy");
+    expect(localOnly.excludedResults?.[0]).toMatchObject({ decision: "review" });
+    expect(localOnly.excludedResults?.[0].reason).toContain("unsafe-to-inject");
+
+    const judged = service.evidencePack({
+      userId: "u1",
+      query: "ship production release deploy gate for Atlas",
+      now: new Date("2026-06-04T01:00:00.000Z"),
+      evidenceJudge: {
+        judgeEvidence: ({ results }) => ({
+          answerable: true,
+          confidence: 0.96,
+          reason: "fixture harness evidence judge accepted the reviewed release gate memory",
+          decisions: results.map((result) => ({ id: result.memory.id, decision: "include", confidence: 0.96, reason: "release gate supported" }))
+        })
+      }
+    });
+
+    expect(judged.context).toContain("Atlas production deploy");
+    expect(judged.results[0].retrieval.verification).toMatchObject({
+      evidenceJudge: "harness",
+      claimSafe: true,
+      harnessVerified: true
+    });
+  });
+
   it("uses BM25-style lexical ranking for repeated exact query terms", () => {
     const store = new MemoryStore();
     store.add({ userId: "u1", content: "Atlas cache cache cache incidents mention Redis once.", source: { kind: "human", confidence: 0.95 } });
@@ -913,7 +954,7 @@ describe("TypeScript memory core", () => {
     expect(pack.excludedResults?.find((result) => result.memoryId === memory.id)?.reason).toContain("unsafe-to-inject");
   });
 
-  it("keeps unsafe harness-reviewed engineering memories out of coding context packs", () => {
+  it("keeps unsafe harness-reviewed engineering memories out of injected coding context while retaining review evidence", () => {
     const service = new MemoryService({
       intelligence: {
         evidenceJudge: {
@@ -937,7 +978,12 @@ describe("TypeScript memory core", () => {
 
     const pack = service.codingContextPack({ userId: "dev", projectId: "atlas", query: "Atlas release test policy", codebaseScope: { repo: "atlas" }, tokenBudget: 500 });
     expect(pack.context).not.toContain(memory.id);
-    expect(pack.excludedStaleRules.find((item) => item.memoryId === memory.id)?.reason).toContain("unsafe");
+    const reviewEvidence = pack.sections.flatMap((section) => section.evidence).find((item) => item.memoryId === memory.id);
+    expect(reviewEvidence).toMatchObject({
+      delivery: "review_required",
+      unsafeToInject: true,
+      verification: { evidenceJudge: "harness", claimSafe: false }
+    });
   });
 
   it("schedules verification for time-sensitive stale memories", () => {

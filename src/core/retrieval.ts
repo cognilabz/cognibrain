@@ -71,12 +71,17 @@ export class RetrievalEngine {
 
     const results = fuseResults(scored, mode).slice(0, options.limit ?? 8);
 
-    const reranked = options.reranker ? options.reranker.rerank({ query: options.query, results, now }) : heuristicRerank(options.query, results);
+    const reranked = options.reranker ? options.reranker.rerank({ query: options.query, results, now }) : localRerank(options.query, results);
     const providerContradicted = options.contradictionDetector ? applyProviderContradictionDecisions(reranked, options.contradictionDetector) : reranked;
     const contradicted = applyContradictionDecisions(providerContradicted);
-    const verified = options.verifier ? options.verifier.verify({ query: options.query, results: contradicted, now }) : heuristicVerify(options.query, contradicted);
+    const verified = options.verifier ? options.verifier.verify({ query: options.query, results: contradicted, now }) : localRelevanceGate(options.query, contradicted);
     const evidenceJudged = options.evidenceJudge ? applyEvidenceJudgement(options.evidenceJudge.judgeEvidence({ query: options.query, results: verified, now }), verified) : verified;
-    const calibrated = calibrateResults(evidenceJudged);
+    const verificationAnnotated = annotateVerification(evidenceJudged, {
+      reranker: options.reranker ? "harness" : "local",
+      verifier: options.verifier ? "harness" : "local_relevance_gate",
+      evidenceJudge: options.evidenceJudge ? "harness" : "missing"
+    });
+    const calibrated = calibrateResults(verificationAnnotated);
 
     for (const result of calibrated) this.store.markAccessed(result.memory.id);
     return calibrated;
@@ -639,30 +644,59 @@ function explainSignals(signals: SearchResult["signals"], graphPaths: string[]):
   return entries;
 }
 
-function heuristicVerify(query: string, results: SearchResult[]): SearchResult[] {
+function localRelevanceGate(query: string, results: SearchResult[]): SearchResult[] {
   const queryTokens = tokenize(query);
   return results.map((result) => {
     const coverage = keywordCoverage(queryTokens, tokenize(result.memory.content));
     if (result.stale && coverage < 0.2) {
-      return { ...result, decision: "warn" as const, explanation: [...(result.explanation ?? []), "stale low-overlap candidate"] };
+      return { ...result, decision: "warn" as const, explanation: [...(result.explanation ?? []), "local relevance gate: stale low-overlap candidate"] };
     }
     if (coverage === 0 && result.signals.entity === 0 && result.signals.graph === 0) {
-      return { ...result, decision: "exclude" as const, explanation: [...(result.explanation ?? []), "no direct relevance after verification"] };
+      return { ...result, decision: "exclude" as const, explanation: [...(result.explanation ?? []), "local relevance gate: no direct relevance"] };
     }
     if (typeof result.memory.metadata.contradiction === "string") {
-      return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "contradiction marker present"] };
+      return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "local relevance gate: contradiction marker present"] };
     }
     const conflictReview = result.memory.metadata.conflictReview as { status?: string } | undefined;
     if (conflictReview?.status === "needs_operator_review") {
-      return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "conflict review pending"] };
+      return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "local relevance gate: conflict review pending"] };
     }
     if (result.memory.beliefState === "contradicted" || result.memory.beliefState === "needs_verification") {
-      return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), `belief state ${result.memory.beliefState}`] };
+      return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), `local relevance gate: belief state ${result.memory.beliefState}`] };
     }
     if (result.memory.beliefState === "stale") {
-      return { ...result, decision: "warn" as const, explanation: [...(result.explanation ?? []), "belief state stale"] };
+      return { ...result, decision: "warn" as const, explanation: [...(result.explanation ?? []), "local relevance gate: belief state stale"] };
     }
-    return result;
+    return { ...result, explanation: [...(result.explanation ?? []), "local relevance gate: not harness verification"] };
+  });
+}
+
+function annotateVerification(
+  results: SearchResult[],
+  channels: Pick<NonNullable<SearchResult["verification"]>, "reranker" | "verifier" | "evidenceJudge">
+): SearchResult[] {
+  return results.map((result) => {
+    const evidenceJudged = channels.evidenceJudge === "harness";
+    const providerDecision = evidenceJudged && result.evidence?.answerable === true && result.decision === "include" && result.unsafeToInject !== true;
+    const claimSafe = Boolean(providerDecision && isFiniteRatio(result.confidence ?? result.evidence?.confidence));
+    const harnessVerified = channels.verifier === "harness" || evidenceJudged;
+    const reason = claimSafe
+      ? "explicit harness evidence judge accepted this memory for the query"
+      : evidenceJudged
+        ? "harness evidence judge did not make this memory claim-safe"
+        : channels.verifier === "harness"
+          ? "harness verifier ran, but no evidence judge made this memory claim-safe"
+          : "local relevance gates only; not claim-safe without harness evidence judge";
+    return {
+      ...result,
+      verification: {
+        ...channels,
+        harnessVerified,
+        claimSafe,
+        reason
+      },
+      explanation: [...(result.explanation ?? []), `verification provenance: ${reason}`]
+    };
   });
 }
 
@@ -695,7 +729,7 @@ function calibrateConfidence(result: SearchResult): number {
   return clamp(score * 0.44 + evidence * 0.2 + trust * 0.2 + source * 0.16 - decisionPenalty - stalePenalty);
 }
 
-function heuristicRerank(query: string, results: SearchResult[]): SearchResult[] {
+function localRerank(query: string, results: SearchResult[]): SearchResult[] {
   const queryTokens = tokenize(query);
   return [...results]
     .map((result) => {
@@ -704,7 +738,7 @@ function heuristicRerank(query: string, results: SearchResult[]): SearchResult[]
       return {
         ...result,
         score: verifiedScore,
-        explanation: [...(result.explanation ?? []), `rerank coverage ${coverage.toFixed(2)}`]
+        explanation: [...(result.explanation ?? []), `local rerank coverage ${coverage.toFixed(2)}`]
       };
     })
     .sort((a, b) => b.score - a.score);

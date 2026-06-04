@@ -1100,6 +1100,46 @@ describe("TypeScript memory core integrations", () => {
     expect(predictions.anomalies.some((anomaly) => anomaly.kind === "low_trust_recent_memory" || anomaly.kind === "pending_pattern_review")).toBe(true);
   });
 
+  it("keeps deterministic reflection summaries out of injected context until harness review", () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    for (const [index, content] of [
+      "Release proof requires generated artifacts before publication.",
+      "Release proof compares current code and CI output.",
+      "Release proof blocks market claims without judged evidence."
+    ].entries()) {
+      service.add({
+        userId: "u1",
+        content,
+        tags: ["release", "proof"],
+        entities: ["release proof"],
+        temporal: { eventAt: `2026-05-${String(index + 1).padStart(2, "0")}T09:00:00.000Z` },
+        source: { kind: "human", confidence: 0.94 }
+      });
+    }
+
+    const report = service.reflect("u1");
+    const deterministicSummary = report.created.find((memory) => memory.metadata.dreamJob === "cluster-summary");
+    expect(deterministicSummary).toBeTruthy();
+    expect(deterministicSummary?.tags).toContain("needs-review");
+    expect(deterministicSummary?.metadata).toMatchObject({
+      summaryMode: "deterministic",
+      needsVerification: true,
+      reflectionReview: { status: "pending" }
+    });
+
+    const results = service.search({ userId: "u1", query: "release proof reflection", limit: 8 });
+    const reflectionResult = results.find((result) => result.memory.id === deterministicSummary?.id);
+    expect(reflectionResult).toBeTruthy();
+    expect(reflectionResult?.decision).toBe("review");
+    expect(reflectionResult?.unsafeToInject).toBe(true);
+    expect(reflectionResult?.verification?.claimSafe).toBe(false);
+    expect(reflectionResult?.explanation?.some((line) => line.includes("harness review required before injection"))).toBe(true);
+
+    const selection = service.retrieval.contextSelection(results, 900);
+    expect(selection.includedResults.some((result) => result.memory.id === deterministicSummary?.id)).toBe(false);
+    expect(selection.context).not.toContain("Reflection on release");
+  });
+
   it("enforces brain membership, explicit shared-brain federation, consent updates, audit revert, storage status, and offline sync", () => {
     const service = new MemoryService();
     const brain = service.createBrain({

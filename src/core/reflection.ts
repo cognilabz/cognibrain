@@ -260,7 +260,7 @@ export class ReflectionEngine {
           type: "reference",
           layer: "reflection",
           source: { kind: "agent", confidence: generated?.confidence ?? 0.7 },
-          tags: ["reflection", theme],
+          tags: generated ? ["reflection", theme] : ["reflection", "needs-review", theme],
           entities: [theme],
           metadata: {
             theme,
@@ -268,6 +268,15 @@ export class ReflectionEngine {
             dreamedAt: now.toISOString(),
             dreamJob: "cluster-summary",
             summaryMode: generated ? "external" : "deterministic",
+            ...(generated
+              ? {}
+              : {
+                  needsVerification: true,
+                  reflectionReview: {
+                    status: "pending",
+                    reason: "deterministic reflection summary requires harness evidence judgement before injection"
+                  }
+                }),
             ...(generated?.metadata ?? {})
           }
         })
@@ -298,12 +307,18 @@ export class ReflectionEngine {
           type: "reference",
           layer: "reflection",
           source: { kind: "agent", confidence: 0.68 },
-          tags: ["reflection", "temporal", period],
+          tags: ["reflection", "temporal", "needs-review", period],
           metadata: {
             period,
             summaryOf: group.map((memory) => memory.id),
             dreamedAt: now.toISOString(),
-            dreamJob: "temporal-summary"
+            dreamJob: "temporal-summary",
+            summaryMode: "deterministic",
+            needsVerification: true,
+            reflectionReview: {
+              status: "pending",
+              reason: "deterministic temporal summary requires harness evidence judgement before injection"
+            }
           }
         })
       );
@@ -335,12 +350,13 @@ export class ReflectionEngine {
           type: "reference",
           layer: "reflection",
           source: { kind: "agent", confidence: 0.66 },
-          tags: ["reflection", "pattern", theme],
+          tags: ["reflection", "pattern", "needs-review", theme],
           entities: [theme],
           metadata: {
             pattern: theme,
             patternType: "behavioral",
             patternReview: { status: "pending", reason: "inferred behavior requires operator approval" },
+            needsVerification: true,
             recurrenceWindow: "observed-period",
             supportCount: group.length,
             confidence: Math.min(0.9, 0.45 + group.length * 0.1),

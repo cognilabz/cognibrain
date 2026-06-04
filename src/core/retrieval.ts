@@ -657,6 +657,9 @@ function localRelevanceGate(query: string, results: SearchResult[]): SearchResul
     if (typeof result.memory.metadata.contradiction === "string") {
       return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "local relevance gate: contradiction marker present"] };
     }
+    if (requiresHarnessReview(result.memory)) {
+      return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "local relevance gate: harness review required before injection"] };
+    }
     const conflictReview = result.memory.metadata.conflictReview as { status?: string } | undefined;
     if (conflictReview?.status === "needs_operator_review") {
       return { ...result, decision: "review" as const, explanation: [...(result.explanation ?? []), "local relevance gate: conflict review pending"] };
@@ -761,6 +764,22 @@ function isSuppressedContradiction(result: SearchResult, all: SearchResult[]): b
 
 function hasSuppressionEvidence(memory: Memory): boolean {
   return memory.tags.includes("needs-review") || memory.beliefState === "needs_verification" || Boolean(memory.metadata.needsVerification);
+}
+
+function requiresHarnessReview(memory: Memory): boolean {
+  const reflectionReview = memory.metadata.reflectionReview as { status?: string } | undefined;
+  const patternReview = memory.metadata.patternReview as { status?: string } | undefined;
+  const isOperatorReviewNotice = Boolean(memory.metadata.conflictReviewSummary) || memory.tags.includes("conflict-review");
+  const deterministicReflection =
+    memory.layer === "reflection" &&
+    (memory.metadata.summaryMode === "deterministic" || memory.metadata.dreamJob === "temporal-summary" || memory.metadata.dreamJob === "behavior-pattern");
+  return (
+    (memory.tags.includes("needs-review") && !isOperatorReviewNotice) ||
+    Boolean(memory.metadata.needsVerification) ||
+    reflectionReview?.status === "pending" ||
+    patternReview?.status === "pending" ||
+    deterministicReflection
+  );
 }
 
 function claimConflicts(a: Memory, b: Memory): boolean {

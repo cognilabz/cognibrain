@@ -85,6 +85,7 @@ const files = {
   mcpHandlers: read("src/connectors/mcpHandlers.ts"),
   cliTests: read("tests/cli.test.ts"),
   coreTests: read("tests/core.test.ts"),
+  coreIntegrationTests: read("tests/core-integrations.test.ts"),
   evaluationTests: readMany(["tests/evaluation.test.ts", "tests/openai-runner-judges.test.ts"]),
   storageAdapter: read("src/core/storageAdapter.ts"),
   openAiEmbeddingsSource: read("src/core/openaiEmbeddings.ts"),
@@ -215,6 +216,7 @@ const streamingBenchmarkOrchestrators = [
   files.releaseCheck.includes("timedOut: result.timedOut") &&
   files.internalRunner.includes("terminateChildTree") &&
   files.internalRunner.includes("process.kill(-child.pid") &&
+  files.arenaSource.includes("process.exit(0)") &&
   !files.streamingCommandHelper.includes("spawnSync") &&
   !files.streamingCommandHelper.includes("maxBuffer") &&
   !files.releaseCheck.includes("spawnSync");
@@ -593,6 +595,15 @@ const runtimeHarnessEvidenceInjectionBoundary = files.retrievalSource.includes("
   files.engineeringMemorySource.includes("reviewReason") &&
   files.coreTests.includes("keeps release-critical context injection unsafe until an explicit harness evidence judge accepts it") &&
   files.coreTests.includes("keeps unsafe harness-reviewed engineering memories out of injected coding context while retaining review evidence");
+const deterministicReflectionHarnessBoundary = files.reflectionSource.includes('summaryMode: "deterministic"') &&
+  files.reflectionSource.includes("deterministic reflection summary requires harness evidence judgement before injection") &&
+  files.reflectionSource.includes("deterministic temporal summary requires harness evidence judgement before injection") &&
+  files.reflectionSource.includes('tags: ["reflection", "pattern", "needs-review", theme]') &&
+  files.retrievalSource.includes("function requiresHarnessReview") &&
+  files.retrievalSource.includes("local relevance gate: harness review required before injection") &&
+  files.retrievalSource.includes("memory.metadata.summaryMode === \"deterministic\"") &&
+  files.retrievalSource.includes("isOperatorReviewNotice") &&
+  files.coreIntegrationTests.includes("keeps deterministic reflection summaries out of injected context until harness review");
 const arenaPublishPublicGateBoundary = files.publishArenaSource.includes("claimAllowed") && files.publishArenaSource.includes("diagnosticPassed") && files.publishArenaSource.includes("claimBlockers") && files.publishArenaSource.includes("Public benchmark claim blockers") && files.publishArenaSource.includes("scoreable") && files.publishArenaSource.includes("local-diagnostic") && files.publishArenaSource.includes("systemClaimStatus") && files.publishArenaSource.includes("Synthetic Diagnostic Scorecard") && files.publishArenaSource.includes("Top diagnostic score") && files.publishArenaSource.includes("market and quality claims require publicBenchmarkGate.claimAllowed=true");
 const benchmarkSvgClaimBoundary = files.benchmarkSvgSource.includes("publicClaimAllowed") && files.benchmarkSvgSource.includes("publicClaimDetail") && files.benchmarkSvgSource.includes("boundary-missing") && files.benchmarkSvgSource.includes("arenaProofDetail") && files.benchmarkSvgSource.includes("API-shape and blocked rows are diagnostic, not market proof") && files.benchmarkSvgSource.includes("Internal regression and ablation diagnostics") && files.benchmarkSvgSource.includes("Diagnostic rows are not quality or market proof unless LLM/harness claim status says so") && !files.benchmarkSvgSource.includes('row.label === "Cognibrain full"') && files.benchmarkSvg.includes("claim blocked") && files.benchmarkSvg.includes("diagnostic pass") && files.benchmarkSvg.includes("api-shape diagnostic") && files.benchmarkSvg.includes("not market proof") && files.benchmarkSvg.includes("ablation diagnostic") && files.benchmarkSvg.includes("internal diagnostic");
 const leaderboardDiagnosticClaimsBounded = files.leaderboardSource.includes('"local-diagnostic"') && files.leaderboardSource.includes("claimAllowed") && files.leaderboardSource.includes("cannot allow quality claims") && files.leaderboardSource.includes('"llm-harness"') && files.leaderboardSource.includes('"public-benchmark"');
@@ -726,6 +737,10 @@ const checks = [
   check("runtime-harness-evidence-injection-boundary", "Runtime retrieval marks local relevance gates as not claim-safe; release-critical or destructive context injection requires explicit LLM/harness evidence judgement while coding packs retain unsafe evidence only as review-required metadata.", runtimeHarnessEvidenceInjectionBoundary, "fail", {
     sources: ["src/core/retrieval.ts", "src/api/service/searchRuntime.ts", "src/core/engineeringMemory.ts"],
     tests: "tests/core.test.ts"
+  }),
+  check("dream-reflection-harness-review-boundary", "Deterministic Dream/Reflection summaries and inferred behavioral patterns are retained as review evidence but stay out of injected context until explicit harness evidence judgement, while operator conflict-review notices remain injectable warnings.", deterministicReflectionHarnessBoundary, "fail", {
+    sources: ["src/core/reflection.ts", "src/core/retrieval.ts"],
+    tests: "tests/core-integrations.test.ts"
   }),
   check("arena-external-runner-judge-contract", "External Arena competitor runners cannot score themselves; native same-run outputs require an explicit LLM/harness judge command for scoreable checks.", arenaRunnerChecksFailClosed && arenaOpenAiJudgeStrict, "fail", {
     source: "src/eval/arena.ts",

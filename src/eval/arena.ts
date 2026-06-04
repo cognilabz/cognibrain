@@ -1235,6 +1235,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     .then((report) => {
       printCliReport(report, options.out, argv);
       if (!report.diagnosticPassed) process.exit(1);
+      process.exit(0);
     })
     .catch((error) => {
       console.error(error);

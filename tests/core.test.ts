@@ -526,6 +526,23 @@ describe("TypeScript memory core", () => {
     expect(report.lifecycle.qualityScore).toBeGreaterThan(0);
   });
 
+  it("runs reflection with bounded active-memory store scans", () => {
+    class CountingStore extends MemoryStore {
+      listCalls = 0;
+      list(userId?: string) {
+        this.listCalls += 1;
+        return super.list(userId);
+      }
+    }
+    const store = new CountingStore();
+    store.add({ userId: "u1", content: "Atlas release prefers compact proof notes.", tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
+    store.add({ userId: "u1", content: "Atlas CI proof should include remote checks.", tags: ["atlas"], source: { kind: "human", confidence: 0.95 } });
+
+    new ReflectionEngine(store).run("u1");
+
+    expect(store.listCalls).toBeLessThanOrEqual(3);
+  });
+
   it("detects multilingual contradictions and supports an external contradiction classifier", () => {
     const store = new MemoryStore();
     store.add({ userId: "u1", content: "Mira nutzt Redis fuer Cache.", entities: ["mira", "cache"], source: { kind: "agent", confidence: 0.5 } });
@@ -2199,6 +2216,21 @@ describe("TypeScript memory core", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("checks due auto dreams from maintenance state without scanning all memories", () => {
+    const service = new MemoryService({ autoDream: { enabled: true, writeThreshold: 100, intervalHours: 6 } });
+    service.add({ userId: "u1", content: "Auto dream resource checks should avoid full memory scans.", source: { kind: "human", confidence: 0.96 } });
+    const store = (service as any).store as MemoryStore;
+    const originalList = store.list.bind(store);
+    let listCalls = 0;
+    store.list = ((userId?: string) => {
+      listCalls += 1;
+      return originalList(userId);
+    }) as typeof store.list;
+
+    expect(service.runDueDreams(new Date("2026-06-04T00:00:00.000Z"))).toEqual([]);
+    expect(listCalls).toBe(0);
   });
 
   it("runs autoDream through the full dream cycle and schedules verification", () => {

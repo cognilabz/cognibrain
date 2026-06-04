@@ -24,14 +24,16 @@ export class ReflectionEngine {
     const evaluations = this.evaluateMemories(memories, now);
     const contradictions = this.resolveContradictions(memories, evaluations);
     const faded = this.fadeLowUtility(memories, now);
-    const stale = this.scheduleStalenessReview(this.activeMemories(userId), now, evaluations);
+    const stale = this.scheduleStalenessReview(memories, now, evaluations);
+    const activeForSummaries = this.activeMemories(userId);
     const created = [
-      ...this.summarizeClusters(userId, this.activeMemories(userId), now),
-      ...this.summarizeTemporalPeriods(userId, this.activeMemories(userId), now),
-      ...this.extractBehavioralPatterns(userId, this.activeMemories(userId), now, evaluations)
+      ...this.summarizeClusters(userId, activeForSummaries, now),
+      ...this.summarizeTemporalPeriods(userId, activeForSummaries, now),
+      ...this.extractBehavioralPatterns(userId, activeForSummaries, now, evaluations)
     ];
-    const revalidatedPatterns = this.revalidateBehavioralPatterns(this.activeMemories(userId), now);
-    const reorganized = this.reorganizeMemories(this.activeMemories(userId), now, evaluations);
+    const activeWithReflections = created.length ? this.activeMemories(userId) : activeForSummaries;
+    const revalidatedPatterns = this.revalidateBehavioralPatterns(activeWithReflections, now);
+    const reorganized = this.reorganizeMemories(activeWithReflections, now, evaluations);
     const activeAfter = this.activeMemories(userId);
     const evaluation = evaluateMemoryQuality(activeAfter, now);
     const demoted = uniqueMemories([...contradictions.map((item) => item.demoted), ...faded.demoted]);

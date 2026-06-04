@@ -106,7 +106,8 @@ export class MemoryServiceInsightsMaintenance extends MemoryServiceGovernanceOps
   runDueDreams(now = new Date()): string[] {
     if (!this.autoDream.enabled) return [];
     const dreamed: string[] = [];
-    for (const userId of new Set(this.store.list().map((memory) => memory.userId))) {
+    for (const [userId, status] of Object.entries(this.maintenance.users)) {
+      if (status.writesSinceDream <= 0) continue;
       if (!this.isDreamDue(userId, now)) continue;
       this.runAutoDream(userId);
       dreamed.push(userId);

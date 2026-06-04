@@ -1,6 +1,7 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { MemoryService } from "../api/service";
 import type { EngineeringMemoryKind } from "../core";
 import type { CogniCodeScenario } from "./cognicodeBench";
@@ -111,6 +112,17 @@ interface ArenaJudgeResult {
   evidence?: Record<string, unknown>;
 }
 
+interface BoundedCommandResult {
+  status: number | null;
+  signal: NodeJS.Signals | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  truncatedStdout: boolean;
+  truncatedStderr: boolean;
+  error?: string;
+}
+
 interface ArenaSystemResult {
   system: MemorySystemId;
   displayName: string;
@@ -208,7 +220,7 @@ export async function runBenchmarkArena(options: { systems?: string[]; benchmark
     .map((system) => ({ system: system.displayName, score: system.score, proofLevel: system.proofLevel, repeatedMistakeRate: system.metrics.repeatedMistakeRate, gaps: system.capabilityGaps.length }))
     .sort((a, b) => b.score - a.score || a.repeatedMistakeRate - b.repeatedMistakeRate || a.gaps - b.gaps);
   const diagnosticPassed = systems.length >= 5 && systems.every((system) => system.scenarioCount === scenarios.length) && systems.some((system) => system.system === "cognibrain" && system.proofLevel === "same-run-full" && system.score >= 0.95);
-  const qualityJudge = runArenaQualityJudge({ systems, leaderboard, scenarioFactory: scenarioSet.summary, diagnosticPassed });
+  const qualityJudge = await runArenaQualityJudge({ systems, leaderboard, scenarioFactory: scenarioSet.summary, diagnosticPassed });
   const qualityClaimAllowed = Boolean(diagnosticPassed && qualityJudge?.passed);
   const judgedOriginalCompetitors = systems.filter((system) =>
     system.system !== "cognibrain" &&
@@ -291,10 +303,13 @@ export async function runBenchmarkArena(options: { systems?: string[]; benchmark
   return report;
 }
 
-function runArenaQualityJudge(input: { systems: ArenaSystemResult[]; leaderboard: ArenaReport["leaderboard"]; scenarioFactory: CogniCodeScenarioFactorySummary; diagnosticPassed: boolean }): { passed: boolean; score: number; reason: string; evidence?: Record<string, unknown> } | undefined {
+async function runArenaQualityJudge(input: { systems: ArenaSystemResult[]; leaderboard: ArenaReport["leaderboard"]; scenarioFactory: CogniCodeScenarioFactorySummary; diagnosticPassed: boolean }): Promise<{ passed: boolean; score: number; reason: string; evidence?: Record<string, unknown> } | undefined> {
   const command = process.env.MEMORY_ARENA_QUALITY_JUDGE_COMMAND;
   if (!command) return undefined;
-  const result = spawnSync(command, {
+  const result = await runBoundedArenaCommand(command, [], {
+    shell: true,
+    timeout: Number(process.env.MEMORY_ARENA_QUALITY_JUDGE_TIMEOUT_MS ?? 120_000),
+    captureLimit: Number(process.env.MEMORY_ARENA_QUALITY_JUDGE_OUTPUT_LIMIT ?? 200_000),
     input: `${JSON.stringify({
       contract: "cognibrain-arena-quality-llm-harness-judge-v1",
       instruction: [
@@ -322,25 +337,21 @@ function runArenaQualityJudge(input: { systems: ArenaSystemResult[]; leaderboard
           evidence: scenario.evidence
         }))
       }))
-    })}\n`,
-    encoding: "utf8",
-    shell: true,
-    timeout: Number(process.env.MEMORY_ARENA_QUALITY_JUDGE_TIMEOUT_MS ?? 120_000),
-    maxBuffer: 20 * 1024 * 1024
+    })}\n`
   });
-  if (result.status !== 0) {
-    return { passed: false, score: 0, reason: `Arena quality judge command failed with status ${result.status ?? 1}`, evidence: { stderrTail: tail(result.stderr), stdoutTail: tail(result.stdout) } };
+  if (result.status !== 0 || result.truncatedStdout) {
+    return { passed: false, score: 0, reason: result.truncatedStdout ? "Arena quality judge stdout exceeded bounded capture before trusted JSON was parsed" : `Arena quality judge command failed with status ${result.status ?? 1}`, evidence: { stderrTail: tail(result.stderr), stdoutTail: tail(result.stdout), timedOut: result.timedOut, truncatedStdout: result.truncatedStdout, truncatedStderr: result.truncatedStderr, error: result.error } };
   }
   let parsed: any;
   try {
     parsed = JSON.parse(result.stdout);
   } catch (error) {
-    return { passed: false, score: 0, reason: `Arena quality judge returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`, evidence: { stdoutTail: tail(result.stdout) } };
+    return { passed: false, score: 0, reason: `Arena quality judge returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`, evidence: { stdoutTail: tail(result.stdout), truncatedStdout: result.truncatedStdout } };
   }
   const passed = typeof parsed?.passed === "boolean" ? parsed.passed : undefined;
   const score = typeof parsed?.score === "number" && Number.isFinite(parsed.score) && parsed.score >= 0 && parsed.score <= 1 ? parsed.score : undefined;
   if (passed === undefined || score === undefined) {
-    return { passed: false, score: 0, reason: "Arena quality judge must return boolean passed and finite score in 0..1", evidence: { stdoutTail: tail(result.stdout) } };
+    return { passed: false, score: 0, reason: "Arena quality judge must return boolean passed and finite score in 0..1", evidence: { stdoutTail: tail(result.stdout), truncatedStdout: result.truncatedStdout } };
   }
   return {
     passed,
@@ -446,7 +457,7 @@ class CognibrainAdapter implements BenchmarkSystemAdapter {
     this.service = new MemoryService();
   }
 
-  runScenario(scenario: CogniCodeScenario): ArenaScenarioResult {
+  runScenario(scenario: CogniCodeScenario): Promise<ArenaScenarioResult> | ArenaScenarioResult {
     const userId = `arena-${scenario.id}`;
     const codebase = {
       repo: scenario.repoSeed.name,
@@ -549,7 +560,7 @@ class ProfileAdapter implements BenchmarkSystemAdapter {
     return undefined;
   }
 
-  runScenario(scenario: CogniCodeScenario): ArenaScenarioResult {
+  runScenario(scenario: CogniCodeScenario): Promise<ArenaScenarioResult> | ArenaScenarioResult {
     const hardType = ["temporal_migration_correction", "forbidden_file_correction"].includes(scenario.correctionType);
     const correctionCarryover = Boolean(this.capabilities.corrections && !(hardType && !this.capabilities.temporal && !this.capabilities.guard));
     const procedureRecall = Boolean(this.capabilities.procedure && correctionCarryover && scenario.correction.correctAction);
@@ -599,7 +610,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
     this.capabilityGaps = [`external runner configured by ${runner.commandEnv}; capability gaps come from runner output when provided`, ...profile.gaps];
   }
 
-  runScenario(scenario: CogniCodeScenario): ArenaScenarioResult {
+  async runScenario(scenario: CogniCodeScenario): Promise<ArenaScenarioResult> {
     if (this.runnerDisabled) {
       const checks = emptyChecks();
       return {
@@ -635,26 +646,25 @@ class CommandRunnerAdapter extends ProfileAdapter {
       }
     };
     const timeoutMs = Number(process.env.MEMORY_ARENA_RUNNER_TIMEOUT_MS ?? 30_000);
-    const result = spawnSync(this.runner.command, this.runner.args ?? [], {
+    const result = await runBoundedArenaCommand(this.runner.command, this.runner.args ?? [], {
       input: `${JSON.stringify(payload)}\n`,
-      encoding: "utf8",
       shell: this.runner.shell ?? true,
       timeout: timeoutMs,
-      maxBuffer: 10 * 1024 * 1024
+      captureLimit: Number(process.env.MEMORY_ARENA_RUNNER_OUTPUT_LIMIT ?? 200_000)
     });
-    if (result.status !== 0) {
+    if (result.status !== 0 || result.truncatedStdout) {
       const checks = emptyChecks();
       const parsedFailure = parseRunnerOutput(result.stdout);
       const runnerContract = normalizeRunnerContract(parsedFailure?.runnerContract ?? parsedFailure?.evidence?.runnerContract);
       const failure = {
-        reason: result.error?.message ? `runner failed for ${scenario.id}: ${result.error.message}` : `runner failed for ${scenario.id}`,
+        reason: result.truncatedStdout ? `runner stdout exceeded bounded capture for ${scenario.id}` : result.error ? `runner failed for ${scenario.id}: ${result.error}` : `runner failed for ${scenario.id}`,
         scenarioId: scenario.id,
         status: result.status,
         signal: result.signal,
         timeoutMs,
         stderrTail: tail(result.stderr),
         stdoutTail: tail(result.stdout),
-        error: result.error?.message,
+        error: result.error,
         runnerContract
       };
       this.runnerDisabled = failure;
@@ -672,6 +682,9 @@ class CommandRunnerAdapter extends ProfileAdapter {
           status: failure.status,
           signal: failure.signal,
           timeoutMs: failure.timeoutMs,
+          timedOut: result.timedOut,
+          truncatedStdout: result.truncatedStdout,
+          truncatedStderr: result.truncatedStderr,
           runnerContract: failure.runnerContract,
           stderrTail: failure.stderrTail,
           stdoutTail: failure.stdoutTail,
@@ -697,7 +710,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
         timeoutMs,
         stderrTail: tail(result.stderr),
         stdoutTail: tail(result.stdout),
-        error: typeof parsed?.evidence?.error === "string" ? parsed.evidence.error : result.error?.message,
+        error: typeof parsed?.evidence?.error === "string" ? parsed.evidence.error : result.error,
         runnerContract
       };
       this.runnerDisabled = failure;
@@ -715,6 +728,9 @@ class CommandRunnerAdapter extends ProfileAdapter {
           status: failure.status,
           signal: failure.signal,
           timeoutMs: failure.timeoutMs,
+          timedOut: result.timedOut,
+          truncatedStdout: result.truncatedStdout,
+          truncatedStderr: result.truncatedStderr,
           latencyMs: parsed?.latencyMs,
           capabilityGaps,
           runnerContract: failure.runnerContract,
@@ -725,7 +741,7 @@ class CommandRunnerAdapter extends ProfileAdapter {
         }
       };
     }
-    const judged = judgeRunnerOutput(this.id, scenario, parsed, this.runner.commandEnv);
+    const judged = await judgeRunnerOutput(this.id, scenario, parsed, this.runner.commandEnv);
     const checks = judged?.checks ?? emptyChecks();
     if (!judged) {
       this.addCapabilityGaps([
@@ -788,7 +804,7 @@ class ArtifactImportAdapter extends ProfileAdapter {
         }
       };
     }
-    const fallback = super.runScenario(scenario);
+    const fallback = super.runScenario(scenario) as ArenaScenarioResult;
     return {
       ...fallback,
       evidence: {
@@ -972,7 +988,7 @@ function normalizeChecks(value: unknown): ArenaScenarioResult["checks"] | undefi
 
 const ARENA_CHECK_KEYS: Array<keyof ArenaScenarioResult["checks"]> = ["correctionCarryover", "repeatedMistakeAvoided", "procedureRecall", "patchCorrectness", "evidenceCompleteness", "wrongMemorySuppression"];
 
-function judgeRunnerOutput(system: MemorySystemId, scenario: CogniCodeScenario, runnerOutput: ParsedRunnerOutput | undefined, commandEnv: string): ArenaJudgeResult | undefined {
+async function judgeRunnerOutput(system: MemorySystemId, scenario: CogniCodeScenario, runnerOutput: ParsedRunnerOutput | undefined, commandEnv: string): Promise<ArenaJudgeResult | undefined> {
   const command = process.env.MEMORY_ARENA_JUDGE_COMMAND;
   if (!command || !runnerOutput) return undefined;
   const payload = {
@@ -984,14 +1000,13 @@ function judgeRunnerOutput(system: MemorySystemId, scenario: CogniCodeScenario, 
     runnerOutput,
     requiredChecks: ARENA_CHECK_KEYS
   };
-  const result = spawnSync(command, [], {
+  const result = await runBoundedArenaCommand(command, [], {
     input: `${JSON.stringify(payload)}\n`,
-    encoding: "utf8",
     shell: true,
     timeout: Number(process.env.MEMORY_ARENA_JUDGE_TIMEOUT_MS ?? 120_000),
-    maxBuffer: 10 * 1024 * 1024
+    captureLimit: Number(process.env.MEMORY_ARENA_JUDGE_OUTPUT_LIMIT ?? 200_000)
   });
-  if (result.status !== 0) return undefined;
+  if (result.status !== 0 || result.truncatedStdout) return undefined;
   const parsed = parseJsonLine(result.stdout);
   const checks = normalizeChecks(parsed?.checks);
   if (!checks) return undefined;
@@ -1039,6 +1054,87 @@ function normalizeProofLevel(value: string | undefined): ProofLevel | undefined 
 
 function isAdapterMode(value: string | undefined): value is AdapterMode {
   return ["full-local", "api-shape", "native-command", "cloud-command", "cli-command", "blocked-command", "artifact-import", "planned", "public-claim"].includes(String(value));
+}
+
+function runBoundedArenaCommand(command: string, args: string[] = [], options: { input: string; shell: boolean; timeout: number; captureLimit: number }): Promise<BoundedCommandResult> {
+  return new Promise((resolve) => {
+    const stdout = createBoundedTextCapture(options.captureLimit);
+    const stderr = createBoundedTextCapture(options.captureLimit);
+    let timedOut = false;
+    let error: string | undefined;
+    let resolved = false;
+    let child: ChildProcessWithoutNullStreams | undefined;
+
+    const complete = (status: number | null, signal: NodeJS.Signals | null) => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      resolve({
+        status,
+        signal,
+        stdout: stdout.value(),
+        stderr: stderr.value(),
+        timedOut,
+        truncatedStdout: stdout.truncated(),
+        truncatedStderr: stderr.truncated(),
+        error
+      });
+    };
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      error = "command timed out";
+      child?.kill("SIGTERM");
+      setTimeout(() => child?.kill("SIGKILL"), 1_000).unref();
+    }, options.timeout);
+    timer.unref();
+
+    try {
+      child = spawn(command, args, {
+        shell: options.shell,
+        stdio: ["pipe", "pipe", "pipe"],
+        env: process.env
+      });
+    } catch (spawnError) {
+      error = spawnError instanceof Error ? spawnError.message : String(spawnError);
+      complete(1, null);
+      return;
+    }
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => stdout.push(String(chunk)));
+    child.stderr.on("data", (chunk) => stderr.push(String(chunk)));
+    child.on("error", (spawnError) => {
+      error = spawnError instanceof Error ? spawnError.message : String(spawnError);
+    });
+    child.on("close", complete);
+    child.stdin.on("error", (stdinError) => {
+      error = stdinError instanceof Error ? stdinError.message : String(stdinError);
+    });
+    child.stdin.end(options.input);
+  });
+}
+
+function createBoundedTextCapture(limit: number): { push(chunk: string): void; value(): string; truncated(): boolean } {
+  const effectiveLimit = Math.max(1_000, limit);
+  let text = "";
+  let wasTruncated = false;
+  return {
+    push(chunk: string) {
+      text += chunk;
+      if (text.length > effectiveLimit) {
+        text = text.slice(-effectiveLimit);
+        wasTruncated = true;
+      }
+    },
+    value() {
+      return text;
+    },
+    truncated() {
+      return wasTruncated;
+    }
+  };
 }
 
 function tail(value: string | undefined): string {

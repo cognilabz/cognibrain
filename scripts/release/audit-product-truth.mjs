@@ -178,8 +178,11 @@ const compactBenchmarkStdout = [files.cognicodeBenchSource, files.arenaSource, f
 ) && files.internalRunner.includes("const compactStdout") &&
   files.internalRunner.includes("MEMORY_INTERNAL_COMPACT_STDOUT") &&
   files.internalRunner.includes("taskName === \"verify:nextgen\"") &&
-  files.internalRunner.includes("writeCompactOutput") &&
-  files.internalRunner.includes("Full evidence is in the configured artifact files");
+  files.internalRunner.includes("createCompactStream") &&
+  files.internalRunner.includes("child.stdout?.on(\"data\"") &&
+  files.internalRunner.includes("Full evidence is in the configured artifact files") &&
+  !files.internalRunner.includes("spawnSync") &&
+  !files.internalRunner.includes("maxBuffer");
 const dreamJobWorkerControl = files.service.includes("cancelDreamJob(") && files.service.includes("retryDreamJob(") && files.dreamRoutes.includes("/dream/jobs") && files.dreamRoutes.includes("cancel") && files.dreamRoutes.includes("retry") && files.mcpTools.includes("memory_dream_job_cancel") && files.mcpTools.includes("memory_dream_job_retry") && files.coreTests.includes("cancels and retries dream jobs");
 const liveSourceRevalidation = files.service.includes("revalidateSourceRefsAsync") && files.service.includes("await resolver.fetch") && files.service.includes("listExternalVendorItems") && files.dreamRoutes.includes("revalidateSourceRefsAsync") && files.coreTests.includes("uses live async source resolver fetch") && files.coreTests.includes("default GitHub source resolver fetches current provider state");
 const postgresVerifierPassed = files.postgresLive?.acceptance?.startsWithPostgresBackend === true && files.postgresLive?.storage?.active === "postgres-repository";

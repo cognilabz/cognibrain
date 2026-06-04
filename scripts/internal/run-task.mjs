@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { nativeRunnerRoot } from "../benchmark/cache-root.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
@@ -85,7 +85,7 @@ if (!task) {
   printUsage(1);
 }
 
-runTask(task, passthrough);
+await runTask(task, passthrough);
 
 function cmd(command, args = []) {
   return { kind: "cmd", command, args };
@@ -95,47 +95,83 @@ function seq(...items) {
   return { kind: "seq", items };
 }
 
-function runTask(task, extraArgs = []) {
+async function runTask(task, extraArgs = []) {
   if (typeof task === "string") return runTask(tasks[task], []);
   if (Array.isArray(task)) return runCommand(task[0], task.slice(1), []);
   if (task.kind === "seq") {
-    for (const item of task.items) runTask(item, []);
+    for (const item of task.items) await runTask(item, []);
     return;
   }
-  runCommand(task.command, task.args, extraArgs);
+  await runCommand(task.command, task.args, extraArgs);
 }
 
 function runCommand(command, args, extraArgs) {
   const allArgs = [...args, ...extraArgs];
-  const result = spawnSync(command, allArgs, {
+  const stdout = compactStdout ? createCompactStream("stdout", command, allArgs) : undefined;
+  const stderr = compactStdout ? createCompactStream("stderr", command, allArgs) : undefined;
+  const child = spawn(command, allArgs, {
     cwd: root,
     env: process.env,
-    encoding: compactStdout ? "utf8" : undefined,
-    maxBuffer: compactStdout ? 80 * 1024 * 1024 : undefined,
     stdio: compactStdout ? ["inherit", "pipe", "pipe"] : "inherit",
     shell: process.platform === "win32"
   });
-  if (compactStdout) writeCompactOutput(command, allArgs, result);
-  if (result.status !== 0) process.exit(result.status ?? 1);
-}
-
-function writeCompactOutput(command, args, result) {
-  writeStream("stdout", command, args, result.stdout ?? "");
-  writeStream("stderr", command, args, result.stderr ?? "");
-}
-
-function writeStream(name, command, args, output) {
-  const text = String(output ?? "");
-  if (!text) return;
-  if (text.length <= compactStdoutLimit) {
-    process[name === "stderr" ? "stderr" : "stdout"].write(text);
-    return;
+  if (compactStdout) {
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk) => stdout?.write(chunk));
+    child.stderr?.on("data", (chunk) => stderr?.write(chunk));
   }
-  const lines = text.split(/\r?\n/);
-  const tail = lines.slice(-80).join("\n").trimEnd();
+  return new Promise((resolve) => {
+    child.on("close", (status) => {
+      stdout?.flush();
+      stderr?.flush();
+      if (status !== 0) process.exit(status ?? 1);
+      resolve();
+    });
+    child.on("error", (error) => {
+      console.error(error);
+      process.exit(1);
+    });
+  });
+}
+
+function createCompactStream(name, command, args) {
   const stream = process[name === "stderr" ? "stderr" : "stdout"];
-  stream.write(`[compact:${name}] ${command} ${args.join(" ")} emitted ${lines.length} lines / ${text.length} chars; showing last ${Math.min(80, lines.length)} lines. Full evidence is in the configured artifact files.\n`);
-  if (tail) stream.write(`${tail}\n`);
+  const retainedLines = [];
+  const buffered = [];
+  let totalChars = 0;
+  let totalLines = 0;
+  let pendingLine = "";
+  return {
+    write(chunk) {
+      const text = String(chunk ?? "");
+      if (!text) return;
+      totalChars += text.length;
+      if (totalChars <= compactStdoutLimit) buffered.push(text);
+      pendingLine += text;
+      const lines = pendingLine.split(/\r?\n/);
+      pendingLine = lines.pop() ?? "";
+      for (const line of lines) {
+        retainedLines.push(line);
+        totalLines += 1;
+        while (retainedLines.length > 80) retainedLines.shift();
+      }
+    },
+    flush() {
+      if (!totalChars) return;
+      if (totalChars <= compactStdoutLimit) {
+        stream.write(buffered.join(""));
+        return;
+      }
+      if (pendingLine) {
+        retainedLines.push(pendingLine);
+        while (retainedLines.length > 80) retainedLines.shift();
+      }
+      const tail = retainedLines.join("\n").trimEnd();
+      stream.write(`[compact:${name}] ${command} ${args.join(" ")} emitted ${totalLines + (pendingLine ? 1 : 0)} lines / ${totalChars} chars; showing last ${Math.min(80, retainedLines.length)} lines. Full evidence is in the configured artifact files.\n`);
+      if (tail) stream.write(`${tail}\n`);
+    }
+  };
 }
 
 function printUsage(exitCode) {

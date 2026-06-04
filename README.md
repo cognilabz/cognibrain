@@ -6,11 +6,11 @@ Cognibrain stores durable engineering context such as repo rules, reviewer corre
 
 ```bash
 npm i @cognilabz/cognibrain
-npx cognibrain init
+npx cognibrain init --yes
 npx cognibrain status
 ```
 
-The default command shows a stable operator CLI snapshot with runtime state, memory health, connections and next actions. It is intentionally text-first, so it works in small panes, CI logs and remote shells.
+`init` defaults to the `solo-dev` profile. That writes local setup state, Codex/Cursor harness files, local JSON storage, local-only auth, a GitHub connector stub, and a SQLite storage adapter stub. The default command shows a stable operator CLI snapshot with runtime state, memory health, connections and next actions. It is intentionally text-first, so it works in small panes, CI logs and remote shells.
 
 ## Public Surface
 
@@ -29,7 +29,7 @@ From npm:
 
 ```bash
 npm i @cognilabz/cognibrain
-npx cognibrain init --profile solo-dev --yes
+npx cognibrain init --yes
 npx cognibrain doctor --fix
 npx cognibrain status
 ```
@@ -40,7 +40,7 @@ From a checkout:
 git clone https://github.com/cognilabz/cognibrain.git
 cd cognibrain
 npm install
-./bin/cognibrain.mjs init --profile solo-dev --yes
+./bin/cognibrain.mjs init --yes
 ./bin/cognibrain.mjs doctor --fix
 ```
 
@@ -63,17 +63,17 @@ npx cognibrain patch-evidence --task "release patch" --json
 npx cognibrain proof
 ```
 
-For MCP-capable agents, use MCP tools first. Use the CLI memory commands as an operator path or fallback.
-
-For shell-hook capable agents and CI jobs, use the JSON-first harness lifecycle:
+For MCP-capable agents, MCP is an optional native adapter. The default integration path is still the CLI lifecycle because every shell-capable coding agent and CI runner can call it:
 
 ```bash
-npx cognibrain harness context --task "prepare the release patch" --json
-npx cognibrain harness guard --action "npm test" --json
-npx cognibrain harness outcome --command "npm test" --exit-code 0 --json
-npx cognibrain harness patch-evidence --task "release patch" --json
-npx cognibrain harness health --json
+npx cognibrain context --task "prepare the release patch" --json
+npx cognibrain guard --action "npm test" --json
+npx cognibrain outcome --command "npm test" --exit-code 0 --json
+npx cognibrain patch-evidence --task "release patch" --json
+npx cognibrain health --json
 ```
+
+`cognibrain harness ...` remains a backward-compatible alias for existing scripts.
 
 ## Connectors
 

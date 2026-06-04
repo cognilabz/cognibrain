@@ -5,8 +5,8 @@
   "type": "module",
   "description": "Self-hosted engineering memory for coding agents with a stable operator CLI, connectors and benchmark proof.",
   "bin": {
-    "cognibrain": "./bin/cognibrain.mjs",
-    "cognibrain-connect": "./bin/cognibrain-connect.mjs"
+    "cognibrain": "bin/cognibrain.mjs",
+    "cognibrain-connect": "bin/cognibrain-connect.mjs"
   },
   "exports": {
     ".": "./sdk/typescript/index.ts",

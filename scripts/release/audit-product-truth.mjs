@@ -44,6 +44,8 @@ const files = {
   operatorMemoryNativePythonRunnerWrapper: read("scripts/benchmark/competitors/operator-memory-native-python-runner.mjs"),
   basicMemoryExternalRunner: read("scripts/benchmark/competitors/basic_memory_external_runner.py"),
   realworldNativeCompetitorBenchmark: read("scripts/benchmark/benchmark-realworld-native-competitors.mjs"),
+  hardArenaBenchmark: read("scripts/benchmark/benchmark-hard-arena.mjs"),
+  streamingCommandHelper: read("scripts/benchmark/streaming-command.mjs"),
   realworldOpenAiJudge: read("scripts/benchmark/realworld-openai-judge.mjs"),
   realworldBasicMemoryRunner: read("scripts/benchmark/competitors/basic_memory_realworld_runner.py"),
   realworldLangMemRunner: read("scripts/benchmark/competitors/langmem_realworld_runner.py"),
@@ -183,6 +185,23 @@ const compactBenchmarkStdout = [files.cognicodeBenchSource, files.arenaSource, f
   files.internalRunner.includes("Full evidence is in the configured artifact files") &&
   !files.internalRunner.includes("spawnSync") &&
   !files.internalRunner.includes("maxBuffer");
+const streamingBenchmarkOrchestrators = [
+  files.hardArenaBenchmark,
+  files.nativeCompetitorBenchmark,
+  files.operatorMemoryNativeCompetitorBenchmark,
+  files.realworldNativeCompetitorBenchmark
+].every((source) =>
+  source.includes("streaming-command.mjs") &&
+  source.includes("await runCommand(") &&
+  !source.includes("spawnSync") &&
+  !source.includes("maxBuffer")
+) &&
+  files.streamingCommandHelper.includes("export function runCommand") &&
+  files.streamingCommandHelper.includes("createTailBuffer") &&
+  files.streamingCommandHelper.includes("captureLimit") &&
+  files.streamingCommandHelper.includes("truncatedStdout") &&
+  !files.streamingCommandHelper.includes("spawnSync") &&
+  !files.streamingCommandHelper.includes("maxBuffer");
 const dreamJobWorkerControl = files.service.includes("cancelDreamJob(") && files.service.includes("retryDreamJob(") && files.dreamRoutes.includes("/dream/jobs") && files.dreamRoutes.includes("cancel") && files.dreamRoutes.includes("retry") && files.mcpTools.includes("memory_dream_job_cancel") && files.mcpTools.includes("memory_dream_job_retry") && files.coreTests.includes("cancels and retries dream jobs");
 const liveSourceRevalidation = files.service.includes("revalidateSourceRefsAsync") && files.service.includes("await resolver.fetch") && files.service.includes("listExternalVendorItems") && files.dreamRoutes.includes("revalidateSourceRefsAsync") && files.coreTests.includes("uses live async source resolver fetch") && files.coreTests.includes("default GitHub source resolver fetches current provider state");
 const postgresVerifierPassed = files.postgresLive?.acceptance?.startsWithPostgresBackend === true && files.postgresLive?.storage?.active === "postgres-repository";
@@ -733,7 +752,7 @@ const checks = [
     removed: ["animated terminal UI dependency", "src/cli/inkApp.mjs", "generated CLI screenshots"],
     structuredMemoryAdd: "src/cli/memctl/memoryCommands.ts"
   }),
-  check("runtime-resource-footprint", "MCP, lifecycle and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers and TypeScript language-server scans, status exposes API/dashboard RSS and CPU, heavyweight benchmark CLIs keep stdout compact by default, and reinstallable benchmark caches have a measured prune path.", files.cli.includes("lightweightMcpServer.mjs") && vscodeHeavyGeneratedExcludes && vscodeLowResourceSettings && compactBenchmarkStdout && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cli.includes("function resourcesCommand") && files.cli.includes("WORKSPACE_BENCHMARK_CACHE_TARGETS") && files.cli.includes("user-cache/native-runners") && files.cli.includes("--prune-benchmark-caches") && files.benchmarkCacheRoot.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.benchmarkCacheRoot.includes("Library\", \"Caches\", \"cognibrain") && files.cli.includes("runtime: \"built-node\"") && files.cli.includes("runtime: \"source-node-import-tsx\"") && files.cli.includes("processModel: \"single-process\"") && files.cli.includes("runtime: \"source-tsx-cli\"") && files.cli.includes("COGNIBRAIN_API_RUNTIME") && files.cli.includes("dist/api/server.mjs") && files.cli.includes("entryPoints: [resolve(root, \"src\", \"api\", \"server.ts\")]") && files.packageJson.scripts?.["build:api"] === "node scripts/runtime/build-api.mjs" && files.packageJson.scripts?.build?.includes("npm run build:api") && packageFiles.has("dist/api/") && files.cliTests.includes("status.runtime.api.resources.rssMb") && files.cliTests.includes("status.runtime.api.runtime") && files.cliTests.includes("prunes reinstallable benchmark caches") && files.cliTests.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.cliTests.includes("user-cache/native-runners"), "fail", {
+  check("runtime-resource-footprint", "MCP, lifecycle and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers and TypeScript language-server scans, status exposes API/dashboard RSS and CPU, heavyweight benchmark CLIs keep stdout compact by default, native/original benchmark orchestrators stream command output instead of buffering large child output, and reinstallable benchmark caches have a measured prune path.", files.cli.includes("lightweightMcpServer.mjs") && vscodeHeavyGeneratedExcludes && vscodeLowResourceSettings && compactBenchmarkStdout && streamingBenchmarkOrchestrators && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cli.includes("function resourcesCommand") && files.cli.includes("WORKSPACE_BENCHMARK_CACHE_TARGETS") && files.cli.includes("user-cache/native-runners") && files.cli.includes("--prune-benchmark-caches") && files.benchmarkCacheRoot.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.benchmarkCacheRoot.includes("Library\", \"Caches\", \"cognibrain") && files.cli.includes("runtime: \"built-node\"") && files.cli.includes("runtime: \"source-node-import-tsx\"") && files.cli.includes("processModel: \"single-process\"") && files.cli.includes("runtime: \"source-tsx-cli\"") && files.cli.includes("COGNIBRAIN_API_RUNTIME") && files.cli.includes("dist/api/server.mjs") && files.cli.includes("entryPoints: [resolve(root, \"src\", \"api\", \"server.ts\")]") && files.packageJson.scripts?.["build:api"] === "node scripts/runtime/build-api.mjs" && files.packageJson.scripts?.build?.includes("npm run build:api") && packageFiles.has("dist/api/") && files.cliTests.includes("status.runtime.api.resources.rssMb") && files.cliTests.includes("status.runtime.api.runtime") && files.cliTests.includes("prunes reinstallable benchmark caches") && files.cliTests.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.cliTests.includes("user-cache/native-runners"), "fail", {
     code: ["bin/lib/cliRuntime.mjs", "bin/lib/harnessRuntime.mjs", "bin/lib/lightweightMcpServer.mjs"],
     checks: [
       "default MCP uses lightweight JS daemon proxy",
@@ -746,11 +765,13 @@ const checks = [
       "VSCode watcher/search excludes generated runtime and benchmark directories",
       "VSCode TypeScript server avoids generated runtime and benchmark directories",
       "heavyweight benchmark CLIs emit compact stdout summaries while preserving full JSON artifacts",
+      "native/original benchmark orchestrators keep only bounded stdout/stderr tails for child command reports",
       "original/native benchmark package caches default to a user cache outside the VSCode workspace",
       "resources CLI measures and prunes reinstallable benchmark caches without deleting memory data"
     ],
     requiredHeavyGeneratedExcludes,
-    compactBenchmarkStdout
+    compactBenchmarkStdout,
+    streamingBenchmarkOrchestrators
   }),
   check("operator-os-proof", "The terminal operator OS maturity artifact covers memory, connectors, runtime, config, benchmarks, policy, retention, logs and docs.", files.operatorOs.passed === true && Array.isArray(files.operatorOs.rows) && files.operatorOs.rows.length >= 10, "fail", {
     artifact: "artifacts/operator-os-maturity.json",

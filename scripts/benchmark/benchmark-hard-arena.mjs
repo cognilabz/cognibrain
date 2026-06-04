@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { runCommand } from "./streaming-command.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
 const extraArgs = process.argv.slice(2);
@@ -39,24 +39,18 @@ const env = {
   MEMORY_ARENA_PYTHON_RUNNER_TIMEOUT_MS: process.env.MEMORY_ARENA_PYTHON_RUNNER_TIMEOUT_MS ?? "60000"
 };
 
-const arena = spawnSync("npx", arenaArgs, {
+const arena = await runCommand("npx", arenaArgs, {
   cwd: root,
   env,
-  encoding: "utf8",
   timeout: Number(process.env.MEMORY_ARENA_HARD_TIMEOUT_MS ?? process.env.MEMORY_RELEASE_CHECK_ARENA_TIMEOUT_MS ?? 1_800_000),
-  maxBuffer: 60 * 1024 * 1024
+  forwardOutput: true
 });
-process.stdout.write(arena.stdout ?? "");
-process.stderr.write(arena.stderr ?? "");
 if (arena.status !== 0) process.exit(arena.status ?? 1);
 
-const publish = spawnSync("node", ["scripts/internal/run-task.mjs", "benchmark:arena:publish"], {
+const publish = await runCommand("node", ["scripts/internal/run-task.mjs", "benchmark:arena:publish"], {
   cwd: root,
   env,
-  encoding: "utf8",
   timeout: 120_000,
-  maxBuffer: 20 * 1024 * 1024
+  forwardOutput: true
 });
-process.stdout.write(publish.stdout ?? "");
-process.stderr.write(publish.stderr ?? "");
 if (publish.status !== 0) process.exit(publish.status ?? 1);

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { dirname, isAbsolute, join } from "node:path";
 import { nativeRunnerRoot } from "./cache-root.mjs";
+import { commandEntry, runCommand } from "./streaming-command.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
 const out = optionValue("--out") ?? "artifacts/realworld-blackbox-openai-intelligence.json";
@@ -19,9 +19,9 @@ const pythonBin = process.env.MEMORY_REALWORLD_COMPETITOR_PYTHON
   ?? join(pythonVenv, "bin", "python");
 
 const installations = {
-  pythonCompetitors: installPythonCompetitors(),
-  basicmemory: pythonPackageStatus("basic-memory"),
-  langmem: pythonPackageStatus("langmem")
+  pythonCompetitors: await installPythonCompetitors(),
+  basicmemory: await pythonPackageStatus("basic-memory"),
+  langmem: await pythonPackageStatus("langmem")
 };
 
 const env = {
@@ -40,7 +40,7 @@ if (!env.MEMORY_REALWORLD_JUDGE_COMMAND && (process.env.MEMORY_OPENAI_API_KEY ||
   env.MEMORY_REALWORLD_JUDGE_KIND = "llm";
 }
 
-const realworld = spawnSync("npx", [
+const realworld = await runCommand("npx", [
   "tsx",
   "src/eval/realworldBlackbox.ts",
   "--out",
@@ -56,9 +56,7 @@ const realworld = spawnSync("npx", [
 ], {
   cwd: root,
   env,
-  encoding: "utf8",
-  timeout: Number(process.env.MEMORY_REALWORLD_NATIVE_TIMEOUT_MS ?? 900_000),
-  maxBuffer: 40 * 1024 * 1024
+  timeout: Number(process.env.MEMORY_REALWORLD_NATIVE_TIMEOUT_MS ?? 900_000)
 });
 
 const report = writeReport({ installations, realworld: commandEntry(realworld) });
@@ -68,45 +66,35 @@ if (realworld.status !== 0) {
   process.exit(realworld.status ?? 1);
 }
 
-function installPythonCompetitors() {
+async function installPythonCompetitors() {
   const pythonCandidate = process.env.MEMORY_REALWORLD_PYTHON ?? process.env.MEMORY_ARENA_PYTHON ?? process.env.PYTHON ?? "python3";
   const packages = [
     "basic-memory==0.21.5",
     "langmem==0.0.30"
   ];
-  const uv = spawnSync("uv", ["--version"], {
+  const uv = await runCommand("uv", ["--version"], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 30_000,
-    maxBuffer: 4 * 1024 * 1024
+    timeout: 30_000
   });
   let venv = { status: 0, stdout: "already exists", stderr: "" };
   if (!existsSync(pythonBin)) {
     mkdirSync(dirname(pythonVenv), { recursive: true });
-    venv = uv.status === 0 ? spawnSync("uv", ["venv", pythonVenv, "--python", pythonCandidate], {
+    venv = uv.status === 0 ? await runCommand("uv", ["venv", pythonVenv, "--python", pythonCandidate], {
       cwd: root,
-      encoding: "utf8",
-      timeout: 180_000,
-      maxBuffer: 20 * 1024 * 1024
-    }) : spawnSync(pythonCandidate, ["-m", "venv", pythonVenv], {
+      timeout: 180_000
+    }) : await runCommand(pythonCandidate, ["-m", "venv", pythonVenv], {
       cwd: root,
-      encoding: "utf8",
-      timeout: 180_000,
-      maxBuffer: 20 * 1024 * 1024
+      timeout: 180_000
     });
     if (venv.status !== 0) return { installed: false, uv: commandEntry(uv), venv: pythonVenv, create: commandEntry(venv), install: null };
   }
 
-  const install = uv.status === 0 ? spawnSync("uv", ["pip", "install", "--python", pythonBin, ...packages], {
+  const install = uv.status === 0 ? await runCommand("uv", ["pip", "install", "--python", pythonBin, ...packages], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 600_000,
-    maxBuffer: 80 * 1024 * 1024
-  }) : spawnSync(pythonBin, ["-m", "pip", "install", ...packages], {
+    timeout: 600_000
+  }) : await runCommand(pythonBin, ["-m", "pip", "install", ...packages], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 600_000,
-    maxBuffer: 80 * 1024 * 1024
+    timeout: 600_000
   });
   return {
     installed: install.status === 0 && existsSync(pythonBin),
@@ -158,13 +146,11 @@ function writeReport(details) {
   return report;
 }
 
-function pythonPackageStatus(packageName) {
+async function pythonPackageStatus(packageName) {
   if (!existsSync(pythonBin)) return { package: packageName, installed: false, version: null, python: pythonBin };
-  const version = spawnSync(pythonBin, ["-c", `import importlib.metadata as m; print(m.version(${JSON.stringify(packageName)}))`], {
+  const version = await runCommand(pythonBin, ["-c", `import importlib.metadata as m; print(m.version(${JSON.stringify(packageName)}))`], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 30_000,
-    maxBuffer: 4 * 1024 * 1024
+    timeout: 30_000
   });
   return {
     package: packageName,
@@ -175,26 +161,12 @@ function pythonPackageStatus(packageName) {
   };
 }
 
-function commandEntry(result) {
-  return {
-    ok: result.status === 0,
-    status: result.status ?? 1,
-    stdoutTail: tail(result.stdout),
-    stderrTail: tail(result.stderr),
-    error: result.error?.message
-  };
-}
-
 function readJson(path, fallback) {
   try {
-    return JSON.parse(readFileSync(join(root, path), "utf8"));
+    return JSON.parse(readFileSync(isAbsolute(path) ? path : join(root, path), "utf8"));
   } catch {
     return fallback;
   }
-}
-
-function tail(value = "", limit = 3000) {
-  return String(value).slice(-limit);
 }
 
 function optionValue(name) {

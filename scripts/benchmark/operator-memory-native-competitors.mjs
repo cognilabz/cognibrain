@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { nativeRunnerRoot } from "./cache-root.mjs";
+import { commandEntry, runCommand } from "./streaming-command.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
 const out = optionValue("--out") ?? "artifacts/operator-memory-native-competitors.json";
@@ -17,11 +17,11 @@ const runner = join(root, "scripts", "benchmark", "competitors", "operator-memor
 const skipInstall = process.argv.includes("--skip-install") || process.env.MEMORY_OPERATOR_MEMORY_SKIP_INSTALL === "true";
 
 const installations = {
-  pythonCompetitors: skipInstall ? skippedPythonCompetitors() : ensurePythonCompetitors(),
-  mem0: pythonPackageStatus("mem0ai"),
-  graphiti: pythonPackageStatus("graphiti-core"),
-  cognee: pythonPackageStatus("cognee"),
-  langmem: pythonPackageStatus("langmem")
+  pythonCompetitors: skipInstall ? skippedPythonCompetitors() : await ensurePythonCompetitors(),
+  mem0: await pythonPackageStatus("mem0ai"),
+  graphiti: await pythonPackageStatus("graphiti-core"),
+  cognee: await pythonPackageStatus("cognee"),
+  langmem: await pythonPackageStatus("langmem")
 };
 
 const env = {
@@ -40,7 +40,7 @@ if (!env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND && (process.env.MEMORY_OPENAI_API_
   env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND = `${process.execPath} ${join(root, "scripts", "benchmark", "operator-memory-openai-judge.mjs")}`;
 }
 
-const benchmark = spawnSync("npx", [
+const benchmark = await runCommand("npx", [
   "tsx",
   "src/eval/operatorMemoryBenchmark.ts",
   "--systems",
@@ -52,9 +52,7 @@ const benchmark = spawnSync("npx", [
 ], {
   cwd: root,
   env,
-  encoding: "utf8",
-  timeout: Number(process.env.MEMORY_OPERATOR_MEMORY_NATIVE_TIMEOUT_MS ?? 600_000),
-  maxBuffer: 40 * 1024 * 1024
+  timeout: Number(process.env.MEMORY_OPERATOR_MEMORY_NATIVE_TIMEOUT_MS ?? 600_000)
 });
 
 if (benchmark.status !== 0) {
@@ -71,12 +69,10 @@ const report = writeReport({
 });
 console.log(JSON.stringify(report, null, 2));
 
-function ensurePythonCompetitors() {
-  const uv = spawnSync("uv", ["--version"], {
+async function ensurePythonCompetitors() {
+  const uv = await runCommand("uv", ["--version"], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 30_000,
-    maxBuffer: 4 * 1024 * 1024
+    timeout: 30_000
   });
   if (uv.status !== 0) return { installed: false, blockedReason: "uv is required to install isolated Python competitor packages", uv: commandEntry(uv), venv: pythonVenv, install: null };
 
@@ -84,11 +80,9 @@ function ensurePythonCompetitors() {
   let create = { status: 0, stdout: "already exists", stderr: "" };
   if (!existsSync(pythonBin)) {
     mkdirSync(dirname(pythonVenv), { recursive: true });
-    create = spawnSync("uv", ["venv", pythonVenv, "--python", pythonCandidate], {
+    create = await runCommand("uv", ["venv", pythonVenv, "--python", pythonCandidate], {
       cwd: root,
-      encoding: "utf8",
-      timeout: 180_000,
-      maxBuffer: 20 * 1024 * 1024
+      timeout: 180_000
     });
     if (create.status !== 0) return { installed: false, uv: commandEntry(uv), venv: pythonVenv, create: commandEntry(create), install: null };
   }
@@ -100,11 +94,9 @@ function ensurePythonCompetitors() {
     "cognee==1.1.0",
     "fastembed==0.7.3"
   ];
-  const install = spawnSync("uv", ["pip", "install", "--python", pythonBin, ...packages], {
+  const install = await runCommand("uv", ["pip", "install", "--python", pythonBin, ...packages], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 600_000,
-    maxBuffer: 80 * 1024 * 1024
+    timeout: 600_000
   });
   return {
     installed: install.status === 0 && existsSync(pythonBin),
@@ -178,13 +170,11 @@ ${(report.summary?.marketSuperiorityBlockers ?? []).map((item) => `- ${item}`).j
 `;
 }
 
-function pythonPackageStatus(packageName) {
+async function pythonPackageStatus(packageName) {
   if (!existsSync(pythonBin)) return { package: packageName, installed: false, version: null, python: pythonBin };
-  const result = spawnSync(pythonBin, ["-c", `import importlib.metadata as m; print(m.version(${JSON.stringify(packageName)}))`], {
+  const result = await runCommand(pythonBin, ["-c", `import importlib.metadata as m; print(m.version(${JSON.stringify(packageName)}))`], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 30_000,
-    maxBuffer: 4 * 1024 * 1024
+    timeout: 30_000
   });
   return {
     package: packageName,
@@ -192,16 +182,6 @@ function pythonPackageStatus(packageName) {
     version: result.status === 0 ? result.stdout.trim() : null,
     python: pythonBin,
     check: commandEntry(result)
-  };
-}
-
-function commandEntry(result) {
-  return {
-    ok: result.status === 0,
-    status: result.status ?? 1,
-    stdoutTail: tail(result.stdout),
-    stderrTail: tail(result.stderr),
-    error: result.error?.message
   };
 }
 
@@ -215,10 +195,6 @@ function readJson(path, fallback) {
 
 function points(value) {
   return `${Math.round(value * 1000)}/1000`;
-}
-
-function tail(value = "", limit = 3000) {
-  return String(value ?? "").slice(-limit);
 }
 
 function optionValue(name) {

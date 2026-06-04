@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { spawnSync } from "node:child_process";
 import { nativeRunnerRoot, vendorBenchmarkRoot } from "./cache-root.mjs";
+import { commandEntry, runCommand } from "./streaming-command.mjs";
 
 const root = new URL("../..", import.meta.url).pathname;
 const out = optionValue("--out") ?? "artifacts/arena/native-competitors.json";
@@ -13,13 +13,13 @@ const gbrainRepo = process.env.MEMORY_ARENA_GBRAIN_REPO ?? vendorBenchmarkRoot("
 const gbrainHome = process.env.MEMORY_ARENA_GBRAIN_HOME ?? nativeRunnerRoot("gbrain-home");
 
 const installations = {
-  pythonCompetitors: installPythonCompetitors(),
-  mem0: installMem0Cli(),
-  graphiti: pythonPackageStatus("graphiti-core"),
-  cognee: pythonPackageStatus("cognee"),
-  langmem: pythonPackageStatus("langmem"),
-  basicmemory: pythonPackageStatus("basic-memory"),
-  gbrain: installGBrain()
+  pythonCompetitors: await installPythonCompetitors(),
+  mem0: await installMem0Cli(),
+  graphiti: await pythonPackageStatus("graphiti-core"),
+  cognee: await pythonPackageStatus("cognee"),
+  langmem: await pythonPackageStatus("langmem"),
+  basicmemory: await pythonPackageStatus("basic-memory"),
+  gbrain: await installGBrain()
 };
 
 const env = {
@@ -55,12 +55,10 @@ if (process.env.MEM0_API_KEY || process.env.MEMORY_ARENA_MEM0_API_KEY) {
   if (process.env.MEM0_BASE_URL) env.MEMORY_ARENA_MEM0_BASE_URL = process.env.MEM0_BASE_URL;
 }
 
-const arena = spawnSync("npx", ["tsx", "src/eval/arena.ts", "--systems", "cognibrain,mem0,graphiti,cognee,langmem,gbrain,basicmemory", "--benchmark", "cognicode", "--count", count, "--out", "artifacts/arena/run.json"], {
+const arena = await runCommand("npx", ["tsx", "src/eval/arena.ts", "--systems", "cognibrain,mem0,graphiti,cognee,langmem,gbrain,basicmemory", "--benchmark", "cognicode", "--count", count, "--out", "artifacts/arena/run.json"], {
   cwd: root,
   env,
-  encoding: "utf8",
-  timeout: Number(process.env.MEMORY_ARENA_NATIVE_TIMEOUT_MS ?? 900_000),
-  maxBuffer: 40 * 1024 * 1024
+  timeout: Number(process.env.MEMORY_ARENA_NATIVE_TIMEOUT_MS ?? 900_000)
 });
 if (arena.status !== 0) {
   writeReport({ installations, arena: commandEntry(arena), published: null });
@@ -68,23 +66,19 @@ if (arena.status !== 0) {
   process.exit(arena.status ?? 1);
 }
 
-const publish = spawnSync("node", ["scripts/internal/run-task.mjs", "benchmark:arena:publish"], {
+const publish = await runCommand("node", ["scripts/internal/run-task.mjs", "benchmark:arena:publish"], {
   cwd: root,
   env,
-  encoding: "utf8",
-  timeout: 120_000,
-  maxBuffer: 20 * 1024 * 1024
+  timeout: 120_000
 });
 const report = writeReport({ installations, arena: commandEntry(arena), published: commandEntry(publish) });
 console.log(JSON.stringify(report, null, 2));
 if (publish.status !== 0) process.exit(publish.status ?? 1);
 
-function installPythonCompetitors() {
-  const uv = spawnSync("uv", ["--version"], {
+async function installPythonCompetitors() {
+  const uv = await runCommand("uv", ["--version"], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 30_000,
-    maxBuffer: 4 * 1024 * 1024
+    timeout: 30_000
   });
   if (uv.status !== 0) return { installed: false, blockedReason: "uv is required to install isolated Python competitor packages", uv: commandEntry(uv), venv: pythonVenv, install: null };
 
@@ -92,11 +86,9 @@ function installPythonCompetitors() {
   let venv = { status: 0, stdout: "already exists", stderr: "" };
   if (!existsSync(pythonBin)) {
     mkdirSync(dirname(pythonVenv), { recursive: true });
-    venv = spawnSync("uv", ["venv", pythonVenv, "--python", pythonCandidate], {
+    venv = await runCommand("uv", ["venv", pythonVenv, "--python", pythonCandidate], {
       cwd: root,
-      encoding: "utf8",
-      timeout: 180_000,
-      maxBuffer: 20 * 1024 * 1024
+      timeout: 180_000
     });
     if (venv.status !== 0) return { installed: false, uv: commandEntry(uv), venv: pythonVenv, create: commandEntry(venv), install: null };
   }
@@ -109,11 +101,9 @@ function installPythonCompetitors() {
     "basic-memory==0.21.5",
     "fastembed==0.8.0"
   ];
-  const install = spawnSync("uv", ["pip", "install", "--python", pythonBin, ...packages], {
+  const install = await runCommand("uv", ["pip", "install", "--python", pythonBin, ...packages], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 600_000,
-    maxBuffer: 80 * 1024 * 1024
+    timeout: 600_000
   });
   return {
     installed: install.status === 0 && existsSync(pythonBin),
@@ -125,24 +115,18 @@ function installPythonCompetitors() {
   };
 }
 
-function installMem0Cli() {
-  const cli = spawnSync("npm", ["exec", "--yes", "--package", "@mem0/cli@0.2.7", "--", "mem0", "--version"], {
+async function installMem0Cli() {
+  const cli = await runCommand("npm", ["exec", "--yes", "--package", "@mem0/cli@0.2.7", "--", "mem0", "--version"], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 120_000,
-    maxBuffer: 20 * 1024 * 1024
+    timeout: 120_000
   });
-  const sdk = spawnSync("npm", ["view", "mem0ai@3.0.3", "repository", "exports", "--json"], {
+  const sdk = await runCommand("npm", ["view", "mem0ai@3.0.3", "repository", "exports", "--json"], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 120_000,
-    maxBuffer: 20 * 1024 * 1024
+    timeout: 120_000
   });
-  const registry = spawnSync("npm", ["view", "mem0ai@3.0.3", "version", "--json"], {
+  const registry = await runCommand("npm", ["view", "mem0ai@3.0.3", "version", "--json"], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 120_000,
-    maxBuffer: 20 * 1024 * 1024
+    timeout: 120_000
   });
   return {
     package: "mem0ai@3.0.3 npm metadata + @mem0/cli@0.2.7; native Python runner uses mem0ai==2.0.2",
@@ -155,23 +139,19 @@ function installMem0Cli() {
   };
 }
 
-function installGBrain() {
+async function installGBrain() {
   mkdirSync(dirname(gbrainRepo), { recursive: true });
   let clone = null;
   if (!existsSync(join(gbrainRepo, "src", "cli.ts"))) {
-    clone = spawnSync("git", ["clone", "--depth=1", "https://github.com/garrytan/gbrain.git", gbrainRepo], {
+    clone = await runCommand("git", ["clone", "--depth=1", "https://github.com/garrytan/gbrain.git", gbrainRepo], {
       cwd: root,
-      encoding: "utf8",
-      timeout: 180_000,
-      maxBuffer: 20 * 1024 * 1024
+      timeout: 180_000
     });
     if (clone.status !== 0) return { repo: gbrainRepo, installed: false, clone: commandEntry(clone), install: null, version: null };
   }
-  const install = spawnSync("bun", ["install", "--frozen-lockfile"], {
+  const install = await runCommand("bun", ["install", "--frozen-lockfile"], {
     cwd: gbrainRepo,
-    encoding: "utf8",
-    timeout: 300_000,
-    maxBuffer: 20 * 1024 * 1024
+    timeout: 300_000
   });
   const version = readVersion(join(gbrainRepo, "package.json"));
   return {
@@ -215,16 +195,6 @@ function writeReport(details) {
   return report;
 }
 
-function commandEntry(result) {
-  return {
-    ok: result.status === 0,
-    status: result.status ?? 1,
-    stdoutTail: tail(result.stdout),
-    stderrTail: tail(result.stderr),
-    error: result.error?.message
-  };
-}
-
 function readJson(path, fallback) {
   try {
     return JSON.parse(readFileSync(join(root, path), "utf8"));
@@ -241,13 +211,11 @@ function readVersion(path) {
   }
 }
 
-function pythonPackageStatus(packageName) {
+async function pythonPackageStatus(packageName) {
   if (!existsSync(pythonBin)) return { package: packageName, installed: false, version: null, python: pythonBin };
-  const version = spawnSync(pythonBin, ["-c", `import importlib.metadata as m; print(m.version(${JSON.stringify(packageName)}))`], {
+  const version = await runCommand(pythonBin, ["-c", `import importlib.metadata as m; print(m.version(${JSON.stringify(packageName)}))`], {
     cwd: root,
-    encoding: "utf8",
-    timeout: 30_000,
-    maxBuffer: 4 * 1024 * 1024
+    timeout: 30_000
   });
   return {
     package: packageName,
@@ -256,10 +224,6 @@ function pythonPackageStatus(packageName) {
     python: pythonBin,
     check: commandEntry(version)
   };
-}
-
-function tail(value = "", limit = 3000) {
-  return String(value).slice(-limit);
 }
 
 function optionValue(name) {

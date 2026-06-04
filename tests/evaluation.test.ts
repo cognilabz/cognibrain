@@ -623,7 +623,9 @@ describe("self verification benchmark loop", () => {
         judgedSystems: 0,
         qualityClaimableSystems: 0,
         resourceTelemetryRecorded: true,
-        systemsMissingResourceTelemetry: []
+        systemsMissingResourceTelemetry: [],
+        commandResourceTelemetryRecorded: true,
+        systemsMissingCommandResourceTelemetry: []
       });
       expect(report.operationalWeaknesses.summary.maxRssDeltaMb).toBeGreaterThanOrEqual(0);
       expect(report.operationalWeaknesses.summary.maxCpuMs).toBeGreaterThanOrEqual(0);
@@ -641,6 +643,7 @@ describe("self verification benchmark loop", () => {
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Real-World Black-Box Benchmark");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Operational Weaknesses");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Max RSS delta");
+      expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Max command peak RSS");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("third-party-oss-workflows");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("not scored");
       expect(existsSync("scripts/benchmark/realworld-openai-judge.mjs")).toBe(true);
@@ -766,11 +769,22 @@ process.stdin.on("end", () => {
         judgeBlockedSystems: 0,
         qualityClaimableSystems: 4,
         resourceTelemetryRecorded: true,
-        systemsMissingResourceTelemetry: []
+        systemsMissingResourceTelemetry: [],
+        commandResourceTelemetryRecorded: true,
+        systemsMissingCommandResourceTelemetry: []
       });
+      const basicMemoryResource = report.systems.find((system) => system.system === "basicmemory")?.resourceFootprint;
+      const langMemResource = report.systems.find((system) => system.system === "langmem")?.resourceFootprint;
+      expect(basicMemoryResource?.childProcess).toMatchObject({ source: "spawned-process-tree-sampling", timedOut: false });
+      expect(langMemResource?.childProcess).toMatchObject({ source: "spawned-process-tree-sampling", timedOut: false });
+      expect(basicMemoryResource?.childProcess?.wallMs).toBeGreaterThanOrEqual(0);
+      expect(langMemResource?.childProcess?.wallMs).toBeGreaterThanOrEqual(0);
+      expect(report.operationalWeaknesses.summary.maxCommandPeakRssMb).toBeGreaterThanOrEqual(0);
+      expect(report.operationalWeaknesses.summary.maxCommandPeakCpuPercent).toBeGreaterThanOrEqual(0);
       expect(report.operationalWeaknesses.rawErrorClasses).toEqual([]);
       expect(report.operationalWeaknesses.bucketWeaknesses.every((bucket) => bucket.scoredSystems === 4 && bucket.bestScore === 1 && bucket.worstScore === 1)).toBe(true);
       expect(report.improvementSignals.some((signal) => signal.evidence.includes("Cognibrain and 2 original competitors"))).toBe(true);
+      expect(report.improvementSignals.some((signal) => signal.evidence.includes("Spawned process-tree telemetry recorded for 2 command runner"))).toBe(true);
     } finally {
       if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
       else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;

@@ -194,6 +194,7 @@ const realworldJudgeBlockedOriginalRuns = Number(files.realworldNativeCompetitor
 const realworldBlackboxSystems = Array.isArray(files.realworldBlackbox.systems) ? files.realworldBlackbox.systems : [];
 const realworldBlackboxCognibrain = realworldBlackboxSystems.find((system) => system.system === "cognibrain");
 const realworldBlackboxBlocked = realworldBlackboxSystems.filter((system) => system.evidenceClass === "credential-blocked");
+const realworldBlackboxCommandSystems = realworldBlackboxSystems.filter((system) => system.adapterMode === "external-command");
 const realworldBlackboxRawRetained = realworldBlackboxCognibrain && Array.isArray(realworldBlackboxCognibrain.rawOutputs) && realworldBlackboxCognibrain.rawOutputs.length >= 15;
 const realworldBlackboxJudgeBlocked = realworldBlackboxCognibrain?.qualityClaimAllowed === false && realworldBlackboxCognibrain?.judge?.kind === "missing" && realworldBlackboxCognibrain?.metrics?.score === null && files.realworldBlackbox.eligibilityGate?.llmOrHarnessJudged === false;
 const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && files.realworldBlackbox.eligibilityGate?.resourceTelemetryRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked;
@@ -250,10 +251,16 @@ const realworldOperationalWeaknessReporting = files.realworldBlackboxSource.incl
   files.realworldBlackboxSource.includes("setupFailureRate") &&
   files.realworldBlackboxSource.includes("rawOutputCoverageRate") &&
   files.realworldBlackboxSource.includes("resourceTelemetryRecorded") &&
+  files.realworldBlackboxSource.includes("spawned-process-tree-sampling") &&
+  files.realworldBlackboxSource.includes("commandResourceTelemetryRecorded") &&
+  files.realworldBlackboxSource.includes("sampleProcessTree") &&
   files.realworldBlackboxSource.includes("maxRssDeltaMb") &&
+  files.realworldBlackboxSource.includes("maxCommandPeakRssMb") &&
   files.realworldBlackboxSource.includes("maxCpuMs") &&
   files.evaluationTests.includes("Operational Weaknesses") &&
   files.evaluationTests.includes("Max RSS delta") &&
+  files.evaluationTests.includes("Max command peak RSS") &&
+  files.evaluationTests.includes("spawned-process-tree-sampling") &&
   files.evaluationTests.includes("central-judge-blocked") &&
   files.evaluationTests.includes("external-system-not-configured") &&
   files.realworldBlackbox?.operationalWeaknesses?.summary?.requestedSystems >= 2 &&
@@ -264,6 +271,12 @@ const realworldOperationalWeaknessReporting = files.realworldBlackboxSource.incl
   Number.isFinite(files.realworldBlackbox?.operationalWeaknesses?.summary?.maxRssDeltaMb) &&
   Number.isFinite(files.realworldBlackbox?.operationalWeaknesses?.summary?.maxCpuMs) &&
   realworldBlackboxSystems.every((system) => system?.resourceFootprint?.source === "central-harness-process") &&
+  files.realworldBlackbox?.operationalWeaknesses?.summary?.commandResourceTelemetryRecorded === true &&
+  Array.isArray(files.realworldBlackbox?.operationalWeaknesses?.summary?.systemsMissingCommandResourceTelemetry) &&
+  Number.isFinite(files.realworldBlackbox?.operationalWeaknesses?.summary?.maxCommandPeakRssMb) &&
+  Number.isFinite(files.realworldBlackbox?.operationalWeaknesses?.summary?.maxCommandPeakCpuPercent) &&
+  Number.isFinite(files.realworldBlackbox?.operationalWeaknesses?.summary?.maxCommandProcessCount) &&
+  realworldBlackboxCommandSystems.every((system) => system?.resourceFootprint?.childProcess?.source === "spawned-process-tree-sampling") &&
   Array.isArray(files.realworldBlackbox?.operationalWeaknesses?.rawErrorClasses) &&
   files.realworldBlackbox.operationalWeaknesses.rawErrorClasses.length >= 1 &&
   Array.isArray(files.realworldBlackbox?.operationalWeaknesses?.bucketWeaknesses) &&

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { MemoryService } from "../api/service";
 
 type EvidenceClass = "same-run-full" | "same-run-command" | "credential-blocked" | "local-baseline";
@@ -108,6 +108,20 @@ interface ResourceFootprint {
   heapUsedStartMb: number;
   heapUsedEndMb: number;
   heapUsedDeltaMb: number;
+  childProcess?: ChildProcessResourceFootprint;
+}
+
+interface ChildProcessResourceFootprint {
+  source: "spawned-process-tree-sampling";
+  pid: number | null;
+  wallMs: number;
+  sampleIntervalMs: number;
+  samples: number;
+  peakRssMb: number;
+  peakCpuPercent: number;
+  maxProcessCount: number;
+  timedOut: boolean;
+  signal: string | null;
 }
 
 interface RealWorldReport {
@@ -177,6 +191,11 @@ interface RealWorldReport {
       maxHeapUsedDeltaMb: number;
       maxCpuMs: number;
       maxWallMs: number;
+      commandResourceTelemetryRecorded: boolean;
+      systemsMissingCommandResourceTelemetry: string[];
+      maxCommandPeakRssMb: number;
+      maxCommandPeakCpuPercent: number;
+      maxCommandProcessCount: number;
     };
     rawErrorClasses: Array<{ className: string; count: number; systems: string[]; examples: string[] }>;
     bucketWeaknesses: Array<{
@@ -1180,24 +1199,34 @@ class CommandAdapter implements Adapter {
     return undefined;
   }
 
-  runExternal(): SystemResult | undefined {
-    if (!this.command || !this.payload) return undefined;
+  async runExternal(): Promise<{ system: SystemResult | undefined; childProcess?: ChildProcessResourceFootprint }> {
+    if (!this.command || !this.payload) return { system: undefined };
     const started = Date.now();
-    const result = spawnSync(this.command, [], {
+    const result = await runShellCommandWithResourceTelemetry(this.command, {
       input: `${JSON.stringify(this.payload)}\n`,
-      encoding: "utf8",
-      shell: true,
-      timeout: Number(process.env.MEMORY_REALWORLD_COMMAND_TIMEOUT_MS ?? 300_000),
-      maxBuffer: 20 * 1024 * 1024
+      timeoutMs: Number(process.env.MEMORY_REALWORLD_COMMAND_TIMEOUT_MS ?? 300_000),
+      maxBuffer: 20 * 1024 * 1024,
+      sampleIntervalMs: Number(process.env.MEMORY_REALWORLD_COMMAND_RESOURCE_SAMPLE_MS ?? 50)
     });
-    if (result.status !== 0) return externalCommandBlockedSystem(this, result.stderr || result.error?.message || "external command failed", Date.now() - started);
+    if (result.status !== 0) {
+      return {
+        system: externalCommandBlockedSystem(this, result.stderr || result.errorMessage || "external command failed", Date.now() - started),
+        childProcess: result.resource
+      };
+    }
     let parsed: unknown;
     try {
       parsed = JSON.parse(result.stdout);
     } catch (error) {
-      return externalCommandBlockedSystem(this, `external command JSON parse failed: ${error instanceof Error ? error.message : String(error)}`, Date.now() - started);
+      return {
+        system: externalCommandBlockedSystem(this, `external command JSON parse failed: ${error instanceof Error ? error.message : String(error)}`, Date.now() - started),
+        childProcess: result.resource
+      };
     }
-    return normalizeExternalSystem(this, parsed, Date.now() - started, manifestFromPayload(this.payload));
+    return {
+      system: normalizeExternalSystem(this, parsed, Date.now() - started, manifestFromPayload(this.payload)),
+      childProcess: result.resource
+    };
   }
 }
 
@@ -1205,14 +1234,15 @@ async function runCommandAdapter(adapter: CommandAdapter, manifest: RealWorldMan
   const resourceSample = startResourceSample();
   try {
     const setup = adapter.setup(manifest);
-    const external = adapter.runExternal();
-    if (!external) return attachResourceFootprint(externalCommandBlockedSystem(adapter, "external command did not produce a result", 0), finishResourceSample(resourceSample));
+    const externalRun = await adapter.runExternal();
+    const external = externalRun.system;
+    if (!external) return attachResourceFootprint(externalCommandBlockedSystem(adapter, "external command did not produce a result", 0), finishResourceSample(resourceSample, externalRun.childProcess));
     const mergedSetup = { ...external.setup, ...setup, manifestHash: sha256(stableStringify(manifest)) };
     if (judge && external.rawOutputs.length === manifest.queries.length && external.setup.rawOutputContractValid !== false) {
       const result = scoreSystem(adapter, manifest, mergedSetup, external.rawOutputs, external.metrics.ingestLatencyMs, judge);
-      return attachResourceFootprint(result, finishResourceSample(resourceSample));
+      return attachResourceFootprint(result, finishResourceSample(resourceSample, externalRun.childProcess));
     }
-    return attachResourceFootprint({ ...external, setup: mergedSetup }, finishResourceSample(resourceSample));
+    return attachResourceFootprint({ ...external, setup: mergedSetup }, finishResourceSample(resourceSample, externalRun.childProcess));
   } catch (error) {
     return attachResourceFootprint(externalCommandBlockedSystem(adapter, error instanceof Error ? error.message : String(error), 0), finishResourceSample(resourceSample));
   }
@@ -1388,7 +1418,7 @@ function startResourceSample(): { startedAt: number; cpu: NodeJS.CpuUsage; memor
   return { startedAt: Date.now(), cpu: process.cpuUsage(), memory: process.memoryUsage() };
 }
 
-function finishResourceSample(sample: ReturnType<typeof startResourceSample>): ResourceFootprint {
+function finishResourceSample(sample: ReturnType<typeof startResourceSample>, childProcess?: ChildProcessResourceFootprint): ResourceFootprint {
   const cpu = process.cpuUsage(sample.cpu);
   const memory = process.memoryUsage();
   const rssStartMb = bytesToMb(sample.memory.rss);
@@ -1405,8 +1435,136 @@ function finishResourceSample(sample: ReturnType<typeof startResourceSample>): R
     rssDeltaMb: roundResource(rssEndMb - rssStartMb),
     heapUsedStartMb,
     heapUsedEndMb,
-    heapUsedDeltaMb: roundResource(heapUsedEndMb - heapUsedStartMb)
+    heapUsedDeltaMb: roundResource(heapUsedEndMb - heapUsedStartMb),
+    ...(childProcess ? { childProcess } : {})
   };
+}
+
+async function runShellCommandWithResourceTelemetry(command: string, options: { input: string; timeoutMs: number; maxBuffer: number; sampleIntervalMs: number }): Promise<{
+  status: number | null;
+  signal: string | null;
+  stdout: string;
+  stderr: string;
+  errorMessage?: string;
+  resource: ChildProcessResourceFootprint;
+}> {
+  const started = Date.now();
+  const sampleIntervalMs = Math.max(10, Math.min(1_000, Math.floor(options.sampleIntervalMs)));
+  const child = spawn(command, [], {
+    shell: true,
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  let stdout = "";
+  let stderr = "";
+  let errorMessage: string | undefined;
+  let timedOut = false;
+  let peakRssKb = 0;
+  let peakCpuPercent = 0;
+  let maxProcessCount = 0;
+  let samples = 0;
+  const sample = () => {
+    if (!child.pid) return;
+    const tree = sampleProcessTree(child.pid);
+    samples += 1;
+    peakRssKb = Math.max(peakRssKb, tree.rssKb);
+    peakCpuPercent = Math.max(peakCpuPercent, tree.cpuPercent);
+    maxProcessCount = Math.max(maxProcessCount, tree.processCount);
+  };
+  const interval = setInterval(sample, sampleIntervalMs);
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGTERM");
+  }, Math.max(1, options.timeoutMs));
+  child.stdout?.setEncoding("utf8");
+  child.stderr?.setEncoding("utf8");
+  child.stdout?.on("data", (chunk) => {
+    stdout += chunk;
+    if (stdout.length > options.maxBuffer) {
+      errorMessage = "external command stdout exceeded maxBuffer";
+      child.kill("SIGTERM");
+    }
+  });
+  child.stderr?.on("data", (chunk) => {
+    stderr += chunk;
+    if (stderr.length > options.maxBuffer) {
+      errorMessage = "external command stderr exceeded maxBuffer";
+      child.kill("SIGTERM");
+    }
+  });
+  child.stdin?.end(options.input);
+  return new Promise((resolve) => {
+    child.on("error", (error) => {
+      errorMessage = error.message;
+    });
+    child.on("close", (status, signal) => {
+      sample();
+      clearInterval(interval);
+      clearTimeout(timeout);
+      resolve({
+        status,
+        signal,
+        stdout,
+        stderr,
+        errorMessage,
+        resource: {
+          source: "spawned-process-tree-sampling",
+          pid: child.pid ?? null,
+          wallMs: Date.now() - started,
+          sampleIntervalMs,
+          samples,
+          peakRssMb: roundResource(peakRssKb / 1024),
+          peakCpuPercent: roundResource(peakCpuPercent),
+          maxProcessCount,
+          timedOut,
+          signal
+        }
+      });
+    });
+  });
+}
+
+function sampleProcessTree(rootPid: number): { rssKb: number; cpuPercent: number; processCount: number } {
+  try {
+    const result = spawnSync("ps", ["-axo", "pid=,ppid=,rss=,pcpu="], {
+      encoding: "utf8",
+      timeout: 1_000,
+      maxBuffer: 5 * 1024 * 1024
+    });
+    if (result.status !== 0 || !result.stdout) return { rssKb: 0, cpuPercent: 0, processCount: 0 };
+    const rows = result.stdout.split("\n")
+      .map((line) => {
+        const [pidText, ppidText, rssText, cpuText] = line.trim().split(/\s+/);
+        return {
+          pid: Number(pidText),
+          ppid: Number(ppidText),
+          rssKb: Number(rssText),
+          cpuPercent: Number(cpuText)
+        };
+      })
+      .filter((row) => Number.isFinite(row.pid) && Number.isFinite(row.ppid));
+    const children = new Map<number, typeof rows>();
+    for (const row of rows) {
+      const siblings = children.get(row.ppid) ?? [];
+      siblings.push(row);
+      children.set(row.ppid, siblings);
+    }
+    const pending = [rootPid];
+    const pids = new Set<number>();
+    while (pending.length) {
+      const pid = pending.pop();
+      if (!pid || pids.has(pid)) continue;
+      pids.add(pid);
+      for (const child of children.get(pid) ?? []) pending.push(child.pid);
+    }
+    const treeRows = rows.filter((row) => pids.has(row.pid));
+    return {
+      rssKb: treeRows.reduce((sum, row) => sum + safeNonNegativeNumber(row.rssKb, 0), 0),
+      cpuPercent: treeRows.reduce((sum, row) => sum + safeNonNegativeNumber(row.cpuPercent, 0), 0),
+      processCount: treeRows.length
+    };
+  } catch {
+    return { rssKb: 0, cpuPercent: 0, processCount: 0 };
+  }
 }
 
 function attachResourceFootprint(system: SystemResult, resourceFootprint: ResourceFootprint): SystemResult {
@@ -1485,6 +1643,9 @@ function buildOperationalWeaknessReport(manifest: RealWorldManifest, systems: Sy
   const latencies = systems.flatMap((system) => system.rawOutputs.map((output) => output.latencyMs)).sort((a, b) => a - b);
   const resourceFootprints = systems.map((system) => system.resourceFootprint).filter((resource): resource is ResourceFootprint => Boolean(resource));
   const systemsMissingResourceTelemetry = systems.filter((system) => !hasResourceTelemetry(system)).map((system) => system.system);
+  const commandSystems = systems.filter((system) => system.adapterMode === "external-command");
+  const commandResourceFootprints = commandSystems.map((system) => system.resourceFootprint?.childProcess).filter((resource): resource is ChildProcessResourceFootprint => Boolean(resource));
+  const systemsMissingCommandResourceTelemetry = commandSystems.filter((system) => !system.resourceFootprint?.childProcess).map((system) => system.system);
   const bucketWeaknesses = [...new Set(manifest.queries.map((query) => query.bucket))].map((bucket) => {
     const total = manifest.queries.filter((query) => query.bucket === bucket).length;
     const scored = systems.filter((system) => system.qualityClaimAllowed && system.buckets[bucket]);
@@ -1521,7 +1682,12 @@ function buildOperationalWeaknessReport(manifest: RealWorldManifest, systems: Sy
       maxRssDeltaMb: roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.rssDeltaMb))),
       maxHeapUsedDeltaMb: roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.heapUsedDeltaMb))),
       maxCpuMs: roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.cpuUserMs + resource.cpuSystemMs))),
-      maxWallMs: roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.wallMs)))
+      maxWallMs: roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.wallMs))),
+      commandResourceTelemetryRecorded: systemsMissingCommandResourceTelemetry.length === 0,
+      systemsMissingCommandResourceTelemetry,
+      maxCommandPeakRssMb: roundResource(Math.max(0, ...commandResourceFootprints.map((resource) => resource.peakRssMb))),
+      maxCommandPeakCpuPercent: roundResource(Math.max(0, ...commandResourceFootprints.map((resource) => resource.peakCpuPercent))),
+      maxCommandProcessCount: Math.max(0, ...commandResourceFootprints.map((resource) => resource.maxProcessCount))
     },
     rawErrorClasses: groupedRawErrorClasses(systems, totalQueries),
     bucketWeaknesses,
@@ -1631,6 +1797,8 @@ function improvementSignals(systems: SystemResult[]): Array<{ priority: string; 
     }
   );
   const resourceFootprints = systems.map((system) => system.resourceFootprint).filter((resource): resource is ResourceFootprint => Boolean(resource));
+  const commandSystems = systems.filter((system) => system.adapterMode === "external-command");
+  const commandResourceFootprints = commandSystems.map((system) => system.resourceFootprint?.childProcess).filter((resource): resource is ChildProcessResourceFootprint => Boolean(resource));
   if (resourceFootprints.length === systems.length) {
     signals.push({
       priority: "P1",
@@ -1642,6 +1810,19 @@ function improvementSignals(systems: SystemResult[]): Array<{ priority: string; 
       priority: "P0",
       item: "Require central resource telemetry before any real-world leaderboard use.",
       evidence: `${systems.length - resourceFootprints.length} system(s) are missing central RSS/CPU telemetry.`
+    });
+  }
+  if (commandSystems.length > 0 && commandResourceFootprints.length === commandSystems.length) {
+    signals.push({
+      priority: "P1",
+      item: "Compare original/native runner resource cost with spawned process telemetry.",
+      evidence: `Spawned process-tree telemetry recorded for ${commandResourceFootprints.length} command runner(s); max peak RSS ${roundResource(Math.max(0, ...commandResourceFootprints.map((resource) => resource.peakRssMb)))} MB and max peak CPU ${roundResource(Math.max(0, ...commandResourceFootprints.map((resource) => resource.peakCpuPercent)))}%.`
+    });
+  } else if (commandSystems.length > 0) {
+    signals.push({
+      priority: "P0",
+      item: "Require spawned process telemetry for original/native command runners.",
+      evidence: `${commandSystems.length - commandResourceFootprints.length} command runner(s) are missing process-tree RSS/CPU telemetry.`
     });
   }
   return signals;
@@ -1673,9 +1854,9 @@ function writeMarkdown(path: string, report: RealWorldReport): void {
     "",
     "## Systems",
     "",
-    "| System | Evidence class | Mode | Judge | Score | Recall | Abstention | Leakage | p95 latency | RSS delta | CPU | Smoke eligible |",
-    "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
-    ...report.systems.map((system) => `| ${system.displayName} | \`${system.evidenceClass}\` | \`${system.adapterMode}\` | \`${system.judge.kind}:${system.judge.status}\` | ${percent(system.metrics.score)} | ${percent(system.metrics.recall)} | ${percent(system.metrics.abstentionPrecision)} | ${percent(system.metrics.forbiddenLeakageRate)} | ${system.metrics.p95LatencyMs} ms | ${system.resourceFootprint ? `${system.resourceFootprint.rssDeltaMb} MB` : "n/a"} | ${system.resourceFootprint ? `${roundResource(system.resourceFootprint.cpuUserMs + system.resourceFootprint.cpuSystemMs)} ms` : "n/a"} | ${system.comparativeSmokeEligible ? "Yes" : "No"} |`),
+    "| System | Evidence class | Mode | Judge | Score | Recall | Abstention | Leakage | p95 latency | RSS delta | CPU | Command peak RSS | Command peak CPU | Smoke eligible |",
+    "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    ...report.systems.map((system) => `| ${system.displayName} | \`${system.evidenceClass}\` | \`${system.adapterMode}\` | \`${system.judge.kind}:${system.judge.status}\` | ${percent(system.metrics.score)} | ${percent(system.metrics.recall)} | ${percent(system.metrics.abstentionPrecision)} | ${percent(system.metrics.forbiddenLeakageRate)} | ${system.metrics.p95LatencyMs} ms | ${system.resourceFootprint ? `${system.resourceFootprint.rssDeltaMb} MB` : "n/a"} | ${system.resourceFootprint ? `${roundResource(system.resourceFootprint.cpuUserMs + system.resourceFootprint.cpuSystemMs)} ms` : "n/a"} | ${system.resourceFootprint?.childProcess ? `${system.resourceFootprint.childProcess.peakRssMb} MB` : "n/a"} | ${system.resourceFootprint?.childProcess ? `${system.resourceFootprint.childProcess.peakCpuPercent}%` : "n/a"} | ${system.comparativeSmokeEligible ? "Yes" : "No"} |`),
     "",
     "## Operational Weaknesses",
     "",
@@ -1696,6 +1877,11 @@ function writeMarkdown(path: string, report: RealWorldReport): void {
     `| Max heap-used delta | ${report.operationalWeaknesses.summary.maxHeapUsedDeltaMb} MB |`,
     `| Max CPU | ${report.operationalWeaknesses.summary.maxCpuMs} ms |`,
     `| Max wall time | ${report.operationalWeaknesses.summary.maxWallMs} ms |`,
+    `| Command resource telemetry recorded | ${report.operationalWeaknesses.summary.commandResourceTelemetryRecorded ? "yes" : "no"} |`,
+    `| Command systems missing resource telemetry | ${report.operationalWeaknesses.summary.systemsMissingCommandResourceTelemetry.join(", ") || "none"} |`,
+    `| Max command peak RSS | ${report.operationalWeaknesses.summary.maxCommandPeakRssMb} MB |`,
+    `| Max command peak CPU | ${report.operationalWeaknesses.summary.maxCommandPeakCpuPercent}% |`,
+    `| Max command process count | ${report.operationalWeaknesses.summary.maxCommandProcessCount} |`,
     "",
     "### Raw Error Classes",
     "",

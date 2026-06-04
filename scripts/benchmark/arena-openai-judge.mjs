@@ -6,6 +6,8 @@ if (!apiKey) fail("MEMORY_OPENAI_API_KEY or OPENAI_API_KEY is required");
 const baseUrl = (process.env.MEMORY_OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "");
 const model = process.env.MEMORY_ARENA_JUDGE_MODEL ?? process.env.MEMORY_REALWORLD_JUDGE_MODEL ?? "gpt-4.1-mini";
 const timeoutMs = Number(process.env.MEMORY_ARENA_OPENAI_JUDGE_TIMEOUT_MS ?? 120_000);
+const endpoint = `${baseUrl}/chat/completions`;
+const pricing = pricingForModel(model);
 const checks = [
   "correctionCarryover",
   "repeatedMistakeAvoided",
@@ -15,7 +17,7 @@ const checks = [
   "wrongMemorySuppression",
 ];
 
-const judged = await chatJson({
+const judgedResponse = await chatJson({
   instruction: [
     "Judge one CogniCode memory benchmark scenario from raw runner evidence.",
     "Do not trust runner-proposed checks; they are advisory and may be produced by heuristics.",
@@ -34,14 +36,18 @@ const judged = await chatJson({
   runnerEvidence: input.runnerOutput?.evidence ?? input.runnerOutput,
 });
 
-const normalized = normalize(judged);
+const normalized = normalize(judgedResponse.value);
 console.log(JSON.stringify({
   ...normalized,
   judge: {
     kind: "llm",
     provider: "openai-compatible",
     model,
-    endpoint: `${baseUrl}/chat/completions`,
+    endpoint,
+    usage: judgedResponse.usage,
+    estimatedCostUsd: estimateCostUsd(judgedResponse.usage, pricing),
+    pricing,
+    latencyMs: judgedResponse.latencyMs,
   },
 }));
 
@@ -49,7 +55,8 @@ async function chatJson(userPayload) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const started = Date.now();
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -79,7 +86,11 @@ async function chatJson(userPayload) {
     const body = await response.json();
     const content = body?.choices?.[0]?.message?.content;
     if (typeof content !== "string") fail("OpenAI-compatible Arena judge response did not include JSON content");
-    return JSON.parse(content);
+    return {
+      value: JSON.parse(content),
+      usage: body.usage ?? null,
+      latencyMs: Date.now() - started,
+    };
   } finally {
     clearTimeout(timeout);
   }
@@ -101,6 +112,37 @@ function normalize(value) {
     confidence: value.confidence,
     reason: typeof value.reason === "string" ? value.reason.slice(0, 1000) : "openai-compatible arena judge decision",
   };
+}
+
+function pricingForModel(modelName) {
+  const inputOverride = Number(process.env.MEMORY_ARENA_JUDGE_INPUT_COST_PER_MILLION_USD ?? NaN);
+  const outputOverride = Number(process.env.MEMORY_ARENA_JUDGE_OUTPUT_COST_PER_MILLION_USD ?? NaN);
+  if (Number.isFinite(inputOverride) && Number.isFinite(outputOverride) && inputOverride >= 0 && outputOverride >= 0) {
+    return {
+      source: "env",
+      inputCostPerMillionUsd: inputOverride,
+      outputCostPerMillionUsd: outputOverride,
+    };
+  }
+  const defaults = {
+    "gpt-4.1-mini": { inputCostPerMillionUsd: 0.4, outputCostPerMillionUsd: 1.6 },
+    "gpt-4.1-nano": { inputCostPerMillionUsd: 0.1, outputCostPerMillionUsd: 0.4 },
+    "gpt-4.1": { inputCostPerMillionUsd: 2, outputCostPerMillionUsd: 8 },
+  };
+  const match = defaults[modelName];
+  if (match) return { source: "openai-pricing-2026-06-03", ...match };
+  fail(`No Arena judge pricing configured for ${modelName}; set MEMORY_ARENA_JUDGE_INPUT_COST_PER_MILLION_USD and MEMORY_ARENA_JUDGE_OUTPUT_COST_PER_MILLION_USD`);
+}
+
+function estimateCostUsd(usage, price) {
+  if (!usage) fail("OpenAI-compatible Arena judge response must include token usage for cost accounting");
+  const inputTokens = Number(usage.prompt_tokens ?? usage.input_tokens ?? 0);
+  const outputTokens = Number(usage.completion_tokens ?? usage.output_tokens ?? 0);
+  if (!Number.isFinite(inputTokens) || !Number.isFinite(outputTokens) || inputTokens < 0 || outputTokens < 0) {
+    fail("OpenAI-compatible Arena judge usage must include non-negative input/output token counts");
+  }
+  const cost = (inputTokens * price.inputCostPerMillionUsd + outputTokens * price.outputCostPerMillionUsd) / 1_000_000;
+  return Number(cost.toFixed(8));
 }
 
 function fail(message) {

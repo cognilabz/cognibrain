@@ -75,7 +75,7 @@ const files = {
   mcpHandlers: read("src/connectors/mcpHandlers.ts"),
   cliTests: read("tests/cli.test.ts"),
   coreTests: read("tests/core.test.ts"),
-  evaluationTests: read("tests/evaluation.test.ts"),
+  evaluationTests: readMany(["tests/evaluation.test.ts", "tests/openai-runner-judges.test.ts"]),
   storageAdapter: read("src/core/storageAdapter.ts"),
   repositories: readMany([
     "src/api/repositories/sqliteRepository.ts",
@@ -312,7 +312,7 @@ const arenaQualityClaimBoundary = files.arenaSource.includes("MEMORY_ARENA_QUALI
   files.arenaSource.includes("Market superiority remains blocked because Benchmark Arena is a synthetic diagnostic") &&
   files.publishArenaSource.includes("Arena claim allowed") &&
   files.publishArenaSource.includes("Arena claim blockers");
-const arenaOpenAiJudgeStrict = files.arenaOpenAiJudge.includes("Do not trust runner-proposed checks") && files.arenaOpenAiJudge.includes("Do not use exact string overlap") && files.arenaOpenAiJudge.includes("must be a JSON boolean") && files.nativeCompetitorBenchmark.includes("arena-openai-judge.mjs");
+const arenaOpenAiJudgeStrict = files.arenaOpenAiJudge.includes("Do not trust runner-proposed checks") && files.arenaOpenAiJudge.includes("Do not use exact string overlap") && files.arenaOpenAiJudge.includes("must be a JSON boolean") && files.arenaOpenAiJudge.includes("estimatedCostUsd") && files.arenaOpenAiJudge.includes("OpenAI-compatible Arena judge response must include token usage") && files.evaluationTests.includes("records OpenAI-compatible Arena judge usage, cost and latency") && files.nativeCompetitorBenchmark.includes("arena-openai-judge.mjs");
 const arenaRunnerContractRows = Array.isArray(files.arena.systems) ? files.arena.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
 const arenaBundledRunnersRawOnly = arenaRunnerContractRows.length > 0 && arenaRunnerContractRows.every((system) =>
   system.runnerContract?.rawEvidenceOnly === true &&
@@ -327,7 +327,7 @@ const arenaBundledRunnersRawOnly = arenaRunnerContractRows.length > 0 && arenaRu
     scenario.evidence?.runnerContract?.scoreableChecksRequireJudge === true
   )
 );
-const operatorMemoryNativeJudgeBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("runnerSelfChecksIgnored") && files.operatorMemoryBenchmarkSource.includes("raw native evidence is unjudged") && files.operatorMemoryBenchmarkSource.includes("native/cloud artifact is unjudged") && files.operatorMemoryOpenAiJudge.includes("Do not trust runner-proposed checks") && files.operatorMemoryOpenAiJudge.includes("Do not use exact string overlap") && files.operatorMemoryOpenAiJudge.includes("must be a JSON boolean") && files.operatorMemoryNativeCompetitorBenchmark.includes("operator-memory-openai-judge.mjs");
+const operatorMemoryNativeJudgeBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("runnerSelfChecksIgnored") && files.operatorMemoryBenchmarkSource.includes("raw native evidence is unjudged") && files.operatorMemoryBenchmarkSource.includes("native/cloud artifact is unjudged") && files.operatorMemoryOpenAiJudge.includes("Do not trust runner-proposed checks") && files.operatorMemoryOpenAiJudge.includes("Do not use exact string overlap") && files.operatorMemoryOpenAiJudge.includes("must be a JSON boolean") && files.operatorMemoryOpenAiJudge.includes("estimatedCostUsd") && files.operatorMemoryOpenAiJudge.includes("OpenAI-compatible Operator Memory judge response must include token usage") && files.evaluationTests.includes("records OpenAI-compatible operator-memory judge usage, cost and latency") && files.operatorMemoryNativeCompetitorBenchmark.includes("operator-memory-openai-judge.mjs");
 const operatorMemoryRunnerContractRows = Array.isArray(files.operatorMemoryBenchmark.systems) ? files.operatorMemoryBenchmark.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
 const operatorMemoryNativeRunnerContractRows = Array.isArray(files.operatorMemoryNativeCompetitors.systems) ? files.operatorMemoryNativeCompetitors.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
 const operatorMemoryBundledRunnersRawOnly = operatorMemoryRunnerContractRows.length > 0 && operatorMemoryRunnerContractRows.every((system) =>

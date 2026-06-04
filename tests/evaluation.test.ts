@@ -576,10 +576,14 @@ describe("self verification benchmark loop", () => {
   it("runs the neutral real-world black-box harness without enabling a premature leaderboard", async () => {
     const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
     const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const previousMemoryOpenAiKey = process.env.MEMORY_OPENAI_API_KEY;
+    const previousOpenAiKey = process.env.OPENAI_API_KEY;
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-blackbox-"));
     try {
       delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
       delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      delete process.env.MEMORY_OPENAI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
       const report = await generateRealWorldBlackBoxBenchmark({
         out: join(dir, "realworld-blackbox.json"),
         markdown: join(dir, "realworld-blackbox.md"),
@@ -599,6 +603,19 @@ describe("self verification benchmark loop", () => {
       expect(queriesByBucket["third-party-oss-workflows"]).toBe(3);
       expect(report.manifest.queries.filter((query) => query.shouldAbstain).length).toBeGreaterThanOrEqual(3);
       expect(report.leaderboardEligible).toBe(false);
+      expect(report.judgeReadiness).toMatchObject({
+        readyForThisRun: false,
+        configuredJudgeCommand: false,
+        activeKind: "missing",
+        runtimeIsolation: "benchmark-only"
+      });
+      expect(report.judgeReadiness.openAiCompatibleAutoJudge).toMatchObject({
+        availableForNativeCompetitorRunner: false,
+        keyEnvPresent: false,
+        judgeScript: "scripts/benchmark/realworld-openai-judge.mjs"
+      });
+      expect(report.judgeReadiness.blockedReason).toContain("No MEMORY_REALWORLD_JUDGE_COMMAND");
+      expect(report.judgeReadiness.nextAction).toContain("Set MEMORY_REALWORLD_JUDGE_COMMAND");
       expect(report.eligibilityGate.manifestCoverageReady).toBe(true);
       expect(report.eligibilityGate.rawOutputsRetained).toBe(true);
       expect(report.eligibilityGate.costLatencyRecorded).toBe(true);
@@ -641,6 +658,8 @@ describe("self verification benchmark loop", () => {
         rawOutputCoverage: report.manifest.queries.length
       });
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Real-World Black-Box Benchmark");
+      expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Judge Readiness");
+      expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Runtime isolation");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Operational Weaknesses");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Max RSS delta");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Max command peak RSS");
@@ -652,6 +671,51 @@ describe("self verification benchmark loop", () => {
       else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
       if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
       else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+      if (previousMemoryOpenAiKey === undefined) delete process.env.MEMORY_OPENAI_API_KEY;
+      else process.env.MEMORY_OPENAI_API_KEY = previousMemoryOpenAiKey;
+      if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previousOpenAiKey;
+    }
+  });
+
+  it("reports secret-free OpenAI-compatible judge readiness without auto-scoring direct real-world runs", async () => {
+    const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+    const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
+    const previousMemoryOpenAiKey = process.env.MEMORY_OPENAI_API_KEY;
+    const previousOpenAiKey = process.env.OPENAI_API_KEY;
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-judge-readiness-"));
+    try {
+      delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      process.env.MEMORY_OPENAI_API_KEY = "test-secret-not-serialized";
+      delete process.env.OPENAI_API_KEY;
+      const report = await generateRealWorldBlackBoxBenchmark({
+        out: join(dir, "realworld-judge-readiness.json"),
+        markdown: join(dir, "realworld-judge-readiness.md"),
+        systems: ["cognibrain"]
+      });
+      expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
+      expect(report.systems[0].metrics.score).toBeNull();
+      expect(report.judgeReadiness.readyForThisRun).toBe(false);
+      expect(report.judgeReadiness.openAiCompatibleAutoJudge).toMatchObject({
+        availableForNativeCompetitorRunner: true,
+        keyEnvPresent: true,
+        keyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
+        enabledBy: "scripts/benchmark/benchmark-realworld-native-competitors.mjs"
+      });
+      expect(report.judgeReadiness.blockedReason).toContain("direct harness run has no MEMORY_REALWORLD_JUDGE_COMMAND");
+      const serialized = readFileSync(join(dir, "realworld-judge-readiness.json"), "utf8");
+      expect(serialized).not.toContain("test-secret-not-serialized");
+      expect(readFileSync(join(dir, "realworld-judge-readiness.md"), "utf8")).toContain("OpenAI-compatible auto judge for native runner");
+    } finally {
+      if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
+      else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
+      if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
+      else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
+      if (previousMemoryOpenAiKey === undefined) delete process.env.MEMORY_OPENAI_API_KEY;
+      else process.env.MEMORY_OPENAI_API_KEY = previousMemoryOpenAiKey;
+      if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previousOpenAiKey;
     }
   });
 

@@ -284,7 +284,20 @@ const realworldBlackboxBlocked = realworldBlackboxSystems.filter((system) => sys
 const realworldBlackboxCommandSystems = realworldBlackboxSystems.filter((system) => system.adapterMode === "external-command");
 const realworldBlackboxRawRetained = realworldBlackboxCognibrain && Array.isArray(realworldBlackboxCognibrain.rawOutputs) && realworldBlackboxCognibrain.rawOutputs.length >= 15;
 const realworldBlackboxJudgeBlocked = realworldBlackboxCognibrain?.qualityClaimAllowed === false && realworldBlackboxCognibrain?.judge?.kind === "missing" && realworldBlackboxCognibrain?.metrics?.score === null && files.realworldBlackbox.eligibilityGate?.llmOrHarnessJudged === false;
-const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && files.realworldBlackbox.eligibilityGate?.resourceTelemetryRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked;
+const realworldJudgeReadiness = files.realworldBlackbox.judgeReadiness ?? {};
+const realworldJudgeReadinessProof = realworldJudgeReadiness.configuredCommandEnv === "MEMORY_REALWORLD_JUDGE_COMMAND" &&
+  realworldJudgeReadiness.runtimeIsolation === "benchmark-only" &&
+  realworldJudgeReadiness.openAiCompatibleAutoJudge?.judgeScript === "scripts/benchmark/realworld-openai-judge.mjs" &&
+  realworldJudgeReadiness.openAiCompatibleAutoJudge?.enabledBy === "scripts/benchmark/benchmark-realworld-native-competitors.mjs" &&
+  Array.isArray(realworldJudgeReadiness.openAiCompatibleAutoJudge?.keyEnvNames) &&
+  realworldJudgeReadiness.openAiCompatibleAutoJudge.keyEnvNames.includes("MEMORY_OPENAI_API_KEY") &&
+  realworldJudgeReadiness.openAiCompatibleAutoJudge.keyEnvNames.includes("OPENAI_API_KEY") &&
+  files.realworldBlackboxSource.includes("function buildJudgeReadiness") &&
+  files.realworldBlackboxSource.includes("Only boolean env presence and static env names are reported") &&
+  files.realworldBlackboxSource.includes("Runtime isolation") &&
+  files.evaluationTests.includes("reports secret-free OpenAI-compatible judge readiness without auto-scoring direct real-world runs") &&
+  files.evaluationTests.includes("test-secret-not-serialized");
+const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && files.realworldBlackbox.eligibilityGate?.resourceTelemetryRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked && realworldJudgeReadinessProof;
 const realworldBlackboxMarketGateStrict = files.realworldBlackboxSource.includes("cognibrainComparativeSmokeEligible") &&
   files.realworldBlackboxSource.includes("leaderboardEligibleSystems: []") &&
   files.realworldBlackboxSource.includes("originalCompetitorEligibleSystems.length >= 2") &&

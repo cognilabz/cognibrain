@@ -145,6 +145,25 @@ interface RealWorldReport {
     externalCommands: Record<string, { configured: boolean; commandEnv: string; commandFingerprint: string | null }>;
     redaction: string;
   };
+  judgeReadiness: {
+    readyForThisRun: boolean;
+    configuredJudgeCommand: boolean;
+    activeKind: JudgeKind;
+    configuredCommandEnv: "MEMORY_REALWORLD_JUDGE_COMMAND";
+    openAiCompatibleAutoJudge: {
+      availableForNativeCompetitorRunner: boolean;
+      keyEnvPresent: boolean;
+      keyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"];
+      judgeScript: "scripts/benchmark/realworld-openai-judge.mjs";
+      enabledBy: "scripts/benchmark/benchmark-realworld-native-competitors.mjs";
+      kindEnv: "MEMORY_REALWORLD_JUDGE_KIND";
+      timeoutEnv: "MEMORY_REALWORLD_JUDGE_TIMEOUT_MS";
+    };
+    blockedReason: string | null;
+    nextAction: string | null;
+    runtimeIsolation: "benchmark-only";
+    secretRedaction: string;
+  };
   manifest: RealWorldManifest;
   eligibilityGate: {
     manifestCoverageReady: boolean;
@@ -301,6 +320,7 @@ export async function generateRealWorldBlackBoxBenchmark(options: { out?: string
     status: comparativeSmokeEligible ? "comparative-smoke-eligible-results-not-market-leaderboard" : "neutral-harness-ready-results-not-leaderboard",
     manifestHash,
     runProvenance: buildRunProvenance(requested, judge),
+    judgeReadiness: buildJudgeReadiness(judge),
     manifest,
     eligibilityGate,
     systems,
@@ -373,6 +393,40 @@ function buildRunProvenance(requestedSystems: string[], judge?: RealWorldJudge):
     },
     externalCommands,
     redaction: "command values and diagnostic text are secret-redacted; fingerprints are sha256 for reproducibility without exposing credentials"
+  };
+}
+
+function buildJudgeReadiness(judge?: RealWorldJudge): RealWorldReport["judgeReadiness"] {
+  const configuredJudgeCommand = Boolean(process.env.MEMORY_REALWORLD_JUDGE_COMMAND);
+  const keyEnvPresent = Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
+  const readyForThisRun = Boolean(judge);
+  const autoJudgeAvailable = !configuredJudgeCommand && keyEnvPresent;
+  return {
+    readyForThisRun,
+    configuredJudgeCommand,
+    activeKind: judge?.kind ?? "missing",
+    configuredCommandEnv: "MEMORY_REALWORLD_JUDGE_COMMAND",
+    openAiCompatibleAutoJudge: {
+      availableForNativeCompetitorRunner: autoJudgeAvailable,
+      keyEnvPresent,
+      keyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
+      judgeScript: "scripts/benchmark/realworld-openai-judge.mjs",
+      enabledBy: "scripts/benchmark/benchmark-realworld-native-competitors.mjs",
+      kindEnv: "MEMORY_REALWORLD_JUDGE_KIND",
+      timeoutEnv: "MEMORY_REALWORLD_JUDGE_TIMEOUT_MS"
+    },
+    blockedReason: readyForThisRun
+      ? null
+      : autoJudgeAvailable
+        ? "This direct harness run has no MEMORY_REALWORLD_JUDGE_COMMAND; the native competitor runner can attach the OpenAI-compatible judge from the available key env."
+        : "No MEMORY_REALWORLD_JUDGE_COMMAND and no OpenAI-compatible judge key env were present, so raw outputs are retained but not scored.",
+    nextAction: readyForThisRun
+      ? null
+      : autoJudgeAvailable
+        ? "Run npm run internal -- benchmark:realworld:competitors to execute the explicit native competitor path with the OpenAI-compatible judge."
+        : "Set MEMORY_REALWORLD_JUDGE_COMMAND to an LLM/harness scorer, or set MEMORY_OPENAI_API_KEY or OPENAI_API_KEY before the explicit native competitor benchmark.",
+    runtimeIsolation: "benchmark-only",
+    secretRedaction: "Only boolean env presence and static env names are reported; secret values are never serialized."
   };
 }
 
@@ -1841,6 +1895,19 @@ function writeMarkdown(path: string, report: RealWorldReport): void {
     `Comparative smoke eligible: ${report.comparativeSmokeEligible ? "yes" : "no"}. Market claim allowed: ${report.marketClaimAllowed ? "yes" : "no"}. Leaderboard eligible: ${report.leaderboardEligible ? "yes" : "no"}.`,
     "",
     "This is the neutral harness implementation. When the eligibility gate is true, it is a comparative smoke for this frozen manifest, not a market-wide leaderboard. Quality scores are reported only when an LLM/harness judge is configured.",
+    "",
+    "## Judge Readiness",
+    "",
+    "| Check | Value |",
+    "| --- | --- |",
+    `| Ready for this run | ${report.judgeReadiness.readyForThisRun ? "yes" : "no"} |`,
+    `| Active kind | \`${report.judgeReadiness.activeKind}\` |`,
+    `| Configured command env | \`${report.judgeReadiness.configuredCommandEnv}\` = ${report.judgeReadiness.configuredJudgeCommand ? "present" : "missing"} |`,
+    `| OpenAI-compatible auto judge for native runner | ${report.judgeReadiness.openAiCompatibleAutoJudge.availableForNativeCompetitorRunner ? "available" : "not available"} |`,
+    `| OpenAI-compatible key env present | ${report.judgeReadiness.openAiCompatibleAutoJudge.keyEnvPresent ? "yes" : "no"} |`,
+    `| Runtime isolation | \`${report.judgeReadiness.runtimeIsolation}\` |`,
+    `| Blocked reason | ${report.judgeReadiness.blockedReason ?? "none"} |`,
+    `| Next action | ${report.judgeReadiness.nextAction ?? "none"} |`,
     "",
     "Claim blockers:",
     "",

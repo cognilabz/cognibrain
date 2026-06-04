@@ -295,15 +295,18 @@ const realworldBlackboxJudgeBlocked = realworldBlackboxCognibrain?.qualityClaimA
 const realworldJudgeReadiness = files.realworldBlackbox.judgeReadiness ?? {};
 const realworldJudgeReadinessProof = realworldJudgeReadiness.configuredCommandEnv === "MEMORY_REALWORLD_JUDGE_COMMAND" &&
   realworldJudgeReadiness.runtimeIsolation === "benchmark-only" &&
-  realworldJudgeReadiness.openAiCompatibleAutoJudge?.judgeScript === "scripts/benchmark/realworld-openai-judge.mjs" &&
-  realworldJudgeReadiness.openAiCompatibleAutoJudge?.enabledBy === "scripts/benchmark/benchmark-realworld-native-competitors.mjs" &&
-  Array.isArray(realworldJudgeReadiness.openAiCompatibleAutoJudge?.keyEnvNames) &&
-  realworldJudgeReadiness.openAiCompatibleAutoJudge.keyEnvNames.includes("MEMORY_OPENAI_API_KEY") &&
-  realworldJudgeReadiness.openAiCompatibleAutoJudge.keyEnvNames.includes("OPENAI_API_KEY") &&
+  realworldJudgeReadiness.openAiCompatibleHarnessJudge?.judgeScript === "scripts/benchmark/realworld-openai-judge.mjs" &&
+  realworldJudgeReadiness.openAiCompatibleHarnessJudge?.configuredBy === "MEMORY_REALWORLD_JUDGE_COMMAND" &&
+  realworldJudgeReadiness.openAiCompatibleHarnessJudge?.autoActivationAllowed === false &&
+  realworldJudgeReadiness.openAiCompatibleHarnessJudge?.keyEnvIgnoredForActivation === true &&
+  Array.isArray(realworldJudgeReadiness.openAiCompatibleHarnessJudge?.keyEnvNames) &&
+  realworldJudgeReadiness.openAiCompatibleHarnessJudge.keyEnvNames.includes("MEMORY_OPENAI_API_KEY") &&
+  realworldJudgeReadiness.openAiCompatibleHarnessJudge.keyEnvNames.includes("OPENAI_API_KEY") &&
   files.realworldBlackboxSource.includes("function buildJudgeReadiness") &&
   files.realworldBlackboxSource.includes("Only boolean env presence and static env names are reported") &&
+  files.realworldBlackboxSource.includes("key presence never configures judge commands") &&
   files.realworldBlackboxSource.includes("Runtime isolation") &&
-  files.evaluationTests.includes("reports secret-free OpenAI-compatible judge readiness without auto-scoring direct real-world runs") &&
+  files.evaluationTests.includes("reports secret-free OpenAI-compatible judge readiness while ignoring generic key env activation") &&
   files.evaluationTests.includes("test-secret-not-serialized");
 const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && files.realworldBlackbox.eligibilityGate?.resourceTelemetryRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked && realworldJudgeReadinessProof;
 const realworldBlackboxMarketGateStrict = files.realworldBlackboxSource.includes("cognibrainComparativeSmokeEligible") &&
@@ -318,6 +321,9 @@ const realworldNativeCompetitorPath = files.internalRunner.includes("benchmark-r
   files.realworldNativeCompetitorBenchmark.includes("basic_memory_realworld_runner.py") &&
   files.realworldNativeCompetitorBenchmark.includes("langmem_realworld_runner.py") &&
   files.realworldNativeCompetitorBenchmark.includes("MEMORY_REALWORLD_JUDGE_COMMAND") &&
+  files.realworldNativeCompetitorBenchmark.includes("autoActivationAllowed: false") &&
+  files.realworldNativeCompetitorBenchmark.includes("keyEnvIgnoredForActivation: true") &&
+  !files.realworldNativeCompetitorBenchmark.includes("env.MEMORY_REALWORLD_JUDGE_COMMAND =") &&
   files.realworldNativeCompetitorBenchmark.includes("comparativeSmokeEligible") &&
   files.realworldNativeCompetitorBenchmark.includes("marketClaimAllowed") &&
   files.realworldNativeCompetitorBenchmark.includes("quality and comparative-smoke eligibility require the configured central LLM/harness judge") &&
@@ -454,7 +460,7 @@ const arenaQualityClaimBoundary = files.arenaSource.includes("MEMORY_ARENA_QUALI
   files.arenaSource.includes("Market superiority remains blocked because Benchmark Arena is a synthetic diagnostic") &&
   files.publishArenaSource.includes("Arena claim allowed") &&
   files.publishArenaSource.includes("Arena claim blockers");
-const arenaOpenAiJudgeStrict = files.arenaOpenAiJudge.includes("Do not trust runner-proposed checks") && files.arenaOpenAiJudge.includes("Do not use exact string overlap") && files.arenaOpenAiJudge.includes("must be a JSON boolean") && files.arenaOpenAiJudge.includes("estimatedCostUsd") && files.arenaOpenAiJudge.includes("OpenAI-compatible Arena judge response must include token usage") && files.evaluationTests.includes("records OpenAI-compatible Arena judge usage, cost and latency") && files.nativeCompetitorBenchmark.includes("arena-openai-judge.mjs");
+const arenaOpenAiJudgeStrict = files.arenaOpenAiJudge.includes("Do not trust runner-proposed checks") && files.arenaOpenAiJudge.includes("Do not use exact string overlap") && files.arenaOpenAiJudge.includes("must be a JSON boolean") && files.arenaOpenAiJudge.includes("estimatedCostUsd") && files.arenaOpenAiJudge.includes("OpenAI-compatible Arena judge response must include token usage") && files.evaluationTests.includes("records OpenAI-compatible Arena judge usage, cost and latency") && !files.nativeCompetitorBenchmark.includes("arena-openai-judge.mjs");
 const arenaRunnerContractRows = Array.isArray(files.arena.systems) ? files.arena.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
 const arenaBundledRunnersRawOnly = arenaRunnerContractRows.length > 0 && arenaRunnerContractRows.every((system) =>
   system.runnerContract?.rawEvidenceOnly === true &&
@@ -469,7 +475,7 @@ const arenaBundledRunnersRawOnly = arenaRunnerContractRows.length > 0 && arenaRu
     scenario.evidence?.runnerContract?.scoreableChecksRequireJudge === true
   )
 );
-const operatorMemoryNativeJudgeBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("runnerSelfChecksIgnored") && files.operatorMemoryBenchmarkSource.includes("raw native evidence is unjudged") && files.operatorMemoryBenchmarkSource.includes("native/cloud artifact is unjudged") && files.operatorMemoryOpenAiJudge.includes("Do not trust runner-proposed checks") && files.operatorMemoryOpenAiJudge.includes("Do not use exact string overlap") && files.operatorMemoryOpenAiJudge.includes("must be a JSON boolean") && files.operatorMemoryOpenAiJudge.includes("estimatedCostUsd") && files.operatorMemoryOpenAiJudge.includes("OpenAI-compatible Operator Memory judge response must include token usage") && files.evaluationTests.includes("records OpenAI-compatible operator-memory judge usage, cost and latency") && files.operatorMemoryNativeCompetitorBenchmark.includes("operator-memory-openai-judge.mjs");
+const operatorMemoryNativeJudgeBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("runnerSelfChecksIgnored") && files.operatorMemoryBenchmarkSource.includes("raw native evidence is unjudged") && files.operatorMemoryBenchmarkSource.includes("native/cloud artifact is unjudged") && files.operatorMemoryOpenAiJudge.includes("Do not trust runner-proposed checks") && files.operatorMemoryOpenAiJudge.includes("Do not use exact string overlap") && files.operatorMemoryOpenAiJudge.includes("must be a JSON boolean") && files.operatorMemoryOpenAiJudge.includes("estimatedCostUsd") && files.operatorMemoryOpenAiJudge.includes("OpenAI-compatible Operator Memory judge response must include token usage") && files.evaluationTests.includes("records OpenAI-compatible operator-memory judge usage, cost and latency") && files.operatorMemoryNativeCompetitorBenchmark.includes("openAiCompatibleHarnessJudges") && files.operatorMemoryNativeCompetitorBenchmark.includes("autoActivationAllowed: false") && !files.operatorMemoryNativeCompetitorBenchmark.includes("env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND =");
 const operatorMemoryRunnerContractRows = Array.isArray(files.operatorMemoryBenchmark.systems) ? files.operatorMemoryBenchmark.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
 const operatorMemoryNativeRunnerContractRows = Array.isArray(files.operatorMemoryNativeCompetitors.systems) ? files.operatorMemoryNativeCompetitors.systems.filter((system) => system?.runner?.commandEnv || system?.runnerContract) : [];
 const operatorMemoryBenchmarkRunnerContractsOk = operatorMemoryRunnerContractRows.length === 0 || operatorMemoryRunnerContractRows.every((system) =>
@@ -504,6 +510,8 @@ const operatorMemoryQualityClaimBoundary = files.operatorMemoryBenchmarkSource.i
   files.operatorMemoryQualityOpenAiJudge.includes("OpenAI-compatible Operator Memory quality judge response must include token usage") &&
   files.operatorMemoryQualityOpenAiJudge.includes("estimatedCostUsd") &&
   files.operatorMemoryNativeCompetitorBenchmark.includes("operator-memory-quality-openai-judge.mjs") &&
+  files.operatorMemoryNativeCompetitorBenchmark.includes("autoActivationAllowed: false") &&
+  !files.operatorMemoryNativeCompetitorBenchmark.includes("env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND =") &&
   files.operatorMemoryNativeCompetitorBenchmark.includes("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND") &&
   files.evaluationTests.includes("records OpenAI-compatible operator-memory report quality judge usage, cost and latency");
 const cognicodeArtifactRequiredProof = Array.isArray(files.cognicodeBench.methodology?.requiredExternalProofForQualityClaim) && files.cognicodeBench.methodology.requiredExternalProofForQualityClaim.includes("ablation baselines may simulate from visible repo metadata only; hidden expected commands and files stay evaluator-only");

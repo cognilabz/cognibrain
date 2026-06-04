@@ -36,13 +36,6 @@ const env = {
   MEMORY_OPERATOR_MEMORY_PYTHON_RUNNER_TIMEOUT_MS: process.env.MEMORY_OPERATOR_MEMORY_PYTHON_RUNNER_TIMEOUT_MS ?? "120000"
 };
 
-if (!env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND && (process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY)) {
-  env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND = `${process.execPath} ${join(root, "scripts", "benchmark", "operator-memory-openai-judge.mjs")}`;
-}
-if (!env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND && (process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY)) {
-  env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND = `${process.execPath} ${join(root, "scripts", "benchmark", "operator-memory-quality-openai-judge.mjs")}`;
-}
-
 const benchmark = await runCommand("npx", [
   "tsx",
   "src/eval/operatorMemoryBenchmark.ts",
@@ -144,13 +137,16 @@ function writeReport(details) {
     judgeReadiness: {
       scenarioJudgeCommandConfigured: Boolean(env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND),
       qualityJudgeCommandConfigured: Boolean(env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND),
-      openAiCompatibleAutoJudge: {
+      openAiCompatibleHarnessJudges: {
         keyEnvPresent: Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY),
+        keyEnvIgnoredForActivation: true,
+        autoActivationAllowed: false,
         scenarioJudgeScript: "scripts/benchmark/operator-memory-openai-judge.mjs",
         qualityJudgeScript: "scripts/benchmark/operator-memory-quality-openai-judge.mjs",
+        configuredBy: ["MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND", "MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND"],
         runtimeIsolation: "benchmark-only"
       },
-      secretRedaction: "Only boolean env presence and static script names are reported; secret values are never serialized."
+      secretRedaction: "Only boolean env presence and static script names are reported; secret values are never serialized, and key presence never configures judge commands."
     },
     blocked: (details.operatorMemory?.systems ?? [])
       .filter((system) => system.system !== "cognibrain-dream" && system.proofLevel === "credential-blocked")

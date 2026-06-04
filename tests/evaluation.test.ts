@@ -609,9 +609,10 @@ describe("self verification benchmark loop", () => {
         activeKind: "missing",
         runtimeIsolation: "benchmark-only"
       });
-      expect(report.judgeReadiness.openAiCompatibleAutoJudge).toMatchObject({
-        availableForNativeCompetitorRunner: false,
+      expect(report.judgeReadiness.openAiCompatibleHarnessJudge).toMatchObject({
+        autoActivationAllowed: false,
         keyEnvPresent: false,
+        keyEnvIgnoredForActivation: true,
         judgeScript: "scripts/benchmark/realworld-openai-judge.mjs"
       });
       expect(report.judgeReadiness.blockedReason).toContain("No MEMORY_REALWORLD_JUDGE_COMMAND");
@@ -678,7 +679,7 @@ describe("self verification benchmark loop", () => {
     }
   });
 
-  it("reports secret-free OpenAI-compatible judge readiness without auto-scoring direct real-world runs", async () => {
+  it("reports secret-free OpenAI-compatible judge readiness while ignoring generic key env activation", async () => {
     const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
     const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
     const previousMemoryOpenAiKey = process.env.MEMORY_OPENAI_API_KEY;
@@ -697,16 +698,17 @@ describe("self verification benchmark loop", () => {
       expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
       expect(report.systems[0].metrics.score).toBeNull();
       expect(report.judgeReadiness.readyForThisRun).toBe(false);
-      expect(report.judgeReadiness.openAiCompatibleAutoJudge).toMatchObject({
-        availableForNativeCompetitorRunner: true,
+      expect(report.judgeReadiness.openAiCompatibleHarnessJudge).toMatchObject({
+        autoActivationAllowed: false,
         keyEnvPresent: true,
+        keyEnvIgnoredForActivation: true,
         keyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
-        enabledBy: "scripts/benchmark/benchmark-realworld-native-competitors.mjs"
+        configuredBy: "MEMORY_REALWORLD_JUDGE_COMMAND"
       });
-      expect(report.judgeReadiness.blockedReason).toContain("direct harness run has no MEMORY_REALWORLD_JUDGE_COMMAND");
+      expect(report.judgeReadiness.blockedReason).toContain("Generic OpenAI key env vars are ignored");
       const serialized = readFileSync(join(dir, "realworld-judge-readiness.json"), "utf8");
       expect(serialized).not.toContain("test-secret-not-serialized");
-      expect(readFileSync(join(dir, "realworld-judge-readiness.md"), "utf8")).toContain("OpenAI-compatible auto judge for native runner");
+      expect(readFileSync(join(dir, "realworld-judge-readiness.md"), "utf8")).toContain("Generic OpenAI key env ignored for activation");
     } finally {
       if (previousJudgeCommand === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_COMMAND;
       else process.env.MEMORY_REALWORLD_JUDGE_COMMAND = previousJudgeCommand;
@@ -717,6 +719,24 @@ describe("self verification benchmark loop", () => {
       if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
       else process.env.OPENAI_API_KEY = previousOpenAiKey;
     }
+  });
+
+  it("does not auto-configure benchmark judges from generic OpenAI key env vars", () => {
+    const arenaNative = readFileSync("scripts/benchmark/benchmark-native-competitors.mjs", "utf8");
+    const operatorNative = readFileSync("scripts/benchmark/operator-memory-native-competitors.mjs", "utf8");
+    const realworldNative = readFileSync("scripts/benchmark/benchmark-realworld-native-competitors.mjs", "utf8");
+    const sources = [arenaNative, operatorNative, realworldNative].join("\n");
+
+    expect(arenaNative).not.toContain("arena-openai-judge.mjs");
+    expect(sources).not.toContain("MEMORY_ARENA_JUDGE_COMMAND =");
+    expect(sources).not.toContain("MEMORY_REALWORLD_JUDGE_COMMAND =");
+    expect(sources).not.toContain("MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND =");
+    expect(sources).not.toContain("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND =");
+    expect(realworldNative).toContain("openAiCompatibleJudgeScript");
+    expect(realworldNative).toContain("keyEnvIgnoredForActivation: true");
+    expect(realworldNative).toContain("autoActivationAllowed: false");
+    expect(operatorNative).toContain("openAiCompatibleHarnessJudges");
+    expect(operatorNative).toContain("autoActivationAllowed: false");
   });
 
   it("scores the real-world black-box harness only through a configured harness judge", async () => {

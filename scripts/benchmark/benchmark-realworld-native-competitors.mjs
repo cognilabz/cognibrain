@@ -35,11 +35,6 @@ const env = {
   MEMORY_REALWORLD_JUDGE_TIMEOUT_MS: process.env.MEMORY_REALWORLD_JUDGE_TIMEOUT_MS ?? "300000"
 };
 
-if (!env.MEMORY_REALWORLD_JUDGE_COMMAND && (process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY)) {
-  env.MEMORY_REALWORLD_JUDGE_COMMAND = `${process.execPath} ${join(root, "scripts", "benchmark", "realworld-openai-judge.mjs")}`;
-  env.MEMORY_REALWORLD_JUDGE_KIND = "llm";
-}
-
 const realworld = await runCommand("npx", [
   "tsx",
   "src/eval/realworldBlackbox.ts",
@@ -139,6 +134,15 @@ function writeReport(details) {
     leaderboardEligible: realworldReport.leaderboardEligible === true,
     marketClaimAllowed: realworldReport.marketClaimAllowed === true,
     eligibilityGate: realworldReport.eligibilityGate ?? {},
+    judgeReadiness: {
+      judgeCommandConfigured: Boolean(env.MEMORY_REALWORLD_JUDGE_COMMAND),
+      configuredBy: "MEMORY_REALWORLD_JUDGE_COMMAND",
+      openAiCompatibleJudgeScript: "scripts/benchmark/realworld-openai-judge.mjs",
+      keyEnvPresent: Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY),
+      keyEnvIgnoredForActivation: true,
+      autoActivationAllowed: false,
+      runtimeIsolation: "benchmark-only"
+    },
     claimBoundary: "Original competitors are executed as same-manifest raw-output systems; quality and comparative-smoke eligibility require the configured central LLM/harness judge, while market and leaderboard claims remain blocked by the RealWorld claim boundary."
   };
   mkdirSync(dirname(installOut), { recursive: true });

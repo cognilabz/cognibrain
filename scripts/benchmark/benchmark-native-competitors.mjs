@@ -44,10 +44,6 @@ const env = {
   MEMORY_ARENA_PYTHON_RUNNER_TIMEOUT_MS: process.env.MEMORY_ARENA_PYTHON_RUNNER_TIMEOUT_MS ?? "120000"
 };
 
-if (!env.MEMORY_ARENA_JUDGE_COMMAND && (process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY)) {
-  env.MEMORY_ARENA_JUDGE_COMMAND = `${process.execPath} ${join(root, "scripts", "benchmark", "arena-openai-judge.mjs")}`;
-}
-
 if (process.env.MEM0_API_KEY || process.env.MEMORY_ARENA_MEM0_API_KEY) {
   env.MEMORY_ARENA_MEM0_COMMAND = `${process.execPath} ${join(root, "scripts", "benchmark", "competitors", "mem0-runner.mjs")}`;
   env.MEMORY_ARENA_MEM0_PROOF_LEVEL = "same-run-cloud-api";

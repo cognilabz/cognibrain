@@ -150,12 +150,13 @@ interface RealWorldReport {
     configuredJudgeCommand: boolean;
     activeKind: JudgeKind;
     configuredCommandEnv: "MEMORY_REALWORLD_JUDGE_COMMAND";
-    openAiCompatibleAutoJudge: {
-      availableForNativeCompetitorRunner: boolean;
+    openAiCompatibleHarnessJudge: {
+      autoActivationAllowed: false;
       keyEnvPresent: boolean;
+      keyEnvIgnoredForActivation: true;
       keyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"];
       judgeScript: "scripts/benchmark/realworld-openai-judge.mjs";
-      enabledBy: "scripts/benchmark/benchmark-realworld-native-competitors.mjs";
+      configuredBy: "MEMORY_REALWORLD_JUDGE_COMMAND";
       kindEnv: "MEMORY_REALWORLD_JUDGE_KIND";
       timeoutEnv: "MEMORY_REALWORLD_JUDGE_TIMEOUT_MS";
     };
@@ -400,33 +401,29 @@ function buildJudgeReadiness(judge?: RealWorldJudge): RealWorldReport["judgeRead
   const configuredJudgeCommand = Boolean(process.env.MEMORY_REALWORLD_JUDGE_COMMAND);
   const keyEnvPresent = Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
   const readyForThisRun = Boolean(judge);
-  const autoJudgeAvailable = !configuredJudgeCommand && keyEnvPresent;
   return {
     readyForThisRun,
     configuredJudgeCommand,
     activeKind: judge?.kind ?? "missing",
     configuredCommandEnv: "MEMORY_REALWORLD_JUDGE_COMMAND",
-    openAiCompatibleAutoJudge: {
-      availableForNativeCompetitorRunner: autoJudgeAvailable,
+    openAiCompatibleHarnessJudge: {
+      autoActivationAllowed: false,
       keyEnvPresent,
+      keyEnvIgnoredForActivation: true,
       keyEnvNames: ["MEMORY_OPENAI_API_KEY", "OPENAI_API_KEY"],
       judgeScript: "scripts/benchmark/realworld-openai-judge.mjs",
-      enabledBy: "scripts/benchmark/benchmark-realworld-native-competitors.mjs",
+      configuredBy: "MEMORY_REALWORLD_JUDGE_COMMAND",
       kindEnv: "MEMORY_REALWORLD_JUDGE_KIND",
       timeoutEnv: "MEMORY_REALWORLD_JUDGE_TIMEOUT_MS"
     },
     blockedReason: readyForThisRun
       ? null
-      : autoJudgeAvailable
-        ? "This direct harness run has no MEMORY_REALWORLD_JUDGE_COMMAND; the native competitor runner can attach the OpenAI-compatible judge from the available key env."
-        : "No MEMORY_REALWORLD_JUDGE_COMMAND and no OpenAI-compatible judge key env were present, so raw outputs are retained but not scored.",
+      : "No MEMORY_REALWORLD_JUDGE_COMMAND was configured, so raw outputs are retained but not scored. Generic OpenAI key env vars are ignored for judge activation.",
     nextAction: readyForThisRun
       ? null
-      : autoJudgeAvailable
-        ? "Run npm run internal -- benchmark:realworld:competitors to execute the explicit native competitor path with the OpenAI-compatible judge."
-        : "Set MEMORY_REALWORLD_JUDGE_COMMAND to an LLM/harness scorer, or set MEMORY_OPENAI_API_KEY or OPENAI_API_KEY before the explicit native competitor benchmark.",
+      : "Set MEMORY_REALWORLD_JUDGE_COMMAND to an explicit LLM/harness scorer, for example node scripts/benchmark/realworld-openai-judge.mjs when the harness owns the provider credentials.",
     runtimeIsolation: "benchmark-only",
-    secretRedaction: "Only boolean env presence and static env names are reported; secret values are never serialized."
+    secretRedaction: "Only boolean env presence and static env names are reported; secret values are never serialized, and key presence never configures judge commands."
   };
 }
 
@@ -1903,8 +1900,8 @@ function writeMarkdown(path: string, report: RealWorldReport): void {
     `| Ready for this run | ${report.judgeReadiness.readyForThisRun ? "yes" : "no"} |`,
     `| Active kind | \`${report.judgeReadiness.activeKind}\` |`,
     `| Configured command env | \`${report.judgeReadiness.configuredCommandEnv}\` = ${report.judgeReadiness.configuredJudgeCommand ? "present" : "missing"} |`,
-    `| OpenAI-compatible auto judge for native runner | ${report.judgeReadiness.openAiCompatibleAutoJudge.availableForNativeCompetitorRunner ? "available" : "not available"} |`,
-    `| OpenAI-compatible key env present | ${report.judgeReadiness.openAiCompatibleAutoJudge.keyEnvPresent ? "yes" : "no"} |`,
+    `| OpenAI-compatible judge script | \`${report.judgeReadiness.openAiCompatibleHarnessJudge.judgeScript}\` |`,
+    `| Generic OpenAI key env ignored for activation | ${report.judgeReadiness.openAiCompatibleHarnessJudge.keyEnvIgnoredForActivation ? "yes" : "no"} |`,
     `| Runtime isolation | \`${report.judgeReadiness.runtimeIsolation}\` |`,
     `| Blocked reason | ${report.judgeReadiness.blockedReason ?? "none"} |`,
     `| Next action | ${report.judgeReadiness.nextAction ?? "none"} |`,

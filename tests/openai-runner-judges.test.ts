@@ -129,6 +129,98 @@ describe("OpenAI-compatible runner judges", () => {
     }
   });
 
+  it("records OpenAI-compatible operator-memory report quality judge usage, cost and latency", async () => {
+    const observed: { authorization?: string; responseFormat?: unknown; userPayload?: unknown } = {};
+    const server = createServer((request, response) => {
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        const payload = JSON.parse(body);
+        observed.authorization = request.headers.authorization;
+        observed.responseFormat = payload.response_format;
+        observed.userPayload = JSON.parse(payload.messages[1].content);
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                passed: true,
+                score: 0.92,
+                reason: "fixture openai-compatible operator quality judge",
+                evidence: { reviewer: "fixture" }
+              })
+            }
+          }],
+          usage: { prompt_tokens: 200, completion_tokens: 50 }
+        }));
+      });
+    });
+    const baseUrl = await listen(server);
+    try {
+      const result = await runNodeScript([join(process.cwd(), "scripts/benchmark/operator-memory-quality-openai-judge.mjs")], {
+        cwd: process.cwd(),
+        input: JSON.stringify({
+          contract: "cognibrain-operator-memory-quality-llm-harness-judge-v1",
+          scenarioCount: 1,
+          cognibrainScore: 1,
+          bestBaselineScore: 0.4,
+          leaderboard: [{ system: "Cognibrain source-aware Dream", score: 1, proofLevel: "same-run-full" }],
+          systems: [{
+            system: "cognibrain-dream",
+            displayName: "Cognibrain source-aware Dream",
+            proofLevel: "same-run-full",
+            adapterMode: "full-local",
+            score: 1,
+            metrics: { currentTruthAccuracy: 1 },
+            scenarios: [{
+              scenarioId: "source-update",
+              title: "Source update",
+              kind: "source_update",
+              score: 1,
+              checks: {
+                currentTruthSelected: true,
+                staleTruthSuppressed: true,
+                sourceRefRevalidated: true,
+                connectorRefreshAccounted: true,
+                beliefRevisionApplied: true,
+                failureContained: true
+              },
+              evidence: { injectedContents: ["current semantic source-backed evidence"], topContents: ["omitted from trimmed payload"] }
+            }]
+          }]
+        }),
+        timeout: 10_000,
+        env: { ...process.env, MEMORY_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" }
+      });
+      expect(result.status).toBe(0);
+      expect(observed.authorization).toBe("Bearer fixture-key");
+      expect(observed.responseFormat).toEqual({ type: "json_object" });
+      expect(JSON.stringify(observed.userPayload)).not.toContain("omitted from trimmed payload");
+      const output = JSON.parse(result.stdout);
+      expect(output).toMatchObject({
+        passed: true,
+        score: 0.92,
+        reason: "fixture openai-compatible operator quality judge",
+        evidence: {
+          reviewer: "fixture",
+          judge: {
+            kind: "llm",
+            provider: "openai-compatible",
+            model: "gpt-4.1-mini",
+            usage: { prompt_tokens: 200, completion_tokens: 50 },
+            estimatedCostUsd: 0.00016
+          }
+        }
+      });
+      expect(output.evidence.judge.latencyMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      await close(server);
+    }
+  });
+
   it("records OpenAI-compatible Arena judge usage, cost and latency", async () => {
     const observed: { authorization?: string; responseFormat?: unknown } = {};
     const server = createServer((request, response) => {
@@ -227,6 +319,24 @@ describe("OpenAI-compatible runner judges", () => {
           reason: "fixture openai-compatible operator judge"
         },
         stderr: "OpenAI-compatible Operator Memory judge response must include token usage"
+      },
+      {
+        script: "scripts/benchmark/operator-memory-quality-openai-judge.mjs",
+        env: { MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" },
+        input: {
+          contract: "cognibrain-operator-memory-quality-llm-harness-judge-v1",
+          scenarioCount: 1,
+          cognibrainScore: 1,
+          bestBaselineScore: 0.4,
+          leaderboard: [],
+          systems: []
+        },
+        content: {
+          passed: true,
+          score: 0.9,
+          reason: "fixture openai-compatible operator quality judge"
+        },
+        stderr: "OpenAI-compatible Operator Memory quality judge response must include token usage"
       }
     ];
 

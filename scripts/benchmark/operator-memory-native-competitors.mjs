@@ -39,6 +39,9 @@ const env = {
 if (!env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND && (process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY)) {
   env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND = `${process.execPath} ${join(root, "scripts", "benchmark", "operator-memory-openai-judge.mjs")}`;
 }
+if (!env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND && (process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY)) {
+  env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND = `${process.execPath} ${join(root, "scripts", "benchmark", "operator-memory-quality-openai-judge.mjs")}`;
+}
 
 const benchmark = await runCommand("npx", [
   "tsx",
@@ -138,6 +141,17 @@ function writeReport(details) {
     })),
     summary: details.operatorMemory?.summary ?? null,
     realCompetitorRuns: (details.operatorMemory?.systems ?? []).filter((system) => system.system !== "cognibrain-dream" && ["same-run-native", "same-run-cloud-api"].includes(system.proofLevel)).length,
+    judgeReadiness: {
+      scenarioJudgeCommandConfigured: Boolean(env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND),
+      qualityJudgeCommandConfigured: Boolean(env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND),
+      openAiCompatibleAutoJudge: {
+        keyEnvPresent: Boolean(process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY),
+        scenarioJudgeScript: "scripts/benchmark/operator-memory-openai-judge.mjs",
+        qualityJudgeScript: "scripts/benchmark/operator-memory-quality-openai-judge.mjs",
+        runtimeIsolation: "benchmark-only"
+      },
+      secretRedaction: "Only boolean env presence and static script names are reported; secret values are never serialized."
+    },
     blocked: (details.operatorMemory?.systems ?? [])
       .filter((system) => system.system !== "cognibrain-dream" && system.proofLevel === "credential-blocked")
       .map((system) => ({ system: system.system, displayName: system.displayName, gaps: system.capabilityGaps }))

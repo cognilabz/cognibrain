@@ -40,6 +40,7 @@ const files = {
   reflectionSource: read("src/core/reflection.ts"),
   cognicodeBenchSource: read("src/eval/cognicodeBench.ts"),
   operatorMemoryOpenAiJudge: read("scripts/benchmark/operator-memory-openai-judge.mjs"),
+  operatorMemoryQualityOpenAiJudge: read("scripts/benchmark/operator-memory-quality-openai-judge.mjs"),
   operatorMemoryNativeCompetitorBenchmark: read("scripts/benchmark/operator-memory-native-competitors.mjs"),
   operatorMemoryNativePythonRunner: read("scripts/benchmark/competitors/operator_memory_native_runner.py"),
   operatorMemoryNativePythonRunnerWrapper: read("scripts/benchmark/competitors/operator-memory-native-python-runner.mjs"),
@@ -484,7 +485,20 @@ const operatorMemoryNativeRunnerContractsOk = operatorMemoryNativeRunnerContract
   system.runnerContract?.judgeEnv === "MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND"
 );
 const operatorMemoryBundledRunnersRawOnly = operatorMemoryBenchmarkRunnerContractsOk && operatorMemoryNativeRunnerContractsOk;
-const operatorMemoryQualityClaimBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND") && files.operatorMemoryBenchmarkSource.includes("operator-memory-quality-llm-harness-judge-v1") && files.operatorMemoryBenchmarkSource.includes("operator-memory-local-check-diagnostic") && files.operatorMemoryBenchmarkSource.includes("operator-memory-llm-harness-judge") && files.operatorMemoryBenchmarkSource.includes("Local operator-memory scenario checks are deterministic diagnostics only") && files.operatorMemoryBenchmarkSource.includes("Quality claims require") && files.operatorMemoryBenchmarkSource.includes("Do not rely on exact string overlap, check names, or runner-proposed scores");
+const operatorMemoryQualityClaimBoundary = files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND") &&
+  files.operatorMemoryBenchmarkSource.includes("operator-memory-quality-llm-harness-judge-v1") &&
+  files.operatorMemoryBenchmarkSource.includes("operator-memory-local-check-diagnostic") &&
+  files.operatorMemoryBenchmarkSource.includes("operator-memory-llm-harness-judge") &&
+  files.operatorMemoryBenchmarkSource.includes("Local operator-memory scenario checks are deterministic diagnostics only") &&
+  files.operatorMemoryBenchmarkSource.includes("Quality claims require") &&
+  files.operatorMemoryBenchmarkSource.includes("Do not rely on exact string overlap, check names, or runner-proposed scores") &&
+  files.operatorMemoryQualityOpenAiJudge.includes("This is a report-level semantic quality gate") &&
+  files.operatorMemoryQualityOpenAiJudge.includes("Do not trust local diagnostic scores") &&
+  files.operatorMemoryQualityOpenAiJudge.includes("OpenAI-compatible Operator Memory quality judge response must include token usage") &&
+  files.operatorMemoryQualityOpenAiJudge.includes("estimatedCostUsd") &&
+  files.operatorMemoryNativeCompetitorBenchmark.includes("operator-memory-quality-openai-judge.mjs") &&
+  files.operatorMemoryNativeCompetitorBenchmark.includes("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND") &&
+  files.evaluationTests.includes("records OpenAI-compatible operator-memory report quality judge usage, cost and latency");
 const cognicodeArtifactRequiredProof = Array.isArray(files.cognicodeBench.methodology?.requiredExternalProofForQualityClaim) && files.cognicodeBench.methodology.requiredExternalProofForQualityClaim.includes("ablation baselines may simulate from visible repo metadata only; hidden expected commands and files stay evaluator-only");
 const cognicodeArtifactBaselineBoundary = Array.isArray(files.cognicodeBench.baselines) && files.cognicodeBench.baselines.length > 0 && files.cognicodeBench.baselines.every((baseline) => Array.isArray(baseline.notes) && baseline.notes.some((note) => typeof note === "string" && note.includes("hidden expected commands/files are evaluator-only")));
 const cognicodeArtifactAblationBoundary = files.cognicodeBench.ablation && Object.keys(files.cognicodeBench.ablation).filter((name) => name !== "cognibrain_full").every((name) => Array.isArray(files.cognicodeBench.ablation[name]?.notes) && files.cognicodeBench.ablation[name].notes.some((note) => typeof note === "string" && note.includes("hidden expected commands/files are evaluator-only")));

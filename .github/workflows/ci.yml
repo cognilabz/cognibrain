@@ -18,9 +18,30 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run verify:ci
       - run: npm run internal -- leaderboard:publish
+      - name: Publish npm package
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          PACKAGE_NAME="$(node -p "require('./package.json').name")"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          LATEST_TAG="$(npm dist-tag ls "$PACKAGE_NAME" --registry=https://registry.npmjs.org/ | awk '/^latest: / { print $2 }')"
+
+          if [ "$LATEST_TAG" = "$PACKAGE_VERSION" ]; then
+            echo "$PACKAGE_NAME@$PACKAGE_VERSION is already tagged latest on npm; skipping publish."
+            exit 0
+          fi
+
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret is required to publish $PACKAGE_NAME@$PACKAGE_VERSION." >&2
+            exit 1
+          fi
+
+          npm publish --access public
       - uses: actions/upload-artifact@v4
         if: always()
         with:

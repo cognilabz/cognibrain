@@ -39,6 +39,7 @@ const files = {
   operatorMemoryBenchmarkSource: read("src/eval/operatorMemoryBenchmark.ts"),
   reflectionSource: read("src/core/reflection.ts"),
   cognicodeBenchSource: read("src/eval/cognicodeBench.ts"),
+  cognicodeQualityOpenAiJudge: read("scripts/benchmark/cognicodebench-quality-openai-judge.mjs"),
   operatorMemoryOpenAiJudge: read("scripts/benchmark/operator-memory-openai-judge.mjs"),
   operatorMemoryQualityOpenAiJudge: read("scripts/benchmark/operator-memory-quality-openai-judge.mjs"),
   operatorMemoryNativeCompetitorBenchmark: read("scripts/benchmark/operator-memory-native-competitors.mjs"),
@@ -81,6 +82,7 @@ const files = {
   coreTests: read("tests/core.test.ts"),
   evaluationTests: readMany(["tests/evaluation.test.ts", "tests/openai-runner-judges.test.ts"]),
   storageAdapter: read("src/core/storageAdapter.ts"),
+  openAiEmbeddingsSource: read("src/core/openaiEmbeddings.ts"),
   repositories: readMany([
     "src/api/repositories/sqliteRepository.ts",
     "src/api/repositories/postgresRepository.ts",
@@ -258,6 +260,11 @@ const autoDreamMaintenanceIndexed = files.service.includes("for (const [userId, 
   !files.service.includes("new Set(this.store.list().map((memory) => memory.userId))") &&
   files.coreTests.includes("checks due auto dreams from maintenance state without scanning all memories") &&
   files.coreTests.includes("expect(listCalls).toBe(0)");
+const runtimeOpenAiEnvIsolation = !files.openAiEmbeddingsSource.includes("process.env.MEMORY_OPENAI_API_KEY") &&
+  !files.openAiEmbeddingsSource.includes("process.env.OPENAI_API_KEY") &&
+  files.openAiEmbeddingsSource.includes("return new LocalHashEmbeddingProvider()") &&
+  files.coreTests.includes("does not auto-enable OpenAI-compatible embeddings from runtime API key env vars") &&
+  files.coreTests.includes("runtime-key-must-not-enable-provider");
 const dreamJobWorkerControl = files.service.includes("cancelDreamJob(") && files.service.includes("retryDreamJob(") && files.dreamRoutes.includes("/dream/jobs") && files.dreamRoutes.includes("cancel") && files.dreamRoutes.includes("retry") && files.mcpTools.includes("memory_dream_job_cancel") && files.mcpTools.includes("memory_dream_job_retry") && files.coreTests.includes("cancels and retries dream jobs");
 const liveSourceRevalidation = files.service.includes("revalidateSourceRefsAsync") && files.service.includes("await resolver.fetch") && files.service.includes("listExternalVendorItems") && files.dreamRoutes.includes("revalidateSourceRefsAsync") && files.coreTests.includes("uses live async source resolver fetch") && files.coreTests.includes("default GitHub source resolver fetches current provider state");
 const postgresVerifierPassed = files.postgresLive?.acceptance?.startsWithPostgresBackend === true && files.postgresLive?.storage?.active === "postgres-repository";
@@ -511,7 +518,14 @@ const cognicodePatchHarnessContract = cognicodeHarnessContracts.patchProposal?.h
 const cognicodeAblationHarnessContract = cognicodeHarnessContracts.ablation?.patchSimulationUsesHiddenExpected === false && cognicodeHarnessContracts.ablation?.hiddenExpectedEvaluatorOnly === true;
 const cognicodeArtifactHarnessContract = cognicodeQualityHarnessContract && cognicodePatchHarnessContract && cognicodeAblationHarnessContract;
 const cognicodeArtifactBoundary = cognicodeArtifactRequiredProof && cognicodeArtifactBaselineBoundary && cognicodeArtifactAblationBoundary && cognicodeArtifactClaimBoundary && cognicodeArtifactPatchBoundary && cognicodeArtifactHarnessContract;
-const cognicodeQualityClaimBoundary = cognicodeArtifactBoundary;
+const cognicodeQualityOpenAiJudgeBoundary = files.cognicodeQualityOpenAiJudge.includes("This is a report-level semantic quality gate") &&
+  files.cognicodeQualityOpenAiJudge.includes("Do not trust local deterministic scores") &&
+  files.cognicodeQualityOpenAiJudge.includes("hidden expected fields") &&
+  files.cognicodeQualityOpenAiJudge.includes("OpenAI-compatible CogniCodeBench quality judge response must include token usage") &&
+  files.cognicodeQualityOpenAiJudge.includes("estimatedCostUsd") &&
+  files.cognicodeQualityOpenAiJudge.includes('runtimeIsolation: "benchmark-harness-only"') &&
+  files.evaluationTests.includes("records OpenAI-compatible CogniCodeBench report quality judge usage, cost and latency");
+const cognicodeQualityClaimBoundary = cognicodeArtifactBoundary && cognicodeQualityOpenAiJudgeBoundary;
 const externalBasicMemoryHeuristicsBounded = files.basicMemoryExternalRunner.includes("MEMORY_EXTERNAL_PUBLIC_JUDGE_COMMAND") && files.basicMemoryExternalRunner.includes('"qualityClaimAllowed"') && files.basicMemoryExternalRunner.includes('"heuristicDiagnostics"') && files.basicMemoryExternalRunner.includes("Diagnostic only. These values are produced by evidence-id, token, or substring heuristics") && files.basicMemoryExternalRunner.includes('"accuracy": None');
 const marketGateClaimBoundary = files.marketGateSource.includes("diagnostic-public-benchmark-baseline") && files.marketGateSource.includes("claimAllowed") && files.marketGateSource.includes("claimBlockers") && files.marketGateSource.includes("local-diagnostic") && files.marketGateSource.includes("provider-evidence-support");
 const syntheticEvaluationClaimBoundary = files.evaluationRunSource.includes("deterministic-expected-id-substring-diagnostic") && files.evaluationRunSource.includes("qualityClaimAllowed: false") && files.evaluationRunSource.includes("marketClaimAllowed: false") && files.evaluationRunSource.includes("Synthetic fixture expected-id substring scoring is diagnostic only") && files.leaderboardSource.includes("Not quality-claim eligible without LLM/harness or comparable public-benchmark proof");
@@ -697,6 +711,7 @@ const checks = [
   }),
   check("cognicodebench-quality-claim-boundary", "CogniCodeBench local scenario, ablation and patch-proposal diagnostics remain claim-blocked unless a report-level LLM/harness judge validates quality; patch planning is separated from hidden expected actions and ablation simulations keep hidden expected commands/files evaluator-only.", cognicodeQualityClaimBoundary, "fail", {
     source: "src/eval/cognicodeBench.ts",
+    judge: "scripts/benchmark/cognicodebench-quality-openai-judge.mjs",
     artifact: "artifacts/cognicodebench/run.json",
     artifactBoundary: {
       requiredProof: cognicodeArtifactRequiredProof,
@@ -705,6 +720,7 @@ const checks = [
       claimBoundary: cognicodeArtifactClaimBoundary,
       patchBoundary: cognicodeArtifactPatchBoundary,
       harnessContract: cognicodeArtifactHarnessContract,
+      openAiJudgeBoundary: cognicodeQualityOpenAiJudgeBoundary,
       integrityMetrics: cognicodeIntegrityMetrics
     }
   }),
@@ -834,7 +850,7 @@ const checks = [
     removed: ["animated terminal UI dependency", "src/cli/inkApp.mjs", "generated CLI screenshots"],
     structuredMemoryAdd: "src/cli/memctl/memoryCommands.ts"
   }),
-  check("runtime-resource-footprint", "MCP, lifecycle and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers and TypeScript language-server scans, status exposes API/dashboard RSS and CPU, heavyweight benchmark CLIs keep stdout compact by default, native/original benchmark orchestrators, Arena parent runners/judges and competitor wrappers stream command output instead of buffering large child output, benchmark/release process trees are terminated on timeout or parent signal, resources separates active non-runtime benchmark processes from normal API/MCP/dashboard runtime, Dream/Reflection reuses bounded active-memory snapshots, AutoDream due checks avoid full-store scans, and reinstallable benchmark caches have a measured prune path.", files.cli.includes("lightweightMcpServer.mjs") && vscodeHeavyGeneratedExcludes && vscodeLowResourceSettings && compactBenchmarkStdout && streamingBenchmarkOrchestrators && streamingCompetitorWrappers && streamingArenaParentCommands && runtimeBenchmarkProcessSeparation && reflectionSinglePassSnapshots && autoDreamMaintenanceIndexed && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cli.includes("function resourcesCommand") && files.cli.includes("WORKSPACE_BENCHMARK_CACHE_TARGETS") && files.cli.includes("user-cache/native-runners") && files.cli.includes("--prune-benchmark-caches") && files.benchmarkCacheRoot.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.benchmarkCacheRoot.includes("Library\", \"Caches\", \"cognibrain") && files.cli.includes("runtime: \"built-node\"") && files.cli.includes("runtime: \"source-node-import-tsx\"") && files.cli.includes("processModel: \"single-process\"") && files.cli.includes("runtime: \"source-tsx-cli\"") && files.cli.includes("COGNIBRAIN_API_RUNTIME") && files.cli.includes("dist/api/server.mjs") && files.cli.includes("entryPoints: [resolve(root, \"src\", \"api\", \"server.ts\")]") && files.packageJson.scripts?.["build:api"] === "node scripts/runtime/build-api.mjs" && files.packageJson.scripts?.build?.includes("npm run build:api") && packageFiles.has("dist/api/") && files.cliTests.includes("status.runtime.api.resources.rssMb") && files.cliTests.includes("status.runtime.api.runtime") && files.cliTests.includes("prunes reinstallable benchmark caches") && files.cliTests.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.cliTests.includes("user-cache/native-runners"), "fail", {
+  check("runtime-resource-footprint", "MCP, lifecycle and status runtime paths avoid heavyweight TSX/process fan-out by default, VSCode harness setup excludes generated benchmark/runtime directories from watchers and TypeScript language-server scans, status exposes API/dashboard RSS and CPU, heavyweight benchmark CLIs keep stdout compact by default, native/original benchmark orchestrators, Arena parent runners/judges and competitor wrappers stream command output instead of buffering large child output, benchmark/release process trees are terminated on timeout or parent signal, resources separates active non-runtime benchmark processes from normal API/MCP/dashboard runtime, Dream/Reflection reuses bounded active-memory snapshots, AutoDream due checks avoid full-store scans, runtime OpenAI-compatible embeddings are not auto-enabled from generic API-key env vars, and reinstallable benchmark caches have a measured prune path.", files.cli.includes("lightweightMcpServer.mjs") && vscodeHeavyGeneratedExcludes && vscodeLowResourceSettings && compactBenchmarkStdout && streamingBenchmarkOrchestrators && streamingCompetitorWrappers && streamingArenaParentCommands && runtimeBenchmarkProcessSeparation && reflectionSinglePassSnapshots && autoDreamMaintenanceIndexed && runtimeOpenAiEnvIsolation && files.cli.includes("files.watcherExclude") && files.cli.includes("statusArgs.includes(\"--full\") ? await cliHomeData() : statusData()") && files.cli.includes("runNodeAndExit(\"bin/lib/lightweightMcpServer.mjs\"") && files.cli.includes("Server } from \"@modelcontextprotocol/sdk/server/index.js\"") && files.cli.includes("callOperation(\"memory.evidencePack\"") && files.cli.includes("function processResources") && files.cli.includes("rssMb") && files.cli.includes("cpuPercent") && files.cli.includes("api rss") && files.cli.includes("function resourcesCommand") && files.cli.includes("WORKSPACE_BENCHMARK_CACHE_TARGETS") && files.cli.includes("user-cache/native-runners") && files.cli.includes("--prune-benchmark-caches") && files.benchmarkCacheRoot.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.benchmarkCacheRoot.includes("Library\", \"Caches\", \"cognibrain") && files.cli.includes("runtime: \"built-node\"") && files.cli.includes("runtime: \"source-node-import-tsx\"") && files.cli.includes("processModel: \"single-process\"") && files.cli.includes("runtime: \"source-tsx-cli\"") && files.cli.includes("COGNIBRAIN_API_RUNTIME") && files.cli.includes("dist/api/server.mjs") && files.cli.includes("entryPoints: [resolve(root, \"src\", \"api\", \"server.ts\")]") && files.packageJson.scripts?.["build:api"] === "node scripts/runtime/build-api.mjs" && files.packageJson.scripts?.build?.includes("npm run build:api") && packageFiles.has("dist/api/") && files.cliTests.includes("status.runtime.api.resources.rssMb") && files.cliTests.includes("status.runtime.api.runtime") && files.cliTests.includes("prunes reinstallable benchmark caches") && files.cliTests.includes("COGNIBRAIN_BENCHMARK_CACHE_ROOT") && files.cliTests.includes("user-cache/native-runners"), "fail", {
     code: ["bin/lib/cliRuntime.mjs", "bin/lib/harnessRuntime.mjs", "bin/lib/lightweightMcpServer.mjs"],
     checks: [
       "default MCP uses lightweight JS daemon proxy",
@@ -854,6 +870,7 @@ const checks = [
       "competitor runner wrappers stream package/CLI/Python child output and fail closed on truncated native JSON",
       "Dream/Reflection reuses active-memory snapshots and has a bounded store-list regression test",
       "AutoDream due checks use maintenance state instead of scanning the full memory store",
+      "OpenAI-compatible embeddings require explicit provider construction and are not selected from runtime API-key env vars",
       "original/native benchmark package caches default to a user cache outside the VSCode workspace",
       "resources CLI measures and prunes reinstallable benchmark caches without deleting memory data"
     ],
@@ -864,7 +881,8 @@ const checks = [
     streamingArenaParentCommands,
     runtimeBenchmarkProcessSeparation,
     reflectionSinglePassSnapshots,
-    autoDreamMaintenanceIndexed
+    autoDreamMaintenanceIndexed,
+    runtimeOpenAiEnvIsolation
   }),
   check("operator-os-proof", "The terminal operator OS maturity artifact covers memory, connectors, runtime, config, benchmarks, policy, retention, logs and docs.", files.operatorOs.passed === true && Array.isArray(files.operatorOs.rows) && files.operatorOs.rows.length >= 10, "fail", {
     artifact: "artifacts/operator-os-maturity.json",

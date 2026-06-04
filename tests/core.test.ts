@@ -23,7 +23,7 @@ import { runNextgenBenchmarkSuites } from "../src/eval/nextgenBenchmarks";
 import { runAnswerGenerationBenchmark } from "../src/eval/answerGeneration";
 import { runMarketGate } from "../src/eval/marketGate";
 import { runProductionLoadBenchmark } from "../src/eval/load";
-import { OpenAICompatibleEmbeddingProvider } from "../src/core/openaiEmbeddings";
+import { OpenAICompatibleEmbeddingProvider, embeddingProviderFromEnv } from "../src/core/openaiEmbeddings";
 import { CODING_QUERY_INTENT_CASES } from "../src/eval/codingIntentCases";
 
 const nodeRequire = createRequire(import.meta.url);
@@ -463,6 +463,33 @@ describe("TypeScript memory core", () => {
     } finally {
       if (previous === undefined) delete process.env.MEMORY_PRIVACY_DISABLE_EMBEDDINGS;
       else process.env.MEMORY_PRIVACY_DISABLE_EMBEDDINGS = previous;
+    }
+  });
+
+  it("does not auto-enable OpenAI-compatible embeddings from runtime API key env vars", () => {
+    const previousMemoryOpenAiKey = process.env.MEMORY_OPENAI_API_KEY;
+    const previousOpenAiKey = process.env.OPENAI_API_KEY;
+    const previousLocalEmbeddings = process.env.MEMORY_LOCAL_EMBEDDINGS;
+    const previousPrivacyDisable = process.env.MEMORY_PRIVACY_DISABLE_EMBEDDINGS;
+    try {
+      process.env.MEMORY_OPENAI_API_KEY = "runtime-key-must-not-enable-provider";
+      process.env.OPENAI_API_KEY = "runtime-key-must-not-enable-provider";
+      delete process.env.MEMORY_LOCAL_EMBEDDINGS;
+      delete process.env.MEMORY_PRIVACY_DISABLE_EMBEDDINGS;
+
+      expect(embeddingProviderFromEnv()).toBeUndefined();
+
+      process.env.MEMORY_LOCAL_EMBEDDINGS = "true";
+      expect(embeddingProviderFromEnv()?.id).toBe("local-hash-embedding");
+    } finally {
+      if (previousMemoryOpenAiKey === undefined) delete process.env.MEMORY_OPENAI_API_KEY;
+      else process.env.MEMORY_OPENAI_API_KEY = previousMemoryOpenAiKey;
+      if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previousOpenAiKey;
+      if (previousLocalEmbeddings === undefined) delete process.env.MEMORY_LOCAL_EMBEDDINGS;
+      else process.env.MEMORY_LOCAL_EMBEDDINGS = previousLocalEmbeddings;
+      if (previousPrivacyDisable === undefined) delete process.env.MEMORY_PRIVACY_DISABLE_EMBEDDINGS;
+      else process.env.MEMORY_PRIVACY_DISABLE_EMBEDDINGS = previousPrivacyDisable;
     }
   });
 

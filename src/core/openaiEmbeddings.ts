@@ -26,11 +26,11 @@ export class OpenAICompatibleEmbeddingProvider implements EmbeddingProvider {
   private readonly request?: OpenAICompatibleEmbeddingOptions["request"];
 
   constructor(options: OpenAICompatibleEmbeddingOptions = {}) {
-    const baseUrl = options.baseUrl ?? process.env.MEMORY_OPENAI_BASE_URL ?? "https://api.openai.com/v1";
-    this.endpoint = options.endpoint ?? process.env.MEMORY_OPENAI_EMBEDDINGS_URL ?? `${baseUrl.replace(/\/$/, "")}/embeddings`;
-    this.model = options.model ?? process.env.MEMORY_OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small";
-    this.apiKey = options.apiKey ?? process.env.MEMORY_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
-    this.dimensions = options.dimensions ?? numberFromEnv(process.env.MEMORY_OPENAI_EMBEDDING_DIMENSIONS);
+    const baseUrl = options.baseUrl ?? "https://api.openai.com/v1";
+    this.endpoint = options.endpoint ?? `${baseUrl.replace(/\/$/, "")}/embeddings`;
+    this.model = options.model ?? "text-embedding-3-small";
+    this.apiKey = options.apiKey;
+    this.dimensions = options.dimensions;
     this.timeoutMs = options.timeoutMs ?? Number(process.env.MEMORY_EMBEDDING_TIMEOUT_MS ?? 5000);
     this.request = options.request;
     this.id = `openai-compatible:${this.model}`;
@@ -65,15 +65,6 @@ export class OpenAICompatibleEmbeddingProvider implements EmbeddingProvider {
 
 export function embeddingProviderFromEnv(): EmbeddingProvider | undefined {
   if (embeddingsDisabled()) return undefined;
-  if (process.env.MEMORY_OPENAI_EMBEDDINGS_URL || process.env.MEMORY_OPENAI_BASE_URL || process.env.MEMORY_OPENAI_API_KEY || process.env.OPENAI_API_KEY) {
-    return new OpenAICompatibleEmbeddingProvider();
-  }
   if (process.env.MEMORY_LOCAL_EMBEDDINGS === "1" || process.env.MEMORY_LOCAL_EMBEDDINGS === "true") return new LocalHashEmbeddingProvider();
   return undefined;
-}
-
-function numberFromEnv(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }

@@ -221,6 +221,102 @@ describe("OpenAI-compatible runner judges", () => {
     }
   });
 
+  it("records OpenAI-compatible CogniCodeBench report quality judge usage, cost and latency", async () => {
+    const observed: { authorization?: string; responseFormat?: unknown; userPayload?: unknown } = {};
+    const server = createServer((request, response) => {
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        const payload = JSON.parse(body);
+        observed.authorization = request.headers.authorization;
+        observed.responseFormat = payload.response_format;
+        observed.userPayload = JSON.parse(payload.messages[1].content);
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                passed: true,
+                score: 0.91,
+                reason: "fixture openai-compatible CogniCodeBench quality judge",
+                evidence: { reviewer: "fixture" }
+              })
+            }
+          }],
+          usage: { prompt_tokens: 300, completion_tokens: 75 }
+        }));
+      });
+    });
+    const baseUrl = await listen(server);
+    try {
+      const result = await runNodeScript([join(process.cwd(), "scripts/benchmark/cognicodebench-quality-openai-judge.mjs")], {
+        cwd: process.cwd(),
+        input: JSON.stringify({
+          contract: "cognibrain-cognicodebench-quality-llm-harness-judge-v1",
+          scenarioCount: 1,
+          metrics: { score: 1, correctionCarryover: 1 },
+          diagnostics: { integrity: { expectedLeakage: 0.01, expectedDirectPatchHarness: false } },
+          baselines: [{ name: "recency", score: 0.52 }],
+          ablation: { no_source_graph: { score: 0.71, deltaFromFull: -0.29 } },
+          scenarios: [{
+            id: "cognicode-001",
+            nextTask: "Fix the cache invalidation regression.",
+            correction: { memoryKind: "test_strategy", content: "Use the integration regression harness.", correctAction: "npm run test:integration" },
+            wrongAction: { command: "npm test", reason: "misses integration path", filesChanged: ["src/cache.ts"] },
+            expected: { referencedKinds: ["test_strategy"], filesChanged: ["src/cache.ts"], command: "npm run test:integration" }
+          }],
+          results: [{
+            id: "cognicode-001",
+            passed: true,
+            score: 1,
+            checks: { correctionRecalled: true, wrongActionSuppressed: true, patchCorrect: true },
+            evidence: {
+              guardSeverity: "block",
+              referencedKinds: ["test_strategy"],
+              patchProposal: {
+                mode: "external-harness",
+                status: "passed",
+                command: "npm run test:integration",
+                filesChanged: ["src/cache.ts"],
+                reason: "semantic correction evidence",
+                evidence: { evidenceKinds: ["test_strategy"], evidenceMemoryIds: ["omitted from trimmed payload"] }
+              }
+            }
+          }]
+        }),
+        timeout: 10_000,
+        env: { ...process.env, MEMORY_OPENAI_API_KEY: "fixture-key", MEMORY_OPENAI_BASE_URL: baseUrl, MEMORY_COGNICODEBENCH_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" }
+      });
+      expect(result.status).toBe(0);
+      expect(observed.authorization).toBe("Bearer fixture-key");
+      expect(observed.responseFormat).toEqual({ type: "json_object" });
+      expect(JSON.stringify(observed.userPayload)).not.toContain("omitted from trimmed payload");
+      const output = JSON.parse(result.stdout);
+      expect(output).toMatchObject({
+        passed: true,
+        score: 0.91,
+        reason: "fixture openai-compatible CogniCodeBench quality judge",
+        evidence: {
+          reviewer: "fixture",
+          judge: {
+            kind: "llm",
+            provider: "openai-compatible",
+            model: "gpt-4.1-mini",
+            usage: { prompt_tokens: 300, completion_tokens: 75 },
+            estimatedCostUsd: 0.00024,
+            runtimeIsolation: "benchmark-harness-only"
+          }
+        }
+      });
+      expect(output.evidence.judge.latencyMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      await close(server);
+    }
+  });
+
   it("records OpenAI-compatible Arena judge usage, cost and latency", async () => {
     const observed: { authorization?: string; responseFormat?: unknown } = {};
     const server = createServer((request, response) => {
@@ -337,6 +433,26 @@ describe("OpenAI-compatible runner judges", () => {
           reason: "fixture openai-compatible operator quality judge"
         },
         stderr: "OpenAI-compatible Operator Memory quality judge response must include token usage"
+      },
+      {
+        script: "scripts/benchmark/cognicodebench-quality-openai-judge.mjs",
+        env: { MEMORY_COGNICODEBENCH_QUALITY_JUDGE_MODEL: "gpt-4.1-mini" },
+        input: {
+          contract: "cognibrain-cognicodebench-quality-llm-harness-judge-v1",
+          scenarioCount: 1,
+          metrics: {},
+          diagnostics: {},
+          baselines: [],
+          ablation: {},
+          scenarios: [],
+          results: []
+        },
+        content: {
+          passed: true,
+          score: 0.9,
+          reason: "fixture openai-compatible CogniCodeBench quality judge"
+        },
+        stderr: "OpenAI-compatible CogniCodeBench quality judge response must include token usage"
       }
     ];
 

@@ -66,6 +66,8 @@ export interface DreamPlanReport {
     staleSourceRefs: number;
     sourceRefs: number;
     connectorCandidates: number;
+    memoryScanSkipped?: boolean;
+    memoryScanReason?: string;
   };
 }
 

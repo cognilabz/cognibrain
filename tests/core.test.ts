@@ -2306,6 +2306,31 @@ describe("TypeScript memory core", () => {
     expect(listCalls).toBe(0);
   });
 
+  it("plans not-due harness session-end dreams without scanning the memory store", () => {
+    const service = new MemoryService({ autoDream: { enabled: true, writeThreshold: 12, intervalHours: 6 } });
+    const store = (service as any).store as MemoryStore;
+    const originalList = store.list.bind(store);
+    let listCalls = 0;
+    store.list = ((userId?: string) => {
+      listCalls += 1;
+      return originalList(userId);
+    }) as typeof store.list;
+
+    const plan = service.dreamPlan({
+      userId: "idle-user",
+      trigger: "harness_session_end",
+      mode: "dream",
+      harnessRunId: "run-idle"
+    });
+
+    expect(listCalls).toBe(0);
+    expect(plan.shouldDream).toBe(false);
+    expect(plan.reasons).toEqual(["dream not due"]);
+    expect(plan.signals.memoryScanSkipped).toBe(true);
+    expect(plan.signals.memoryScanReason).toContain("maintenance counters");
+    expect(plan.signals.writesSinceDream).toBe(0);
+  });
+
   it("runs autoDream through the full dream cycle and schedules verification", () => {
     const service = new MemoryService({ autoDream: { enabled: true, writeThreshold: 2, intervalHours: 6 } });
     const risky = service.add({

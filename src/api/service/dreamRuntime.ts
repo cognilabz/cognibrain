@@ -14,11 +14,52 @@ export function dreamPlan(service: any, input: DreamCycleInput): DreamPlanReport
     const mode = input.mode ?? modeForTrigger(input.trigger);
     const trigger = input.trigger ?? triggerForMode(mode);
     const budget = input.budget ?? budgetForTrigger(trigger);
-    const active = (service.store.list(input.userId) as Memory[]).filter((memory) => !memory.archivedAt);
     const status = service.userMaintenance(input.userId);
     const dueByWriteThreshold = status.writesSinceDream >= service.autoDream.writeThreshold;
     const hoursSinceLastDream = status.lastDreamAt ? (now.getTime() - new Date(status.lastDreamAt).getTime()) / 3_600_000 : undefined;
     const dueByInterval = hoursSinceLastDream !== undefined && hoursSinceLastDream >= service.autoDream.intervalHours && status.writesSinceDream > 0;
+    const canSkipMemoryScan = !input.force &&
+      !input.sourceRefresh &&
+      budget === "quick" &&
+      status.writesSinceDream <= 0 &&
+      !dueByWriteThreshold &&
+      !dueByInterval &&
+      (trigger === "harness_session_end" || trigger === "auto_interval");
+    if (canSkipMemoryScan) {
+      return {
+        userId: input.userId,
+        generatedAt: now.toISOString(),
+        trigger,
+        mode,
+        scope: input.scope,
+        budget,
+        sourceRefresh: false,
+        connectorIds: uniqueStrings(input.connectorIds ?? []),
+        harnessRunId: input.harnessRunId,
+        shouldDream: false,
+        forced: false,
+        reasons: ["dream not due"],
+        recommendedActions: trigger === "harness_session_end" ? ["prepare session-end reflection plan"] : ["schedule verification queue from dream results"],
+        releaseBlockers: [],
+        signals: {
+          activeMemories: 0,
+          writesSinceDream: status.writesSinceDream,
+          writeThreshold: service.autoDream.writeThreshold,
+          dueByWriteThreshold,
+          dueByInterval,
+          hoursSinceLastDream,
+          verificationQueue: 0,
+          contradictions: 0,
+          needsVerification: 0,
+          staleSourceRefs: 0,
+          sourceRefs: 0,
+          connectorCandidates: (input.connectorIds ?? []).length,
+          memoryScanSkipped: true,
+          memoryScanReason: "quick dream plan is not due by maintenance counters"
+        }
+      };
+    }
+    const active = (service.store.list(input.userId) as Memory[]).filter((memory) => !memory.archivedAt);
     const verificationQueue = active.filter((memory) => memory.beliefState === "needs_verification" || memory.beliefState === "contradicted" || Boolean(memory.temporal.verificationDueAt && new Date(memory.temporal.verificationDueAt) <= now)).length;
     const contradictions = active.filter((memory) => memory.beliefState === "contradicted").length;
     const needsVerification = active.filter((memory) => memory.beliefState === "needs_verification").length;

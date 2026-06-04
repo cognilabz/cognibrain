@@ -338,14 +338,16 @@ export class MemoryServicePersistence extends MemoryServiceInsightsMaintenance {
 	      });
 	      const storage = {
 	        compacted: true,
-	        compactedAt: new Date().toISOString(),
-	        reason: "c",
 	        originalBytes: sourceOriginalBytes,
 	        persistedBytes: 0,
 	        maxPersistedBytes,
-	        contextMaxChars,
 	        resultContentMaxChars,
-	        explanationMaxItems
+	        ...(maxPersistedBytes >= 2_000 ? {
+	          compactedAt: new Date().toISOString(),
+	          reason: "c",
+	          contextMaxChars,
+	          explanationMaxItems
+	        } : {})
 	      };
 	      let stored = attachEvidencePackStorage(compacted, storage);
 	      if (jsonBytes(stored) > maxPersistedBytes) stored = attachEvidencePackStorage(compactEvidencePackHardLimit(compacted, maxPersistedBytes), storage);
@@ -501,11 +503,12 @@ function compactEvidencePack(pack: EvidencePack, limits: { originalBytes: number
 function compactEvidencePackHardLimit(pack: EvidencePack, maxPersistedBytes: number): EvidencePack {
   const resultLimit = maxPersistedBytes < 2_000 ? 1 : 4;
   const contentChars = maxPersistedBytes < 2_000 ? 0 : 80;
+  const tinyLimit = maxPersistedBytes < 2_000;
   return {
     schemaVersion: pack.schemaVersion,
     id: pack.id,
     generatedAt: pack.generatedAt,
-    query: truncatePersistedText(pack.query, maxPersistedBytes < 2_000 ? 80 : 240),
+    query: truncatePersistedText(pack.query, tinyLimit ? 32 : 240),
     userId: pack.userId,
     tokenBudget: pack.tokenBudget,
     hash: pack.hash,
@@ -521,8 +524,14 @@ function compactEvidencePackHardLimit(pack: EvidencePack, maxPersistedBytes: num
 
 function attachEvidencePackStorage(pack: EvidencePack, storage: NonNullable<EvidencePack["storage"]>): EvidencePack {
   const placeholder = { ...pack, storage: { ...storage, persistedBytes: 0 } };
-  const persistedBytes = jsonBytes(placeholder);
-  const stored = { ...pack, storage: { ...storage, persistedBytes } };
+  let persistedBytes = jsonBytes(placeholder);
+  let stored = { ...pack, storage: { ...storage, persistedBytes } };
+  for (let index = 0; index < 3; index += 1) {
+    const nextPersistedBytes = jsonBytes(stored);
+    if (nextPersistedBytes === persistedBytes) break;
+    persistedBytes = nextPersistedBytes;
+    stored = { ...pack, storage: { ...storage, persistedBytes } };
+  }
   return {
     ...stored,
     storage: {

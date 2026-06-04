@@ -94,6 +94,20 @@ interface SystemResult {
   };
   rawOutputs: QueryOutput[];
   setup: Record<string, unknown>;
+  resourceFootprint?: ResourceFootprint;
+}
+
+interface ResourceFootprint {
+  source: "central-harness-process";
+  wallMs: number;
+  cpuUserMs: number;
+  cpuSystemMs: number;
+  rssStartMb: number;
+  rssEndMb: number;
+  rssDeltaMb: number;
+  heapUsedStartMb: number;
+  heapUsedEndMb: number;
+  heapUsedDeltaMb: number;
 }
 
 interface RealWorldReport {
@@ -124,6 +138,7 @@ interface RealWorldReport {
     blackBoxContract: boolean;
     rawOutputsRetained: boolean;
     costLatencyRecorded: boolean;
+    resourceTelemetryRecorded: boolean;
     llmOrHarnessJudged: boolean;
     enoughOriginalSystems: boolean;
   };
@@ -156,6 +171,12 @@ interface RealWorldReport {
       p95LatencyMs: number;
       maxP95LatencyMs: number;
       maxIngestLatencyMs: number;
+      resourceTelemetryRecorded: boolean;
+      systemsMissingResourceTelemetry: string[];
+      maxRssDeltaMb: number;
+      maxHeapUsedDeltaMb: number;
+      maxCpuMs: number;
+      maxWallMs: number;
     };
     rawErrorClasses: Array<{ className: string; count: number; systems: string[]; examples: string[] }>;
     bucketWeaknesses: Array<{
@@ -181,6 +202,7 @@ interface RealWorldReport {
       weakBuckets: string[];
       p95LatencyMs: number;
       estimatedCostUsd: number;
+      resourceFootprint?: ResourceFootprint;
     }>;
   };
   improvementSignals: Array<{ priority: string; item: string; evidence: string }>;
@@ -245,6 +267,7 @@ export async function generateRealWorldBlackBoxBenchmark(options: { out?: string
     blackBoxContract: systems.every((system) => ["generic-blackbox", "external-command", "blocked-command", "lexical-baseline"].includes(system.adapterMode)),
     rawOutputsRetained: systems.every((system) => system.evidenceClass === "credential-blocked" || (system.rawOutputs.length === manifest.queries.length && system.setup.rawOutputContractValid !== false)),
     costLatencyRecorded: systems.every((system) => metricsHaveFiniteCostLatency(system.metrics) && system.setup.metricContractValid !== false),
+    resourceTelemetryRecorded: systems.every(hasResourceTelemetry),
     llmOrHarnessJudged: systems.every((system) => system.evidenceClass === "credential-blocked" || system.qualityClaimAllowed),
     enoughOriginalSystems: cognibrainComparativeSmokeEligible && originalCompetitorEligibleSystems.length >= 2
   };
@@ -705,6 +728,7 @@ function buildManifest(): RealWorldManifest {
 
 async function runSystem(adapter: Adapter, manifest: RealWorldManifest, judge?: RealWorldJudge): Promise<SystemResult> {
   const started = Date.now();
+  const resourceSample = startResourceSample();
   try {
     const manifestHash = sha256(stableStringify(manifest));
     const setup = await adapter.setup(manifest);
@@ -712,10 +736,11 @@ async function runSystem(adapter: Adapter, manifest: RealWorldManifest, judge?: 
     const rawOutputs: QueryOutput[] = [];
     for (const query of manifest.queries) rawOutputs.push(await adapter.query(query));
     await adapter.teardown();
-    return scoreSystem(adapter, manifest, { ...setup, manifestHash, ingestRaw: ingest.raw }, rawOutputs, ingest.latencyMs, judge);
+    const result = scoreSystem(adapter, manifest, { ...setup, manifestHash, ingestRaw: ingest.raw }, rawOutputs, ingest.latencyMs, judge);
+    return attachResourceFootprint(result, finishResourceSample(resourceSample));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return blockedSystem(adapter, message, Date.now() - started);
+    return attachResourceFootprint(blockedSystem(adapter, message, Date.now() - started), finishResourceSample(resourceSample));
   }
 }
 
@@ -1177,17 +1202,19 @@ class CommandAdapter implements Adapter {
 }
 
 async function runCommandAdapter(adapter: CommandAdapter, manifest: RealWorldManifest, judge?: RealWorldJudge): Promise<SystemResult> {
+  const resourceSample = startResourceSample();
   try {
     const setup = adapter.setup(manifest);
     const external = adapter.runExternal();
-    if (!external) return externalCommandBlockedSystem(adapter, "external command did not produce a result", 0);
+    if (!external) return attachResourceFootprint(externalCommandBlockedSystem(adapter, "external command did not produce a result", 0), finishResourceSample(resourceSample));
     const mergedSetup = { ...external.setup, ...setup, manifestHash: sha256(stableStringify(manifest)) };
     if (judge && external.rawOutputs.length === manifest.queries.length && external.setup.rawOutputContractValid !== false) {
-      return scoreSystem(adapter, manifest, mergedSetup, external.rawOutputs, external.metrics.ingestLatencyMs, judge);
+      const result = scoreSystem(adapter, manifest, mergedSetup, external.rawOutputs, external.metrics.ingestLatencyMs, judge);
+      return attachResourceFootprint(result, finishResourceSample(resourceSample));
     }
-    return { ...external, setup: mergedSetup };
+    return attachResourceFootprint({ ...external, setup: mergedSetup }, finishResourceSample(resourceSample));
   } catch (error) {
-    return externalCommandBlockedSystem(adapter, error instanceof Error ? error.message : String(error), 0);
+    return attachResourceFootprint(externalCommandBlockedSystem(adapter, error instanceof Error ? error.message : String(error), 0), finishResourceSample(resourceSample));
   }
 }
 
@@ -1357,6 +1384,54 @@ function metricsHaveFiniteCostLatency(metrics: SystemResult["metrics"]): boolean
   );
 }
 
+function startResourceSample(): { startedAt: number; cpu: NodeJS.CpuUsage; memory: NodeJS.MemoryUsage } {
+  return { startedAt: Date.now(), cpu: process.cpuUsage(), memory: process.memoryUsage() };
+}
+
+function finishResourceSample(sample: ReturnType<typeof startResourceSample>): ResourceFootprint {
+  const cpu = process.cpuUsage(sample.cpu);
+  const memory = process.memoryUsage();
+  const rssStartMb = bytesToMb(sample.memory.rss);
+  const rssEndMb = bytesToMb(memory.rss);
+  const heapUsedStartMb = bytesToMb(sample.memory.heapUsed);
+  const heapUsedEndMb = bytesToMb(memory.heapUsed);
+  return {
+    source: "central-harness-process",
+    wallMs: Date.now() - sample.startedAt,
+    cpuUserMs: roundResource(cpu.user / 1000),
+    cpuSystemMs: roundResource(cpu.system / 1000),
+    rssStartMb,
+    rssEndMb,
+    rssDeltaMb: roundResource(rssEndMb - rssStartMb),
+    heapUsedStartMb,
+    heapUsedEndMb,
+    heapUsedDeltaMb: roundResource(heapUsedEndMb - heapUsedStartMb)
+  };
+}
+
+function attachResourceFootprint(system: SystemResult, resourceFootprint: ResourceFootprint): SystemResult {
+  return { ...system, resourceFootprint };
+}
+
+function hasResourceTelemetry(system: SystemResult): boolean {
+  const resource = system.resourceFootprint;
+  return Boolean(
+    resource &&
+    resource.source === "central-harness-process" &&
+    [resource.wallMs, resource.cpuUserMs, resource.cpuSystemMs, resource.rssStartMb, resource.rssEndMb, resource.rssDeltaMb, resource.heapUsedStartMb, resource.heapUsedEndMb, resource.heapUsedDeltaMb].every((value) =>
+      typeof value === "number" && Number.isFinite(value)
+    )
+  );
+}
+
+function bytesToMb(value: number): number {
+  return roundResource(value / (1024 * 1024));
+}
+
+function roundResource(value: number): number {
+  return Number((Number.isFinite(value) ? value : 0).toFixed(3));
+}
+
 function externalRawOutputsBlockedSystem(adapter: Adapter, rawOutputs: QueryOutput[], reason: string, latencyMs: number, setup: unknown, rawOutputContractValid = true, metricContractValid = true): SystemResult {
   const safeReason = sanitizeDiagnosticText(reason);
   const latencies = rawOutputs.map((output) => safeNonNegativeNumber(output?.latencyMs, 0)).sort((a, b) => a - b);
@@ -1408,6 +1483,8 @@ function buildOperationalWeaknessReport(manifest: RealWorldManifest, systems: Sy
   const blockedSystems = systems.length - executedSystems;
   const rawOutputSystems = systems.filter((system) => system.rawOutputs.length === totalQueries).length;
   const latencies = systems.flatMap((system) => system.rawOutputs.map((output) => output.latencyMs)).sort((a, b) => a - b);
+  const resourceFootprints = systems.map((system) => system.resourceFootprint).filter((resource): resource is ResourceFootprint => Boolean(resource));
+  const systemsMissingResourceTelemetry = systems.filter((system) => !hasResourceTelemetry(system)).map((system) => system.system);
   const bucketWeaknesses = [...new Set(manifest.queries.map((query) => query.bucket))].map((bucket) => {
     const total = manifest.queries.filter((query) => query.bucket === bucket).length;
     const scored = systems.filter((system) => system.qualityClaimAllowed && system.buckets[bucket]);
@@ -1438,7 +1515,13 @@ function buildOperationalWeaknessReport(manifest: RealWorldManifest, systems: Sy
       p50LatencyMs: percentile(latencies, 0.5),
       p95LatencyMs: percentile(latencies, 0.95),
       maxP95LatencyMs: Math.max(0, ...systems.map((system) => system.metrics.p95LatencyMs)),
-      maxIngestLatencyMs: Math.max(0, ...systems.map((system) => system.metrics.ingestLatencyMs))
+      maxIngestLatencyMs: Math.max(0, ...systems.map((system) => system.metrics.ingestLatencyMs)),
+      resourceTelemetryRecorded: systemsMissingResourceTelemetry.length === 0,
+      systemsMissingResourceTelemetry,
+      maxRssDeltaMb: roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.rssDeltaMb))),
+      maxHeapUsedDeltaMb: roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.heapUsedDeltaMb))),
+      maxCpuMs: roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.cpuUserMs + resource.cpuSystemMs))),
+      maxWallMs: roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.wallMs)))
     },
     rawErrorClasses: groupedRawErrorClasses(systems, totalQueries),
     bucketWeaknesses,
@@ -1455,7 +1538,8 @@ function buildOperationalWeaknessReport(manifest: RealWorldManifest, systems: Sy
         rawOutputCoverageRate: ratio(system.rawOutputs.length, totalQueries),
         weakBuckets: Object.entries(system.buckets).filter(([, bucket]) => bucket.score < 1).map(([bucket]) => bucket),
         p95LatencyMs: system.metrics.p95LatencyMs,
-        estimatedCostUsd: system.metrics.estimatedCostUsd
+        estimatedCostUsd: system.metrics.estimatedCostUsd,
+        resourceFootprint: system.resourceFootprint
       };
     })
   };
@@ -1546,6 +1630,20 @@ function improvementSignals(systems: SystemResult[]): Array<{ priority: string; 
         : `Cognibrain raw outputs are retained but quality scoring is blocked until an LLM/harness judge runs; p95 latency is ${cognibrain?.metrics.p95LatencyMs ?? 0} ms.`
     }
   );
+  const resourceFootprints = systems.map((system) => system.resourceFootprint).filter((resource): resource is ResourceFootprint => Boolean(resource));
+  if (resourceFootprints.length === systems.length) {
+    signals.push({
+      priority: "P1",
+      item: "Keep memory and CPU usage visible beside quality and latency.",
+      evidence: `Central harness resource telemetry recorded for ${resourceFootprints.length} systems; max RSS delta ${roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.rssDeltaMb)))} MB and max CPU ${roundResource(Math.max(0, ...resourceFootprints.map((resource) => resource.cpuUserMs + resource.cpuSystemMs)))} ms.`
+    });
+  } else {
+    signals.push({
+      priority: "P0",
+      item: "Require central resource telemetry before any real-world leaderboard use.",
+      evidence: `${systems.length - resourceFootprints.length} system(s) are missing central RSS/CPU telemetry.`
+    });
+  }
   return signals;
 }
 
@@ -1575,9 +1673,9 @@ function writeMarkdown(path: string, report: RealWorldReport): void {
     "",
     "## Systems",
     "",
-    "| System | Evidence class | Mode | Judge | Score | Recall | Abstention | Leakage | p95 latency | Smoke eligible |",
-    "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
-    ...report.systems.map((system) => `| ${system.displayName} | \`${system.evidenceClass}\` | \`${system.adapterMode}\` | \`${system.judge.kind}:${system.judge.status}\` | ${percent(system.metrics.score)} | ${percent(system.metrics.recall)} | ${percent(system.metrics.abstentionPrecision)} | ${percent(system.metrics.forbiddenLeakageRate)} | ${system.metrics.p95LatencyMs} ms | ${system.comparativeSmokeEligible ? "Yes" : "No"} |`),
+    "| System | Evidence class | Mode | Judge | Score | Recall | Abstention | Leakage | p95 latency | RSS delta | CPU | Smoke eligible |",
+    "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    ...report.systems.map((system) => `| ${system.displayName} | \`${system.evidenceClass}\` | \`${system.adapterMode}\` | \`${system.judge.kind}:${system.judge.status}\` | ${percent(system.metrics.score)} | ${percent(system.metrics.recall)} | ${percent(system.metrics.abstentionPrecision)} | ${percent(system.metrics.forbiddenLeakageRate)} | ${system.metrics.p95LatencyMs} ms | ${system.resourceFootprint ? `${system.resourceFootprint.rssDeltaMb} MB` : "n/a"} | ${system.resourceFootprint ? `${roundResource(system.resourceFootprint.cpuUserMs + system.resourceFootprint.cpuSystemMs)} ms` : "n/a"} | ${system.comparativeSmokeEligible ? "Yes" : "No"} |`),
     "",
     "## Operational Weaknesses",
     "",
@@ -1592,6 +1690,12 @@ function writeMarkdown(path: string, report: RealWorldReport): void {
     `| Judge-blocked systems | ${report.operationalWeaknesses.summary.judgeBlockedSystems} |`,
     `| Total estimated scorer/system cost | $${report.operationalWeaknesses.summary.totalEstimatedCostUsd.toFixed(6)} |`,
     `| p95 query latency | ${report.operationalWeaknesses.summary.p95LatencyMs} ms |`,
+    `| Resource telemetry recorded | ${report.operationalWeaknesses.summary.resourceTelemetryRecorded ? "yes" : "no"} |`,
+    `| Systems missing resource telemetry | ${report.operationalWeaknesses.summary.systemsMissingResourceTelemetry.join(", ") || "none"} |`,
+    `| Max RSS delta | ${report.operationalWeaknesses.summary.maxRssDeltaMb} MB |`,
+    `| Max heap-used delta | ${report.operationalWeaknesses.summary.maxHeapUsedDeltaMb} MB |`,
+    `| Max CPU | ${report.operationalWeaknesses.summary.maxCpuMs} ms |`,
+    `| Max wall time | ${report.operationalWeaknesses.summary.maxWallMs} ms |`,
     "",
     "### Raw Error Classes",
     "",

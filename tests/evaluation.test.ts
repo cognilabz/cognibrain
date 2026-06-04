@@ -602,6 +602,7 @@ describe("self verification benchmark loop", () => {
       expect(report.eligibilityGate.manifestCoverageReady).toBe(true);
       expect(report.eligibilityGate.rawOutputsRetained).toBe(true);
       expect(report.eligibilityGate.costLatencyRecorded).toBe(true);
+      expect(report.eligibilityGate.resourceTelemetryRecorded).toBe(true);
       expect(report.eligibilityGate.llmOrHarnessJudged).toBe(false);
       expect(cognibrain?.qualityClaimAllowed).toBe(false);
       expect(cognibrain?.judge.kind).toBe("missing");
@@ -611,14 +612,22 @@ describe("self verification benchmark loop", () => {
       expect(cognibrain?.rawOutputs).toHaveLength(report.manifest.queries.length);
       expect(cognibrain?.rawOutputs.flatMap((output) => output.retrievedText).join("\n")).not.toMatch(/evidence_id:/);
       expect(cognibrain?.metrics.p95LatencyMs).toBeGreaterThanOrEqual(0);
+      expect(cognibrain?.resourceFootprint).toMatchObject({ source: "central-harness-process" });
+      expect(cognibrain?.resourceFootprint?.rssEndMb).toBeGreaterThan(0);
+      expect(cognibrain?.resourceFootprint?.wallMs).toBeGreaterThanOrEqual(0);
       expect(report.systems.find((system) => system.system === "mem0")?.evidenceClass).toBe("credential-blocked");
       expect(report.operationalWeaknesses.summary).toMatchObject({
         requestedSystems: 3,
         executedSystems: 2,
         blockedSystems: 1,
         judgedSystems: 0,
-        qualityClaimableSystems: 0
+        qualityClaimableSystems: 0,
+        resourceTelemetryRecorded: true,
+        systemsMissingResourceTelemetry: []
       });
+      expect(report.operationalWeaknesses.summary.maxRssDeltaMb).toBeGreaterThanOrEqual(0);
+      expect(report.operationalWeaknesses.summary.maxCpuMs).toBeGreaterThanOrEqual(0);
+      expect(report.operationalWeaknesses.systemWeaknesses.find((system) => system.system === "cognibrain")?.resourceFootprint?.source).toBe("central-harness-process");
       expect(report.operationalWeaknesses.summary.setupFailureRate).toBeGreaterThan(0);
       expect(report.operationalWeaknesses.summary.rawOutputCoverageRate).toBeGreaterThan(0);
       expect(report.operationalWeaknesses.rawErrorClasses.map((item) => item.className)).toEqual(expect.arrayContaining(["central-judge-blocked", "external-system-not-configured"]));
@@ -631,6 +640,7 @@ describe("self verification benchmark loop", () => {
       });
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Real-World Black-Box Benchmark");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Operational Weaknesses");
+      expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("Max RSS delta");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("third-party-oss-workflows");
       expect(readFileSync(join(dir, "realworld-blackbox.md"), "utf8")).toContain("not scored");
       expect(existsSync("scripts/benchmark/realworld-openai-judge.mjs")).toBe(true);
@@ -733,6 +743,7 @@ process.stdin.on("end", () => {
       expect(report.status).toBe("comparative-smoke-eligible-results-not-market-leaderboard");
       expect(report.eligibilityGate.llmOrHarnessJudged).toBe(true);
       expect(report.eligibilityGate.enoughOriginalSystems).toBe(true);
+      expect(report.eligibilityGate.resourceTelemetryRecorded).toBe(true);
       expect(report.leaderboardEligibleSystems).toEqual([]);
       expect(report.comparativeSmokeEligibleSystems).toEqual(expect.arrayContaining(["cognibrain", "basicmemory", "langmem"]));
       expect(report.comparativeSmokeEligibleSystems).not.toContain("keyword");
@@ -753,7 +764,9 @@ process.stdin.on("end", () => {
         blockedSystems: 0,
         judgedSystems: 4,
         judgeBlockedSystems: 0,
-        qualityClaimableSystems: 4
+        qualityClaimableSystems: 4,
+        resourceTelemetryRecorded: true,
+        systemsMissingResourceTelemetry: []
       });
       expect(report.operationalWeaknesses.rawErrorClasses).toEqual([]);
       expect(report.operationalWeaknesses.bucketWeaknesses.every((bucket) => bucket.scoredSystems === 4 && bucket.bestScore === 1 && bucket.worstScore === 1)).toBe(true);

@@ -61,7 +61,15 @@ describe("cognibrain CLI", () => {
       expect(before.prune.requested).toBe(false);
       expect(before.vscode.settingsPresent).toBe(false);
       expect(before.vscode.missingLowResourceSettings).toEqual([
+        "javascript.suggest.autoImports",
+        "npm.autoDetect",
+        "python.analysis.autoImportCompletions",
+        "python.analysis.exclude",
+        "python.analysis.indexing",
+        "task.autoDetect",
         "typescript.disableAutomaticTypeAcquisition",
+        "typescript.preferences.includePackageJsonAutoImports",
+        "typescript.suggest.autoImports",
         "typescript.tsserver.maxTsServerMemory",
         "typescript.tsserver.experimental.enableProjectDiagnostics",
         "typescript.tsserver.watchOptions"
@@ -1132,6 +1140,19 @@ describe("cognibrain CLI", () => {
         expect(vscodeSettings["search.exclude"][pattern], pattern).toBe(true);
       }
       expect(vscodeSettings["typescript.disableAutomaticTypeAcquisition"]).toBe(true);
+      expect(vscodeSettings["typescript.preferences.includePackageJsonAutoImports"]).toBe("off");
+      expect(vscodeSettings["typescript.suggest.autoImports"]).toBe(false);
+      expect(vscodeSettings["javascript.suggest.autoImports"]).toBe(false);
+      expect(vscodeSettings["npm.autoDetect"]).toBe("off");
+      expect(vscodeSettings["task.autoDetect"]).toBe("off");
+      expect(vscodeSettings["python.analysis.indexing"]).toBe(false);
+      expect(vscodeSettings["python.analysis.autoImportCompletions"]).toBe(false);
+      expect(vscodeSettings["python.analysis.exclude"]).toEqual(expect.arrayContaining([
+        "**/.cognibrain/**",
+        "**/artifacts/**",
+        "**/data/benchmarks/**",
+        "**/node_modules/**"
+      ]));
       expect(vscodeSettings["typescript.tsserver.maxTsServerMemory"]).toBe(1024);
       expect(vscodeSettings["typescript.tsserver.experimental.enableProjectDiagnostics"]).toBe(false);
       expect(vscodeSettings["typescript.tsserver.watchOptions"].excludeDirectories).toEqual(expect.arrayContaining([

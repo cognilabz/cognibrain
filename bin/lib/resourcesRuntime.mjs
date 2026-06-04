@@ -204,6 +204,10 @@ function missingVsCodeLowResourceSettings(settings) {
       const expectedExcludes = expected.excludeDirectories ?? [];
       const actualExcludes = Array.isArray(actual?.excludeDirectories) ? actual.excludeDirectories : [];
       if (!expectedExcludes.every((pattern) => actualExcludes.includes(pattern))) missing.push(key);
+    } else if (Array.isArray(expected)) {
+      if (!Array.isArray(actual) || !expected.every((pattern) => actual.includes(pattern))) missing.push(key);
+    } else if (expected && typeof expected === "object") {
+      if (JSON.stringify(actual ?? {}) !== JSON.stringify(expected)) missing.push(key);
     } else if (actual !== expected) {
       missing.push(key);
     }

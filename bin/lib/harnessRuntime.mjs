@@ -41,7 +41,15 @@ export const VS_CODE_TSSERVER_EXCLUDE_DIRECTORIES = Object.freeze([
 ]);
 
 export const VS_CODE_LOW_RESOURCE_SETTINGS = Object.freeze({
+  "javascript.suggest.autoImports": false,
+  "npm.autoDetect": "off",
+  "python.analysis.autoImportCompletions": false,
+  "python.analysis.exclude": HEAVY_GENERATED_EXCLUDE_PATTERNS,
+  "python.analysis.indexing": false,
+  "task.autoDetect": "off",
   "typescript.disableAutomaticTypeAcquisition": true,
+  "typescript.preferences.includePackageJsonAutoImports": "off",
+  "typescript.suggest.autoImports": false,
   "typescript.tsserver.maxTsServerMemory": 1024,
   "typescript.tsserver.experimental.enableProjectDiagnostics": false,
   "typescript.tsserver.watchOptions": Object.freeze({

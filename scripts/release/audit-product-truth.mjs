@@ -153,10 +153,21 @@ const requiredHeavyGeneratedExcludes = [
 const vscodeHeavyGeneratedExcludes = files.cli.includes("HEAVY_GENERATED_EXCLUDE_PATTERNS") &&
   requiredHeavyGeneratedExcludes.every((pattern) => files.cli.includes(pattern) && files.cliTests.includes(pattern));
 const vscodeLowResourceSettings = files.cli.includes("VS_CODE_LOW_RESOURCE_SETTINGS") &&
+  files.cli.includes("javascript.suggest.autoImports") &&
+  files.cli.includes("npm.autoDetect") &&
+  files.cli.includes("python.analysis.exclude") &&
+  files.cli.includes("python.analysis.indexing") &&
+  files.cli.includes("task.autoDetect") &&
   files.cli.includes("typescript.tsserver.maxTsServerMemory") &&
   files.cli.includes("typescript.tsserver.watchOptions") &&
   files.cli.includes("typescript.disableAutomaticTypeAcquisition") &&
+  files.cli.includes("typescript.preferences.includePackageJsonAutoImports") &&
+  files.cli.includes("typescript.suggest.autoImports") &&
   files.cli.includes("missingLowResourceSettings") &&
+  files.cliTests.includes("javascript.suggest.autoImports") &&
+  files.cliTests.includes("python.analysis.exclude") &&
+  files.cliTests.includes("python.analysis.indexing") &&
+  files.cliTests.includes("typescript.preferences.includePackageJsonAutoImports") &&
   files.cliTests.includes("typescript.tsserver.maxTsServerMemory") &&
   files.cliTests.includes("typescript.tsserver.watchOptions");
 const dreamJobWorkerControl = files.service.includes("cancelDreamJob(") && files.service.includes("retryDreamJob(") && files.dreamRoutes.includes("/dream/jobs") && files.dreamRoutes.includes("cancel") && files.dreamRoutes.includes("retry") && files.mcpTools.includes("memory_dream_job_cancel") && files.mcpTools.includes("memory_dream_job_retry") && files.coreTests.includes("cancels and retries dream jobs");
@@ -185,7 +196,7 @@ const realworldBlackboxCognibrain = realworldBlackboxSystems.find((system) => sy
 const realworldBlackboxBlocked = realworldBlackboxSystems.filter((system) => system.evidenceClass === "credential-blocked");
 const realworldBlackboxRawRetained = realworldBlackboxCognibrain && Array.isArray(realworldBlackboxCognibrain.rawOutputs) && realworldBlackboxCognibrain.rawOutputs.length >= 15;
 const realworldBlackboxJudgeBlocked = realworldBlackboxCognibrain?.qualityClaimAllowed === false && realworldBlackboxCognibrain?.judge?.kind === "missing" && realworldBlackboxCognibrain?.metrics?.score === null && files.realworldBlackbox.eligibilityGate?.llmOrHarnessJudged === false;
-const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked;
+const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && files.realworldBlackbox.eligibilityGate?.resourceTelemetryRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked;
 const realworldBlackboxMarketGateStrict = files.realworldBlackboxSource.includes("cognibrainComparativeSmokeEligible") &&
   files.realworldBlackboxSource.includes("leaderboardEligibleSystems: []") &&
   files.realworldBlackboxSource.includes("originalCompetitorEligibleSystems.length >= 2") &&
@@ -238,11 +249,21 @@ const realworldOperationalWeaknessReporting = files.realworldBlackboxSource.incl
   files.realworldBlackboxSource.includes("systemWeaknesses") &&
   files.realworldBlackboxSource.includes("setupFailureRate") &&
   files.realworldBlackboxSource.includes("rawOutputCoverageRate") &&
+  files.realworldBlackboxSource.includes("resourceTelemetryRecorded") &&
+  files.realworldBlackboxSource.includes("maxRssDeltaMb") &&
+  files.realworldBlackboxSource.includes("maxCpuMs") &&
   files.evaluationTests.includes("Operational Weaknesses") &&
+  files.evaluationTests.includes("Max RSS delta") &&
   files.evaluationTests.includes("central-judge-blocked") &&
   files.evaluationTests.includes("external-system-not-configured") &&
   files.realworldBlackbox?.operationalWeaknesses?.summary?.requestedSystems >= 2 &&
   files.realworldBlackbox?.operationalWeaknesses?.summary?.blockedSystems >= 1 &&
+  files.realworldBlackbox?.operationalWeaknesses?.summary?.resourceTelemetryRecorded === true &&
+  Array.isArray(files.realworldBlackbox?.operationalWeaknesses?.summary?.systemsMissingResourceTelemetry) &&
+  files.realworldBlackbox.operationalWeaknesses.summary.systemsMissingResourceTelemetry.length === 0 &&
+  Number.isFinite(files.realworldBlackbox?.operationalWeaknesses?.summary?.maxRssDeltaMb) &&
+  Number.isFinite(files.realworldBlackbox?.operationalWeaknesses?.summary?.maxCpuMs) &&
+  realworldBlackboxSystems.every((system) => system?.resourceFootprint?.source === "central-harness-process") &&
   Array.isArray(files.realworldBlackbox?.operationalWeaknesses?.rawErrorClasses) &&
   files.realworldBlackbox.operationalWeaknesses.rawErrorClasses.length >= 1 &&
   Array.isArray(files.realworldBlackbox?.operationalWeaknesses?.bucketWeaknesses) &&
@@ -441,7 +462,7 @@ const checks = [
     classifiedArtifacts: realworldArtifacts.map((artifact) => `${artifact.path}:${artifact.className}:${artifact.leaderboardEligible ? "eligible" : "not-eligible"}`),
     leaderboardEligibleArtifacts: realworldEligibleArtifacts
   }),
-  check("realworld-blackbox-harness-proof", "Neutral real-world black-box harness has broad bucket coverage, retains raw outputs, latency/cost fields and refuses quality scoring without an LLM/harness judge.", realworldBlackboxHarnessReady && realworldBlackboxBlocked.length >= 5 && docsContainAll([
+  check("realworld-blackbox-harness-proof", "Neutral real-world black-box harness has broad bucket coverage, retains raw outputs, latency/cost/resource fields and refuses quality scoring without an LLM/harness judge.", realworldBlackboxHarnessReady && realworldBlackboxBlocked.length >= 5 && docsContainAll([
     "Real-World Black-Box Smoke",
     "at least 15 queries",
     "export-raw-outputs",
@@ -453,6 +474,7 @@ const checks = [
     manifestHash: files.realworldBlackbox.manifestHash,
     leaderboardEligible: files.realworldBlackbox.leaderboardEligible,
     llmOrHarnessJudged: files.realworldBlackbox.eligibilityGate?.llmOrHarnessJudged,
+    resourceTelemetryRecorded: files.realworldBlackbox.eligibilityGate?.resourceTelemetryRecorded,
     judge: realworldBlackboxCognibrain?.judge,
     blockedSystems: realworldBlackboxBlocked.map((system) => system.system),
     cognibrainScore: realworldBlackboxCognibrain?.metrics?.score,
@@ -481,7 +503,7 @@ const checks = [
     judge: "scripts/benchmark/realworld-openai-judge.mjs",
     tests: "tests/evaluation.test.ts"
   }),
-  check("realworld-operational-weakness-reporting", "Real-world black-box results expose setup failure rate, raw-output coverage, raw error classes, bucket weakness rows, scorer cost and latency beside quality metrics.", realworldOperationalWeaknessReporting, "fail", {
+  check("realworld-operational-weakness-reporting", "Real-world black-box results expose setup failure rate, raw-output coverage, raw error classes, bucket weakness rows, scorer cost, latency and central RSS/CPU telemetry beside quality metrics.", realworldOperationalWeaknessReporting, "fail", {
     source: "src/eval/realworldBlackbox.ts",
     tests: "tests/evaluation.test.ts",
     artifact: "artifacts/realworld-blackbox.json",

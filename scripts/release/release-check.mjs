@@ -35,6 +35,7 @@ const steps = [
   ["benchmark release manifest", "npm", ["run", "internal", "--", "benchmark:release"]],
   ["product truth audit", "npm", ["run", "internal", "--", "audit:truth"]],
   ["latest analysis acceptance audit", "npm", ["run", "internal", "--", "audit:latest-analysis"]],
+  ["full plan proof", "npm", ["run", "internal", "--", "proof:plan"]],
   ["public benchmark publish", "npm", ["run", "internal", "--", "leaderboard:publish"]],
   ["local runtime start", process.execPath, ["bin/cognibrain.mjs", "start"]],
   ["publish doctor", "npm", ["run", "internal", "--", "doctor:publish"]],

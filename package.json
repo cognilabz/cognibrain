@@ -65,6 +65,7 @@
     "verify": "npm run test && npm run internal -- eval && npm run build",
     "verify:ci": "npm run internal -- verify:nextgen",
     "verify:selfhosted": "npm run internal -- verify:selfhosted",
+    "proof:plan": "node scripts/release/full-plan-proof.mjs",
     "proof": "node bin/cognibrain.mjs proof",
     "cli": "tsx src/cli/memctl.ts",
     "mcp": "tsx src/connectors/mcpServer.ts",

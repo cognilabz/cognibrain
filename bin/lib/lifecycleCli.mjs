@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import http from "node:http";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { sanitizedRuntimeEnv } from "./runtimeEnv.mjs";
+import { authHeadersFromOptions, autostartDaemon, discoverDaemonUrl, httpJson, queryString } from "./daemonClient.mjs";
 
 const HARNESS_LIFECYCLE_CONTRACT = JSON.parse(readFileSync(new URL("../../src/contracts/harness/v1.json", import.meta.url), "utf8"));
 const EXIT_CODES = HARNESS_LIFECYCLE_CONTRACT.exitCodes;
@@ -274,7 +274,7 @@ async function createAutoBackend(context) {
   const reachable = await daemon.isReachable();
   if (reachable) return daemon;
   if (!context.options.flags.has("no-autostart") && process.env.COGNIBRAIN_CLI_AUTOSTART !== "false" && process.env.COGNIBRAIN_HARNESS_AUTOSTART !== "false") {
-    await autostartDaemon(context);
+    await autostartDaemon({ root: context.root, runtimeRoot: context.runtimeRoot, cwd: context.launchCwd, lockName: "cli-start.lock", waitOnLockedMs: 1000, encoding: "utf8", maxBuffer: 1024 * 1024 });
     if (await daemon.refresh().isReachable()) return daemon;
   }
   if (context.options.flags.has("require-daemon") || mode === "daemon" || productionHarnessMode()) {
@@ -290,12 +290,12 @@ async function createAutoBackend(context) {
 class DaemonBackend {
   constructor(context) {
     this.context = context;
-    this.baseUrl = discoverDaemonUrl(context);
+    this.baseUrl = discoverDaemonUrl(context.runtimeRoot);
     this.authHeaders = authHeadersFromOptions(context.options);
   }
 
   refresh() {
-    this.baseUrl = discoverDaemonUrl(this.context);
+    this.baseUrl = discoverDaemonUrl(this.context.runtimeRoot);
     return this;
   }
 
@@ -306,7 +306,7 @@ class DaemonBackend {
   async isReachable() {
     if (!this.baseUrl) return false;
     try {
-      const health = await httpJson("GET", `${this.baseUrl}/health`, undefined, 800, this.authHeaders);
+      const health = await httpJson("GET", `${this.baseUrl}/health`, undefined, { timeoutMs: 800, headers: this.authHeaders, exitCodes: EXIT_CODES });
       return Boolean(health.ok);
     } catch {
       return false;
@@ -315,7 +315,7 @@ class DaemonBackend {
 
   async call(command, payload) {
     const route = routeFor(command, payload);
-    const data = await httpJson(route.method, `${this.baseUrl}${route.path}`, route.body, 4_000, this.authHeaders);
+    const data = await httpJson(route.method, `${this.baseUrl}${route.path}`, route.body, { timeoutMs: 4_000, headers: this.authHeaders, exitCodes: EXIT_CODES });
     return { data, backend: this.description(), warnings: [] };
   }
 }
@@ -384,114 +384,14 @@ function routeFor(command, payload) {
     case "dream-plan":
       return { method: "POST", path: "/dream/plan", body: payload };
     case "health":
-      return { method: "GET", path: `/health?userId=${encodeURIComponent(payload.userId)}` };
+      return { method: "GET", path: `/health${queryString({ userId: payload.userId })}` };
     case "source-revalidate":
       return { method: "POST", path: "/sources/revalidate", body: payload };
     case "conflicts":
-      return { method: "GET", path: `/conflicts${payload.status ? `?status=${encodeURIComponent(payload.status)}` : ""}` };
+      return { method: "GET", path: `/conflicts${queryString({ status: payload.status })}` };
     default:
       throw new Error(`unsupported harness route ${command}`);
   }
-}
-
-function discoverDaemonUrl(context) {
-  const explicit = process.env.MEMORY_API_URL ?? process.env.COGNIBRAIN_API_URL ?? process.env.COGNIBRAIN_URL;
-  if (explicit) return stripSlash(explicit);
-  for (const file of [
-    join(context.runtimeRoot, ".cognibrain", "runtime.json"),
-    join(context.runtimeRoot, ".cognibrain", "local-runtime.json")
-  ]) {
-    const state = readJson(file, null);
-    if (state?.api?.url) return stripSlash(state.api.url);
-  }
-  return "http://127.0.0.1:8787";
-}
-
-async function autostartDaemon(context) {
-  const lockPath = join(context.runtimeRoot, ".cognibrain", "cli-start.lock");
-  mkdirSync(dirname(lockPath), { recursive: true });
-  let lockFd;
-  try {
-    lockFd = openSync(lockPath, "wx");
-  } catch {
-    await sleep(1000);
-    return;
-  }
-  try {
-    writeFileSync(lockFd, `${process.pid}\n`);
-    spawnSync(process.execPath, [join(context.root, "bin", "cognibrain.mjs"), "--runtime-root", context.runtimeRoot, "start"], {
-      cwd: context.launchCwd,
-      env: sanitizedRuntimeEnv(),
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024
-    });
-  } finally {
-    rmSync(lockPath, { force: true });
-  }
-}
-
-function httpJson(method, url, body, timeoutMs = 4_000, extraHeaders = {}) {
-  return new Promise((resolveRequest, reject) => {
-    const request = http.request(url, {
-      method,
-      headers: cleanHeaders({
-        ...(body ? { "content-type": "application/json" } : {}),
-        ...extraHeaders
-      })
-    }, (response) => {
-      let text = "";
-      response.on("data", (chunk) => {
-        text += chunk;
-      });
-      response.on("end", () => {
-        let payload;
-        try {
-          payload = text ? JSON.parse(text) : {};
-        } catch {
-          payload = { body: text };
-        }
-        if ((response.statusCode ?? 500) >= 400) {
-          const error = new Error(payload.error ?? payload.message ?? `${url} returned ${response.statusCode}`);
-          error.code = payload.code ?? "http_error";
-          error.exitCode = response.statusCode === 401 || response.statusCode === 403 ? EXIT_CODES.authConfigError : EXIT_CODES.genericFailure;
-          reject(error);
-          return;
-        }
-        resolveRequest(payload);
-      });
-    });
-    request.on("error", reject);
-    request.setTimeout(timeoutMs, () => request.destroy(new Error(`${url} timed out`)));
-    if (body) request.write(JSON.stringify(body));
-    request.end();
-  });
-}
-
-function authHeadersFromOptions(options) {
-  const authEnvName = stringOption(options, "auth-env");
-  const authEnvValue = authEnvName ? process.env[authEnvName] : undefined;
-  const bearer = stringOption(options, "bearer-token") ?? process.env.MEMORY_BEARER_TOKEN ?? bearerFromAuthEnv(authEnvName, authEnvValue);
-  const apiKey = bearer ? undefined : stringOption(options, "api-key") ?? apiKeyFromAuthEnv(authEnvName, authEnvValue) ?? process.env.MEMORY_API_KEY ?? process.env.COGNIBRAIN_API_KEY ?? process.env.COGNIBRAIN_API_TOKEN;
-  return cleanHeaders({
-    authorization: bearer ? `Bearer ${bearer}` : undefined,
-    "x-api-key": apiKey,
-    "x-actor-id": process.env.MEMORY_ACTOR_ID ?? process.env.COGNIBRAIN_ACTOR_ID
-  });
-}
-
-function bearerFromAuthEnv(name, value) {
-  if (!name || !value) return undefined;
-  return /BEARER|JWT/i.test(name) ? value : undefined;
-}
-
-function apiKeyFromAuthEnv(name, value) {
-  if (!name || !value) return undefined;
-  return /BEARER|JWT/i.test(name) ? undefined : value;
-}
-
-function cleanHeaders(headers) {
-  const entries = Object.entries(headers).filter(([, value]) => value !== undefined && value !== "");
-  return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
 function productionHarnessMode() {
@@ -673,19 +573,6 @@ function clean(object) {
   return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined && !(Array.isArray(value) && value.length === 0)));
 }
 
-function readJson(path, fallback) {
-  if (!existsSync(path)) return fallback;
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return fallback;
-  }
-}
-
-function stripSlash(value) {
-  return value.replace(/\/+$/, "");
-}
-
 function resolveExecutable(root, name) {
   const suffix = process.platform === "win32" ? ".cmd" : "";
   for (const candidate of [
@@ -697,10 +584,6 @@ function resolveExecutable(root, name) {
   }
   const result = spawnSync(name, ["--version"], { cwd: root, stdio: "ignore" });
   return result.status === 0 ? name : null;
-}
-
-function sleep(ms) {
-  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
 function printLifecycleUsage(context = { prefix: "cognibrain", alias: false }) {

@@ -73,7 +73,31 @@ jobs:
           if [ -z "$NODE_AUTH_TOKEN" ]; then
             echo "NPM_TOKEN is not set; using npm trusted publishing via GitHub OIDC."
           fi
-          npm publish --access public
+
+          set -o pipefail
+          publish_log="$(mktemp)"
+          if npm publish --access public 2>&1 | tee "$publish_log"; then
+            exit 0
+          fi
+          publish_status="${PIPESTATUS[0]}"
+
+          if npm view "$PACKAGE_NAME@$NEXT_VERSION" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
+            echo "$PACKAGE_NAME@$NEXT_VERSION is already available on npm; treating publish as complete."
+            exit 0
+          fi
+
+          if grep -Eq "TLOG_CREATE_ENTRY_ERROR|rekor\.sigstore\.dev" "$publish_log"; then
+            echo "npm provenance transparency-log creation failed transiently; retrying publish without provenance."
+            if npm publish --access public --provenance=false; then
+              exit 0
+            fi
+            if npm view "$PACKAGE_NAME@$NEXT_VERSION" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
+              echo "$PACKAGE_NAME@$NEXT_VERSION is already available on npm after fallback; treating publish as complete."
+              exit 0
+            fi
+          fi
+
+          exit "$publish_status"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

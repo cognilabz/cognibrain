@@ -117,6 +117,7 @@ const checks = [
   check("release.goal-proof-gated", "Release, CI and proof scripts include all plan audits and this full-plan proof gate.", [
     files.packageJson.scripts?.["proof:plan"] === "node scripts/release/full-plan-proof.mjs",
     files.internalRunner.includes("\"proof:plan\""),
+    files.internalRunner.includes("\"audit:latest-analysis\", \"proof:plan\""),
     files.internalRunner.includes("proof:plan\", \"build"),
     files.releaseCheck.includes("full plan proof"),
     files.latestAnalysis.passed === true,

@@ -3488,23 +3488,43 @@ describe("TypeScript memory core", () => {
   });
 
   it("seeds expanded first-class vendor connectors", () => {
-    const service = new MemoryService({ autoDream: { enabled: false } });
-    const vendors = ["official-github", "official-slack", "official-discord", "official-jira", "official-confluence", "official-notion", "official-linear", "official-gitlab", "official-azure-devops", "official-microsoft-teams", "official-google-drive", "official-gmail", "official-google-calendar", "official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"];
-    const health = service.connectorHealth().filter((item) => vendors.includes(item.connectorId));
-    expect(health.map((item) => item.connectorId)).toEqual(expect.arrayContaining(vendors));
-    expect(health.every((item) => item.supports.externalVendor)).toBe(true);
-    expect(health.find((item) => item.connectorId === "official-jira")?.externalVendor?.missingEnv).toContain("MEMORY_JIRA_PROJECT");
-    expect(health.find((item) => item.connectorId === "official-github")?.certification).toMatchObject({
-      state: "credential-blocked",
-      artifact: "artifacts/connector-certification.json",
-      canBecomeTenantVerified: true,
-      productionCertified: false
-    });
-    expect(health.find((item) => item.connectorId === "official-confluence")?.kind).toBe("docs");
-    expect(health.find((item) => item.connectorId === "official-linear")?.kind).toBe("project_management");
-    const stateOfArt = health.filter((item) => ["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"].includes(item.connectorId));
-    expect(stateOfArt.map((item) => item.connectorId)).toEqual(expect.arrayContaining(["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"]));
-    expect(stateOfArt.every((item) => item.supports.poll && item.supports.writeback && item.supports.externalVendor)).toBe(true);
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-connector-health-cert-"));
+    const oldArtifact = process.env.MEMORY_CONNECTOR_CERTIFICATION_ARTIFACT;
+    try {
+      const certificationArtifact = join(dir, "connector-certification.json");
+      writeFileSync(certificationArtifact, JSON.stringify({
+        rows: [{
+          provider: "github",
+          connectorId: "official-github",
+          state: "credential-blocked",
+          blockedBy: ["signed tenant live-smoke artifact"],
+          canBecomeTenantVerified: true,
+          canBecomeProductionCertified: false
+        }]
+      }));
+      process.env.MEMORY_CONNECTOR_CERTIFICATION_ARTIFACT = certificationArtifact;
+      const service = new MemoryService({ autoDream: { enabled: false } });
+      const vendors = ["official-github", "official-slack", "official-discord", "official-jira", "official-confluence", "official-notion", "official-linear", "official-gitlab", "official-azure-devops", "official-microsoft-teams", "official-google-drive", "official-gmail", "official-google-calendar", "official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"];
+      const health = service.connectorHealth().filter((item) => vendors.includes(item.connectorId));
+      expect(health.map((item) => item.connectorId)).toEqual(expect.arrayContaining(vendors));
+      expect(health.every((item) => item.supports.externalVendor)).toBe(true);
+      expect(health.find((item) => item.connectorId === "official-jira")?.externalVendor?.missingEnv).toContain("MEMORY_JIRA_PROJECT");
+      expect(health.find((item) => item.connectorId === "official-github")?.certification).toMatchObject({
+        state: "credential-blocked",
+        artifact: certificationArtifact,
+        canBecomeTenantVerified: true,
+        productionCertified: false
+      });
+      expect(health.find((item) => item.connectorId === "official-confluence")?.kind).toBe("docs");
+      expect(health.find((item) => item.connectorId === "official-linear")?.kind).toBe("project_management");
+      const stateOfArt = health.filter((item) => ["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"].includes(item.connectorId));
+      expect(stateOfArt.map((item) => item.connectorId)).toEqual(expect.arrayContaining(["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"]));
+      expect(stateOfArt.every((item) => item.supports.poll && item.supports.writeback && item.supports.externalVendor)).toBe(true);
+    } finally {
+      if (oldArtifact === undefined) delete process.env.MEMORY_CONNECTOR_CERTIFICATION_ARTIFACT;
+      else process.env.MEMORY_CONNECTOR_CERTIFICATION_ARTIFACT = oldArtifact;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("writes guided init and connector setup state without storing credential values", () => {

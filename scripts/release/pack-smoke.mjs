@@ -45,7 +45,8 @@ try {
   run("installed health", "npx", ["cognibrain", "health", "--json"], { cwd: installDir, env: smokeEnv });
   run("installed harness health", "npx", ["cognibrain", "harness", "health", "--json"], { cwd: installDir, env: smokeEnv });
   run("installed MCP help", "npx", ["cognibrain", "mcp", "--help"], { cwd: installDir, env: smokeEnv });
-  run("installed SDK and storage imports", "npx", ["tsx", "--eval", importSmokeSource()], { cwd: installDir, env: smokeEnv });
+  run("installed plain Node SDK imports", "node", ["--input-type=module", "--eval", plainNodeImportSmokeSource()], { cwd: installDir, env: smokeEnv });
+  run("installed TS internal storage imports", "npx", ["tsx", "--eval", internalImportSmokeSource()], { cwd: installDir, env: smokeEnv });
 
   console.log(`pack smoke passed: ${results.length}/${results.length} checks`);
 } finally {
@@ -90,22 +91,37 @@ function run(name, command, args, options = {}) {
   return entry;
 }
 
-function importSmokeSource() {
+function plainNodeImportSmokeSource() {
+  return `
+async function main() {
+  const root = await import("@cognilabz/cognibrain");
+  const client = await import("@cognilabz/cognibrain/sdk/typescript/client");
+  const harness = await import("@cognilabz/cognibrain/sdk/typescript/harness");
+  const connectors = await import("@cognilabz/cognibrain/sdk/typescript/connectors");
+
+  if (typeof root.CognibrainClient !== "function") throw new Error("root CognibrainClient export missing");
+  if (typeof client.CognibrainClient !== "function") throw new Error("CognibrainClient export missing");
+  if (typeof harness.CognibrainHarnessSdk !== "function") throw new Error("CognibrainHarnessSdk export missing");
+  if (typeof connectors.createPlatformIntegration !== "function") throw new Error("createPlatformIntegration export missing");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+`;
+}
+
+function internalImportSmokeSource() {
   return `
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 async function main() {
   const packageRoot = join(process.cwd(), "node_modules", "@cognilabz", "cognibrain");
-  const client = await import("@cognilabz/cognibrain/sdk/typescript/client");
-  const harness = await import("@cognilabz/cognibrain/sdk/typescript/harness");
-  const connectors = await import("@cognilabz/cognibrain/sdk/typescript/connectors");
   const mcp = await import(pathToFileURL(join(packageRoot, "src", "connectors", "mcpServer.ts")).href);
   const postgres = await import(pathToFileURL(join(packageRoot, "src", "api", "repositories", "postgresRepository.ts")).href);
 
-  if (typeof client.CognibrainClient !== "function") throw new Error("CognibrainClient export missing");
-  if (typeof harness.CognibrainHarnessSdk !== "function") throw new Error("CognibrainHarnessSdk export missing");
-  if (typeof connectors.createPlatformIntegration !== "function") throw new Error("createPlatformIntegration export missing");
   if (typeof mcp.createOpenMemoryMcpServer !== "function") throw new Error("MCP server export missing");
   if (typeof postgres.AsyncPostgresMemoryRepository !== "function") throw new Error("Postgres repository export missing");
 }

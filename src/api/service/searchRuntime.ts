@@ -1,4 +1,4 @@
-import { bestConceptMatch, buildCodingContextPackFromResults, buildPatchEvidenceTrail, citationFor, engineeringQueryWeights, normalizeRetrievalWeights, type CodingContextPack, type EngineeringMemoryKind, type EvidencePack, type FederatedSearchReport, type Memory, type MemoryRouteReport, type PolicyDecision, type QueryIntentReport, type RetrievalProfile, type SearchOptions, type SearchResult } from "../../core";
+import { bestConceptMatch, buildCodingContextPackFromResults, buildPatchEvidenceTrail, citationFor, engineeringQueryWeights, getEngineeringMetadata, normalizeRetrievalWeights, type CodingContextPack, type EngineeringMemoryKind, type EvidencePack, type FederatedSearchReport, type Memory, type MemoryRouteReport, type PolicyDecision, type QueryIntentReport, type RetrievalProfile, type SearchOptions, type SearchResult } from "../../core";
 import { buildQueryPlan, contentHash, evidenceDate, rollingAverage, roundMetric, uniqueStrings } from "./helpers";
 
 export function search(service: any, options: SearchOptions): SearchResult[] {
@@ -82,8 +82,17 @@ export function classifyQueryIntent(service: any, query: string): QueryIntentRep
 
 function applyTruthDecision(service: any, result: SearchResult): SearchResult {
     const truthDecision = service.currentTruthForMemory(result.memory);
-    if (!truthDecision) return result;
     const explicitClaim = Boolean(result.memory.metadata?.claim);
+    const engineering = getEngineeringMetadata(result.memory);
+    if (engineering && !explicitClaim) {
+      return {
+        ...result,
+        decision: result.decision === "exclude" ? "exclude" : "review",
+        unsafeToInject: true,
+        explanation: [...(result.explanation ?? []), "truth review required: engineering memory lacks claim record"]
+      };
+    }
+    if (!truthDecision) return result;
     const truth = {
       selectedClaimId: truthDecision.selectedClaimId,
       selectedMemoryId: truthDecision.selectedMemoryId,
@@ -98,6 +107,7 @@ function applyTruthDecision(service: any, result: SearchResult): SearchResult {
         ...result,
         truth,
         decision: "exclude",
+        unsafeToInject: true,
         explanation: [...(result.explanation ?? []), `truth excluded: ${truthDecision.reason}`]
       };
     }
@@ -106,6 +116,7 @@ function applyTruthDecision(service: any, result: SearchResult): SearchResult {
         ...result,
         truth,
         decision: result.decision === "exclude" ? "exclude" : "review",
+        unsafeToInject: true,
         explanation: [...(result.explanation ?? []), `truth review required: ${truthDecision.reason}`]
       };
     }
@@ -371,6 +382,7 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
               ? "unsafe-to-inject result kept outside the context body"
               : "token budget or reranking kept this memory outside the context body",
           decision: result.decision,
+          unsafeToInject: result.unsafeToInject,
           policyDecision: policyDecisions.find((decision) => decision.memoryId === result.memory.id),
           score: result.score,
           truthDecision: service.currentTruthForMemory(result.memory)

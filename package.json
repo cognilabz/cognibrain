@@ -13,11 +13,11 @@
     "cognibrain-connect": "bin/cognibrain-connect.mjs"
   },
   "exports": {
-    ".": "./sdk/typescript/index.ts",
-    "./sdk/typescript": "./sdk/typescript/index.ts",
-    "./sdk/typescript/client": "./sdk/typescript/client.ts",
-    "./sdk/typescript/connectors": "./sdk/typescript/connectors.ts",
-    "./sdk/typescript/harness": "./sdk/typescript/harness.ts",
+    ".": "./dist/sdk/typescript/index.js",
+    "./sdk/typescript": "./dist/sdk/typescript/index.js",
+    "./sdk/typescript/client": "./dist/sdk/typescript/client.js",
+    "./sdk/typescript/connectors": "./dist/sdk/typescript/connectors.js",
+    "./sdk/typescript/harness": "./dist/sdk/typescript/harness.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -38,6 +38,7 @@
     "docker/",
     "deploy/",
     "dist/api/",
+    "dist/sdk/",
     ".env.example",
     "bootstrap.sh",
     "CONTRIBUTING.md",
@@ -54,7 +55,8 @@
     "operator-ui:dev": "next dev operator-ui -H 0.0.0.0",
     "operator-ui:build": "next build operator-ui",
     "build:api": "node scripts/runtime/build-api.mjs",
-    "build": "tsc && npm run build:api && npm run operator-ui:build",
+    "build:sdk": "node scripts/runtime/build-sdk.mjs",
+    "build": "tsc && npm run build:sdk && npm run build:api && npm run operator-ui:build",
     "test": "vitest run",
     "test:watch": "vitest",
     "release:check": "node scripts/release/release-check.mjs",

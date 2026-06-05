@@ -885,6 +885,24 @@ describe("TypeScript memory core", () => {
     expect(results[0].explanation?.join(" ")).toContain("provider evidence contract invalid");
   });
 
+  it("marks engineering memories without claim records as review-only and unsafe to inject", () => {
+    const service = new MemoryService();
+    service.add({
+      userId: "u1",
+      content: "Atlas release must use npm run release:check.",
+      source: { kind: "human", confidence: 0.96 },
+      metadata: { engineering: { kind: "repo_policy", confidence: 0.96, codebase: { repo: "atlas" } } }
+    });
+
+    const results = service.search({ userId: "u1", query: "What release command should Atlas use?", limit: 1 });
+
+    expect(results[0]).toMatchObject({ decision: "review", unsafeToInject: true });
+    expect(results[0].explanation?.join(" ")).toContain("engineering memory lacks claim record");
+    const pack = service.evidencePack({ userId: "u1", query: "What release command should Atlas use?", limit: 1 });
+    expect(pack.results).toHaveLength(0);
+    expect(pack.excludedResults?.[0]).toMatchObject({ decision: "review", unsafeToInject: true });
+  });
+
   it("uses harness evidence judgement to suppress unsupported retrieval without static query rules", () => {
     const service = new MemoryService({
       intelligence: {

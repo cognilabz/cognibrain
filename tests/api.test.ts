@@ -66,7 +66,11 @@ describe("cognibrain HTTP API contract", () => {
     delete process.env.MEMORY_REQUEST_BODY_LIMIT_BYTES;
     delete process.env.MEMORY_POLICY_MODE;
     delete process.env.MEMORY_SECURITY_MODE;
+    delete process.env.COGNIBRAIN_SECURITY_MODE;
     delete process.env.MEMORY_PRODUCTION_MODE;
+    delete process.env.COGNIBRAIN_PRODUCTION_MODE;
+    delete process.env.COGNIBRAIN_CORS_ORIGINS;
+    delete process.env.COGNIBRAIN_ALLOWED_ORIGINS;
     delete process.env.MEMORY_CONNECTOR_CONFIG_PATH;
     delete process.env.MEMORY_GITHUB_REPO;
     delete process.env.MEMORY_GITHUB_TOKEN;
@@ -207,8 +211,13 @@ describe("cognibrain HTTP API contract", () => {
     for (const command of [
       "node bin/cognibrain.mjs help; echo pwned",
       "node bin/cognibrain.mjs help && echo pwned",
+      "node bin/cognibrain.mjs help | sh",
+      "node bin/cognibrain.mjs help `echo pwned`",
       "node bin/cognibrain.mjs help $(echo pwned)",
-      "node bin/cognibrain.mjs help > /tmp/pwned"
+      "node bin/cognibrain.mjs help > /tmp/pwned",
+      "node bin/cognibrain.mjs help\nnode bin/cognibrain.mjs status",
+      "node bin/cognibrain.mjs help \"quoted\"",
+      "node bin/cognibrain.mjs help 'quoted'"
     ]) {
       const injected = await fetch(`${baseUrl}/harness/execute`, {
         method: "POST",
@@ -457,6 +466,23 @@ describe("cognibrain HTTP API contract", () => {
     const second = await fetch(`${baseUrl}/health`);
     const third = await fetch(`${baseUrl}/health`);
     expect([first.status, second.status, third.status]).toContain(429);
+  });
+
+  it("treats COGNIBRAIN production env as protected and avoids wildcard CORS defaults", async () => {
+    process.env.COGNIBRAIN_SECURITY_MODE = "production";
+    const baseUrl = await listen();
+
+    const health = await fetch(`${baseUrl}/health`, { headers: { origin: "https://app.example" } });
+    expect(health.status).toBe(200);
+    expect(health.headers.get("access-control-allow-origin")).toBe("null");
+
+    const denied = await fetch(`${baseUrl}/memories`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://app.example" },
+      body: JSON.stringify({ userId: "prod", content: "production requires auth" })
+    });
+    expect(denied.status).toBe(401);
+    expect(denied.headers.get("access-control-allow-origin")).toBe("null");
   });
 
   it("exposes a structured OpenAPI contract for SDK generation", async () => {

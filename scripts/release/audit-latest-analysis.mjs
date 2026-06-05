@@ -10,6 +10,7 @@ const files = {
   readme: read("README.md"),
   internalRunner: read("scripts/internal/run-task.mjs"),
   releaseCheck: read("scripts/release/release-check.mjs"),
+  buildSdk: read("scripts/runtime/build-sdk.mjs"),
   certifyProduction: read("scripts/release/certify-production.mjs"),
   packSmoke: read("scripts/release/pack-smoke.mjs"),
   cliRuntime: read("bin/lib/cliRuntime.mjs"),
@@ -53,7 +54,11 @@ const checks = [
     Boolean(files.packageJson.bin?.cognibrain),
     ["@modelcontextprotocol/sdk", "pg", "zod", "tsx"].every((dep) => Boolean(files.packageJson.dependencies?.[dep])),
     ["release:check", "internal", "verify:selfhosted"].every((script) => Boolean(files.packageJson.scripts?.[script])),
-    files.packSmoke.includes("npm pack") && files.packSmoke.includes("installed MCP help") && files.packSmoke.includes("SDK and storage imports"),
+    files.packageJson.exports?.["."] === "./dist/sdk/typescript/index.js",
+    files.packageJson.exports?.["./sdk/typescript/client"] === "./dist/sdk/typescript/client.js",
+    files.packageJson.scripts?.["build:sdk"] === "node scripts/runtime/build-sdk.mjs",
+    files.buildSdk.includes("sdk\", \"typescript") && files.buildSdk.includes("dist\", \"sdk\", \"typescript"),
+    files.packSmoke.includes("npm pack") && files.packSmoke.includes("installed MCP help") && files.packSmoke.includes("installed plain Node SDK imports") && files.packSmoke.includes("node\", [\"--input-type=module\""),
     files.cliRuntime.includes("doctor --publish") && files.cliRuntime.includes("npm pack dry-run"),
     files.releaseCheck.includes("npm pack smoke install")
   ]),
@@ -94,6 +99,9 @@ const checks = [
     files.retrieval.includes("safe_to_inject"),
     files.engineeringMemory.includes("truthExplanation"),
     files.searchRuntime.includes("suppressedClaimIds"),
+    files.searchRuntime.includes("engineering memory lacks claim record"),
+    files.searchRuntime.includes("unsafeToInject: true"),
+    files.coreTests.includes("marks engineering memories without claim records as review-only and unsafe to inject"),
     files.coreTests.includes("currentTruthForMemory"),
     files.coreTests.includes("safe_to_inject="),
     files.coreTests.includes("suppressed=1")
@@ -133,7 +141,9 @@ const checks = [
     files.apiTests.includes("cross-org") && files.apiTests.includes("nested body"),
     files.productTruth.checks.some((item) => item.id === "policy-tenant-boundary" && item.passed),
     files.productTruth.checks.some((item) => item.id === "gap-default-deny-policy" && item.passed),
-    files.productTruth.checks.some((item) => item.id === "gap-enterprise-authz" && item.passed)
+    files.productTruth.checks.some((item) => item.id === "gap-enterprise-authz" && item.passed),
+    files.apiTests.includes("treats COGNIBRAIN production env as protected"),
+    files.apiTests.includes("node bin/cognibrain.mjs help | sh")
   ])
 ];
 

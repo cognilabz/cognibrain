@@ -93,11 +93,11 @@ export function applyCors(request: IncomingMessage, response: ServerResponse): v
 
 export function corsDefaultOrigin(): string {
   const allowed = configuredCorsOrigins();
-  return allowed[0] ?? String.fromCharCode(42);
+  return allowed[0] ?? (productionMode() ? "null" : String.fromCharCode(42));
 }
 
 export function configuredCorsOrigins(): string[] {
-  return (process.env.MEMORY_CORS_ORIGINS ?? process.env.MEMORY_ALLOWED_ORIGINS ?? "")
+  return (process.env.MEMORY_CORS_ORIGINS ?? process.env.COGNIBRAIN_CORS_ORIGINS ?? process.env.MEMORY_ALLOWED_ORIGINS ?? process.env.COGNIBRAIN_ALLOWED_ORIGINS ?? "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
@@ -123,7 +123,10 @@ export function requestBodyLimitBytes(): number {
 }
 
 export function productionMode(): boolean {
-  return process.env.MEMORY_SECURITY_MODE === "production" || process.env.MEMORY_PRODUCTION_MODE === "true";
+  return process.env.MEMORY_SECURITY_MODE === "production"
+    || process.env.COGNIBRAIN_SECURITY_MODE === "production"
+    || process.env.MEMORY_PRODUCTION_MODE === "true"
+    || process.env.COGNIBRAIN_PRODUCTION_MODE === "true";
 }
 
 export function authenticate(request: IncomingMessage, pathname: string): AuthResult {

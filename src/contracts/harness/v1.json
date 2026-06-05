@@ -28,7 +28,13 @@
   "commands": {
     "context": {
       "required": ["userId", "task"],
-      "properties": ["userId", "task", "repo", "branch", "harness", "agentId", "sessionId", "appId", "orgId", "projectId", "limit", "tokenBudget", "codebaseScope"]
+      "properties": ["userId", "task", "repo", "branch", "harness", "agentId", "sessionId", "appId", "orgId", "projectId", "limit", "tokenBudget", "codebaseScope"],
+      "apiMapping": {
+        "endpoint": "/coding-context-pack",
+        "fields": {
+          "task": "query"
+        }
+      }
     },
     "guard": {
       "required": ["userId", "action"],

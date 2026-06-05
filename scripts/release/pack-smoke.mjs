@@ -39,8 +39,11 @@ try {
     MEMORY_AUTO_DREAM: "false"
   };
 
+  run("installed help", "npx", ["cognibrain", "--help"], { cwd: installDir, env: smokeEnv });
   run("installed init", "npx", ["cognibrain", "init", "--yes", "--no-start", "--no-skill", "--no-doctor"], { cwd: installDir, env: smokeEnv });
+  run("installed status", "npx", ["cognibrain", "status", "--json"], { cwd: installDir, env: smokeEnv });
   run("installed health", "npx", ["cognibrain", "health", "--json"], { cwd: installDir, env: smokeEnv });
+  run("installed harness health", "npx", ["cognibrain", "harness", "health", "--json"], { cwd: installDir, env: smokeEnv });
   run("installed MCP help", "npx", ["cognibrain", "mcp", "--help"], { cwd: installDir, env: smokeEnv });
   run("installed SDK and storage imports", "npx", ["tsx", "--eval", importSmokeSource()], { cwd: installDir, env: smokeEnv });
 

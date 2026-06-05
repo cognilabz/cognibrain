@@ -4,6 +4,10 @@ export type HarnessLifecycleCommand = keyof typeof contract.commands;
 export type HarnessCommandSchema = {
   required: string[];
   properties: string[];
+  apiMapping?: {
+    endpoint: string;
+    fields: Record<string, string>;
+  };
 };
 
 export const harnessLifecycleContract = contract;

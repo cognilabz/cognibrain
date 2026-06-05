@@ -735,6 +735,11 @@ describe("cognibrain CLI", () => {
       expect(context.ok).toBe(true);
       expect(context.type).toBe("context");
       expect(context.mcpParity).toBe("memory_coding_context_pack");
+      expect(context.schema.input.apiMapping).toEqual({
+        endpoint: "/coding-context-pack",
+        fields: { task: "query" }
+      });
+      expect(context.data.query).toBe("prepare validation patch");
       expect(context.nextRecommendedCommands).toContain("cognibrain guard --action \"<command>\" --json");
 
       const blocked = spawnSync(process.execPath, [
@@ -1249,6 +1254,13 @@ describe("cognibrain CLI", () => {
           expect(valueAtPath(output.data, path), `${fixture.command} missing ${path}`).not.toBeUndefined();
         }
         if (fixture.command === "correction") replacements["${correctionId}"] = output.data.id;
+        if (fixture.command === "context") {
+          expect(output.schema.input.apiMapping).toEqual({
+            endpoint: "/coding-context-pack",
+            fields: { task: "query" }
+          });
+          expect(output.data.query).toBe(input.task);
+        }
       }
       expect([...seenCommands].sort()).toEqual(Object.keys(harnessCommandSchemas).sort());
     } finally {

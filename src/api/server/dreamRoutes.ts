@@ -233,16 +233,29 @@ type HarnessExecutionResult = {
   stderr: string;
 };
 
+type ParsedHarnessCommand = {
+  bin: string;
+  args: string[];
+};
+
+const safeHarnessTokenPattern = /^[A-Za-z0-9._/@:+,=-]+$/;
+
 function allowedHarnessCommand(command: string): boolean {
+  return parseAllowedHarnessCommand(command) !== null;
+}
+
+function parseAllowedHarnessCommand(command: string): ParsedHarnessCommand | null {
   const trimmed = command.trim();
-  return [
-    "npx cognibrain",
-    "npm run setup",
-    "npm run mcp",
-    "npm run skill:install",
-    "node bin/cognibrain.mjs",
-    `${process.execPath} bin/cognibrain.mjs`
-  ].some((prefix) => trimmed === prefix || trimmed.startsWith(`${prefix} `));
+  if (!trimmed || /[\r\n"'`$\\;&|<>(){}[\]*?!]/.test(trimmed)) return null;
+  const tokens = trimmed.split(/\s+/);
+  if (!tokens.every((token) => safeHarnessTokenPattern.test(token))) return null;
+
+  const [bin, first, second, ...rest] = tokens;
+  const args = [first, second, ...rest].filter((token): token is string => Boolean(token));
+  if (bin === "npx" && first === "cognibrain") return { bin, args };
+  if (bin === "npm" && first === "run" && ["setup", "mcp", "skill:install"].includes(second ?? "")) return { bin, args };
+  if ((bin === "node" || bin === process.execPath) && first === "bin/cognibrain.mjs") return { bin, args };
+  return null;
 }
 
 function executeHarnessCommand(command: string, options: { cwd: string; timeoutMs: number }): Promise<HarnessExecutionResult> {
@@ -251,9 +264,22 @@ function executeHarnessCommand(command: string, options: { cwd: string; timeoutM
     let stdout = "";
     let stderr = "";
     let timedOut = false;
-    const child = spawn(command, {
+    const parsed = parseAllowedHarnessCommand(command);
+    if (!parsed) {
+      resolve({
+        command,
+        cwd: options.cwd,
+        exitCode: 1,
+        timedOut: false,
+        durationMs: Date.now() - started,
+        stdout,
+        stderr: "Command is not an allowed Cognibrain harness command."
+      });
+      return;
+    }
+    const child = spawn(parsed.bin, parsed.args, {
       cwd: options.cwd,
-      shell: true,
+      shell: false,
       env: sanitizedRuntimeEnv(),
       stdio: ["ignore", "pipe", "pipe"]
     });

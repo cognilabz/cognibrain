@@ -204,6 +204,20 @@ describe("cognibrain HTTP API contract", () => {
     });
     expect(denied.status).toBe(400);
 
+    for (const command of [
+      "node bin/cognibrain.mjs help; echo pwned",
+      "node bin/cognibrain.mjs help && echo pwned",
+      "node bin/cognibrain.mjs help $(echo pwned)",
+      "node bin/cognibrain.mjs help > /tmp/pwned"
+    ]) {
+      const injected = await fetch(`${baseUrl}/harness/execute`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId: "api-harness-user", command })
+      });
+      expect(injected.status).toBe(400);
+    }
+
     const executed = await fetch(`${baseUrl}/harness/execute`, {
       method: "POST",
       headers: { "content-type": "application/json" },

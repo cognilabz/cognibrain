@@ -23,6 +23,10 @@ Usage:
       Measure runtime/generated footprint and prune reinstallable original benchmark caches without deleting memory data
   cognibrain proof|truth [--json] [--no-refresh]
       Render the code-first truth workbench from benchmark, connector, CLI, and packaging artifacts
+  cognibrain truth explain --memory <id>
+      Explain the current-truth decision, selected memory, suppressed alternatives, and available resolution action
+  cognibrain context explain --pack <id>
+      Explain why a persisted evidence or coding context pack injected, excluded, or held memories for review
   cognibrain service [plan|status] [--platform linux|macos|windows] [--json]
       Inspect native service automation for systemd, launchd, or Windows Task Scheduler
   cognibrain service install [--activate] [--dashboard] [--system] [--env KEY=value]
@@ -68,6 +72,8 @@ Usage:
   cognibrain memory code-correction <text>
   cognibrain memory action-guard <action>
   cognibrain memory patch-evidence <task>
+  cognibrain truth explain --memory <id>
+  cognibrain context explain --pack <id>
   cognibrain memory reflect
   cognibrain memory dream
   cognibrain memory health
@@ -113,6 +119,16 @@ Native managers:
   linux: systemd user service by default, system service with --system
   macos: launchd LaunchAgent by default, LaunchDaemon with --system
   windows: Task Scheduler startup task without extra dependencies`);
+  process.exit(exitCode);
+}
+
+export function mcpUsage(exitCode) {
+  console.log(`Usage: cognibrain mcp [--http]
+
+Run the optional MCP adapter for MCP-native agent hosts.
+
+Default mode uses stdio and proxies tool calls to the local Cognibrain daemon.
+Use --http to expose a local Streamable HTTP MCP endpoint for development.`);
   process.exit(exitCode);
 }
 

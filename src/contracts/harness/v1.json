@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "1.0",
+  "contract": "cognibrain-harness-lifecycle-v1",
+  "exitCodes": {
+    "success": 0,
+    "genericFailure": 1,
+    "guardWarning": 2,
+    "guardBlock": 3,
+    "authConfigError": 4,
+    "daemonUnavailable": 5,
+    "policyDenied": 6,
+    "needsVerification": 7
+  },
+  "mcpParity": {
+    "context": "memory_coding_context_pack",
+    "guard": "memory_action_guard",
+    "outcome": "memory_action_outcome",
+    "correction": "memory_code_correction",
+    "patch-evidence": "memory_patch_evidence",
+    "dream-plan": "memory_dream_plan",
+    "session-end": "memory_session_end",
+    "handoff": "memory_handoff_prepare",
+    "release-prepare": "memory_release_prepare",
+    "source-revalidate": "memory_source_revalidate",
+    "conflicts": "memory_conflict_sets",
+    "health": "memory_health"
+  },
+  "commands": {
+    "context": {
+      "required": ["userId", "task"],
+      "properties": ["userId", "task", "repo", "branch", "harness", "agentId", "sessionId", "appId", "orgId", "projectId", "limit", "tokenBudget", "codebaseScope"]
+    },
+    "guard": {
+      "required": ["userId", "action"],
+      "properties": ["userId", "action", "repo", "branch", "harness", "agentId", "sessionId", "appId", "orgId", "projectId", "codebaseScope"]
+    },
+    "outcome": {
+      "required": ["userId", "command"],
+      "properties": ["userId", "command", "exitCode", "cwd", "summary", "files", "durationMs", "repo", "branch", "harness"]
+    },
+    "correction": {
+      "required": ["userId", "text"],
+      "properties": ["userId", "text", "wrongAction", "correctAction", "repo", "branch", "harness", "kind", "previousMemoryId", "evidenceIds"]
+    },
+    "patch-evidence": {
+      "required": ["userId", "task"],
+      "properties": ["userId", "task", "files", "commands", "memoryIds", "repo", "branch", "harness"]
+    },
+    "session-end": {
+      "required": ["userId"],
+      "properties": ["userId", "harness", "harnessRunId", "runDreamIfDue", "force", "budget", "sourceRefresh"]
+    },
+    "handoff": {
+      "required": ["userId"],
+      "properties": ["userId", "harness", "harnessRunId", "runDreamIfDue", "force", "budget", "sourceRefresh"]
+    },
+    "release-prepare": {
+      "required": ["userId"],
+      "properties": ["userId", "repo", "branch", "harnessRunId", "sourceRefresh", "runDreamIfDue", "force", "budget"]
+    },
+    "dream-plan": {
+      "required": ["userId"],
+      "properties": ["userId", "repo", "branch", "harnessRunId", "trigger", "budget", "sourceRefresh", "force"]
+    },
+    "health": {
+      "required": [],
+      "properties": ["userId"]
+    },
+    "source-revalidate": {
+      "required": ["userId"],
+      "properties": ["userId", "memoryId", "connectorIds", "limit"]
+    },
+    "conflicts": {
+      "required": [],
+      "properties": ["status"]
+    }
+  }
+}

@@ -13,6 +13,7 @@ const stepTimeouts = new Map([
   ["Benchmark Arena", envNumber("MEMORY_RELEASE_CHECK_ARENA_TIMEOUT_MS", 30 * 60_000)],
   ["Postgres verifier", envNumber("MEMORY_RELEASE_CHECK_POSTGRES_TIMEOUT_MS", 5 * 60_000)],
   ["npm pack dry-run", envNumber("MEMORY_RELEASE_CHECK_PACK_TIMEOUT_MS", 5 * 60_000)],
+  ["npm pack smoke install", envNumber("MEMORY_RELEASE_CHECK_PACK_SMOKE_TIMEOUT_MS", 5 * 60_000)],
   ["Python SDK tests", envNumber("MEMORY_RELEASE_CHECK_PYTHON_TIMEOUT_MS", 5 * 60_000)]
 ]);
 const steps = [
@@ -33,10 +34,12 @@ const steps = [
   ["benchmark hardening", "npm", ["run", "internal", "--", "benchmark:hardening"]],
   ["benchmark release manifest", "npm", ["run", "internal", "--", "benchmark:release"]],
   ["product truth audit", "npm", ["run", "internal", "--", "audit:truth"]],
+  ["latest analysis acceptance audit", "npm", ["run", "internal", "--", "audit:latest-analysis"]],
   ["public benchmark publish", "npm", ["run", "internal", "--", "leaderboard:publish"]],
   ["local runtime start", process.execPath, ["bin/cognibrain.mjs", "start"]],
   ["publish doctor", "npm", ["run", "internal", "--", "doctor:publish"]],
   ["npm pack dry-run", "npm", ["pack", "--dry-run"]],
+  ["npm pack smoke install", "node", ["scripts/release/pack-smoke.mjs"]],
   ["Python SDK tests", "python3", ["-m", "unittest", "discover", "-s", "sdk/python/tests"]]
 ];
 

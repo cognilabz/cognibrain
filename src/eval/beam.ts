@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { MemoryStore, conceptScore, cosineLike, estimateTokens, extractEntities, keywordCoverage, tokenize } from "../core";
+import { BEAM_LOCAL_RERANKER_PROFILE, MemoryStore, conceptScore, estimateTokens, extractEntities, keywordCoverage, rankMemories, tokenize } from "../core";
 import { createJsonCommandIntelligenceFromEnv } from "../core/providers";
 import type { BenchmarkResult, ContextEvidenceJudge, Memory, SearchResult } from "../core";
 import { keywordOnly, recencyOnly, vectorOnly, type Retriever } from "./baselines";
@@ -218,23 +218,7 @@ function evaluateBeamMemoryRetriever(
 }
 
 function beamSearch(query: string, memories: Memory[], limit: number): Memory[] {
-  const queryTokens = tokenize(query);
-  const queryEntities = new Set(queryTokens);
-  return memories
-    .map((memory) => {
-      const memoryTokens = tokenize(`${memory.content} ${memory.tags.join(" ")} ${memory.entities.join(" ")}`);
-      const semantic = cosineLike(queryTokens, memoryTokens);
-      const keyword = keywordCoverage(queryTokens, memoryTokens);
-      const entityHits = memory.entities.filter((entity) => queryEntities.has(entity)).length;
-      const entity = memory.entities.length ? Math.min(1, entityHits / Math.min(4, memory.entities.length)) : 0;
-      const trust = memory.trust * memory.importance;
-      return {
-        memory,
-        score: semantic * 0.38 + keyword * 0.34 + entity * 0.14 + trust * 0.08
-      };
-    })
-    .filter((item) => item.score > 0.08)
-    .sort((a, b) => b.score - a.score)
+  return rankMemories(query, memories, BEAM_LOCAL_RERANKER_PROFILE)
     .slice(0, limit)
     .map((item) => item.memory);
 }

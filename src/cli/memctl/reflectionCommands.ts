@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { MemoryService } from "../../api/service";
+import type { Memory } from "../../core/types/memory";
 import { buildLeaderboardArtifact } from "../../eval/leaderboard";
 import { runNextgenBenchmarkSuites } from "../../eval/nextgenBenchmarks";
 import {
@@ -38,6 +39,12 @@ export async function handleReflectionCommands(command: string | undefined, args
     const memoryId = args[0];
     if (!memoryId) fail("Usage: memctl truth-current <memory-id>");
     console.log(JSON.stringify(service.currentTruthForMemory(service.get(memoryId)), null, 2));
+    return true;
+  }
+  case "truth-explain": {
+    const memoryId = optionValue(args, "--memory") ?? optionValue(args, "--memory-id") ?? args[0];
+    if (!memoryId) fail("Usage: memctl truth-explain --memory <memory-id>");
+    console.log(JSON.stringify(explainTruthForMemory(service, memoryId), null, 2));
     return true;
   }
   case "truth-resolve": {
@@ -304,6 +311,12 @@ export async function handleReflectionCommands(command: string | undefined, args
     console.log(JSON.stringify(service.graphExplain(from, to, { userId, maxDepth: Number(process.env.MEMORY_GRAPH_DEPTH ?? 3), relationTypes: relationTypesFromEnv(), limit: Number(process.env.MEMORY_GRAPH_LIMIT ?? 5), validAt: process.env.MEMORY_VALID_AT, strategy }), null, 2));
     return true;
   }
+  case "context-explain": {
+    const packId = optionValue(args, "--pack") ?? optionValue(args, "--context-pack") ?? args[0];
+    if (!packId) fail("Usage: memctl context-explain --pack <context-pack-id>");
+    console.log(JSON.stringify(explainContextPack(service, packId), null, 2));
+    return true;
+  }
   case "graph-activate": {
     const query = args.join(" ");
     if (!query) fail("Usage: memctl graph-activate <query>");
@@ -336,6 +349,148 @@ export async function handleReflectionCommands(command: string | undefined, args
   }
   }
   return false;
+}
+
+function explainTruthForMemory(service: MemoryService, memoryId: string) {
+  const memory = service.get(memoryId);
+  const truth = service.currentTruthForMemory(memory);
+  const claims = [...(((service as unknown as { claims?: Map<string, any> }).claims?.values()) ?? [])];
+  const selectedMemory = truth?.selectedMemoryId ? safeMemory(service, truth.selectedMemoryId) : undefined;
+  const suppressedClaims = claims
+    .filter((claim) => truth?.suppressedClaimIds.includes(claim.id))
+    .map((claim) => ({ ...claim, memory: safeMemory(service, claim.sourceMemoryId) }));
+  const conflictSet = truth?.conflictSetId
+    ? service.listConflictSets().find((item) => item.id === truth.conflictSetId)
+    : undefined;
+
+  return {
+    schemaVersion: "1.0",
+    memory: memorySummary(memory),
+    truth,
+    selectedMemory: selectedMemory ? memorySummary(selectedMemory) : undefined,
+    suppressedAlternatives: suppressedClaims.map((claim) => ({
+      claimId: claim.id,
+      subject: claim.subject,
+      predicate: claim.predicate,
+      object: claim.object,
+      state: claim.state,
+      confidence: claim.confidence,
+      trust: claim.trust,
+      memory: claim.memory ? memorySummary(claim.memory) : undefined
+    })),
+    conflictSet,
+    audit: {
+      command: "cognibrain truth explain --memory <id>",
+      whySelectedVisible: Boolean(truth?.selectedMemoryId),
+      whySuppressedVisible: suppressedClaims.length > 0,
+      canCorrectWith: "cognibrain memory code-correction <text>",
+      canResolveWith: conflictSet ? `cognibrain truth resolve ${conflictSet.id} <claim-id> <reason>` : undefined
+    }
+  };
+}
+
+function explainContextPack(service: MemoryService, packId: string) {
+  const evidencePack = safeCall(() => service.getEvidencePack(packId));
+  const codingPack = safeCall(() => service.getCodingContextPack(packId));
+  if (!evidencePack && !codingPack) throw new Error(`Context pack not found: ${packId}`);
+
+  const evidence = evidencePack ?? safeCall(() => service.getEvidencePack(codingPack?.evidencePackId ?? ""));
+  const codingEvidence = codingPack?.sections.flatMap((section) =>
+    section.evidence.map((item) => ({ section: section.id, title: section.title, ...item }))
+  ) ?? [];
+  const reviewRequired = codingEvidence.filter((item) => item.delivery === "review_required" || item.unsafeToInject);
+  const excluded = [
+    ...(evidence?.excludedResults ?? []).map((item) => ({
+      memoryId: item.memoryId,
+      reason: item.reason,
+      decision: item.decision,
+      truthDecision: item.truthDecision,
+      policyDecision: item.policyDecision,
+      score: item.score
+    })),
+    ...(codingPack?.excludedStaleRules ?? []).map((item) => ({
+      memoryId: item.memoryId,
+      reason: item.reason,
+      kind: item.kind
+    }))
+  ];
+
+  return {
+    schemaVersion: "1.0",
+    id: packId,
+    kind: evidencePack ? "evidence-pack" : "coding-context-pack",
+    query: evidencePack?.query ?? codingPack?.query,
+    context: evidencePack?.context ?? codingPack?.context,
+    injected: {
+      memoryIds: evidence?.results.map((item) => item.memoryId) ?? [],
+      count: evidence?.results.length ?? 0
+    },
+    reviewRequired: reviewRequired.map((item) => ({
+      memoryId: item.memoryId,
+      section: item.section,
+      title: item.title,
+      kind: item.kind,
+      reviewReason: item.reviewReason,
+      truthExplanation: item.truthExplanation
+    })),
+    excluded,
+    truthDecisions: evidence?.truthDecisions ?? [],
+    evidenceVerdict: evidence?.evidenceVerdict,
+    policyDecisions: evidence?.policyDecisions ?? [],
+    audit: {
+      command: "cognibrain context explain --pack <id>",
+      whyInjectedVisible: Boolean((evidence?.results.length ?? 0) || codingEvidence.some((item) => item.truthExplanation)),
+      whyNotInjectedVisible: Boolean(excluded.length || reviewRequired.length)
+    }
+  };
+}
+
+function safeMemory(service: MemoryService, memoryId: string) {
+  return safeCall(() => service.get(memoryId));
+}
+
+function safeCall<T>(fn: () => T): T | undefined {
+  try {
+    return fn();
+  } catch {
+    return undefined;
+  }
+}
+
+function memorySummary(memory: Memory) {
+  return {
+    id: memory.id,
+    content: memory.content,
+    source: memory.source,
+    scope: memory.scope,
+    beliefState: memory.beliefState,
+    trust: memory.trust,
+    confidence: memory.confidence,
+    provenance: {
+      sourceRef: memory.provenance.sourceRef
+    },
+    temporal: {
+      eventAt: dateString(memory.temporal.eventAt),
+      validFrom: dateString(memory.temporal.validFrom),
+      validUntil: dateString(memory.temporal.validUntil),
+      lastConfirmedAt: dateString(memory.temporal.lastConfirmedAt),
+      verificationDueAt: dateString(memory.temporal.verificationDueAt)
+    },
+    relations: memory.relations
+      .filter((relation) => ["supersedes", "contradicts"].includes(String(relation.type)))
+      .map((relation) => ({
+        type: relation.type,
+        targetId: relation.targetId,
+        targetEntity: relation.targetEntity,
+        confidence: relation.confidence,
+        evidence: relation.evidence
+      }))
+  };
+}
+
+function dateString(value: Date | string | undefined) {
+  if (!value) return undefined;
+  return value instanceof Date ? value.toISOString() : value;
 }
 
 function dreamTriggerFromArgs(args: string[]) {

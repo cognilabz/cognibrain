@@ -172,7 +172,8 @@ export function buildCodingContextPackFromResults(input: {
       ? result.risk?.verificationRequests?.join("; ") || result.verification?.reason || "unsafe to inject without review"
       : undefined;
     const section = sectionForKind(engineering.kind);
-    const line = `[${result.memory.id}] ${engineering.kind}: ${result.memory.content}`;
+    const truthExplanation = codingTruthSummary(result);
+    const line = `[${result.memory.id}] ${engineering.kind}${truthExplanation ? ` ${truthExplanation}` : ""}: ${result.memory.content}`;
     const cost = estimateTokens(line);
     if (spent + cost > input.tokenBudget) break;
     spent += cost;
@@ -188,6 +189,7 @@ export function buildCodingContextPackFromResults(input: {
       delivery,
       reviewReason,
       verification: result.verification,
+      truthExplanation,
       graphPaths: result.graphPaths
     });
   }
@@ -196,7 +198,10 @@ export function buildCodingContextPackFromResults(input: {
     .map((section) => {
       const injectable = section.evidence.filter((item) => item.delivery !== "review_required" && !item.unsafeToInject);
       if (!injectable.length) return "";
-      return [`## ${section.title}`, ...injectable.map((item) => `- [${item.memoryId}] ${item.kind}: ${item.content}`)].join("\n");
+      return [`## ${section.title}`, ...injectable.map((item) => {
+        const truth = item.truthExplanation ? ` ${item.truthExplanation}` : "";
+        return `- [${item.memoryId}] ${item.kind}${truth}: ${item.content}`;
+      })].join("\n");
     })
     .filter(Boolean)
     .join("\n\n");
@@ -213,6 +218,14 @@ export function buildCodingContextPackFromResults(input: {
     excludedStaleRules,
     evidencePackId: input.evidencePackId
   };
+}
+
+function codingTruthSummary(result: SearchResult): string {
+  const truth = result.truth;
+  if (!truth) return "";
+  const selected = truth.selectedMemoryId ? ` selected=${truth.selectedMemoryId}` : "";
+  const suppressed = truth.suppressedClaimIds.length ? ` suppressed=${truth.suppressedClaimIds.length}` : "";
+  return `truth=${truth.currentTruthState}${selected}${suppressed} safe_to_inject="${truth.reason}"`;
 }
 
 export function evaluateForbiddenAction(input: { userId: string; action: string; results: SearchResult[] }): ActionGuardReport {

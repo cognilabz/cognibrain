@@ -64,6 +64,7 @@ const files = {
   locomoSource: read("src/eval/locomo.ts"),
   longMemEvalSource: read("src/eval/longmemeval.ts"),
   beamSource: read("src/eval/beam.ts"),
+  rerankerSource: read("src/core/reranker.ts"),
   externalHardSource: read("src/eval/externalHard.ts"),
   nextgenBenchmarksSource: read("src/eval/nextgenBenchmarks.ts"),
   publishArenaSource: read("src/eval/publishArena.ts"),
@@ -619,6 +620,18 @@ const beamClaimBoundary = files.beamSource.includes("beam-rubric-support-diagnos
   "local BEAM rubric-support scoring is not quality or market proof",
   "`local-diagnostic`"
 ]);
+const sharedRerankerBoundary = files.rerankerSource.includes("MemoryRerankerProfile") &&
+  files.rerankerSource.includes("BEAM_LOCAL_RERANKER_PROFILE") &&
+  files.rerankerSource.includes("LOCAL_CONTEXT_RERANKER_PROFILE") &&
+  files.rerankerSource.includes("rankMemories") &&
+  files.rerankerSource.includes("rerankSearchResults") &&
+  files.beamSource.includes("rankMemories(query, memories, BEAM_LOCAL_RERANKER_PROFILE)") &&
+  !files.beamSource.includes("semantic * 0.38") &&
+  !files.beamSource.includes("keyword * 0.34") &&
+  !files.beamSource.includes("entity * 0.14") &&
+  !files.beamSource.includes("trust * 0.08") &&
+  files.coreTests.includes("supports reusable weighted local reranker profiles outside benchmark-specific code") &&
+  files.evaluationTests.includes("BEAM_LOCAL_RERANKER_PROFILE");
 const externalHardClaimBoundary = files.externalHardSource.includes("diagnostic-public-dataset-stress") && files.externalHardSource.includes("claimAllowed") && files.externalHardSource.includes("External-hard public dataset stress rows are diagnostics unless their child benchmark artifact carries LLM/harness") && files.externalHardSource.includes("Local evidence-id, session-id, deterministic or rubric recall wins") && files.externalHardSource.includes("scoreable && diagnosticPassed") && docsContainAll([
   "External-hard public dataset stress is diagnostic-only",
   "`claimAllowed=false`",
@@ -848,6 +861,9 @@ const checks = [
   }),
   check("beam-rubric-diagnostic-boundary", "BEAM deterministic rubric-support scoring is diagnostic-only and reserves passed quality claims for LLM/harness evidence-judge runs.", beamClaimBoundary, "fail", {
     source: "src/eval/beam.ts"
+  }),
+  check("shared-reranker-boundary", "BEAM and local context reranking use named reusable Core reranker profiles instead of benchmark-specific inline scoring constants.", sharedRerankerBoundary, "fail", {
+    sources: ["src/core/reranker.ts", "src/eval/beam.ts", "src/core/retrieval.ts"]
   }),
   check("external-hard-claim-boundary", "External-hard public dataset stress summaries keep local diagnostic wins separate from scoreable quality or market claims.", externalHardClaimBoundary, "fail", {
     source: "src/eval/externalHard.ts"

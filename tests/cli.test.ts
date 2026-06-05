@@ -3,14 +3,24 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { describe, expect, it } from "vitest";
 import { createMcpRuntimeToolHandlers } from "../src/connectors/mcpRuntimeClient";
+import { harnessCommandSchemas, harnessLifecycleContractVersion, harnessMcpParity } from "../src/contracts/harness/v1";
 import { sanitizedRuntimeEnv } from "../src/core/runtimeEnv";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const cli = join(root, "bin", "cognibrain.mjs");
 const connectCli = join(root, "bin", "cognibrain-connect.mjs");
 const slowCliTimeout = 180_000;
+
+function valueAtPath(input: unknown, path: string) {
+  return path.split(".").reduce<unknown>((value, segment) => {
+    if (value === null || typeof value !== "object") return undefined;
+    return (value as Record<string, unknown>)[segment];
+  }, input);
+}
 
 describe("cognibrain CLI", () => {
   it("prints the one-command surface", () => {
@@ -534,6 +544,78 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 
+  it("explains truth decisions and context packs through operator aliases", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-explain-"));
+    try {
+      const env = {
+        ...process.env,
+        MEMORY_DB_PATH: join(dir, "memory.json"),
+        MEMORY_USER_ID: "cli-explain",
+        MEMORY_PROJECT_ID: "atlas",
+        MEMORY_AUTO_DREAM: "false"
+      };
+      const created = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "memory",
+        "add",
+        "Atlas cache backend is Redis."
+      ], { cwd: root, env, encoding: "utf8" }));
+
+      const truth = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "truth",
+        "explain",
+        "--memory",
+        created.id
+      ], { cwd: root, env, encoding: "utf8" }));
+      expect(truth).toMatchObject({
+        schemaVersion: "1.0",
+        memory: { id: created.id, content: "Atlas cache backend is Redis." },
+        audit: {
+          command: "cognibrain truth explain --memory <id>",
+          canCorrectWith: "cognibrain memory code-correction <text>"
+        }
+      });
+      expect(truth.memory).toHaveProperty("source");
+      expect(truth.memory).toHaveProperty("temporal");
+
+      const pack = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "memory",
+        "evidence-pack",
+        "Atlas cache backend"
+      ], { cwd: root, env, encoding: "utf8" }));
+      const context = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "context",
+        "explain",
+        "--pack",
+        pack.id
+      ], { cwd: root, env, encoding: "utf8" }));
+      expect(context).toMatchObject({
+        schemaVersion: "1.0",
+        id: pack.id,
+        kind: "evidence-pack",
+        query: "Atlas cache backend",
+        audit: {
+          command: "cognibrain context explain --pack <id>",
+          whyInjectedVisible: true
+        }
+      });
+      expect(context.injected.memoryIds).toContain(created.id);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
   it("records coding corrections, guards actions, and exports patch evidence through the CLI", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-code-"));
     try {
@@ -927,6 +1009,55 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 
+  it("rejects explicit local-direct lifecycle mode in production without break-glass override", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-production-local-direct-"));
+    try {
+      const result = spawnSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "health",
+        "--local-direct",
+        "--json"
+      ], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          MEMORY_SECURITY_MODE: "production",
+          MEMORY_AUTO_DREAM: "false"
+        },
+        encoding: "utf8"
+      });
+      expect(result.status).toBe(6);
+      const payload = JSON.parse(result.stdout);
+      expect(payload.ok).toBe(false);
+      expect(payload.backend.kind).toBe("local-direct");
+      expect(payload.backend.disabled).toBe(true);
+      expect(payload.errors[0].code).toBe("local_direct_disabled_in_production");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("rejects local-direct MCP runtime mode in production without break-glass override", async () => {
+    const previousEnv = {
+      COGNIBRAIN_MCP_BACKEND: process.env.COGNIBRAIN_MCP_BACKEND,
+      MEMORY_SECURITY_MODE: process.env.MEMORY_SECURITY_MODE,
+      COGNIBRAIN_ALLOW_LOCAL_DIRECT_IN_PROD: process.env.COGNIBRAIN_ALLOW_LOCAL_DIRECT_IN_PROD
+    };
+    try {
+      process.env.COGNIBRAIN_MCP_BACKEND = "local-direct";
+      process.env.MEMORY_SECURITY_MODE = "production";
+      delete process.env.COGNIBRAIN_ALLOW_LOCAL_DIRECT_IN_PROD;
+      expect(() => createMcpRuntimeToolHandlers()).toThrow(/local-direct MCP backend is disabled in production/);
+    } finally {
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
   it("runs every harness lifecycle command against the daemon backend with the stable JSON envelope", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-all-daemon-"));
     const env = {
@@ -954,6 +1085,10 @@ describe("cognibrain CLI", () => {
       const result = spawnSync(process.execPath, [cli, "--runtime-root", dir, ...args, "--require-daemon", "--json"], { cwd: dir, env, encoding: "utf8" });
       expect(result.stdout).toBeTruthy();
       return JSON.parse(result.stdout);
+    };
+    const percentile95 = (values: number[]) => {
+      const sorted = [...values].sort((a, b) => a - b);
+      return sorted[Math.ceil(sorted.length * 0.95) - 1] ?? 0;
     };
     try {
       execFileSync(process.execPath, [cli, "--runtime-root", dir, "start"], { cwd: dir, env, encoding: "utf8" });
@@ -987,13 +1122,135 @@ describe("cognibrain CLI", () => {
         "health"
       ]);
       for (const output of outputs) {
+        const command = output.schema.command as keyof typeof harnessCommandSchemas;
         expect(Object.keys(output)).toEqual(envelopeKeys);
         expect(output.backend.kind).toBe("daemon");
         expect(output.schemaVersion).toBe("1.0");
         expect(output.errors).toEqual([]);
-        expect(output.mcpParity).toEqual(expect.any(String));
+        expect(output.schema.input).toEqual(harnessCommandSchemas[command]);
+        expect(output.mcpParity).toBe(harnessMcpParity[command]);
       }
       expect(outputs.at(-1)?.mcpParity).toBe("memory_health");
+
+      const latencySamples = {
+        context: [
+          outputs[1],
+          run(["harness", "context", "--user", "harness-all-daemon", "--task", "latency budget context sample 1", "--repo", "demo/harness-all"]),
+          run(["harness", "context", "--user", "harness-all-daemon", "--task", "latency budget context sample 2", "--repo", "demo/harness-all"]),
+          run(["harness", "context", "--user", "harness-all-daemon", "--task", "latency budget context sample 3", "--repo", "demo/harness-all"]),
+          run(["harness", "context", "--user", "harness-all-daemon", "--task", "latency budget context sample 4", "--repo", "demo/harness-all"])
+        ],
+        guard: [
+          outputs[2],
+          run(["harness", "guard", "--user", "harness-all-daemon", "--action", "npm test -- latency sample 1", "--repo", "demo/harness-all"]),
+          run(["harness", "guard", "--user", "harness-all-daemon", "--action", "npm test -- latency sample 2", "--repo", "demo/harness-all"]),
+          run(["harness", "guard", "--user", "harness-all-daemon", "--action", "npm test -- latency sample 3", "--repo", "demo/harness-all"]),
+          run(["harness", "guard", "--user", "harness-all-daemon", "--action", "npm test -- latency sample 4", "--repo", "demo/harness-all"])
+        ],
+        outcome: [
+          outputs[3],
+          run(["harness", "outcome", "--user", "harness-all-daemon", "--command", "npm test -- latency sample 1", "--exit-code", "0", "--summary", "latency sample 1"]),
+          run(["harness", "outcome", "--user", "harness-all-daemon", "--command", "npm test -- latency sample 2", "--exit-code", "0", "--summary", "latency sample 2"]),
+          run(["harness", "outcome", "--user", "harness-all-daemon", "--command", "npm test -- latency sample 3", "--exit-code", "0", "--summary", "latency sample 3"]),
+          run(["harness", "outcome", "--user", "harness-all-daemon", "--command", "npm test -- latency sample 4", "--exit-code", "0", "--summary", "latency sample 4"])
+        ],
+        correction: [
+          outputs[0],
+          run(["harness", "correction", "--user", "harness-all-daemon", "--text", "Latency sample 1 prefers npm test.", "--wrong-action", "pnpm test", "--correct-action", "npm test", "--repo", "demo/harness-all"]),
+          run(["harness", "correction", "--user", "harness-all-daemon", "--text", "Latency sample 2 prefers npm test.", "--wrong-action", "pnpm test", "--correct-action", "npm test", "--repo", "demo/harness-all"]),
+          run(["harness", "correction", "--user", "harness-all-daemon", "--text", "Latency sample 3 prefers npm test.", "--wrong-action", "pnpm test", "--correct-action", "npm test", "--repo", "demo/harness-all"]),
+          run(["harness", "correction", "--user", "harness-all-daemon", "--text", "Latency sample 4 prefers npm test.", "--wrong-action", "pnpm test", "--correct-action", "npm test", "--repo", "demo/harness-all"])
+        ]
+      };
+      expect(percentile95(latencySamples.context.map((output) => output.durationMs))).toBeLessThan(500);
+      expect(percentile95(latencySamples.guard.map((output) => output.durationMs))).toBeLessThan(250);
+      expect(percentile95(latencySamples.outcome.map((output) => output.durationMs))).toBeLessThan(300);
+      expect(percentile95(latencySamples.correction.map((output) => output.durationMs))).toBeLessThan(300);
+    } finally {
+      try {
+        execFileSync(process.execPath, [cli, "--runtime-root", dir, "stop"], { cwd: dir, encoding: "utf8" });
+      } catch {
+        // best-effort cleanup
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("validates daemon-backed golden lifecycle fixtures for every harness command", () => {
+    const manifestPath = join(root, "fixtures", "harness", "v1", "golden-lifecycle.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      schemaVersion: string;
+      contract: string;
+      fixtures: Array<{
+        command: keyof typeof harnessCommandSchemas;
+        args: string[];
+        input: Record<string, unknown>;
+        daemonResponse: { requiredPaths: string[] };
+        cliOutput: { ok: boolean; type: string; decision: string; mcpParity: string };
+        exitCode: number;
+      }>;
+    };
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-golden-"));
+    const env = {
+      ...process.env,
+      MEMORY_DB_PATH: join(dir, "memory.json"),
+      MEMORY_USER_ID: "harness-golden",
+      MEMORY_AUTO_DREAM: "false"
+    };
+    const seenCommands: string[] = [];
+    const run = (args: string[], expectedExitCode: number) => {
+      const result = spawnSync(process.execPath, [cli, "--runtime-root", dir, ...args, "--require-daemon", "--json"], { cwd: dir, env, encoding: "utf8" });
+      expect(result.status).toBe(expectedExitCode);
+      expect(result.stdout).toBeTruthy();
+      return JSON.parse(result.stdout);
+    };
+    const materialize = (value: unknown, replacements: Record<string, string>): unknown => {
+      if (typeof value === "string") return replacements[value] ?? value;
+      if (Array.isArray(value)) return value.map((item) => materialize(item, replacements));
+      if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, materialize(item, replacements)]));
+      return value;
+    };
+
+    try {
+      expect(manifest.schemaVersion).toBe("1.0");
+      expect(manifest.contract).toBe(harnessLifecycleContractVersion);
+      expect([...manifest.fixtures.map((fixture) => fixture.command)].sort()).toEqual(Object.keys(harnessCommandSchemas).sort());
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "start"], { cwd: dir, env, encoding: "utf8" });
+
+      const replacements: Record<string, string> = {};
+      for (const fixture of manifest.fixtures) {
+        const args = materialize(fixture.args, replacements) as string[];
+        const input = materialize(fixture.input, replacements) as Record<string, unknown>;
+        const output = run(args, fixture.exitCode);
+        seenCommands.push(output.schema.command);
+
+        for (const required of harnessCommandSchemas[fixture.command].required) {
+          expect(input[required]).not.toBeUndefined();
+        }
+        for (const key of Object.keys(input)) {
+          expect(harnessCommandSchemas[fixture.command].properties).toContain(key);
+        }
+        expect(output).toMatchObject({
+          schemaVersion: "1.0",
+          ok: fixture.cliOutput.ok,
+          type: fixture.cliOutput.type,
+          decision: fixture.cliOutput.decision,
+          errors: [],
+          backend: { kind: "daemon" },
+          schema: {
+            command: fixture.command,
+            input: harnessCommandSchemas[fixture.command]
+          },
+          mcpParity: fixture.cliOutput.mcpParity
+        });
+        expect(output.mcpParity).toBe(harnessMcpParity[fixture.command]);
+        expect(output.durationMs).toEqual(expect.any(Number));
+        for (const path of fixture.daemonResponse.requiredPaths) {
+          expect(valueAtPath(output.data, path), `${fixture.command} missing ${path}`).not.toBeUndefined();
+        }
+        if (fixture.command === "correction") replacements["${correctionId}"] = output.data.id;
+      }
+      expect([...seenCommands].sort()).toEqual(Object.keys(harnessCommandSchemas).sort());
     } finally {
       try {
         execFileSync(process.execPath, [cli, "--runtime-root", dir, "stop"], { cwd: dir, encoding: "utf8" });
@@ -1068,6 +1325,73 @@ describe("cognibrain CLI", () => {
       }
       try {
         execFileSync(process.execPath, [cli, "--runtime-root", dir, "stop"], { cwd: dir, encoding: "utf8" });
+      } catch {
+        // best-effort cleanup
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
+  it("shares state between a spawned MCP process and the HTTP daemon", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-mcp-process-parity-"));
+    const env = {
+      ...process.env,
+      COGNIBRAIN_RUNTIME_ROOT: dir,
+      MEMORY_DB_PATH: join(dir, "memory.json"),
+      MEMORY_USER_ID: "mcp-process",
+      MEMORY_AUTO_DREAM: "false"
+    };
+    let client: Client | undefined;
+    try {
+      execFileSync(process.execPath, [cli, "--runtime-root", dir, "start"], { cwd: dir, env, encoding: "utf8" });
+      const runtime = JSON.parse(readFileSync(join(dir, ".cognibrain", "local-runtime.json"), "utf8"));
+      const apiUrl = runtime.api.url as string;
+      client = new Client({ name: "cognibrain-cli-test", version: "1.0.0" });
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [cli, "--runtime-root", dir, "mcp"],
+        cwd: dir,
+        env,
+        stderr: "pipe"
+      });
+      await client.connect(transport);
+
+      const mcpWrite = await client.callTool({
+        name: "memory_add",
+        arguments: {
+          userId: "mcp-process",
+          content: "MCP process writes are visible through the HTTP daemon.",
+          sourceKind: "tool",
+          sourceConfidence: 0.91
+        }
+      });
+      const mcpCreated = mcpJson(mcpWrite) as { id: string };
+      const httpSearch = await httpJson(`${apiUrl}/search`, {
+        userId: "mcp-process",
+        query: "MCP process HTTP daemon",
+        limit: 5
+      });
+      expect(searchMemoryIds(httpSearch)).toContain(mcpCreated.id);
+
+      const httpCreated = await httpJson(`${apiUrl}/memories`, {
+        userId: "mcp-process",
+        content: "HTTP daemon writes are visible through the MCP process.",
+        source: { kind: "tool", confidence: 0.92 }
+      });
+      const mcpRead = await client.callTool({
+        name: "memory_search",
+        arguments: {
+          userId: "mcp-process",
+          query: "HTTP daemon MCP process",
+          limit: 5
+        }
+      });
+      const mcpResults = mcpJson(mcpRead) as Array<{ id: string }>;
+      expect(searchMemoryIds(mcpResults)).toContain((httpCreated as { id: string }).id);
+    } finally {
+      await client?.close();
+      try {
+        execFileSync(process.execPath, [cli, "--runtime-root", dir, "stop"], { cwd: dir, env, encoding: "utf8" });
       } catch {
         // best-effort cleanup
       }
@@ -1270,3 +1594,24 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 });
+
+function mcpJson(result: Awaited<ReturnType<Client["callTool"]>>): unknown {
+  const content = result.content as Array<{ type: string; text?: string }>;
+  const text = content.find((item) => item.type === "text")?.text;
+  if (!text) throw new Error("MCP result did not include text content");
+  return JSON.parse(text);
+}
+
+function searchMemoryIds(result: unknown): string[] {
+  return (result as Array<{ id?: string; memory?: { id?: string } }>).map((item) => item.id ?? item.memory?.id).filter(Boolean) as string[];
+}
+
+async function httpJson(url: string, body: unknown): Promise<unknown> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+  return response.json();
+}

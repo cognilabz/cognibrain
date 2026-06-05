@@ -23,7 +23,7 @@
 <rect width="1180" height="1976" fill="#f6f8fb"/>
 <text class="title" x="36" y="46">Benchmark Results</text>
 <text class="subtitle" x="36" y="72">Fresh local run, percent scale. Diagnostic rows are not quality or market proof unless LLM/harness claim status says so.</text>
-<text class="subtitle" x="36" y="94">Generated 2026-06-02 UTC; public datasets 18:25Z-18:13Z, arena 19:28Z, cognicode 19:33Z</text>
+<text class="subtitle" x="36" y="94">Generated 2026-06-05 UTC; public datasets 18:25Z-11:41Z, arena 13:15Z, cognicode 13:10Z</text>
 <rect class="panel" x="36" y="128" width="1108" height="486" rx="10"/>
 <text class="section-title" x="60" y="162">Public Benchmark Datasets</text>
 <text class="section-note" x="60" y="184">Cognibrain compared with the strongest local baseline; each row carries proof and claim status.</text>
@@ -55,28 +55,28 @@
 <text class="value" x="1028.48" y="302">99.8%</text>
 <text class="detail" x="1022.4" y="326">Keyword Only 99.0%</text>
 <text class="label" x="60" y="376">BEAM 100K</text>
-<text class="detail" x="60" y="396">Cognibrain 181/400</text>
+<text class="detail" x="60" y="396">Cognibrain 184/400</text>
 <text class="detail" x="60" y="413">local-diagnostic · claim blocked · diagnostic pass</text>
-<rect class="bar-baseline" x="260" y="388" width="210.9" height="14" rx="4"/>
-<rect class="bar-blocked" x="260" y="362" width="343.90000000000003" height="18" rx="4"/>
+<rect class="bar-baseline" x="260" y="388" width="214.7" height="14" rx="4"/>
+<rect class="bar-blocked" x="260" y="362" width="349.6" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="371" r="5"/>
-<text class="value" x="613.9000000000001" y="376">45.3%</text>
-<text class="detail" x="480.9" y="400">Keyword Only 27.8%</text>
+<text class="value" x="619.6" y="376">46.0%</text>
+<text class="detail" x="484.7" y="400">Keyword Only 28.2%</text>
 <text class="label" x="60" y="450">BEAM 500K</text>
-<text class="detail" x="60" y="470">Cognibrain 308/700</text>
+<text class="detail" x="60" y="470">Cognibrain 304/700</text>
 <text class="detail" x="60" y="487">local-diagnostic · claim blocked · diagnostic pass</text>
 <rect class="bar-baseline" x="260" y="462" width="171.54285714285714" height="14" rx="4"/>
-<rect class="bar-blocked" x="260" y="436" width="334.4" height="18" rx="4"/>
+<rect class="bar-blocked" x="260" y="436" width="330.0571428571428" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="445" r="5"/>
-<text class="value" x="604.4" y="450">44.0%</text>
+<text class="value" x="600.0571428571428" y="450">43.4%</text>
 <text class="detail" x="441.54285714285714" y="474">Keyword Only 22.6%</text>
 <text class="label" x="60" y="524">BEAM 1M</text>
-<text class="detail" x="60" y="544">Cognibrain 352/700</text>
+<text class="detail" x="60" y="544">Cognibrain 359/700</text>
 <text class="detail" x="60" y="561">local-diagnostic · claim blocked · diagnostic pass</text>
 <rect class="bar-baseline" x="260" y="536" width="209.54285714285712" height="14" rx="4"/>
-<rect class="bar-blocked" x="260" y="510" width="382.1714285714286" height="18" rx="4"/>
+<rect class="bar-blocked" x="260" y="510" width="389.7714285714286" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="519" r="5"/>
-<text class="value" x="652.1714285714286" y="524">50.3%</text>
+<text class="value" x="659.7714285714286" y="524">51.3%</text>
 <text class="detail" x="479.5428571428571" y="548">Keyword Only 27.6%</text>
 <rect class="panel" x="36" y="640" width="1108" height="396" rx="10"/>
 <text class="section-title" x="60" y="674">Benchmark Integrity And Weaknesses</text>
@@ -103,20 +103,20 @@
 <circle class="marker" cx="265" cy="776" r="5"/>
 <text class="value" x="274" y="781">0.0%</text>
 <text class="label" x="60" y="819">BEAM 100K Instruction Following</text>
-<text class="detail" x="60" y="834">gap 90.0pp</text>
-<rect class="bar-blocked" x="260" y="807" width="76" height="18" rx="4"/>
+<text class="detail" x="60" y="834">gap 87.5pp</text>
+<rect class="bar-blocked" x="260" y="807" width="95" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="816" r="5"/>
-<text class="value" x="346" y="821">10.0%</text>
+<text class="value" x="365" y="821">12.5%</text>
 <text class="label" x="60" y="859">BEAM 500K Abstention</text>
 <text class="detail" x="60" y="874">gap 90.0pp</text>
 <rect class="bar-blocked" x="260" y="847" width="4" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="856" r="5"/>
 <text class="value" x="274" y="861">0.0%</text>
 <text class="label" x="60" y="899">BEAM 500K Temporal Reasoning</text>
-<text class="detail" x="60" y="914">gap 71.4pp</text>
-<rect class="bar-blocked" x="260" y="887" width="141.14285714285714" height="18" rx="4"/>
+<text class="detail" x="60" y="914">gap 72.9pp</text>
+<rect class="bar-blocked" x="260" y="887" width="130.28571428571428" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="896" r="5"/>
-<text class="value" x="411.1428571428571" y="901">18.6%</text>
+<text class="value" x="400.2857142857143" y="901">17.1%</text>
 <text class="label" x="60" y="939">BEAM 1M Abstention</text>
 <text class="detail" x="60" y="954">gap 97.1pp</text>
 <rect class="bar-blocked" x="260" y="927" width="4" height="18" rx="4"/>
@@ -206,9 +206,9 @@
 <text class="value" x="937.28" y="1665">87.8%</text>
 <text class="label" x="60" y="1703">Procedure only</text>
 <text class="detail" x="60" y="1718">baseline diagnostic · claim blocked</text>
-<rect class="bar-blocked" x="260" y="1691" width="299.44" height="18" rx="4"/>
+<rect class="bar-blocked" x="260" y="1691" width="278.15999999999997" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="1700" r="5"/>
-<text class="value" x="569.44" y="1705">39.4%</text>
+<text class="value" x="548.16" y="1705">36.6%</text>
 <text class="label" x="60" y="1743">Keyword only</text>
 <text class="detail" x="60" y="1758">baseline diagnostic · claim blocked</text>
 <rect class="bar-blocked" x="260" y="1731" width="173.28" height="18" rx="4"/>

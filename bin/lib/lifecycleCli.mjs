@@ -4,82 +4,10 @@ import http from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { sanitizedRuntimeEnv } from "./runtimeEnv.mjs";
 
-const EXIT_CODES = {
-  success: 0,
-  genericFailure: 1,
-  guardWarning: 2,
-  guardBlock: 3,
-  authConfigError: 4,
-  daemonUnavailable: 5,
-  policyDenied: 6,
-  needsVerification: 7
-};
-
-const MCP_PARITY = {
-  context: "memory_coding_context_pack",
-  guard: "memory_action_guard",
-  outcome: "memory_action_outcome",
-  correction: "memory_code_correction",
-  "patch-evidence": "memory_patch_evidence",
-  "dream-plan": "memory_dream_plan",
-  "session-end": "memory_session_end",
-  handoff: "memory_handoff_prepare",
-  "release-prepare": "memory_release_prepare",
-  "source-revalidate": "memory_source_revalidate",
-  conflicts: "memory_conflict_sets",
-  health: "memory_health"
-};
-
-const COMMAND_SCHEMAS = {
-  context: {
-    required: ["userId", "task"],
-    properties: ["userId", "task", "repo", "branch", "harness", "agentId", "sessionId", "appId", "orgId", "projectId", "limit", "tokenBudget", "codebaseScope"]
-  },
-  guard: {
-    required: ["userId", "action"],
-    properties: ["userId", "action", "repo", "branch", "harness", "agentId", "sessionId", "appId", "orgId", "projectId", "codebaseScope"]
-  },
-  outcome: {
-    required: ["userId", "command"],
-    properties: ["userId", "command", "exitCode", "cwd", "summary", "files", "durationMs", "repo", "branch", "harness"]
-  },
-  correction: {
-    required: ["userId", "text"],
-    properties: ["userId", "text", "wrongAction", "correctAction", "repo", "branch", "harness", "kind", "previousMemoryId", "evidenceIds"]
-  },
-  "patch-evidence": {
-    required: ["userId", "task"],
-    properties: ["userId", "task", "files", "commands", "memoryIds", "repo", "branch", "harness"]
-  },
-  "session-end": {
-    required: ["userId"],
-    properties: ["userId", "harness", "harnessRunId", "runDreamIfDue", "force", "budget", "sourceRefresh"]
-  },
-  handoff: {
-    required: ["userId"],
-    properties: ["userId", "harness", "harnessRunId", "runDreamIfDue", "force", "budget", "sourceRefresh"]
-  },
-  "release-prepare": {
-    required: ["userId"],
-    properties: ["userId", "repo", "branch", "harnessRunId", "sourceRefresh", "runDreamIfDue", "force", "budget"]
-  },
-  "dream-plan": {
-    required: ["userId"],
-    properties: ["userId", "repo", "branch", "harnessRunId", "trigger", "budget", "sourceRefresh", "force"]
-  },
-  health: {
-    required: [],
-    properties: ["userId"]
-  },
-  "source-revalidate": {
-    required: ["userId"],
-    properties: ["userId", "memoryId", "connectorIds", "limit"]
-  },
-  conflicts: {
-    required: [],
-    properties: ["status"]
-  }
-};
+const HARNESS_LIFECYCLE_CONTRACT = JSON.parse(readFileSync(new URL("../../src/contracts/harness/v1.json", import.meta.url), "utf8"));
+const EXIT_CODES = HARNESS_LIFECYCLE_CONTRACT.exitCodes;
+const MCP_PARITY = HARNESS_LIFECYCLE_CONTRACT.mcpParity;
+const COMMAND_SCHEMAS = HARNESS_LIFECYCLE_CONTRACT.commands;
 
 const LIFECYCLE_COMMANDS = new Set(Object.keys(COMMAND_SCHEMAS));
 const MEMORY_LIFECYCLE_ALIASES = new Set(["coding-context", "action-guard", "action", "code-correction", "patch-evidence"]);
@@ -332,7 +260,16 @@ class CliBackendClient {
 
 async function createAutoBackend(context) {
   const mode = stringOption(context.options, "backend") ?? process.env.COGNIBRAIN_CLI_BACKEND ?? process.env.COGNIBRAIN_HARNESS_BACKEND;
-  if (context.options.flags.has("local-direct") || mode === "local" || mode === "local-direct") return new LocalDirectBackend(context);
+  if (context.options.flags.has("local-direct") || mode === "local" || mode === "local-direct") {
+    if (productionHarnessMode() && process.env.COGNIBRAIN_ALLOW_LOCAL_DIRECT_IN_PROD !== "true") {
+      const error = new Error("local-direct lifecycle backend is disabled in production; set COGNIBRAIN_ALLOW_LOCAL_DIRECT_IN_PROD=true for an explicit break-glass override");
+      error.code = "local_direct_disabled_in_production";
+      error.exitCode = EXIT_CODES.policyDenied;
+      error.backend = { kind: "local-direct", disabled: true, production: true };
+      throw error;
+    }
+    return new LocalDirectBackend(context);
+  }
   const daemon = new DaemonBackend(context);
   const reachable = await daemon.isReachable();
   if (reachable) return daemon;

@@ -1,0 +1,158 @@
+{
+  "schemaVersion": "1.0",
+  "contract": "cognibrain-harness-lifecycle-v1",
+  "description": "Golden daemon-backed lifecycle fixtures. Each command pins input, daemon response shape, CLI JSON output shape, and exit code.",
+  "fixtures": [
+    {
+      "command": "correction",
+      "args": ["harness", "correction", "--user", "harness-golden", "--text", "Use npm test, not pnpm in this repo.", "--wrong-action", "pnpm test", "--correct-action", "npm test", "--repo", "demo/harness-golden"],
+      "input": {
+        "userId": "harness-golden",
+        "text": "Use npm test, not pnpm in this repo.",
+        "wrongAction": "pnpm test",
+        "correctAction": "npm test",
+        "repo": "demo/harness-golden"
+      },
+      "daemonResponse": {
+        "requiredPaths": ["schemaVersion", "id", "content", "metadata.engineering.kind", "metadata.engineering.previousWrongAction", "metadata.engineering.correctAction"]
+      },
+      "cliOutput": { "ok": true, "type": "correction", "decision": "ok", "mcpParity": "memory_code_correction" },
+      "exitCode": 0
+    },
+    {
+      "command": "context",
+      "args": ["harness", "context", "--user", "harness-golden", "--task", "prepare daemon parity patch", "--repo", "demo/harness-golden"],
+      "input": {
+        "userId": "harness-golden",
+        "task": "prepare daemon parity patch",
+        "repo": "demo/harness-golden"
+      },
+      "daemonResponse": {
+        "requiredPaths": ["schemaVersion", "id", "query", "scope.codebase.repo", "sections", "evidencePackId"]
+      },
+      "cliOutput": { "ok": true, "type": "context", "decision": "ok", "mcpParity": "memory_coding_context_pack" },
+      "exitCode": 0
+    },
+    {
+      "command": "guard",
+      "args": ["harness", "guard", "--user", "harness-golden", "--action", "pnpm test", "--repo", "demo/harness-golden"],
+      "input": {
+        "userId": "harness-golden",
+        "action": "pnpm test",
+        "repo": "demo/harness-golden"
+      },
+      "daemonResponse": {
+        "requiredPaths": ["schemaVersion", "action", "allowed", "severity", "blockedBy", "alternatives", "evidenceIds"]
+      },
+      "cliOutput": { "ok": false, "type": "guard", "decision": "block", "mcpParity": "memory_action_guard" },
+      "exitCode": 3
+    },
+    {
+      "command": "outcome",
+      "args": ["harness", "outcome", "--user", "harness-golden", "--command", "npm test", "--exit-code", "0", "--summary", "daemon lifecycle passed"],
+      "input": {
+        "userId": "harness-golden",
+        "command": "npm test",
+        "exitCode": 0,
+        "summary": "daemon lifecycle passed"
+      },
+      "daemonResponse": {
+        "requiredPaths": ["schemaVersion", "id", "content", "metadata.action.command", "metadata.action.exitCode", "metadata.action.outputSummary"]
+      },
+      "cliOutput": { "ok": true, "type": "outcome", "decision": "ok", "mcpParity": "memory_action_outcome" },
+      "exitCode": 0
+    },
+    {
+      "command": "patch-evidence",
+      "args": ["harness", "patch-evidence", "--user", "harness-golden", "--task", "daemon parity patch", "--files", "src/example.ts", "--commands", "npm test", "--memory-ids", "${correctionId}"],
+      "input": {
+        "userId": "harness-golden",
+        "task": "daemon parity patch",
+        "files": ["src/example.ts"],
+        "commands": ["npm test"],
+        "memoryIds": ["${correctionId}"]
+      },
+      "daemonResponse": {
+        "requiredPaths": ["schemaVersion", "id", "task", "summary.filesChanged", "summary.commandsRun", "summary.evidenceCount"]
+      },
+      "cliOutput": { "ok": true, "type": "patch_evidence", "decision": "ok", "mcpParity": "memory_patch_evidence" },
+      "exitCode": 0
+    },
+    {
+      "command": "session-end",
+      "args": ["harness", "session-end", "--user", "harness-golden"],
+      "input": { "userId": "harness-golden" },
+      "daemonResponse": {
+        "requiredPaths": ["plan.userId", "plan.trigger", "plan.shouldDream", "plan.reasons"]
+      },
+      "cliOutput": { "ok": true, "type": "session_end", "decision": "ok", "mcpParity": "memory_session_end" },
+      "exitCode": 0
+    },
+    {
+      "command": "handoff",
+      "args": ["harness", "handoff", "--user", "harness-golden"],
+      "input": { "userId": "harness-golden" },
+      "daemonResponse": {
+        "requiredPaths": ["plan.userId", "plan.trigger", "plan.shouldDream", "plan.reasons"]
+      },
+      "cliOutput": { "ok": true, "type": "handoff", "decision": "ok", "mcpParity": "memory_handoff_prepare" },
+      "exitCode": 0
+    },
+    {
+      "command": "release-prepare",
+      "args": ["harness", "release-prepare", "--user", "harness-golden", "--repo", "demo/harness-golden"],
+      "input": {
+        "userId": "harness-golden",
+        "repo": "demo/harness-golden"
+      },
+      "daemonResponse": {
+        "requiredPaths": ["plan.userId", "plan.trigger", "plan.budget", "plan.releaseBlockers"]
+      },
+      "cliOutput": { "ok": true, "type": "release_prepare", "decision": "ok", "mcpParity": "memory_release_prepare" },
+      "exitCode": 0
+    },
+    {
+      "command": "dream-plan",
+      "args": ["harness", "dream-plan", "--user", "harness-golden"],
+      "input": { "userId": "harness-golden" },
+      "daemonResponse": {
+        "requiredPaths": ["userId", "trigger", "mode", "shouldDream", "signals"]
+      },
+      "cliOutput": { "ok": true, "type": "dream_plan", "decision": "ok", "mcpParity": "memory_dream_plan" },
+      "exitCode": 0
+    },
+    {
+      "command": "source-revalidate",
+      "args": ["harness", "source-revalidate", "--user", "harness-golden", "--limit", "5"],
+      "input": {
+        "userId": "harness-golden",
+        "limit": 5
+      },
+      "daemonResponse": {
+        "requiredPaths": ["userId", "generatedAt", "evaluated", "results", "summary"]
+      },
+      "cliOutput": { "ok": true, "type": "source_revalidate", "decision": "ok", "mcpParity": "memory_source_revalidate" },
+      "exitCode": 0
+    },
+    {
+      "command": "conflicts",
+      "args": ["harness", "conflicts"],
+      "input": {},
+      "daemonResponse": {
+        "requiredPaths": []
+      },
+      "cliOutput": { "ok": true, "type": "conflicts", "decision": "ok", "mcpParity": "memory_conflict_sets" },
+      "exitCode": 0
+    },
+    {
+      "command": "health",
+      "args": ["harness", "health", "--user", "harness-golden"],
+      "input": { "userId": "harness-golden" },
+      "daemonResponse": {
+        "requiredPaths": ["ok", "total", "active", "healthScore"]
+      },
+      "cliOutput": { "ok": true, "type": "health", "decision": "healthy", "mcpParity": "memory_health" },
+      "exitCode": 0
+    }
+  ]
+}

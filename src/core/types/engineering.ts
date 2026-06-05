@@ -103,6 +103,7 @@ export interface CodingContextPack {
       delivery?: "injectable" | "review_required";
       reviewReason?: string;
       verification?: SearchResult["verification"];
+      truthExplanation?: string;
       graphPaths?: string[];
     }>;
   }>;

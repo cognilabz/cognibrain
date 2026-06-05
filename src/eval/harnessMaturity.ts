@@ -68,6 +68,7 @@ interface HarnessMaturityReport {
     mcpTargets: number;
     cliLifecycleProtocol: boolean;
     cliMcpParityCommands: number;
+    cliGoldenFixtureCommands: number;
     publicHarnessSdk: boolean;
     e2eDemos: number;
     preToolGuardTargets: number;
@@ -102,6 +103,7 @@ export function generateHarnessMaturity(options: { out?: string; markdown?: stri
   const goldenPaths = catalog.filter((item) => generatedHarnesses.has(item.id)).map((item) => runHarnessGoldenPath(item.id));
   const goldenByHarness = new Map(goldenPaths.map((item) => [item.harness, item]));
   const rows = catalog.map((item) => maturityRow(item, generatedHarnesses, install, goldenByHarness.get(item.id)));
+  const cliGoldenFixtureCommands = lifecycleGoldenFixtureCommandCount();
   const report: HarnessMaturityReport = {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
@@ -116,13 +118,14 @@ export function generateHarnessMaturity(options: { out?: string; markdown?: stri
       mcpTargets: rows.filter((item) => item.maturity.mcp).length,
       cliLifecycleProtocol: cliLifecycleProtocolReady(),
       cliMcpParityCommands: lifecycleCliParityCommandCount(),
+      cliGoldenFixtureCommands,
       publicHarnessSdk: publicHarnessSdkReady(),
       e2eDemos: rows.filter((item) => item.maturity.e2eDemo).length,
       preToolGuardTargets: rows.filter((item) => item.maturity.preToolGuard).length,
       correctionCaptureTargets: rows.filter((item) => item.maturity.correctionCapture).length,
       evidenceTrailTargets: rows.filter((item) => item.maturity.patchEvidenceTrail).length
     },
-    passed: rows.length >= 16 && rows.filter((item) => item.maturity.configGenerated).length >= 16 && cliLifecycleProtocolReady() && lifecycleCliParityCommandCount() >= 10 && publicHarnessSdkReady() && goldenPaths.every((item) => item.passed)
+    passed: rows.length >= 16 && rows.filter((item) => item.maturity.configGenerated).length >= 16 && cliLifecycleProtocolReady() && lifecycleCliParityCommandCount() >= 10 && cliGoldenFixtureCommands >= lifecycleCliParityCommandCount() && publicHarnessSdkReady() && goldenPaths.every((item) => item.passed)
   };
   if (options.out) writeJson(options.out, report);
   if (options.markdown) writeText(options.markdown, renderMarkdown(report));
@@ -293,7 +296,7 @@ function renderMarkdown(report: HarnessMaturityReport): string {
 
 Generated at ${report.generatedAt} from the harness package manifest, setup output and golden-path simulator.
 
-Current checked state: ${report.summary.generated} generated harness packages, ${report.summary.mcpTargets} MCP-capable targets, ${report.summary.preToolGuardTargets} pre-tool guard targets, ${report.summary.correctionCaptureTargets} correction-capture targets, ${report.summary.evidenceTrailTargets} patch-evidence targets, ${report.summary.e2eDemos} golden-path demos, public Harness SDK ${report.summary.publicHarnessSdk ? "present" : "missing"}, CLI lifecycle protocol ${report.summary.cliLifecycleProtocol ? "present" : "missing"} and ${report.summary.cliMcpParityCommands} CLI/MCP parity commands. Non-native rows are marked without claiming vendor-native hooks.
+Current checked state: ${report.summary.generated} generated harness packages, ${report.summary.mcpTargets} MCP-capable targets, ${report.summary.preToolGuardTargets} pre-tool guard targets, ${report.summary.correctionCaptureTargets} correction-capture targets, ${report.summary.evidenceTrailTargets} patch-evidence targets, ${report.summary.e2eDemos} golden-path demos, public Harness SDK ${report.summary.publicHarnessSdk ? "present" : "missing"}, CLI lifecycle protocol ${report.summary.cliLifecycleProtocol ? "present" : "missing"}, ${report.summary.cliMcpParityCommands} CLI/MCP parity commands and ${report.summary.cliGoldenFixtureCommands} CLI golden fixture commands. Non-native rows are marked without claiming vendor-native hooks.
 
 | Harness | Status | Config | Skill/rules | MCP | Pre-LLM context | Pre-tool guard | Telemetry | Correction | Evidence trail | Install wizard | Doctor | E2E demo | Gaps |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
@@ -306,24 +309,36 @@ Evidence:
 - Golden-path demos simulate install -> context -> action guard -> telemetry -> correction -> evidence for generated harness rows.
 - External-agent modes use the generated JSON-command contract unless a vendor-native hook is available.
 - The universal CLI lifecycle protocol is checked as the CLI-first path and must preserve MCP parity for context, guard, outcome, correction, patch evidence, dream/session/release, source revalidation, conflicts and health.
+- The v1 MCP parity contract names the stable tool ids, including \`memory_coding_context_pack\`, \`memory_action_guard\`, \`memory_patch_evidence\`, \`memory_release_prepare\` and \`memory_health\`.
+- The v1 golden lifecycle fixture manifest pins input, daemon response shape, CLI JSON output shape and exit code for every lifecycle command.
 - The dream lifecycle proof is counted only when context, guard, outcome, correction, patch evidence, session, handoff, release, source revalidation, conflicts and health commands remain in the MCP parity contract.
 `;
 }
 
 function cliLifecycleProtocolReady(): boolean {
   const content = readFileSync("bin/lib/lifecycleCli.mjs", "utf8");
+  const contract = readFileSync("src/contracts/harness/v1.json", "utf8");
+  const typedContract = readFileSync("src/contracts/harness/v1.ts", "utf8");
   return [
     "class CliBackendClient",
     "class DaemonBackend",
     "class LocalDirectBackend",
-    "EXIT_CODES",
-    "COMMAND_SCHEMAS",
-    "MCP_PARITY",
-    "health: \"memory_health\"",
+    "HARNESS_LIFECYCLE_CONTRACT",
+    "src/contracts/harness/v1.json",
     "handleLifecycleCommand",
     "handleHarnessCommand",
     "handleMemoryLifecycleCommand"
-  ].every((needle) => content.includes(needle));
+  ].every((needle) => content.includes(needle))
+    && [
+      "\"contract\": \"cognibrain-harness-lifecycle-v1\"",
+      "\"health\": \"memory_health\"",
+      "\"context\": \"memory_coding_context_pack\""
+    ].every((needle) => contract.includes(needle))
+    && [
+      "harnessCommandSchemas",
+      "harnessCommandJsonSchema",
+      "HarnessLifecycleCommand"
+    ].every((needle) => typedContract.includes(needle));
 }
 
 function publicHarnessSdkReady(): boolean {
@@ -344,21 +359,26 @@ function publicHarnessSdkReady(): boolean {
 }
 
 function lifecycleCliParityCommandCount(): number {
-  const content = readFileSync("bin/lib/lifecycleCli.mjs", "utf8");
-  return [
-    "memory_coding_context_pack",
-    "memory_action_guard",
-    "memory_action_outcome",
-    "memory_code_correction",
-    "memory_patch_evidence",
-    "memory_dream_plan",
-    "memory_session_end",
-    "memory_handoff_prepare",
-    "memory_release_prepare",
-    "memory_source_revalidate",
-    "memory_conflict_sets",
-    "memory_health"
-  ].filter((needle) => content.includes(needle)).length;
+  const contract = JSON.parse(readFileSync("src/contracts/harness/v1.json", "utf8")) as { mcpParity?: Record<string, string> };
+  return Object.keys(contract.mcpParity ?? {}).length;
+}
+
+function lifecycleGoldenFixtureCommandCount(): number {
+  if (!existsSync("fixtures/harness/v1/golden-lifecycle.json")) return 0;
+  const contract = JSON.parse(readFileSync("src/contracts/harness/v1.json", "utf8")) as { mcpParity?: Record<string, string> };
+  const manifest = JSON.parse(readFileSync("fixtures/harness/v1/golden-lifecycle.json", "utf8")) as {
+    contract?: string;
+    fixtures?: Array<{ command?: string; input?: unknown; daemonResponse?: unknown; cliOutput?: unknown; exitCode?: unknown }>;
+  };
+  const expected = new Set(Object.keys(contract.mcpParity ?? {}));
+  if (manifest.contract !== "cognibrain-harness-lifecycle-v1") return 0;
+  const fixtureCommands = new Set(
+    (manifest.fixtures ?? [])
+      .filter((fixture) => fixture.input && fixture.daemonResponse && fixture.cliOutput && Number.isInteger(fixture.exitCode))
+      .map((fixture) => fixture.command)
+      .filter((command): command is string => typeof command === "string")
+  );
+  return [...expected].filter((command) => fixtureCommands.has(command)).length;
 }
 
 function row(id: string, name: string, configPaths: string[], rulesPaths: string[], mcp: boolean, notes: string[] = []): HarnessCatalogRow {

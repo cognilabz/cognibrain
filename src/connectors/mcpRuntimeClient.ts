@@ -51,6 +51,7 @@ export function createMcpRuntimeService(options: RuntimeOptions = {}): MemorySer
   if (options.service) return options.service;
   const mode = process.env.COGNIBRAIN_MCP_BACKEND ?? process.env.COGNIBRAIN_RUNTIME_BACKEND;
   if (mode === "local" || mode === "local-direct" || mode === "in-process") {
+    assertLocalDirectMcpAllowed();
     return createDefaultMemoryService();
   }
   return new DaemonRuntimeServiceProxy({
@@ -61,11 +62,26 @@ export function createMcpRuntimeService(options: RuntimeOptions = {}): MemorySer
 
 export function createMcpRuntimeToolHandlers(options: RuntimeOptions = {}) {
   if (options.service || process.env.COGNIBRAIN_MCP_BACKEND === "local" || process.env.COGNIBRAIN_MCP_BACKEND === "local-direct" || process.env.COGNIBRAIN_MCP_BACKEND === "in-process") {
+    if (!options.service) assertLocalDirectMcpAllowed();
     const service = options.service ?? createDefaultMemoryService();
     return createMemoryToolHandlers(service);
   }
   const runtime = new DaemonRuntimeClient({ root: options.root, runtimeRoot: options.runtimeRoot });
   return createDaemonMemoryToolHandlers(runtime);
+}
+
+function assertLocalDirectMcpAllowed(): void {
+  if (!productionMcpMode() || process.env.COGNIBRAIN_ALLOW_LOCAL_DIRECT_IN_PROD === "true") return;
+  const error = new Error("local-direct MCP backend is disabled in production; set COGNIBRAIN_ALLOW_LOCAL_DIRECT_IN_PROD=true for an explicit break-glass override");
+  (error as Error & { code?: string }).code = "local_direct_disabled_in_production";
+  throw error;
+}
+
+function productionMcpMode(): boolean {
+  return process.env.MEMORY_SECURITY_MODE === "production"
+    || process.env.COGNIBRAIN_SECURITY_MODE === "production"
+    || process.env.MEMORY_PRODUCTION_MODE === "true"
+    || process.env.COGNIBRAIN_PRODUCTION_MODE === "true";
 }
 
 function memoryInputForAdd(args: MemoryAddArgs): MemoryInput {

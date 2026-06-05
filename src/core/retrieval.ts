@@ -2,6 +2,7 @@ import { normalizeRetrievalWeights } from "./config";
 import { cosineVector, embeddingsDisabled } from "./embeddings";
 import { codebaseScopeMatches, getEngineeringMetadata } from "./engineeringMemory";
 import { activateGraph } from "./graphReasoning";
+import { LOCAL_CONTEXT_RERANKER_PROFILE, rerankSearchResults } from "./reranker";
 import { clamp, MemoryStore } from "./store";
 import { bestConceptMatch, conceptScore } from "./semantic";
 import { cosineLike, estimateTokens, keywordCoverage, tokenize } from "./text";
@@ -71,7 +72,7 @@ export class RetrievalEngine {
 
     const results = fuseResults(scored, mode).slice(0, options.limit ?? 8);
 
-    const reranked = options.reranker ? options.reranker.rerank({ query: options.query, results, now }) : localRerank(options.query, results);
+    const reranked = options.reranker ? options.reranker.rerank({ query: options.query, results, now }) : rerankSearchResults(options.query, results, LOCAL_CONTEXT_RERANKER_PROFILE, now);
     const providerContradicted = options.contradictionDetector ? applyProviderContradictionDecisions(reranked, options.contradictionDetector) : reranked;
     const contradicted = applyContradictionDecisions(providerContradicted);
     const verified = options.verifier ? options.verifier.verify({ query: options.query, results: contradicted, now }) : localRelevanceGate(options.query, contradicted);
@@ -99,7 +100,8 @@ export class RetrievalEngine {
       const decision = result.decision && result.decision !== "include" ? ` decision=${result.decision}` : "";
       const confidence = typeof result.confidence === "number" ? ` confidence=${result.confidence.toFixed(2)}` : "";
       const unsafe = result.unsafeToInject ? " unsafe=true" : "";
-      const line = `[${result.memory.id}] trust=${result.memory.trust.toFixed(2)} score=${result.score.toFixed(2)}${confidence}${unsafe}${stale}${decision} ${result.memory.content}`;
+      const truth = truthInjectionSummary(result);
+      const line = `[${result.memory.id}] trust=${result.memory.trust.toFixed(2)} score=${result.score.toFixed(2)}${confidence}${unsafe}${stale}${decision}${truth} ${result.memory.content}`;
       const tokens = estimateTokens(line);
       if (spent + tokens > tokenBudget) break;
       spent += tokens;
@@ -243,6 +245,16 @@ export class RetrievalEngine {
     }
     return boosts;
   }
+}
+
+function truthInjectionSummary(result: SearchResult): string {
+  const truth = result.truth;
+  if (!truth) return "";
+  const selected = truth.selectedMemoryId ? ` selected=${truth.selectedMemoryId}` : "";
+  const claim = truth.selectedClaimId ? ` claim=${truth.selectedClaimId}` : "";
+  const suppressed = truth.suppressedClaimIds.length ? ` suppressed=${truth.suppressedClaimIds.length}` : "";
+  const conflict = truth.conflictSetId ? ` conflict=${truth.conflictSetId}` : "";
+  return ` truth=${truth.currentTruthState}${selected}${claim}${suppressed}${conflict} safe_to_inject="${truth.reason}"`;
 }
 
 function applyEvidenceJudgement(judgement: EvidenceJudgement, results: SearchResult[]): SearchResult[] {
@@ -730,21 +742,6 @@ function calibrateConfidence(result: SearchResult): number {
   const decisionPenalty = result.decision === "exclude" ? 0.45 : result.decision === "review" ? 0.25 : result.decision === "warn" ? 0.12 : 0;
   const stalePenalty = result.stale ? 0.08 : 0;
   return clamp(score * 0.44 + evidence * 0.2 + trust * 0.2 + source * 0.16 - decisionPenalty - stalePenalty);
-}
-
-function localRerank(query: string, results: SearchResult[]): SearchResult[] {
-  const queryTokens = tokenize(query);
-  return [...results]
-    .map((result) => {
-      const coverage = keywordCoverage(queryTokens, tokenize(`${result.memory.content} ${result.memory.entities.join(" ")}`));
-      const verifiedScore = clamp(result.score * 0.72 + coverage * 0.18 + result.memory.trust * 0.1);
-      return {
-        ...result,
-        score: verifiedScore,
-        explanation: [...(result.explanation ?? []), `local rerank coverage ${coverage.toFixed(2)}`]
-      };
-    })
-    .sort((a, b) => b.score - a.score);
 }
 
 function relevanceEvidence(result: SearchResult): number {

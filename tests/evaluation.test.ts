@@ -30,6 +30,7 @@ import { runOperatorMemoryBenchmark } from "../src/eval/operatorMemoryBenchmark"
 import { publishArenaReport } from "../src/eval/publishArena";
 import { runBenchmarkArena } from "../src/eval/arena";
 import { CLI_COMMAND_CONTRACTS, MEMCTL_COMMAND_CONTRACTS } from "../src/api/releaseContract";
+import { BEAM_LOCAL_RERANKER_PROFILE } from "../src/core";
 
 const heavyBenchmarkTimeout = 180_000;
 const nativeRunnerBenchmarkTimeout = 30_000;
@@ -207,6 +208,7 @@ describe("self verification benchmark loop", () => {
     expect(report.qualityClaimAllowed).toBe(false);
     expect(report.claimBoundary.scorer).toBe("beam-rubric-support-diagnostic");
     expect(report.claimBoundary.claimBlockers[0]).toContain("diagnostic only");
+    expect(BEAM_LOCAL_RERANKER_PROFILE.id).toBe("beam-local-retrieval-v1");
   });
 
   it("keeps external-hard public dataset stress summaries diagnostic-only without scoreable proof", () => {
@@ -518,6 +520,7 @@ describe("self verification benchmark loop", () => {
     expect(report.passed).toBe(true);
     expect(report.summary.total).toBeGreaterThanOrEqual(16);
     expect(report.summary.generated).toBeGreaterThanOrEqual(16);
+    expect(report.summary.cliGoldenFixtureCommands).toBe(report.summary.cliMcpParityCommands);
     expect(report.rows.find((row) => row.harness === "windsurf")?.maturity.configGenerated).toBe(true);
     expect(report.rows.find((row) => row.harness === "continue")?.maturity.configGenerated).toBe(true);
     expect(report.rows.find((row) => row.harness === "continue")?.maturity.mcp).toBe(false);

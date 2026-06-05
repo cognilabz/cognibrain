@@ -15,6 +15,7 @@ const requiredSteps = [
   ["docs audit", "npm", ["run", "internal", "--", "audit:docs"]],
   ["release contract audit", "npm", ["run", "internal", "--", "release:contract"]],
   ["product truth audit", "npm", ["run", "internal", "--", "audit:truth"]],
+  ["latest analysis acceptance audit", "npm", ["run", "internal", "--", "audit:latest-analysis"]],
   ["full plan gap audit", "npm", ["run", "internal", "--", "audit:plan-gaps"]],
   ["operator maturity", "npm", ["run", "internal", "--", "operator:maturity"]],
   ["harness maturity", "npm", ["run", "internal", "--", "harness:maturity"]],
@@ -25,6 +26,7 @@ const fullSteps = [
   ["benchmark hardening", "npm", ["run", "internal", "--", "benchmark:hardening"]],
   ["connector compatibility", "npm", ["run", "internal", "--", "verify:compatibility"]],
   ["npm pack dry-run", "npm", ["pack", "--dry-run"]],
+  ["npm pack smoke install", "node", ["scripts/release/pack-smoke.mjs"]],
   ["Python SDK tests", "python3", ["-m", "unittest", "discover", "-s", "sdk/python/tests"]]
 ];
 

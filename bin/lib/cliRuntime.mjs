@@ -6,7 +6,7 @@ import { formatResourceFootprint, resourceFootprint } from "./resourcesRuntime.m
 import { renderCliPanel, renderCliSurface } from "./render.mjs";
 import { createServiceRuntime } from "./serviceRuntime.mjs";
 import { sanitizedRuntimeEnv } from "./runtimeEnv.mjs";
-import { adapterUsage, configUsage, connectionsUsage, connectorUsage, initUsage, memoriesUsage, proofUsage, sdkUsage, serviceUsage, skillUsage, usage } from "./usage.mjs";
+import { adapterUsage, configUsage, connectionsUsage, connectorUsage, initUsage, mcpUsage, memoriesUsage, proofUsage, sdkUsage, serviceUsage, skillUsage, usage } from "./usage.mjs";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { homedir, platform as hostPlatformName } from "node:os";
@@ -41,6 +41,8 @@ const {
   printServiceRemove,
   printServiceLogs
 } = createServiceRuntime({ root, runtimeRoot, hostPlatformName, optionValue, optionValues, readJson, writeJson, runtimeStatus, serviceUsage });
+if (command === "context" && commandArgs[0] === "explain") runTsxAndExit("src/cli/memctl.ts",
+  ["context-explain", ...(() => { const args = commandArgs.slice(1); const pack = optionValue(args, "--pack") ?? optionValue(args, "--context-pack") ?? args.find((arg) => !arg.startsWith("--")); return pack ? [pack] : []; })()]);
 if (isLifecycleCommand(command)) {
   await handleLifecycleCommand([command, ...commandArgs], { root, launchCwd, runtimeRoot });
   return;
@@ -92,6 +94,7 @@ switch (command) {
 
   case "truth":
     if (commandArgs.length === 0 || commandArgs.includes("--help")) await proofCommand(commandArgs);
+    else if (commandArgs[0] === "explain") runTsxAndExit("src/cli/memctl.ts", ["truth-explain", ...commandArgs.slice(1)]);
     else runTsxAndExit("src/cli/memctl.ts", [`truth-${commandArgs[0]}`, ...commandArgs.slice(1)]);
     break;
 
@@ -153,6 +156,7 @@ switch (command) {
     break;
 
   case "mcp":
+    if (hasHelpFlag(commandArgs)) mcpUsage(0);
     if (commandArgs.includes("--local-direct") || ["local", "local-direct", "in-process"].includes(process.env.COGNIBRAIN_MCP_BACKEND ?? "")) {
       runTsxAndExit("src/connectors/mcpServer.ts", commandArgs.filter((arg) => arg !== "--local-direct"));
     }
@@ -489,6 +493,8 @@ async function doctor(doctorArgs) {
       "sdk/rust"
     ].filter((item) => packOutput.includes(item));
     add("package excludes generated files", leaked.length === 0 && unexpectedArtifacts.length === 0, [...leaked, ...unexpectedArtifacts].length ? [...leaked, ...unexpectedArtifacts].join(", ") : "clean");
+    const packSmoke = runCapture(process.execPath, ["scripts/release/pack-smoke.mjs"]);
+    add("package smoke install", packSmoke.status === 0, packSmoke.status === 0 ? "fresh install, CLI, MCP help, SDK and storage imports passed" : (packSmoke.stderr || packSmoke.stdout).trim());
     const transport = transportSecurityCheck(state?.api?.url);
     add("transport security", transport.ok, transport.detail, transport.level);
     const harnessTemplates = harnessTemplateHealth();

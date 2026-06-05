@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, InMemoryMemoryRepository, MemoryStore, ReflectionEngine, RepositoryBackedStorageAdapter, RetrievalEngine, healthReport, tokenize, extractEntities, type EngineeringMemoryKind, type MemoryClaim } from "../src/core";
+import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, InMemoryMemoryRepository, LOCAL_CONTEXT_RERANKER_PROFILE, MemoryStore, ReflectionEngine, RepositoryBackedStorageAdapter, RetrievalEngine, healthReport, rankMemories, tokenize, extractEntities, type EngineeringMemoryKind, type MemoryClaim } from "../src/core";
 import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { connectorAuthHeaders, createConnectorManifest, createPlatformIntegration, createWritebackPlan, runConnectorPoll } from "../src/connectors/sdk";
@@ -150,6 +150,37 @@ describe("TypeScript memory core", () => {
     const results = new RetrievalEngine(store).search({ userId: "u1", query: "Redis cache", now: new Date("2026-05-21T00:00:00.000Z") });
     expect(results[0].memory.content).toContain("Redis");
     expect(results[0].explanation?.some((item) => item.includes("rerank coverage"))).toBe(true);
+    expect(results[0].explanation?.some((item) => item.includes(LOCAL_CONTEXT_RERANKER_PROFILE.id))).toBe(true);
+  });
+
+  it("supports reusable weighted local reranker profiles outside benchmark-specific code", () => {
+    const store = new MemoryStore();
+    const trusted = store.add({
+      userId: "u1",
+      content: "Atlas cache settings live in Redis.",
+      tags: ["atlas"],
+      entities: ["atlas", "redis"],
+      source: { kind: "human", confidence: 0.95 }
+    });
+    store.add({
+      userId: "u1",
+      content: "Atlas cache notes mention generic storage.",
+      tags: ["atlas"],
+      entities: ["atlas"],
+      source: { kind: "agent", confidence: 0.5 }
+    });
+
+    const ranked = rankMemories("Redis cache", store.list(), {
+      id: "test-reranker-profile",
+      label: "Test reranker profile",
+      weights: { semantic: 0.4, keyword: 0.4, entity: 0.1, trust: 0.1 },
+      includeTags: true,
+      includeEntities: true
+    });
+
+    expect(ranked[0].memory.id).toBe(trusted.id);
+    expect(ranked[0].signals.semantic).toBeGreaterThan(0);
+    expect(ranked[0].signals.keyword).toBeGreaterThan(0);
   });
 
   it("keeps release-critical context injection unsafe until an explicit harness evidence judge accepts it", () => {
@@ -338,6 +369,43 @@ describe("TypeScript memory core", () => {
     expect(pack.truthDecisions?.some((decision) => decision.selectedMemoryId === currentMemory.id)).toBe(true);
     expect(pack.excludedResults?.some((result) => result.memoryId === oldMemory.id && result.truthDecision?.selectedMemoryId === currentMemory.id)).toBe(true);
     expect(JSON.stringify(pack.results)).toContain("truth state");
+    expect(pack.context).toContain(`truth=selected selected=${currentMemory.id}`);
+    expect(pack.context).toContain("safe_to_inject=");
+    expect(pack.context).toContain("suppressed=1");
+
+    const testClaim: MemoryClaim = {
+      id: "claim-jest",
+      subject: "atlas",
+      predicate: "test_command",
+      object: "jest",
+      qualifiers: {},
+      source: { kind: "agent", confidence: 0.55 },
+      confidence: 0.55,
+      durability: "durable",
+      sensitivity: "none",
+      scope: { userId: "u1", projectId: "atlas" }
+    };
+    const staleTestMemory = service.add({
+      userId: "u1",
+      projectId: "atlas",
+      content: "Atlas test command is jest.",
+      source: { kind: "agent", confidence: 0.55 },
+      metadata: { claim: testClaim, engineeringKind: "test_strategy" }
+    });
+    const currentTestMemory = service.add({
+      userId: "u1",
+      projectId: "atlas",
+      content: "Atlas test command is vitest.",
+      source: { kind: "reviewed_code", confidence: 0.95 },
+      metadata: { claim: { ...testClaim, id: "claim-vitest", object: "vitest", source: { kind: "reviewed_code", confidence: 0.95 }, confidence: 0.95 }, engineeringKind: "test_strategy" }
+    });
+    const codingPack = service.codingContextPack({ userId: "u1", projectId: "atlas", query: "Atlas test command", limit: 2 });
+    const codingEvidence = codingPack.sections.flatMap((section) => section.evidence);
+    expect(codingPack.excludedStaleRules.some((item) => item.memoryId === staleTestMemory.id)).toBe(true);
+    expect(codingPack.context).not.toContain(staleTestMemory.content);
+    expect(codingEvidence.find((item) => item.memoryId === currentTestMemory.id)?.truthExplanation).toContain(`truth=selected selected=${currentTestMemory.id}`);
+    expect(codingEvidence.find((item) => item.memoryId === currentTestMemory.id)?.truthExplanation).toContain("safe_to_inject=");
+    expect(codingEvidence.find((item) => item.memoryId === currentTestMemory.id)?.truthExplanation).toContain("suppressed=1");
   });
 
   it("tracks evidence-pack delivery structurally when context text mentions another memory id", () => {

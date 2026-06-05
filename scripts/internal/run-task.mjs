@@ -68,11 +68,13 @@ const tasks = {
   "audit:structure": cmd("node", ["scripts/release/audit-structure.mjs"]),
   "audit:docs": cmd("node", ["scripts/release/audit-docs.mjs"]),
   "audit:truth": cmd("node", ["scripts/release/audit-product-truth.mjs"]),
+  "audit:latest-analysis": cmd("node", ["scripts/release/audit-latest-analysis.mjs"]),
   "audit:plan-gaps": cmd("npx", ["tsx", "src/eval/planGaps.ts", "--out", "artifacts/plan-gaps-audit.json", "--markdown", "artifacts/docs/plan-gaps.md"]),
   "release:contract": cmd("npx", ["tsx", "src/eval/releaseContract.ts", "--out", "artifacts/release-contract-audit.json"]),
   "doctor:publish": cmd("node", ["bin/cognibrain.mjs", "doctor", "--publish"]),
+  "pack:smoke": cmd("node", ["scripts/release/pack-smoke.mjs"]),
   "verify:nextgen": seq("test", "eval", "eval:nextgen", "benchmark:nextgen", "benchmark:cognicode", "benchmark:arena", "benchmark:realworld:blackbox", "benchmark:realworld:competitors", "benchmark:realworld:protocol", "benchmark:release", "demo:first-win", ["node", "scripts/internal/run-task.mjs", "benchmark:answer-generation", "--reports", "artifacts/nextgen-benchmarks.json,artifacts/cognicodebench/run.json"], "leaderboard", "verify:compatibility", "harness:maturity", "operator:maturity", "benchmark:hardening", "verify:status", "audit:structure", "audit:docs", "release:contract", ["node", "scripts/benchmark/operator-memory-native-competitors.mjs", "--skip-install", "--out", "artifacts/operator-memory-native-competitors.json", "--markdown", "artifacts/docs/operator-memory-native-competitors.md"], "audit:truth", "audit:plan-gaps", "build"),
-  "verify:selfhosted": seq("verify:nextgen", "verify:postgres", "verify:selfhosted:claims", "doctor:publish", ["npm", "pack", "--dry-run"], ["python3", "-m", "unittest", "discover", "-s", "sdk/python/tests"])
+  "verify:selfhosted": seq("verify:nextgen", "verify:postgres", "verify:selfhosted:claims", "doctor:publish", ["npm", "pack", "--dry-run"], "pack:smoke", ["python3", "-m", "unittest", "discover", "-s", "sdk/python/tests"])
 };
 
 if (!taskName || taskName === "help" || taskName === "--help") {

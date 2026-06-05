@@ -120,6 +120,11 @@ const POSTGRES_MIGRATIONS: Array<Omit<PostgresRepositoryMigration, "checksum"> &
         trigger text,
         mode text,
         queued_at timestamptz,
+        priority integer,
+        lease_owner text,
+        lease_until timestamptz,
+        attempt_count integer not null default 0,
+        next_run_at timestamptz,
         updated_at timestamptz not null default now(),
         payload jsonb not null
       );
@@ -211,6 +216,18 @@ const POSTGRES_MIGRATIONS: Array<Omit<PostgresRepositoryMigration, "checksum"> &
       create policy cognibrain_policy_rules_scope on cognibrain_policy_rules
         using (coalesce(current_setting('cognibrain.org_id', true), '') = '' or org_id = current_setting('cognibrain.org_id', true))
         with check (coalesce(current_setting('cognibrain.org_id', true), '') = '' or org_id = current_setting('cognibrain.org_id', true));
+    `
+  },
+  {
+    version: 13,
+    name: "postgres_dream_job_leases",
+    sql: `
+      alter table cognibrain_dream_jobs add column if not exists priority integer;
+      alter table cognibrain_dream_jobs add column if not exists lease_owner text;
+      alter table cognibrain_dream_jobs add column if not exists lease_until timestamptz;
+      alter table cognibrain_dream_jobs add column if not exists attempt_count integer not null default 0;
+      alter table cognibrain_dream_jobs add column if not exists next_run_at timestamptz;
+      create index if not exists idx_cognibrain_dream_jobs_lease on cognibrain_dream_jobs(status, next_run_at, lease_until);
     `
   }
 ];
@@ -728,6 +745,11 @@ async function ensureSchema(client, enableRls) {
       trigger text,
       mode text,
       queued_at timestamptz,
+      priority integer,
+      lease_owner text,
+      lease_until timestamptz,
+      attempt_count integer not null default 0,
+      next_run_at timestamptz,
       updated_at timestamptz not null default now(),
       payload jsonb not null
     );
@@ -873,7 +895,7 @@ async function saveState(client, state) {
     await client.query("insert into cognibrain_repository_state(key, updated_at, payload) values ($1, $2, $3::jsonb) on conflict(key) do update set updated_at = excluded.updated_at, payload = excluded.payload", ["service_state", now, JSON.stringify(state)]);
     await replaceRows(client, "cognibrain_claims", "claim_id", state.claims || [], (claim) => [claim.id, claim.sourceMemoryId || null, claim.subject || null, claim.predicate || null, claim.object || null, claim.state || null, now, JSON.stringify(claim)]);
     await replaceRows(client, "cognibrain_conflict_sets", "conflict_set_id", state.conflictSets || [], (set) => [set.id, set.status || null, now, JSON.stringify(set)]);
-    await replaceRows(client, "cognibrain_dream_jobs", "job_id", state.dreamJobs || [], (job) => [job.jobId, job.userId || null, job.status || null, job.trigger || null, job.mode || null, job.queuedAt ? iso(job.queuedAt) : now, now, JSON.stringify(job)]);
+    await replaceRows(client, "cognibrain_dream_jobs", "job_id", state.dreamJobs || [], (job) => [job.jobId, job.userId || null, job.status || null, job.trigger || null, job.mode || null, job.queuedAt ? iso(job.queuedAt) : now, job.priority ?? null, job.leaseOwner || null, job.leaseUntil ? iso(job.leaseUntil) : null, job.attemptCount ?? 0, job.nextRunAt ? iso(job.nextRunAt) : null, now, JSON.stringify(job)]);
     await replaceRows(client, "cognibrain_connector_sync_states", "connector_id", state.connectorSyncStates || [], (syncState) => [syncState.connectorId, syncState.lastStatus || null, now, JSON.stringify(syncState)]);
     await replaceRows(client, "cognibrain_evidence_packs", "evidence_pack_id", state.evidencePacks || [], (pack) => [pack.id, pack.userId || null, pack.query || null, pack.generatedAt ? iso(pack.generatedAt) : now, now, JSON.stringify(pack)]);
     await replaceRows(client, "cognibrain_policy_rules", "rule_id", state.policyRules || [], (rule) => [rule.id, rule.label || null, rule.effect || null, now, JSON.stringify(rule)]);
@@ -889,7 +911,7 @@ async function replaceRows(client, table, _idColumn, rows, valuesFor) {
     : table === "cognibrain_conflict_sets"
       ? "insert into cognibrain_conflict_sets(conflict_set_id, status, updated_at, payload) values ($1,$2,$3,$4::jsonb)"
       : table === "cognibrain_dream_jobs"
-        ? "insert into cognibrain_dream_jobs(job_id, user_id, status, trigger, mode, queued_at, updated_at, payload) values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)"
+      ? "insert into cognibrain_dream_jobs(job_id, user_id, status, trigger, mode, queued_at, priority, lease_owner, lease_until, attempt_count, next_run_at, updated_at, payload) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)"
         : table === "cognibrain_connector_sync_states"
           ? "insert into cognibrain_connector_sync_states(connector_id, last_status, updated_at, payload) values ($1,$2,$3,$4::jsonb)"
           : table === "cognibrain_evidence_packs"

@@ -2806,6 +2806,10 @@ describe("TypeScript memory core", () => {
       const restored = reloaded.dreamJobStatus(job.jobId)[0];
       expect(restored.jobId).toBe(job.jobId);
       expect(restored.status).toBe("done");
+      expect(restored.priority).toBe(100);
+      expect(restored.attemptCount).toBe(1);
+      expect(restored.leaseOwner).toMatch(/^pid-/);
+      expect(restored.leaseUntil).toBeUndefined();
       expect(restored.progress.memoriesEvaluated).toBeGreaterThan(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -2833,6 +2837,10 @@ describe("TypeScript memory core", () => {
     };
 
     const job = await service.startDreamJob({ userId: "u1", trigger: "before_release", mode: "dream", budget: "release", sourceRefresh: true, connectorIds: ["slow-jira"] }, slowFetch as typeof fetch);
+    expect(job.status).toBe("running");
+    expect(job.leaseOwner).toMatch(/^pid-/);
+    expect(job.leaseUntil).toBeTruthy();
+    expect(job.attemptCount).toBe(1);
     const cancelled = service.cancelDreamJob(job.jobId, "operator paused release gate");
     expect(cancelled.status).toBe("cancelled");
     await new Promise((resolve) => setTimeout(resolve, 40));
@@ -2841,6 +2849,7 @@ describe("TypeScript memory core", () => {
     const retry = await service.retryDreamJob(job.jobId, slowFetch as typeof fetch, 10_000, { wait: true });
     expect(retry.retryOf).toBe(job.jobId);
     expect(retry.status).toBe("done");
+    expect(retry.attemptCount).toBe(1);
   });
 
   it("tracks connector sync state cursor metadata from poll records", async () => {
@@ -3485,6 +3494,12 @@ describe("TypeScript memory core", () => {
     expect(health.map((item) => item.connectorId)).toEqual(expect.arrayContaining(vendors));
     expect(health.every((item) => item.supports.externalVendor)).toBe(true);
     expect(health.find((item) => item.connectorId === "official-jira")?.externalVendor?.missingEnv).toContain("MEMORY_JIRA_PROJECT");
+    expect(health.find((item) => item.connectorId === "official-github")?.certification).toMatchObject({
+      state: "credential-blocked",
+      artifact: "artifacts/connector-certification.json",
+      canBecomeTenantVerified: true,
+      productionCertified: false
+    });
     expect(health.find((item) => item.connectorId === "official-confluence")?.kind).toBe("docs");
     expect(health.find((item) => item.connectorId === "official-linear")?.kind).toBe("project_management");
     const stateOfArt = health.filter((item) => ["official-asana", "official-clickup", "official-sentry", "official-datadog", "official-pagerduty", "official-posthog"].includes(item.connectorId));

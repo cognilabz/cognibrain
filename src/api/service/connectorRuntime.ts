@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import {
   externalVendorConfigured,
   externalVendorProvider,
@@ -51,6 +52,14 @@ export interface ConnectorHealthItem {
   privacyPolicy: string;
   supports: { list: boolean; poll: boolean; ingest: boolean; writeback: boolean; externalVendor: boolean };
   externalVendor?: { provider: string; configured: boolean; missingEnv: string[] };
+  certification: {
+    state: "not_certified" | "implementation-ready" | "credential-blocked" | "tenant-verified" | "production-certified" | "failed";
+    artifact?: string;
+    blockedBy: string[];
+    canBecomeTenantVerified: boolean;
+    canBecomeProductionCertified: boolean;
+    productionCertified: boolean;
+  };
   lastStatus: ConnectorSyncRecord["status"] | "never_run";
   lastError?: string;
   lastSyncAt?: string | Date;
@@ -58,12 +67,38 @@ export interface ConnectorHealthItem {
   records: number;
 }
 
+const CONNECTOR_CERTIFICATION_ARTIFACT = process.env.MEMORY_CONNECTOR_CERTIFICATION_ARTIFACT ?? "artifacts/connector-certification.json";
+
 export interface ConnectorListResult {
   connectorId: string;
   status: "applied" | "failed";
   items: Array<Record<string, unknown>>;
   responseStatusCode?: number;
   error?: string;
+}
+
+function connectorCertification(manifest: ConnectorManifest, provider?: string): ConnectorHealthItem["certification"] {
+  const artifact = loadConnectorCertificationArtifact();
+  const rows = Array.isArray(artifact?.rows) ? artifact.rows as Array<Record<string, unknown>> : [];
+  const row = rows.find((candidate) => candidate.connectorId === manifest.id || (provider && candidate.provider === provider));
+  const state = String(row?.state ?? "not_certified") as ConnectorHealthItem["certification"]["state"];
+  return {
+    state,
+    artifact: row ? CONNECTOR_CERTIFICATION_ARTIFACT : undefined,
+    blockedBy: Array.isArray(row?.blockedBy) ? row.blockedBy.map(String) : ["connector certification artifact row missing"],
+    canBecomeTenantVerified: row?.canBecomeTenantVerified === true,
+    canBecomeProductionCertified: row?.canBecomeProductionCertified === true,
+    productionCertified: state === "production-certified"
+  };
+}
+
+function loadConnectorCertificationArtifact(): Record<string, unknown> | undefined {
+  try {
+    if (!existsSync(CONNECTOR_CERTIFICATION_ARTIFACT)) return undefined;
+    return JSON.parse(readFileSync(CONNECTOR_CERTIFICATION_ARTIFACT, "utf8")) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
 }
 
 function appendConnectorSyncRecord(service: any, record: ConnectorSyncRecord): ConnectorSyncRecord {
@@ -392,6 +427,7 @@ export function connectorHealth(service: any, connectorId?: string): ConnectorHe
         const lastWriteback = [...records].reverse().find((record) => record.direction === "export");
         const vendorProvider = externalVendorProvider(manifest);
         const vendorStatus = vendorProvider ? externalVendorConfigured(vendorProvider) : undefined;
+        const certification = connectorCertification(manifest, vendorProvider);
         return {
           connectorId: manifest.id,
           kind: manifest.kind,
@@ -408,6 +444,7 @@ export function connectorHealth(service: any, connectorId?: string): ConnectorHe
           externalVendor: vendorProvider
             ? { provider: vendorProvider, configured: vendorStatus?.configured ?? false, missingEnv: vendorStatus?.missing ?? [] }
             : undefined,
+          certification,
           lastStatus: last?.status ?? "never_run",
           lastError: last?.error,
           lastSyncAt: lastIngest?.timestamp,

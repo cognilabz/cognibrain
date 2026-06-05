@@ -289,22 +289,26 @@ export async function startDreamJob(service: any, input: DreamCycleInput, fetchI
     const mode = input.mode ?? modeForTrigger(input.trigger);
     const trigger = input.trigger ?? triggerForMode(mode);
     const plan = service.dreamPlan({ ...input, mode, trigger });
+    const queuedAt = new Date().toISOString();
     const job: DreamJob = {
       jobId: `dream_${contentHash(`${input.userId}:${trigger}:${Date.now()}:${service.dreamJobs.size}`).slice(2)}`,
       userId: input.userId,
       status: "queued",
       trigger,
       mode,
-      queuedAt: new Date().toISOString(),
+      queuedAt,
+      priority: dreamJobPriority(plan.budget),
+      attemptCount: 0,
+      nextRunAt: queuedAt,
       progress: { connectorPolls: 0, memoriesEvaluated: 0, contradictions: 0, sourceRevalidations: 0, verificationScheduled: 0 },
       plan,
       input: { ...input, mode, trigger },
-      logs: [{ at: new Date().toISOString(), level: "info", message: "dream job queued", payload: { trigger, mode } }]
+      logs: [{ at: queuedAt, level: "info", message: "dream job queued", payload: { trigger, mode, durable: true } }]
     };
     service.dreamJobs.set(job.jobId, job);
+    service.persist();
     const execution = service.executeDreamJob(job, input, mode, trigger, fetchImpl, timeoutMs);
     if (options.wait) await execution;
-    service.persist();
     return job;
   }
 
@@ -313,3 +317,10 @@ export function dreamJobStatus(service: any, jobId?: string): DreamJob[] {
       .filter((job) => !jobId || job.jobId === jobId)
       .sort((a, b) => new Date(b.queuedAt).getTime() - new Date(a.queuedAt).getTime());
   }
+
+function dreamJobPriority(budget: DreamPlanReport["budget"]): number {
+  if (budget === "release") return 100;
+  if (budget === "deep") return 75;
+  if (budget === "standard") return 50;
+  return 25;
+}

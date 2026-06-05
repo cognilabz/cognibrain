@@ -112,7 +112,7 @@ export class SQLiteMemoryRepository implements MemoryRepository, RepositoryState
       const payload = state as {
         claims?: Array<{ id: string; sourceMemoryId?: string; subject?: string; predicate?: string; object?: string; state?: string }>;
         conflictSets?: Array<{ id: string; status?: string }>;
-        dreamJobs?: Array<{ jobId: string; userId?: string; status?: string; trigger?: string; mode?: string; queuedAt?: string | Date }>;
+        dreamJobs?: Array<{ jobId: string; userId?: string; status?: string; trigger?: string; mode?: string; queuedAt?: string | Date; priority?: number; leaseOwner?: string; leaseUntil?: string | Date; attemptCount?: number; nextRunAt?: string | Date }>;
         connectorSyncStates?: Array<{ connectorId: string; lastStatus?: string }>;
       };
       replacePayloadTable(db, "claims", payload.claims ?? [], (claim) => [
@@ -138,6 +138,11 @@ export class SQLiteMemoryRepository implements MemoryRepository, RepositoryState
         job.trigger ?? null,
         job.mode ?? null,
         job.queuedAt ? new Date(job.queuedAt).toISOString() : now,
+        job.priority ?? null,
+        job.leaseOwner ?? null,
+        job.leaseUntil ? new Date(job.leaseUntil).toISOString() : null,
+        job.attemptCount ?? 0,
+        job.nextRunAt ? new Date(job.nextRunAt).toISOString() : null,
         now,
         JSON.stringify(job)
       ]);
@@ -339,6 +344,11 @@ export class SQLiteMemoryRepository implements MemoryRepository, RepositoryState
         trigger text,
         mode text,
         queued_at text,
+        priority integer,
+        lease_owner text,
+        lease_until text,
+        attempt_count integer not null default 0,
+        next_run_at text,
         updated_at text not null,
         payload text not null
       );
@@ -374,7 +384,7 @@ function replacePayloadTable<T>(db: SQLiteDatabase, table: string, rows: T[], va
     : table === "conflict_sets"
       ? "insert into conflict_sets (id, status, updated_at, payload) values (?, ?, ?, ?)"
       : table === "dream_jobs"
-        ? "insert into dream_jobs (job_id, user_id, status, trigger, mode, queued_at, updated_at, payload) values (?, ?, ?, ?, ?, ?, ?, ?)"
+        ? "insert into dream_jobs (job_id, user_id, status, trigger, mode, queued_at, priority, lease_owner, lease_until, attempt_count, next_run_at, updated_at, payload) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         : "insert into connector_sync_states (connector_id, last_status, updated_at, payload) values (?, ?, ?, ?)";
   const statement = db.prepare(sql);
   for (const row of rows) statement.run(...valuesFor(row));

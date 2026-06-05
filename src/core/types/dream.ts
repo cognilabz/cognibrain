@@ -98,12 +98,17 @@ export interface DreamPreparationReport {
 export interface DreamJob {
   jobId: string;
   userId: string;
-  status: "queued" | "running" | "done" | "succeeded" | "failed" | "cancelled" | "retrying";
+  status: "queued" | "running" | "done" | "succeeded" | "failed" | "cancelled" | "retrying" | "retry_scheduled";
   trigger: DreamCycleTrigger;
   mode: DreamCycleMode;
   queuedAt: Date | string;
   startedAt?: Date | string;
   finishedAt?: Date | string;
+  priority?: number;
+  leaseOwner?: string;
+  leaseUntil?: Date | string;
+  attemptCount?: number;
+  nextRunAt?: Date | string;
   progress: {
     connectorPolls: number;
     connectorPollFailures?: number;

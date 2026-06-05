@@ -50,6 +50,7 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
     marketplace: read("src/api/service/marketplace.ts"),
     dreamTypes: read("src/core/types/dream.ts"),
     dreamRuntime: read("src/api/service/dreamRuntime.ts"),
+    dreamEngineering: read("src/api/service/memoryServiceDreamEngineering.ts"),
     searchRuntime: read("src/api/service/searchRuntime.ts"),
     memctl: read("src/cli/memctl.ts"),
     memoryCommands: read("src/cli/memctl/memoryCommands.ts"),
@@ -183,6 +184,9 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
     check("dream.durable-source-aware", "dream", "Dreaming has durable jobs, logs, retry/cancel, release blockers and provider SourceResolver v2 with live async fetch revalidation.", files, [
       ["src/api/repositories/postgresRepository.ts", "cognibrain_dream_jobs"],
       ["src/api/repositories/postgresRepository.ts", "cognibrain_dream_job_logs"],
+      ["src/api/repositories/postgresRepository.ts", "lease_owner"],
+      ["src/api/service/memoryServiceDreamEngineering.ts", "leaseDreamJob"],
+      ["src/core/types/dream.ts", "attemptCount"],
       ["src/core/types/dream.ts", "supports?("],
       ["src/core/types/dream.ts", "fetch?("],
       ["src/api/service.ts", "registerDefaultSourceResolvers"],
@@ -191,7 +195,8 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
       ["src/api/service.ts", "listExternalVendorItems"],
       ["tests/core.test.ts", "default GitHub source resolver fetches current provider state"],
       ["src/api/service.ts", "releaseBlockers"],
-      ["tests/core.test.ts", "releaseBlockers"]
+      ["tests/core.test.ts", "releaseBlockers"],
+      ["tests/core.test.ts", "leaseOwner"]
     ]),
     check("connectors.oauth-secret-store", "connectors", "OAuth code exchange, refresh and revoke use TokenSecretStore refs and hashes only.", files, [
       ["src/api/service/connectorOAuthRuntime.ts", "TokenSecretStore"],
@@ -205,6 +210,8 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
       ["src/eval/connectorCertification.ts", "signedLiveSmoke"],
       ["src/eval/connectorCertification.ts", "ownerApproval"],
       ["src/eval/connectorCertification.ts", "hermetic fixtures may never"],
+      ["src/api/service/connectorRuntime.ts", "certification:"],
+      ["tests/core.test.ts", "productionCertified: false"],
       ["tests/evaluation.test.ts", "tenantVerified"]
     ]),
     check("harness.certified-lifecycle", "harness", "Harness maturity checks full lifecycle events and proof levels, not binary support.", files, [
@@ -331,6 +338,7 @@ function keyForPath(path: string): string {
     marketplace: "src/api/service/marketplace.ts",
     dreamTypes: "src/core/types/dream.ts",
     dreamRuntime: "src/api/service/dreamRuntime.ts",
+    dreamEngineering: "src/api/service/memoryServiceDreamEngineering.ts",
     searchRuntime: "src/api/service/searchRuntime.ts",
     memctl: "src/cli/memctl.ts",
     memoryCommands: "src/cli/memctl/memoryCommands.ts",

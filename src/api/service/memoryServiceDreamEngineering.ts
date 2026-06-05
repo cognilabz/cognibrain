@@ -92,14 +92,22 @@ export class MemoryServiceDreamEngineering extends MemoryServiceRetrieval {
       this.persist();
       return;
     }
-    job.status = "running";
-    job.startedAt = new Date().toISOString();
-    job.logs = [...(job.logs ?? []), { at: job.startedAt, level: "info", message: "dream job running" }];
+    if (!this.leaseDreamJob(job)) return;
+    this.persist();
+    const terminal = () => this.dreamJobs.get(job.jobId);
+    const cancelled = () => terminal()?.status === "cancelled";
+    const finished = (): string => {
+      const finishedAt = new Date().toISOString();
+      job.leaseUntil = undefined;
+      job.nextRunAt = undefined;
+      job.finishedAt = finishedAt;
+      return finishedAt;
+    };
     try {
       const report = await this.runDreamCycleAsync({ ...input, mode, trigger, connectorIds: job.plan.connectorIds, sourceRefresh: job.plan.sourceRefresh }, fetchImpl, timeoutMs);
-      job.finishedAt = new Date().toISOString();
+      const finishedAt = finished();
       job.report = report;
-      job.logs = [...(job.logs ?? []), { at: job.finishedAt, level: "info", message: "dream job completed", payload: { releaseBlockers: report.dreamCycle.plan.releaseBlockers?.length ?? 0 } }];
+      job.logs = [...(job.logs ?? []), { at: finishedAt, level: "info", message: "dream job completed", payload: { releaseBlockers: report.dreamCycle.plan.releaseBlockers?.length ?? 0 } }];
       job.progress = {
         connectorPolls: report.dreamCycle.connectorRefresh?.attempted ?? 0,
         connectorPollFailures: report.dreamCycle.connectorRefresh?.failed ?? 0,
@@ -109,15 +117,39 @@ export class MemoryServiceDreamEngineering extends MemoryServiceRetrieval {
         sourceRevalidations: report.dreamCycle.sourceRevalidation?.evaluated ?? 0,
         verificationScheduled: report.dreamCycle.verificationScheduled
       };
-      if (this.dreamJobs.get(job.jobId)?.status !== "cancelled") job.status = "done";
+      if (!cancelled()) job.status = "done";
     } catch (error) {
-      if (this.dreamJobs.get(job.jobId)?.status !== "cancelled") job.status = "failed";
-      job.finishedAt = new Date().toISOString();
-      job.logs = [...(job.logs ?? []), { at: job.finishedAt, level: "error", message: error instanceof Error ? error.message : "dream job failed" }];
-      if (this.dreamJobs.get(job.jobId)?.status !== "cancelled") job.error = error instanceof Error ? error.message : "dream job failed";
+      if (!cancelled()) job.status = "failed";
+      const finishedAt = finished();
+      job.logs = [...(job.logs ?? []), { at: finishedAt, level: "error", message: error instanceof Error ? error.message : "dream job failed" }];
+      if (!cancelled()) job.error = error instanceof Error ? error.message : "dream job failed";
     }
-    this.recordAudit(job.status === "failed" ? "policy.violation" : "reflect.run", { userId: input.userId, metadata: { resource: "dream-job", jobId: job.jobId, status: job.status, trigger, mode, progress: job.progress, error: job.error } });
+    this.recordAudit(job.status === "failed" ? "policy.violation" : "reflect.run", { userId: input.userId, metadata: { resource: "dream-job", jobId: job.jobId, status: job.status, trigger, mode, leaseOwner: job.leaseOwner, attemptCount: job.attemptCount, progress: job.progress, error: job.error } });
     this.persist();
+  }
+
+  private leaseDreamJob(job: DreamJob): boolean {
+    const current = this.dreamJobs.get(job.jobId);
+    if (!current || current.status === "cancelled") return false;
+    if (current.status === "running" && current.leaseUntil && new Date(current.leaseUntil).getTime() > Date.now()) return false;
+    const now = new Date();
+    const leaseMs = Number(process.env.MEMORY_DREAM_JOB_LEASE_MS ?? 300_000);
+    const owner = process.env.MEMORY_DREAM_WORKER_ID ?? `pid-${process.pid}`;
+    job.status = "running";
+    job.startedAt = now.toISOString();
+    job.leaseOwner = owner;
+    job.leaseUntil = new Date(now.getTime() + leaseMs).toISOString();
+    job.attemptCount = (job.attemptCount ?? 0) + 1;
+    job.nextRunAt = undefined;
+    job.logs = [...(job.logs ?? []), { at: job.startedAt, level: "info", message: "dream job leased", payload: { leaseOwner: owner, leaseUntil: job.leaseUntil, attemptCount: job.attemptCount } }];
+    current.status = job.status;
+    current.startedAt = job.startedAt;
+    current.leaseOwner = job.leaseOwner;
+    current.leaseUntil = job.leaseUntil;
+    current.attemptCount = job.attemptCount;
+    current.nextRunAt = job.nextRunAt;
+    current.logs = job.logs;
+    return true;
   }
 
   dreamJobStatus(jobId?: string): DreamJob[] {
@@ -146,6 +178,8 @@ export class MemoryServiceDreamEngineering extends MemoryServiceRetrieval {
     if (!job) throw new Error(`Dream job not found: ${jobId}`);
     if (job.status !== "failed" && job.status !== "cancelled") throw new Error(`Dream job ${jobId} is not retryable from status ${job.status}`);
     job.status = "retrying";
+    job.nextRunAt = new Date().toISOString();
+    job.leaseUntil = undefined;
     job.logs = [...(job.logs ?? []), { at: new Date().toISOString(), level: "info", message: "dream job retry queued" }];
     const input = { ...(job.input ?? { userId: job.userId }), trigger: job.trigger, mode: job.mode, budget: job.plan.budget, sourceRefresh: job.plan.sourceRefresh, connectorIds: job.plan.connectorIds };
     const retry = await this.startDreamJob(input, fetchImpl, timeoutMs, options);

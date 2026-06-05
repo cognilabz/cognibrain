@@ -19,7 +19,9 @@ const files = {
   sdkClient: read("sdk/typescript/client.ts"),
   helpers: read("src/api/server/helpers.ts"),
   dreamRoutes: read("src/api/server/dreamRoutes.ts"),
+  dreamRuntime: read("src/api/service/memoryServiceDreamEngineering.ts"),
   searchRuntime: read("src/api/service/searchRuntime.ts"),
+  connectorRuntime: read("src/api/service/connectorRuntime.ts"),
   postgresRepository: read("src/api/repositories/postgresRepository.ts"),
   persistence: read("src/api/service/memoryServicePersistence.ts"),
   apiTests: read("tests/api.test.ts"),
@@ -94,7 +96,11 @@ const checks = [
   check("dream.durable-queue-proof", "Dream jobs are persisted, controllable and release/source-aware across service, HTTP, MCP and tests.", [
     files.postgresRepository.includes("cognibrain_dream_jobs"),
     files.postgresRepository.includes("cognibrain_dream_job_logs"),
+    files.postgresRepository.includes("lease_owner"),
+    files.dreamRuntime.includes("attemptCount"),
+    files.dreamRuntime.includes("leaseDreamJob"),
     files.coreTests.includes("persists dream job queue state across service restarts"),
+    files.coreTests.includes("leaseOwner"),
     files.coreTests.includes("releaseBlockers"),
     files.lightweightMcp.includes("memory_dream_job_start"),
     files.tsMcpRuntime.includes("dream.jobStart")
@@ -103,6 +109,8 @@ const checks = [
     files.connectorCertification.passed === true,
     (files.connectorCertification.rows ?? []).length >= 10,
     (files.connectorCertification.rows ?? []).some((row) => row.state === "credential-blocked"),
+    files.connectorRuntime.includes("certification:"),
+    files.coreTests.includes("productionCertified: false"),
     files.productTruth.checks?.some((item) => item.id === "connector-certification-boundary" && item.passed),
     files.evaluationTests.includes("tenantVerified")
   ]),

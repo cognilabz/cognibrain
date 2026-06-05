@@ -1,7 +1,9 @@
 import type { ActionGuardReport, CodebaseScope, CodingContextPack, ConnectorManifest, ConnectorSyncRecord, ContextEnrichmentReport, EngineeringMemoryKind, EpisodeRecord, EvidencePack, FeedbackKind, GraphExplainReport, HarnessActionInput, HarnessLifecycleEventInput, HarnessLifecycleEventReport, MarketplaceModule, Memory, MemoryInput, MemoryPolicyOperation, MemoryPolicyRule, MemoryRouteReport, MemoryScope, PatchEvidenceTrail, PolicyDecision, QueryIntentReport, SearchOptions, SearchResult } from "../../src/core";
+import { discoverDaemonUrl } from "../../src/runtime/daemonClient";
 
 export interface CognibrainClientOptions {
   baseUrl?: string;
+  runtimeRoot?: string;
   fetchImpl?: typeof fetch;
   apiKey?: string;
   actorId?: string;
@@ -37,7 +39,7 @@ export class CognibrainClient {
   private readonly timeoutMs: number;
 
   constructor(options: CognibrainClientOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? "http://127.0.0.1:8787").replace(/\/$/, "");
+    this.baseUrl = (options.baseUrl ?? discoverDaemonUrl(options.runtimeRoot ?? process.env.COGNIBRAIN_RUNTIME_ROOT ?? process.env.COGNIBRAIN_HOME ?? process.cwd())).replace(/\/$/, "");
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.apiKey = options.apiKey;
     this.actorId = options.actorId;
@@ -48,6 +50,10 @@ export class CognibrainClient {
 
   add(input: MemoryInput): Promise<Memory> {
     return this.request("/memories", { method: "POST", body: input });
+  }
+
+  health(userId?: string): Promise<Record<string, unknown>> {
+    return this.request(`/health${queryString({ userId })}`);
   }
 
   search(options: SearchOptions): Promise<SearchResult[]> {

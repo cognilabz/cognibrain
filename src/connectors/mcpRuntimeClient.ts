@@ -1,9 +1,7 @@
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { createDefaultMemoryService, type MemoryService } from "../api/service";
 import type { DreamCycleInput, HarnessLifecycleEventInput, Memory, MemoryInput, MemoryPolicyOperation } from "../core";
-import { sanitizedRuntimeEnv } from "../core/runtimeEnv";
+import { RuntimeDaemonClient, type DaemonHttpRoute, queryString } from "../runtime/daemonClient";
 import { createMemoryToolHandlers } from "./mcpHandlers";
 import type {
   ConnectorReviewDecisionArgs,
@@ -328,20 +326,28 @@ export function createDaemonMemoryToolHandlers(runtime: MemoryRuntimeClient) {
 export class DaemonRuntimeClient implements MemoryRuntimeClient {
   readonly root: string;
   readonly runtimeRoot: string;
+  readonly client: RuntimeDaemonClient;
   baseUrl: string;
   readonly headers: Record<string, string>;
 
   constructor(options: { root?: string; runtimeRoot?: string; baseUrl?: string } = {}) {
     this.root = resolve(options.root ?? process.cwd());
     this.runtimeRoot = resolve(options.runtimeRoot ?? process.env.COGNIBRAIN_RUNTIME_ROOT ?? process.env.COGNIBRAIN_HOME ?? process.cwd());
-    this.baseUrl = stripSlash(options.baseUrl ?? discoverDaemonUrl(this.runtimeRoot));
-    this.headers = authHeadersFromEnv();
+    this.client = new RuntimeDaemonClient(routeForOperation, {
+      root: this.root,
+      runtimeRoot: this.runtimeRoot,
+      baseUrl: options.baseUrl,
+      autostartEnv: "COGNIBRAIN_MCP_AUTOSTART",
+      autostartLockName: "mcp-start.lock"
+    });
+    this.baseUrl = this.client.baseUrl;
+    this.headers = this.client.headers;
   }
 
   async call<TInput, TOutput>(operation: string, input?: TInput): Promise<TOutput> {
-    const route = routeForOperation(operation, input);
-    await this.ensureReachable();
-    return httpJson<TOutput>(route.method, `${this.baseUrl}${route.path}`, route.body, this.headers);
+    const output = await this.client.call<TInput, TOutput>(operation, input);
+    this.baseUrl = this.client.baseUrl;
+    return output;
   }
 
   async health(input: { userId?: string } = {}): Promise<Record<string, unknown>> {
@@ -349,21 +355,8 @@ export class DaemonRuntimeClient implements MemoryRuntimeClient {
   }
 
   async ensureReachable(): Promise<void> {
-    if (await this.isReachable()) return;
-    if (process.env.COGNIBRAIN_MCP_AUTOSTART === "false") throw new Error(`cognibrain daemon unavailable at ${this.baseUrl}`);
-    autostartDaemon(this.root, this.runtimeRoot);
-    this.baseUrl = stripSlash(discoverDaemonUrl(this.runtimeRoot));
-    if (await this.isReachable()) return;
-    throw new Error(`cognibrain daemon unavailable at ${this.baseUrl}`);
-  }
-
-  private async isReachable(): Promise<boolean> {
-    try {
-      const health = await httpJson<{ ok?: boolean }>("GET", `${this.baseUrl}/health`, undefined, this.headers, 800);
-      return Boolean(health.ok);
-    } catch {
-      return false;
-    }
+    await this.client.ensureReachable();
+    this.baseUrl = this.client.baseUrl;
   }
 }
 
@@ -523,7 +516,7 @@ export class DaemonRuntimeServiceProxy {
   }
 }
 
-function routeForOperation(operation: string, input?: any): { method: string; path: string; body?: unknown } {
+function routeForOperation(operation: string, input?: any): DaemonHttpRoute {
   switch (operation) {
     case "memory.add":
       return { method: "POST", path: "/memories", body: input };
@@ -544,21 +537,21 @@ function routeForOperation(operation: string, input?: any): { method: string; pa
     case "memory.actionRecord":
       return { method: "POST", path: "/actions", body: input };
     case "memory.list":
-      return { method: "GET", path: `/memories${query(input)}` };
+      return { method: "GET", path: `/memories${queryString(input)}` };
     case "memory.get":
       return { method: "GET", path: `/memories/${encodeURIComponent(input.memoryId)}` };
     case "graph.paths":
-      return { method: "GET", path: `/graph/paths${query(input)}` };
+      return { method: "GET", path: `/graph/paths${queryString(input)}` };
     case "graph.query":
       return { method: "POST", path: "/graph/query", body: input };
     case "graph.activation":
-      return { method: "GET", path: `/graph/activate${query(input)}` };
+      return { method: "GET", path: `/graph/activate${queryString(input)}` };
     case "graph.explain":
-      return { method: "GET", path: `/graph/explain${query(input)}` };
+      return { method: "GET", path: `/graph/explain${queryString(input)}` };
     case "policy.evaluate":
       return { method: "POST", path: "/policy/evaluate", body: input };
     case "retention.review":
-      return { method: "GET", path: `/retention/review${query(input)}` };
+      return { method: "GET", path: `/retention/review${queryString(input)}` };
     case "dream.reflect":
       return { method: "POST", path: "/reflection", body: input };
     case "dream.runLegacy":
@@ -570,7 +563,7 @@ function routeForOperation(operation: string, input?: any): { method: string; pa
     case "dream.jobStart":
       return { method: "POST", path: "/dream/jobs", body: input };
     case "dream.jobStatus":
-      return { method: "GET", path: `/dream/jobs${query(input)}` };
+      return { method: "GET", path: `/dream/jobs${queryString(input)}` };
     case "dream.jobCancel":
       return { method: "POST", path: `/dream/jobs/${encodeURIComponent(input.jobId)}/cancel`, body: { reason: input.reason } };
     case "dream.jobRetry":
@@ -584,17 +577,17 @@ function routeForOperation(operation: string, input?: any): { method: string; pa
     case "connector.syncState":
       return { method: "POST", path: "/connectors/sync-state", body: input };
     case "truth.conflictSets":
-      return { method: "GET", path: `/conflicts${query(input)}` };
+      return { method: "GET", path: `/conflicts${queryString(input)}` };
     case "truth.conflictResolve":
       return { method: "POST", path: `/conflicts/${encodeURIComponent(input.conflictSetId)}/resolve`, body: { selectedClaimId: input.selectedClaimId, reason: input.reason, resolvedBy: input.resolvedBy } };
     case "connector.reviewQueue":
-      return { method: "GET", path: `/connectors/review-queue${query(input)}` };
+      return { method: "GET", path: `/connectors/review-queue${queryString(input)}` };
     case "connector.reviewDecision":
       return { method: "POST", path: `/connectors/review-queue/${encodeURIComponent(input.memoryId)}/review`, body: { decision: input.decision, reviewerId: input.reviewerId, reason: input.reason } };
     case "harness.event":
       return { method: "POST", path: "/harness/events", body: input };
     case "health":
-      return { method: "GET", path: `/health${query(input)}` };
+      return { method: "GET", path: `/health${queryString(input)}` };
     case "maintenance.status":
       return { method: "GET", path: "/maintenance" };
     default:
@@ -602,103 +595,9 @@ function routeForOperation(operation: string, input?: any): { method: string; pa
   }
 }
 
-function dreamPrepareRoute(input: DreamCycleInput & { run?: boolean }): { method: string; path: string; body?: unknown } {
+function dreamPrepareRoute(input: DreamCycleInput & { run?: boolean }): DaemonHttpRoute {
   const trigger = input.trigger;
   if (trigger === "harness_handoff") return { method: "POST", path: "/harness/handoff-prepare", body: input };
   if (trigger === "before_release") return { method: "POST", path: "/harness/release-prepare", body: input };
   return { method: "POST", path: "/harness/session-end", body: input };
-}
-
-function query(input?: Record<string, unknown>): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(input ?? {})) {
-    if (value === undefined || value === null || value === "") continue;
-    if (Array.isArray(value)) {
-      if (value.length) params.set(key, value.join(","));
-      continue;
-    }
-    params.set(key, value instanceof Date ? value.toISOString() : String(value));
-  }
-  const text = params.toString();
-  return text ? `?${text}` : "";
-}
-
-async function httpJson<T>(method: string, url: string, body?: unknown, headers: Record<string, string> = {}, timeoutMs = 4_000): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, {
-      method,
-      headers: {
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
-        ...headers
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: controller.signal
-    });
-    const text = await response.text();
-    const payload = text ? JSON.parse(text) : {};
-    if (!response.ok) throw new Error(payload.error ?? payload.message ?? `${url} returned ${response.status}`);
-    return payload as T;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function discoverDaemonUrl(runtimeRoot: string): string {
-  const explicit = process.env.MEMORY_API_URL ?? process.env.COGNIBRAIN_API_URL ?? process.env.COGNIBRAIN_URL;
-  if (explicit) return explicit;
-  for (const file of [
-    join(runtimeRoot, ".cognibrain", "runtime.json"),
-    join(runtimeRoot, ".cognibrain", "local-runtime.json")
-  ]) {
-    const state = readJson(file);
-    if (state?.api?.url) return state.api.url;
-  }
-  return "http://127.0.0.1:8787";
-}
-
-function autostartDaemon(root: string, runtimeRoot: string): void {
-  const lockPath = join(runtimeRoot, ".cognibrain", "mcp-start.lock");
-  mkdirSync(dirname(lockPath), { recursive: true });
-  let lockFd: number | undefined;
-  try {
-    lockFd = openSync(lockPath, "wx");
-  } catch {
-    return;
-  }
-  try {
-    writeFileSync(lockFd, `${process.pid}\n`);
-    spawnSync(process.execPath, [join(root, "bin", "cognibrain.mjs"), "--runtime-root", runtimeRoot, "start"], {
-      cwd: root,
-      env: sanitizedRuntimeEnv(),
-      stdio: "ignore",
-      timeout: 12_000
-    });
-  } finally {
-    rmSync(lockPath, { force: true });
-  }
-}
-
-function authHeadersFromEnv(): Record<string, string> {
-  const bearer = process.env.MEMORY_BEARER_TOKEN;
-  const apiKey = bearer ? undefined : process.env.MEMORY_API_KEY ?? process.env.COGNIBRAIN_API_KEY ?? process.env.COGNIBRAIN_API_TOKEN;
-  return Object.fromEntries(Object.entries({
-    authorization: bearer ? `Bearer ${bearer}` : undefined,
-    "x-api-key": apiKey,
-    "x-actor-id": process.env.MEMORY_ACTOR_ID ?? process.env.COGNIBRAIN_ACTOR_ID
-  }).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== ""));
-}
-
-function stripSlash(value: string): string {
-  return value.replace(/\/+$/, "");
-}
-
-function readJson(path: string): any {
-  if (!existsSync(path)) return undefined;
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return undefined;
-  }
 }

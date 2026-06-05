@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync, spawn } from "node:child_process";
 import { createHmac } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -565,6 +565,26 @@ describe("TypeScript memory core integrations", () => {
       "/harness/events",
       "/harness/events"
     ]);
+  });
+
+  it("discovers the daemon URL from runtime metadata in the public TypeScript SDK", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-sdk-runtime-"));
+    try {
+      mkdirSync(join(dir, ".cognibrain"), { recursive: true });
+      writeFileSync(join(dir, ".cognibrain", "runtime.json"), JSON.stringify({ api: { url: "http://memory.runtime.local/" } }));
+      const seen: string[] = [];
+      const fetchImpl = (async (url) => {
+        seen.push(String(url));
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+      }) as typeof fetch;
+
+      const client = new CognibrainClient({ runtimeRoot: dir, fetchImpl, retries: 0 });
+      await client.health();
+
+      expect(seen).toEqual(["http://memory.runtime.local/health"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("validates connector manifests, syncs connector events, retries webhooks, and ingests translated media", () => {

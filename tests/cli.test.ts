@@ -6,9 +6,10 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { describe, expect, it } from "vitest";
-import { createMcpRuntimeToolHandlers } from "../src/connectors/mcpRuntimeClient";
+import { createMcpRuntimeToolHandlers, DaemonRuntimeClient } from "../src/connectors/mcpRuntimeClient";
 import { harnessCommandSchemas, harnessLifecycleContractVersion, harnessMcpParity } from "../src/contracts/harness/v1";
 import { sanitizedRuntimeEnv } from "../src/core/runtimeEnv";
+import { RuntimeDaemonClient } from "../src/runtime/daemonClient";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const cli = join(root, "bin", "cognibrain.mjs");
@@ -1321,6 +1322,8 @@ describe("cognibrain CLI", () => {
       delete process.env.COGNIBRAIN_API_URL;
       delete process.env.COGNIBRAIN_URL;
       delete process.env.COGNIBRAIN_MCP_BACKEND;
+      const mcpRuntime = new DaemonRuntimeClient({ root, runtimeRoot: dir });
+      expect(mcpRuntime.client).toBeInstanceOf(RuntimeDaemonClient);
       const handlers = createMcpRuntimeToolHandlers({ root, runtimeRoot: dir });
       const guard = await handlers.actionGuard({
         userId: "mcp-daemon",

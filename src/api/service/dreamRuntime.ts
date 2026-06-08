@@ -285,7 +285,7 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
     return report;
   }
 
-export async function startDreamJob(service: any, input: DreamCycleInput, fetchImpl: typeof fetch = fetch, timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000), options: { wait?: boolean } = {}): Promise<DreamJob> {
+export async function startDreamJob(service: any, input: DreamCycleInput, fetchImpl: typeof fetch = fetch, timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000), options: { wait?: boolean; queueOnly?: boolean } = {}): Promise<DreamJob> {
     const mode = input.mode ?? modeForTrigger(input.trigger);
     const trigger = input.trigger ?? triggerForMode(mode);
     const plan = service.dreamPlan({ ...input, mode, trigger });
@@ -307,9 +307,27 @@ export async function startDreamJob(service: any, input: DreamCycleInput, fetchI
     };
     service.dreamJobs.set(job.jobId, job);
     service.persist();
+    if (options.queueOnly) return job;
     const execution = service.executeDreamJob(job, input, mode, trigger, fetchImpl, timeoutMs);
     if (options.wait) await execution;
     return job;
+  }
+
+export async function runDreamJobWorkerOnce(service: any, fetchImpl: typeof fetch = fetch, timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000), options: { now?: string } = {}): Promise<DreamJob | undefined> {
+    const now = options.now ? new Date(options.now).getTime() : Date.now();
+    const due = [...service.dreamJobs.values()]
+      .filter((job: DreamJob) => {
+        if (job.status === "cancelled" || job.status === "done" || job.status === "failed") return false;
+        const nextRunAt = job.nextRunAt ? new Date(job.nextRunAt).getTime() : new Date(job.queuedAt).getTime();
+        if (nextRunAt > now) return false;
+        if (job.status === "running" && job.leaseUntil && new Date(job.leaseUntil).getTime() > now) return false;
+        return true;
+      })
+      .sort((a: DreamJob, b: DreamJob) => (b.priority ?? 0) - (a.priority ?? 0) || new Date(a.queuedAt).getTime() - new Date(b.queuedAt).getTime())[0];
+    if (!due) return undefined;
+    const input = due.input ?? { userId: due.userId, trigger: due.trigger, mode: due.mode, budget: due.plan.budget, sourceRefresh: due.plan.sourceRefresh, connectorIds: due.plan.connectorIds };
+    await service.executeDreamJob(due, input, due.mode, due.trigger, fetchImpl, timeoutMs);
+    return service.dreamJobs.get(due.jobId) ?? due;
   }
 
 export function dreamJobStatus(service: any, jobId?: string): DreamJob[] {

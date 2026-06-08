@@ -1,12 +1,24 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname } from "node:path";
 
-type CertificationState = "implementation-ready" | "credential-blocked" | "tenant-verified" | "production-certified" | "failed";
+type CertificationState = "not_certified" | "implementation-ready" | "credential-blocked" | "tenant-verified" | "production-certified" | "failed";
+type CertificationLevel = "L0-driver-present" | "L1-mock-contract-tested" | "L2-sandbox-live-smoke" | "L3-tenant-verified" | "L4-production-certified";
 
 interface CertificationRow {
   provider: string;
   connectorId: string;
   state: CertificationState;
+  level: CertificationLevel;
+  list: boolean;
+  poll: boolean;
+  writeback: boolean;
+  oauth: boolean;
+  webhook: boolean;
+  sourceResolverCoverage: number;
+  semanticMappingScore: number;
+  liveSmokeRunId?: string;
+  artifactHash: string;
   checks: Record<string, boolean>;
   evidence: Record<string, string>;
   blockedBy: string[];
@@ -133,22 +145,80 @@ function certificationRow(
       : implementationReady
         ? "credential-blocked"
         : "failed";
+  const capabilities = connectorCapabilities(row, qualityRow, webhookNeeded, signedLiveSmoke);
+  const level = certificationLevel(state, checks);
+  const evidence = {
+    maturity: artifactPaths.maturity,
+    apiSpec: String(maturityEvidence.apiSpecArtifact ?? "artifacts/vendor-api-specs.json"),
+    liveSmoke: artifactPaths.liveSmoke,
+    quality: artifactPaths.quality,
+    transport: provider === "github" ? artifactPaths.transport : "covered-by-shared-transport-path"
+  };
+  const liveSmokeRunId = stringValue(liveRow?.runId) ?? stringValue(object(liveRow?.artifact).runId);
+  const artifactHash = hashCertificationRow({
+    provider,
+    connectorId: String(row.connectorId ?? ""),
+    state,
+    level,
+    checks,
+    capabilities,
+    evidence,
+    blockedBy,
+    liveSmokeRunId
+  });
   return {
     provider,
     connectorId: String(row.connectorId ?? ""),
     state,
+    level,
+    ...capabilities,
+    liveSmokeRunId,
+    artifactHash,
     checks,
-    evidence: {
-      maturity: artifactPaths.maturity,
-      apiSpec: String(maturityEvidence.apiSpecArtifact ?? "artifacts/vendor-api-specs.json"),
-      liveSmoke: artifactPaths.liveSmoke,
-      quality: artifactPaths.quality,
-      transport: provider === "github" ? artifactPaths.transport : "covered-by-shared-transport-path"
-    },
+    evidence,
     blockedBy,
     canBecomeTenantVerified: implementationReady,
     canBecomeProductionCertified: implementationReady && tenantVerified
   };
+}
+
+function connectorCapabilities(
+  row: Record<string, unknown>,
+  qualityRow: Record<string, unknown> | undefined,
+  webhookNeeded: boolean,
+  signedLiveSmoke: boolean
+): Pick<CertificationRow, "list" | "poll" | "writeback" | "oauth" | "webhook" | "sourceResolverCoverage" | "semanticMappingScore"> {
+  const maturity = object(row.maturity);
+  const quality = object(qualityRow);
+  const qualityChecks = object(quality.checks);
+  const semanticScore = numberValue(quality.score) ?? scoreFromChecks(qualityChecks);
+  return {
+    list: maturity.listImplemented === true || maturity.pollOrList === true,
+    poll: maturity.pollImplemented === true || maturity.pollOrList === true,
+    writeback: maturity.writebackImplemented === true || maturity.writeback === true,
+    oauth: maturity.oauthOrSetupWizard === true,
+    webhook: webhookNeeded ? maturity.webhook === true : false,
+    sourceResolverCoverage: signedLiveSmoke ? 0.95 : maturity.liveSmokeSupport === true ? 0.75 : 0,
+    semanticMappingScore: semanticScore
+  };
+}
+
+function certificationLevel(state: CertificationState, checks: Record<string, boolean>): CertificationLevel {
+  if (state === "production-certified") return "L4-production-certified";
+  if (state === "tenant-verified") return "L3-tenant-verified";
+  if (checks.liveSmokeHarness) return "L2-sandbox-live-smoke";
+  if (checks.hermeticDriver && checks.apiSpec) return "L1-mock-contract-tested";
+  return "L0-driver-present";
+}
+
+function scoreFromChecks(checks: Record<string, unknown>): number {
+  const values = Object.values(checks).filter((value): value is boolean => typeof value === "boolean");
+  if (!values.length) return 0;
+  return Number((values.filter(Boolean).length / values.length).toFixed(2));
+}
+
+function hashCertificationRow(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 function liveArtifactSigned(liveRow: Record<string, unknown> | undefined): boolean {
@@ -186,6 +256,14 @@ ${rows}
 
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function readJson(path: string, fallback: unknown): unknown {

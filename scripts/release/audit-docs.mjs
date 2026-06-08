@@ -42,6 +42,7 @@ const files = {
 const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmarks, files.integrations, files.status, files.operations, files.reference, files.evidence].join("\n\n");
 const packageJson = JSON.parse(files.package);
 const packageFiles = Array.isArray(packageJson.files) ? packageJson.files : [];
+const connectorCertification = exists("artifacts/connector-certification.json") ? JSON.parse(read("artifacts/connector-certification.json")) : { rows: [] };
 
 const checks = [
   check("documentation is compact and canonical", [
@@ -110,7 +111,8 @@ const checks = [
     !exists("scripts/audit-plan1_5.mjs"),
     !exists("scripts/demo-plan1_5.mjs")
   ]),
-  check("local markdown links resolve", [localMarkdownLinks().broken.length === 0])
+  check("local markdown links resolve", [localMarkdownLinks().broken.length === 0]),
+  check("connector certification claims do not exceed artifact", connectorCertificationClaims())
 ];
 
 const failed = checks.filter((item) => !item.passed);
@@ -160,6 +162,37 @@ function writeReport(items) {
     checks: items
   };
   writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`);
+}
+
+function connectorCertificationClaims() {
+  const rows = Array.isArray(connectorCertification.rows) ? connectorCertification.rows : [];
+  const tenantVerifiedProviders = new Set(rows.filter((row) => row?.state === "tenant-verified" || row?.state === "production-certified").map((row) => String(row.provider).toLowerCase()));
+  const productionCertifiedProviders = new Set(rows.filter((row) => row?.state === "production-certified").map((row) => String(row.provider).toLowerCase()));
+  const providers = [...new Set(rows.map((row) => String(row.provider ?? "").toLowerCase()).filter(Boolean))];
+  const assertions = [
+    !positiveConnectorClaim(docsCorpus, /\bproduction[- ]certified connectors?\b/i) || productionCertifiedProviders.size > 0,
+    !positiveConnectorClaim(docsCorpus, /\btenant[- ]verified connectors?\b/i) || tenantVerifiedProviders.size > 0
+  ];
+  for (const provider of providers) {
+    assertions.push(!positiveConnectorClaim(docsCorpus, new RegExp(`\\b${escapeRegExp(provider)}\\b[^\\n.]{0,80}\\bproduction[- ]certified\\b`, "i")) || productionCertifiedProviders.has(provider));
+    assertions.push(!positiveConnectorClaim(docsCorpus, new RegExp(`\\b${escapeRegExp(provider)}\\b[^\\n.]{0,80}\\btenant[- ]verified\\b`, "i")) || tenantVerifiedProviders.has(provider));
+  }
+  return assertions;
+}
+
+function positiveConnectorClaim(content, pattern) {
+  for (const match of content.matchAll(new RegExp(pattern.source, `${pattern.flags.includes("i") ? "i" : ""}g`))) {
+    const start = Math.max(0, match.index - 80);
+    const end = Math.min(content.length, match.index + match[0].length + 80);
+    const window = content.slice(start, end).toLowerCase();
+    if (/\b(no|not|without|unless|requires|required|cannot|blocked|credential-blocked|does not mean|never)\b/.test(window)) continue;
+    return true;
+  }
+  return false;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function walk(dir) {

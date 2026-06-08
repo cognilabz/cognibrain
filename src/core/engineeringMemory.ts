@@ -239,6 +239,14 @@ export function evaluateForbiddenAction(input: { userId: string; action: string;
     const forbidden = engineering.forbiddenAction ? normalizeComparableAction(engineering.forbiddenAction) : undefined;
     const relevant = forbidden ? actionPhraseMatches(action, forbidden) : explicitEngineeringActionMatches(action, engineering);
     if (!relevant) continue;
+    if (result.unsafeToInject || result.decision === "review" || result.decision === "exclude") {
+      const reason = `review required before action guard can rely on ${engineering.kind} memory ${result.memory.id}: ${engineering.forbiddenAction ?? result.memory.content}`;
+      if (engineering.kind === "forbidden_action" || engineering.kind === "generated_file_rule") blockedBy.push({ memoryId: result.memory.id, kind: engineering.kind, reason });
+      else warnings.push(reason);
+      if (engineering.correctAction) alternatives.add(engineering.correctAction);
+      if (engineering.successPattern) alternatives.add(engineering.successPattern);
+      continue;
+    }
     if (engineering.kind === "forbidden_action" || engineering.kind === "generated_file_rule") {
       blockedBy.push({ memoryId: result.memory.id, kind: engineering.kind, reason: engineering.forbiddenAction ?? result.memory.content });
     } else if (engineering.kind === "repo_policy" || engineering.kind === "test_strategy" || engineering.kind === "procedure") {

@@ -64,6 +64,7 @@ export class MemoryServiceBase {
     noHitSearches: 0,
     averageSearchResults: 0,
     averageQualityScore: 1,
+    truthGate: { excluded: 0, reviewed: 0, missingClaim: 0, suppressedClaims: 0, revalidate: 0 },
     dreamActions: {},
     sessions: {}
   };

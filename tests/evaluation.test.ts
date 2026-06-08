@@ -456,6 +456,16 @@ describe("self verification benchmark loop", () => {
     expect(certification.passed).toBe(true);
     expect(certification.summary.credentialBlocked).toBeGreaterThanOrEqual(19);
     expect(certification.summary.productionCertified).toBe(0);
+    expect(certification.rows.find((row) => row.provider === "github")).toMatchObject({
+      level: "L2-sandbox-live-smoke",
+      list: true,
+      poll: true,
+      writeback: true,
+      oauth: true,
+      webhook: true,
+      sourceResolverCoverage: 0.75
+    });
+    expect(certification.rows.find((row) => row.provider === "github")?.artifactHash).toHaveLength(64);
   }, 30_000);
 
   it("requires signed live-smoke and owner artifacts for tenant and production connector certification", () => {
@@ -492,6 +502,9 @@ describe("self verification benchmark loop", () => {
     }));
     const certified = generateConnectorCertification({ maturityInput: maturityPath, liveSmokeInput: livePath, qualityInput: qualityPath, transportInput: transportPath });
     expect(certified.rows[0].state).toBe("production-certified");
+    expect(certified.rows[0].level).toBe("L4-production-certified");
+    expect(certified.rows[0].sourceResolverCoverage).toBe(0.95);
+    expect(certified.rows[0].artifactHash).toHaveLength(64);
 
     writeFileSync(livePath, JSON.stringify({
       writebackEnabled: false,
@@ -2334,6 +2347,13 @@ process.stdin.on("end", () => {
     expect(report.scenarioFactory.availableCorrectionTypes).toBeGreaterThanOrEqual(20);
     expect(report.metrics.sourceRefCorrectness).toBe(1);
     expect(report.metrics.granularPatchCorrectness).toBe(1);
+    expect(report.nextChangeTracks.truthGate.requiredSignals).toEqual(expect.arrayContaining(["truthGate.missingClaim", "unsafeToInject"]));
+    expect(report.nextChangeTracks.restartDurability.scenarios).toEqual(expect.arrayContaining(["restart between correction and next task", "dream job resumes after restart"]));
+    expect(report.nextChangeTracks.marketClaimGate).toMatchObject({
+      competitorRunsRequired: 2,
+      externalJudgeRequired: true,
+      publicArtifactHashRequired: true
+    });
     expect(report.diagnostics.integrity.overfitRisk).toBe("low");
     expect(report.diagnostics.integrity.metrics).toMatchObject({
       expectedDirectPatchHarness: false,
@@ -2443,6 +2463,8 @@ process.stdin.on("end", () => {
     expect(report.scenarioCount).toBe(10);
     expect(report.generation.scenariosWritten).toBe(true);
     expect(report.scenarios).toHaveLength(0);
+    const scenariosArtifact = JSON.parse(readFileSync(join(dir, "scenarios.json"), "utf8"));
+    expect(scenariosArtifact.nextChangeTracks.truthGate.scenarios).toContain("engineering memory without metadata.claim cannot be injected");
     expect(report.difficultyDistribution.easy + report.difficultyDistribution.medium + report.difficultyDistribution.hard + report.difficultyDistribution.evil).toBe(10);
   });
 });

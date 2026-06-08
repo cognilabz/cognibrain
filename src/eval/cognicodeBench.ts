@@ -196,6 +196,24 @@ export interface CogniCodeBenchReport {
     requiredExternalProofForQualityClaim: string[];
     requiredExternalProofForMarketClaim: string[];
   };
+  nextChangeTracks: {
+    truthGate: {
+      scenarios: string[];
+      requiredSignals: string[];
+      passCondition: string;
+    };
+    restartDurability: {
+      scenarios: string[];
+      requiredSignals: string[];
+      passCondition: string;
+    };
+    marketClaimGate: {
+      competitorRunsRequired: number;
+      proofLevels: string[];
+      externalJudgeRequired: boolean;
+      publicArtifactHashRequired: boolean;
+    };
+  };
   metrics: {
     correctionCarryoverRate: number;
     repeatedMistakeRate: number;
@@ -399,7 +417,8 @@ export function runCogniCodeBench(options: CogniCodeScenarioFactoryOptions & { o
   const scenarioSet = buildCogniCodeScenarioSet({ ...options, count: options.count ?? options.scenarios ?? 100, seed });
   const scenarios = scenarioSet.scenarios;
   const scenariosPath = options.scenariosPath ?? "artifacts/cognicodebench/scenarios.json";
-  writeJson(scenariosPath, { schemaVersion: "1.0", generatedAt: new Date().toISOString(), seed, scenarios });
+  const nextChangeTracks = cognicodeNextChangeTracks();
+  writeJson(scenariosPath, { schemaVersion: "1.0", generatedAt: new Date().toISOString(), seed, nextChangeTracks, scenarios });
   const scenariosWritten = existsSync(scenariosPath);
   const results = generateOnly ? [] : scenarios.map(runScenario);
   const metrics = generateOnly ? emptyMetrics() : summarizeResults(results);
@@ -487,7 +506,7 @@ export function runCogniCodeBench(options: CogniCodeScenarioFactoryOptions & { o
       },
     methodology: {
       task: "Measure whether coding agents learn from codebase corrections, review feedback, commands, and tool outcomes before the next change.",
-      metrics: ["correction carryover", "repeated mistake rate", "procedure recall", "patch correctness", "evidence completeness", "wrong-memory suppression", "sourceRef correctness", "granular patch correctness", "long-horizon recall"],
+      metrics: ["correction carryover", "repeated mistake rate", "procedure recall", "patch correctness", "evidence completeness", "wrong-memory suppression", "sourceRef correctness", "granular patch correctness", "long-horizon recall", "TruthGate suppression", "restart durability"],
       baselines: baselines.map((baseline) => baseline.name),
       privacy: { syntheticReposOnly: true, noUserData: true },
       deterministicDiagnostics: true,
@@ -503,6 +522,7 @@ export function runCogniCodeBench(options: CogniCodeScenarioFactoryOptions & { o
         "credentialed live-system runs where competitors require hosted APIs"
       ]
     },
+    nextChangeTracks,
     metrics,
     scenarioFactory: scenarioSet.summary,
     difficultyDistribution: scenarioSet.summary.difficultyDistribution,
@@ -519,6 +539,39 @@ export function runCogniCodeBench(options: CogniCodeScenarioFactoryOptions & { o
   };
   writeJson(options.outputPath ?? "artifacts/cognicodebench/run.json", report);
   return report;
+}
+
+function cognicodeNextChangeTracks(): CogniCodeBenchReport["nextChangeTracks"] {
+  return {
+    truthGate: {
+      scenarios: [
+        "stale repo rule is excluded before context selection",
+        "engineering memory without metadata.claim cannot be injected",
+        "newer source-backed claim suppresses an older rule",
+        "contradiction or uncertainty routes to review",
+        "release-critical source refresh happens before the next code change"
+      ],
+      requiredSignals: ["truthGate.excluded", "truthGate.reviewed", "truthGate.missingClaim", "truthGate.suppressedClaims", "unsafeToInject"],
+      passCondition: "No engineering memory reaches a coding context or action guard unless claim, truth, policy and injection-safety checks pass."
+    },
+    restartDurability: {
+      scenarios: [
+        "restart between correction and next task",
+        "connector event survives daemon restart",
+        "source revalidation result survives daemon restart",
+        "dream job resumes after restart",
+        "two workers cannot lease the same job"
+      ],
+      requiredSignals: ["memory.created event", "current_truth.decided event", "source_ref.revalidated event", "dream.job_leased event", "dream.job_completed event"],
+      passCondition: "The next code-change decision is identical after process restart and event/projection rebuild."
+    },
+    marketClaimGate: {
+      competitorRunsRequired: 2,
+      proofLevels: ["same-run-native", "same-run-cloud", "vendor-signed", "third-party-replicated"],
+      externalJudgeRequired: true,
+      publicArtifactHashRequired: true
+    }
+  };
 }
 
 function judgeCogniCodeQuality(payload: {

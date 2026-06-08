@@ -1,12 +1,16 @@
 import { MemoryServicePersistence } from './memoryServicePersistence';
 import { JsonFilePersistenceAdapter, createPersistenceFromEnv, createRepositoryFromEnv, redactionModeFromEnv } from './memoryServiceDeps';
-import type { MemoryServiceOptions, PersistedMemoryFile } from './memoryServiceDeps';
+import type { Memory, MemoryServiceOptions, PersistedMemoryFile } from './memoryServiceDeps';
 
 export class MemoryService extends MemoryServicePersistence {}
 export type { ConnectorWritebackInput, ConnectorWritebackOperation, ContextEnrichmentInput, MemoryMaintenanceStatus, MemoryServiceOptions } from './memoryServiceDeps';
 
 function isPostgresRepositoryBackend(backend: string): boolean {
   return backend === "postgres-async" || backend === "postgres-production" || backend === "postgres-db-primary" || backend === "postgres-repository";
+}
+
+function isStrictDbPrimaryBackend(backend: string): boolean {
+  return backend === "postgres-production" || backend === "postgres-db-primary";
 }
 
 export function createDefaultMemoryService() {
@@ -40,15 +44,35 @@ export async function createProductionMemoryService() {
     const { AsyncPostgresMemoryRepository } = await import("../repositories/postgresRepository");
     const asyncRepository = new AsyncPostgresMemoryRepository(process.env.MEMORY_POSTGRES_URL, { enableRls: process.env.MEMORY_POSTGRES_RLS === "true" });
     await asyncRepository.initialize();
-    const loadedState = await asyncRepository.loadStateAsync();
+    const loadedState = await createProductionPersistedFileFromRepository(asyncRepository, {
+      allowServiceStateFallback: !isStrictDbPrimaryBackend(backend)
+    });
     const service = createDefaultMemoryService();
     Object.defineProperty(service, "productionAsyncRepository", { value: asyncRepository, enumerable: false });
     if (loadedState && typeof loadedState === "object" && !Array.isArray(loadedState)) {
-      service.importMemoryFile(loadedState as PersistedMemoryFile);
+      service.importMemoryFile(loadedState as PersistedMemoryFile, { persist: false });
     }
     return service;
   }
   return createDefaultMemoryService();
+}
+
+export async function createProductionPersistedFileFromRepository(repository: {
+  list(filter?: { userId?: string; includeArchived?: boolean; limit?: number }): Promise<Memory[]>;
+  loadStateAsync?: () => Promise<unknown>;
+}, options: { allowServiceStateFallback?: boolean } = {}): Promise<PersistedMemoryFile | undefined> {
+  const memories = await repository.list({});
+  if (memories.length > 0) {
+    return {
+      version: 2,
+      memories
+    } as PersistedMemoryFile;
+  }
+  if (options.allowServiceStateFallback === false) return undefined;
+  const legacyState = await repository.loadStateAsync?.();
+  return legacyState && typeof legacyState === "object" && !Array.isArray(legacyState)
+    ? legacyState as PersistedMemoryFile
+    : undefined;
 }
 
 export let defaultService = createDefaultMemoryService();

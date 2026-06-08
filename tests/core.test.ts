@@ -7,11 +7,11 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, InMemoryMemoryRepository, LOCAL_CONTEXT_RERANKER_PROFILE, MemoryStore, ReflectionEngine, RepositoryBackedStorageAdapter, RetrievalEngine, healthReport, rankMemories, tokenize, extractEntities, type EngineeringMemoryKind, type MemoryClaim } from "../src/core";
+import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, InMemoryEventJournal, InMemoryMemoryRepository, LOCAL_CONTEXT_RERANKER_PROFILE, MemoryProjectionBuilder, MemoryStore, ReflectionEngine, RepositoryBackedStorageAdapter, RetrievalEngine, healthReport, rankMemories, tokenize, extractEntities, rebuildMemoryStoreFromEvents, type EngineeringMemoryKind, type MemoryClaim } from "../src/core";
 import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { connectorAuthHeaders, createConnectorManifest, createPlatformIntegration, createWritebackPlan, runConnectorPoll } from "../src/connectors/sdk";
-import { MemoryService } from "../src/api/service";
+import { MemoryService, createProductionPersistedFileFromRepository } from "../src/api/service";
 import { PostgresMemoryRepository, SQLiteMemoryRepository, sqliteRepositoryAvailable } from "../src/api/repositories";
 import { CognibrainClient, CognibrainError } from "../sdk/typescript/client";
 import { AppendOnlyLogPersistenceAdapter, CassandraCompatiblePersistenceAdapter, CassandraRemotePersistenceAdapter, JsonFilePersistenceAdapter, PostgresCompatiblePersistenceAdapter, PostgresRemotePersistenceAdapter, SQLitePersistenceAdapter, createPersistenceFromEnv, sqliteAvailable } from "../src/api/persistence";
@@ -29,6 +29,469 @@ import { CODING_QUERY_INTENT_CASES } from "../src/eval/codingIntentCases";
 const nodeRequire = createRequire(import.meta.url);
 
 describe("TypeScript memory core", () => {
+  it("records typed memory events through the event journal contract", async () => {
+    const journal = new InMemoryEventJournal();
+    const event = await journal.appendEvent({
+      type: "current_truth.decided",
+      aggregateId: "claim-atlas",
+      occurredAt: "2026-06-05T00:00:00.000Z",
+      payload: { selectedMemoryId: "mem-atlas" }
+    });
+
+    expect(event.id).toBeTruthy();
+    await journal.appendEvent({
+      type: "dream.job_queued",
+      aggregateId: "job-atlas",
+      occurredAt: "2026-06-05T00:01:00.000Z",
+      payload: { jobId: "job-atlas" }
+    });
+
+    const claimEvents = await journal.readEvents({ aggregateId: "claim-atlas" });
+    expect(claimEvents).toEqual([expect.objectContaining({ type: "current_truth.decided", payload: { selectedMemoryId: "mem-atlas" } })]);
+  });
+
+  it("rebuilds a MemoryStore projection from typed memory events", async () => {
+    const sourceStore = new MemoryStore();
+    const memory = sourceStore.add({
+      userId: "u1",
+      content: "Atlas uses npm test for release checks.",
+      source: { kind: "human", confidence: 0.96 }
+    });
+    const updated = sourceStore.update(memory.id, { content: "Atlas uses npm run release:check for release checks." });
+    const deleted = sourceStore.add({
+      userId: "u1",
+      content: "Delete this stale projection row.",
+      source: { kind: "human", confidence: 0.9 }
+    });
+    const journal = new InMemoryEventJournal();
+    await journal.appendEvent({ type: "memory.created", aggregateId: memory.id, occurredAt: "2026-06-05T00:00:00.000Z", payload: memory });
+    await journal.appendEvent({ type: "current_truth.decided", aggregateId: "claim-atlas", occurredAt: "2026-06-05T00:00:01.000Z", payload: { selectedMemoryId: memory.id } });
+    await journal.appendEvent({ type: "memory.updated", aggregateId: memory.id, occurredAt: "2026-06-05T00:00:02.000Z", payload: updated });
+    await journal.appendEvent({ type: "memory.created", aggregateId: deleted.id, occurredAt: "2026-06-05T00:00:03.000Z", payload: deleted });
+    await journal.appendEvent({ type: "memory.deleted", aggregateId: deleted.id, occurredAt: "2026-06-05T00:00:04.000Z", payload: { memoryId: deleted.id } });
+
+    const { store, report } = await new MemoryProjectionBuilder(journal).rebuild();
+
+    expect(report).toMatchObject({ eventsRead: 5, memoriesCreatedOrUpdated: 3, memoriesDeleted: 1, ignoredEvents: 1, errors: [] });
+    expect(store.get(memory.id).content).toBe("Atlas uses npm run release:check for release checks.");
+    expect(() => store.get(deleted.id)).toThrow("Memory not found");
+  });
+
+  it("rebuilds claims truth conflicts evidence dream and connector projections from typed events", async () => {
+    const journal = new InMemoryEventJournal();
+    const claim = {
+      id: "claim-release-command",
+      subject: "cognibrain",
+      predicate: "release_command",
+      object: "npm run release:check",
+      qualifiers: {},
+      sourceMemoryId: "mem-release-command",
+      confidence: 0.96,
+      trust: 0.95,
+      state: "active" as const,
+      createdAt: "2026-06-05T00:00:00.000Z",
+      updatedAt: "2026-06-05T00:00:00.000Z"
+    };
+    const conflict = {
+      id: "conflict-release-command",
+      claimIds: ["claim-old", claim.id],
+      detectedAt: "2026-06-05T00:01:00.000Z",
+      status: "operator_review" as const
+    };
+    const truthDecision = {
+      subject: claim.subject,
+      predicate: claim.predicate,
+      selectedClaimId: claim.id,
+      selectedMemoryId: claim.sourceMemoryId,
+      state: "selected" as const,
+      reason: "newer source-backed release command",
+      suppressedClaimIds: ["claim-old"],
+      conflictSetId: conflict.id
+    };
+    const evidencePack = {
+      schemaVersion: "1.0" as const,
+      id: "ctx-release-command",
+      generatedAt: "2026-06-05T00:02:00.000Z",
+      query: "release command",
+      userId: "u1",
+      tokenBudget: 900,
+      context: "safe_to_inject=true",
+      results: [],
+      summary: { included: 0, warnings: 0, excluded: 0, stale: 0, contradictions: 0 }
+    };
+    const connectorState = {
+      connectorId: "official-github",
+      lastStatus: "applied" as const,
+      records: 2,
+      cursor: "cursor-42"
+    };
+    await journal.appendEvent({ type: "claim.registered", aggregateId: claim.id, occurredAt: "2026-06-05T00:00:00.000Z", payload: claim });
+    await journal.appendEvent({ type: "conflict.opened", aggregateId: conflict.id, occurredAt: "2026-06-05T00:01:00.000Z", payload: conflict });
+    await journal.appendEvent({ type: "current_truth.decided", aggregateId: "cognibrain:release_command", occurredAt: "2026-06-05T00:01:30.000Z", payload: truthDecision });
+    await journal.appendEvent({ type: "context_pack.created", aggregateId: evidencePack.id, occurredAt: evidencePack.generatedAt, payload: evidencePack });
+    await journal.appendEvent({ type: "dream.job_queued", aggregateId: "job-release", occurredAt: "2026-06-05T00:03:00.000Z", payload: { jobId: "job-release", status: "queued", trigger: "before_release" } });
+    await journal.appendEvent({ type: "dream.job_leased", aggregateId: "job-release", occurredAt: "2026-06-05T00:04:00.000Z", payload: { jobId: "job-release", status: "running", leaseOwner: "worker-a" } });
+    await journal.appendEvent({ type: "connector.polled", aggregateId: connectorState.connectorId, occurredAt: "2026-06-05T00:05:00.000Z", payload: connectorState });
+
+    const { domain, report } = await new MemoryProjectionBuilder(journal).rebuild();
+
+    expect(report.domainEventsApplied).toBe(7);
+    expect(domain.claims).toEqual([expect.objectContaining({ id: claim.id })]);
+    expect(domain.conflictSets).toEqual([expect.objectContaining({ id: conflict.id, status: "operator_review" })]);
+    expect(domain.currentTruth).toEqual([expect.objectContaining({ selectedClaimId: claim.id, suppressedClaimIds: ["claim-old"] })]);
+    expect(domain.evidencePacks).toEqual([expect.objectContaining({ id: evidencePack.id, context: "safe_to_inject=true" })]);
+    expect(domain.dreamJobs).toEqual([expect.objectContaining({ jobId: "job-release", status: "running", leaseOwner: "worker-a" })]);
+    expect(domain.connectorSyncStates).toEqual([expect.objectContaining({ connectorId: "official-github", cursor: "cursor-42" })]);
+  });
+
+  it("rebuilds non-memory domain projections from a persisted SQLite event journal", async () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-domain-projection-journal-"));
+    try {
+      const repository = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      await repository.appendEvent({
+        type: "claim.registered",
+        aggregateId: "claim-sqlite-domain",
+        occurredAt: "2026-06-05T00:00:00.000Z",
+        payload: {
+          id: "claim-sqlite-domain",
+          subject: "sqlite",
+          predicate: "rebuilds_domain_projection",
+          object: "true",
+          qualifiers: {},
+          sourceMemoryId: "mem-sqlite-domain",
+          confidence: 0.9,
+          trust: 0.9,
+          state: "active",
+          createdAt: "2026-06-05T00:00:00.000Z",
+          updatedAt: "2026-06-05T00:00:00.000Z"
+        }
+      });
+      await repository.appendEvent({
+        type: "connector.polled",
+        aggregateId: "official-github",
+        occurredAt: "2026-06-05T00:01:00.000Z",
+        payload: { connectorId: "official-github", lastStatus: "applied", records: 1, cursor: "sqlite-cursor" }
+      });
+
+      const reloaded = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      const { domain, report } = await rebuildMemoryStoreFromEvents(reloaded);
+
+      expect(report.domainEventsApplied).toBe(2);
+      expect(domain.claims).toEqual([expect.objectContaining({ id: "claim-sqlite-domain" })]);
+      expect(domain.connectorSyncStates).toEqual([expect.objectContaining({ connectorId: "official-github", cursor: "sqlite-cursor" })]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("persists typed memory events through the SQLite repository journal", async () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-event-journal-"));
+    try {
+      const repository = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      await repository.appendEvent({
+        type: "source_ref.revalidated",
+        aggregateId: "mem-source",
+        occurredAt: "2026-06-05T00:00:00.000Z",
+        payload: { status: "confirmed" }
+      });
+
+      const reloaded = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      const events = await reloaded.readEvents({ aggregateId: "mem-source", type: "source_ref.revalidated" });
+      expect(events).toEqual([
+        expect.objectContaining({
+          type: "source_ref.revalidated",
+          aggregateId: "mem-source",
+          payload: { status: "confirmed" }
+        })
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rebuilds a MemoryStore projection from a persisted SQLite event journal", async () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-projection-journal-"));
+    try {
+      const sourceStore = new MemoryStore();
+      const memory = sourceStore.add({
+        userId: "u1",
+        content: "SQLite event journal can rebuild projection caches.",
+        source: { kind: "tool", confidence: 0.88 }
+      });
+      const repository = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      await repository.appendEvent({ type: "memory.created", aggregateId: memory.id, occurredAt: "2026-06-05T00:00:00.000Z", payload: memory });
+
+      const reloaded = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      const { store, report } = await rebuildMemoryStoreFromEvents(reloaded);
+
+      expect(report.errors).toEqual([]);
+      expect(report.memoriesCreatedOrUpdated).toBe(1);
+      expect(store.get(memory.id).content).toBe("SQLite event journal can rebuild projection caches.");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("persists claims and current truth through SQLite domain repositories", async () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-sqlite-truth-repository-"));
+    try {
+      const repository = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      const claim = {
+        id: "claim-atlas-release",
+        subject: "atlas",
+        predicate: "release_command",
+        object: "npm run release:check",
+        qualifiers: {},
+        sourceMemoryId: "mem-atlas-release",
+        confidence: 0.97,
+        trust: 0.94,
+        state: "active" as const,
+        createdAt: "2026-06-05T00:00:00.000Z",
+        updatedAt: "2026-06-05T00:00:00.000Z"
+      };
+      const decision = {
+        subject: "atlas",
+        predicate: "release_command",
+        selectedClaimId: claim.id,
+        selectedMemoryId: claim.sourceMemoryId,
+        state: "selected" as const,
+        reason: "fixture repository selected current truth",
+        suppressedClaimIds: [],
+        scoreBreakdown: { selected: 0.99 }
+      };
+
+      await repository.claimRepository.register(claim);
+      await repository.truthRepository.decide(decision);
+
+      const reloaded = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      await expect(reloaded.claimRepository.get(claim.id)).resolves.toMatchObject({ id: claim.id, object: "npm run release:check" });
+      await expect(reloaded.claimRepository.list({ subject: "atlas", predicate: "release_command" })).resolves.toEqual([expect.objectContaining({ id: claim.id })]);
+      await expect(reloaded.truthRepository.currentForClaim("atlas", "release_command")).resolves.toMatchObject({ selectedClaimId: claim.id, state: "selected" });
+      const events = await reloaded.readEvents({ aggregateId: claim.id });
+      expect(events.map((event) => event.type)).toContain("claim.registered");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("persists conflict evidence connector policy and retention rows through SQLite domain repositories", async () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-sqlite-domain-repositories-"));
+    try {
+      const repository = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      const conflict = {
+        id: "conflict-release-rule",
+        claimIds: ["claim-old", "claim-new"],
+        detectedAt: "2026-06-05T00:00:00.000Z",
+        status: "open" as const
+      };
+      const evidencePack = {
+        schemaVersion: "1.0" as const,
+        id: "ctx-release-rule",
+        generatedAt: "2026-06-05T00:00:00.000Z",
+        query: "release command",
+        userId: "u1",
+        tokenBudget: 1200,
+        context: "safe_to_inject=true",
+        results: [],
+        summary: {
+          included: 0,
+          warnings: 0,
+          excluded: 0,
+          stale: 0,
+          contradictions: 0
+        }
+      };
+      const connectorState = {
+        connectorId: "official-github",
+        lastStatus: "applied" as const,
+        records: 3,
+        cursor: "cursor-1"
+      };
+      const policyRule = {
+        id: "policy-release-read",
+        label: "Allow release proof retrieval",
+        effect: "allow" as const,
+        operations: ["retrieve" as const],
+        createdAt: "2026-06-05T00:00:00.000Z",
+        updatedAt: "2026-06-05T00:00:00.000Z"
+      };
+      const retentionRule = {
+        id: "retention-release-proof",
+        label: "Archive release proof after one year",
+        retentionDays: 365,
+        action: "archive" as const,
+        createdAt: "2026-06-05T00:00:00.000Z",
+        updatedAt: "2026-06-05T00:00:00.000Z"
+      };
+
+      await repository.conflictRepository.save(conflict);
+      await repository.evidencePackRepository.save(evidencePack);
+      await repository.connectorSyncRepository.save(connectorState);
+      await repository.policyRepository.savePolicy(policyRule);
+      await repository.policyRepository.saveRetention(retentionRule);
+
+      const reloaded = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      await expect(reloaded.conflictRepository.get(conflict.id)).resolves.toMatchObject({ id: conflict.id, status: "open" });
+      await expect(reloaded.conflictRepository.list({ status: "open" })).resolves.toEqual([expect.objectContaining({ id: conflict.id })]);
+      await expect(reloaded.evidencePackRepository.get(evidencePack.id)).resolves.toMatchObject({ id: evidencePack.id, context: "safe_to_inject=true" });
+      await expect(reloaded.connectorSyncRepository.get(connectorState.connectorId)).resolves.toMatchObject({ connectorId: "official-github", cursor: "cursor-1" });
+
+      const events = await reloaded.readEvents();
+      expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(["conflict.opened", "context_pack.created", "connector.polled"]));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("commits memory claim truth and event writes through a SQLite async UnitOfWork", async () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-sqlite-uow-"));
+    try {
+      const repository = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      const uow = repository.createUnitOfWork();
+      const memory = await uow.memoryRepository.create({
+        userId: "u1",
+        content: "UnitOfWork writes memory rows and truth records together.",
+        source: { kind: "tool", confidence: 0.92 }
+      });
+      const claim = {
+        id: "claim-uow-release",
+        subject: "unit_of_work",
+        predicate: "writes",
+        object: "memory_claim_truth_event",
+        qualifiers: {},
+        sourceMemoryId: memory.id,
+        confidence: 0.92,
+        trust: 0.91,
+        state: "active" as const,
+        createdAt: "2026-06-05T00:00:00.000Z",
+        updatedAt: "2026-06-05T00:00:00.000Z"
+      };
+      await uow.claimRepository.register(claim);
+      await uow.truthRepository.decide({
+        subject: claim.subject,
+        predicate: claim.predicate,
+        selectedClaimId: claim.id,
+        selectedMemoryId: memory.id,
+        state: "selected",
+        reason: "unit of work selected current truth",
+        suppressedClaimIds: []
+      });
+      await uow.appendEvent({
+        type: "patch_evidence.created",
+        aggregateId: memory.id,
+        occurredAt: "2026-06-05T00:01:00.000Z",
+        payload: { memoryId: memory.id, claimId: claim.id }
+      });
+
+      const reloaded = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      await expect(reloaded.get(memory.id)).toMatchObject({ id: memory.id });
+      await expect(reloaded.claimRepository.get(claim.id)).resolves.toMatchObject({ id: claim.id, sourceMemoryId: memory.id });
+      await expect(reloaded.truthRepository.currentForClaim(claim.subject, claim.predicate)).resolves.toMatchObject({ selectedClaimId: claim.id });
+      await expect(reloaded.readEvents({ aggregateId: memory.id, type: "patch_evidence.created" })).resolves.toEqual([
+        expect.objectContaining({ type: "patch_evidence.created", payload: { memoryId: memory.id, claimId: claim.id } })
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rolls back SQLite async UnitOfWork writes atomically", async () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-sqlite-uow-rollback-"));
+    try {
+      const repository = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      let memoryId = "";
+      await expect(repository.executeUnitOfWork(async (uow) => {
+        const memory = await uow.memoryRepository.create({
+          userId: "u1",
+          content: "This UnitOfWork should roll back.",
+          source: { kind: "tool", confidence: 0.92 }
+        });
+        memoryId = memory.id;
+        await uow.appendEvent({
+          type: "patch_evidence.created",
+          aggregateId: memory.id,
+          occurredAt: "2026-06-05T00:02:00.000Z",
+          payload: { memoryId: memory.id }
+        });
+        throw new Error("rollback fixture");
+      })).rejects.toThrow("rollback fixture");
+
+      const reloaded = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      expect(() => reloaded.get(memoryId)).toThrow("Memory not found");
+      await expect(reloaded.readEvents({ aggregateId: memoryId })).resolves.toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("claims due dream jobs through a durable SQLite lease repository", async () => {
+    if (!sqliteRepositoryAvailable()) return;
+    const dir = mkdtempSync(join(tmpdir(), "memory-dream-queue-"));
+    try {
+      const repository = new SQLiteMemoryRepository(join(dir, "memory.sqlite"));
+      const baseJob = {
+        jobId: "job-release",
+        userId: "u1",
+        status: "queued" as const,
+        trigger: "before_release" as const,
+        mode: "dream" as const,
+        queuedAt: "2026-06-05T00:00:00.000Z",
+        priority: 10,
+        progress: { connectorPolls: 0, memoriesEvaluated: 0, contradictions: 0, sourceRevalidations: 0, verificationScheduled: 0 },
+        plan: {
+          userId: "u1",
+          generatedAt: "2026-06-05T00:00:00.000Z",
+          trigger: "before_release" as const,
+          mode: "dream" as const,
+          budget: "release" as const,
+          sourceRefresh: true,
+          connectorIds: [],
+          shouldDream: true,
+          forced: true,
+          reasons: ["release gate"],
+          recommendedActions: ["revalidate sources"],
+          signals: {
+            activeMemories: 0,
+            writesSinceDream: 0,
+            writeThreshold: 1,
+            dueByWriteThreshold: true,
+            dueByInterval: false,
+            verificationQueue: 0,
+            contradictions: 0,
+            needsVerification: 0,
+            staleSourceRefs: 0,
+            sourceRefs: 0,
+            connectorCandidates: 0
+          }
+        }
+      };
+      await repository.queue(baseJob);
+
+      const first = await repository.claimDueJob({ workerId: "worker-a", now: "2026-06-05T00:00:01.000Z", leaseMs: 60_000 });
+      const second = await repository.claimDueJob({ workerId: "worker-b", now: "2026-06-05T00:00:02.000Z", leaseMs: 60_000 });
+
+      expect(first).toMatchObject({ jobId: "job-release", status: "running", leaseOwner: "worker-a", attemptCount: 1 });
+      expect(second).toBeUndefined();
+
+      const reclaimed = await repository.claimDueJob({ workerId: "worker-b", now: "2026-06-05T00:02:02.000Z", leaseMs: 60_000 });
+      expect(reclaimed).toMatchObject({ jobId: "job-release", status: "running", leaseOwner: "worker-b", attemptCount: 2 });
+
+      const completed = await repository.completeJob("job-release", { status: "succeeded" });
+      expect(completed.status).toBe("succeeded");
+      const events = await repository.readEvents({ aggregateId: "job-release" });
+      expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(["dream.job_queued", "dream.job_leased", "dream.job_completed"]));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("retrieves with trust-aware multi-signal ranking", () => {
     const store = new MemoryStore();
     store.add({
@@ -901,6 +1364,79 @@ describe("TypeScript memory core", () => {
     const pack = service.evidencePack({ userId: "u1", query: "What release command should Atlas use?", limit: 1 });
     expect(pack.results).toHaveLength(0);
     expect(pack.excludedResults?.[0]).toMatchObject({ decision: "review", unsafeToInject: true });
+    expect(service.metricsReport().truthGate?.missingClaim).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders selected truth details in injected context lines", () => {
+    const service = new MemoryService();
+    const claim: MemoryClaim = {
+      id: "claim-atlas-release",
+      subject: "atlas",
+      predicate: "release_command",
+      object: "npm run release:check",
+      qualifiers: {},
+      source: { kind: "reviewed_code", confidence: 0.98 },
+      confidence: 0.98,
+      durability: "durable",
+      sensitivity: "none",
+      scope: { userId: "u1" }
+    };
+    const memory = service.add({
+      userId: "u1",
+      content: "Atlas release command is npm run release:check.",
+      source: { kind: "reviewed_code", confidence: 0.98 },
+      metadata: { claim }
+    });
+
+    const selectedClaimId = service.currentTruthForMemory(memory)?.selectedClaimId;
+    const context = service.retrieval.contextSelection(service.search({ userId: "u1", query: "Atlas release command", limit: 1 }), 300).context;
+
+    expect(context).toContain(`[${memory.id}]`);
+    expect(context).toContain("truth=selected");
+    expect(context).toContain(`selected=${memory.id}`);
+    expect(context).toContain(`claim=${selectedClaimId}`);
+    expect(context).toContain("safe_to_inject=");
+  });
+
+  it("uses truth gate decisions before action guard relies on supplemental engineering matches", () => {
+    const service = new MemoryService();
+    const unsafe = service.add({
+      userId: "u1",
+      content: "Never run rm -rf dist for Atlas release cleanup.",
+      source: { kind: "human", confidence: 0.96 },
+      metadata: { engineering: { kind: "forbidden_action", confidence: 0.96, forbiddenAction: "rm -rf dist", codebase: { repo: "atlas" } } }
+    });
+
+    const reviewOnly = service.guardAction({ userId: "u1", action: "rm -rf dist", codebaseScope: { repo: "atlas" } });
+
+    expect(reviewOnly.allowed).toBe(false);
+    expect(reviewOnly.severity).toBe("block");
+    expect(reviewOnly.blockedBy).toEqual(expect.arrayContaining([expect.objectContaining({ memoryId: unsafe.id })]));
+    expect(reviewOnly.blockedBy[0].reason).toContain("review required");
+
+    const claim: MemoryClaim = {
+      id: "claim-atlas-forbidden-cleanup",
+      subject: "atlas",
+      predicate: "forbidden_action",
+      object: "rm -rf dist",
+      qualifiers: {},
+      source: { kind: "human", confidence: 0.97 },
+      confidence: 0.97,
+      durability: "durable",
+      sensitivity: "none",
+      scope: { userId: "u1" }
+    };
+    const safe = service.add({
+      userId: "u1",
+      content: "Atlas forbidden cleanup action is rm -rf dist.",
+      source: { kind: "human", confidence: 0.97 },
+      metadata: { claim, engineering: { kind: "forbidden_action", confidence: 0.97, forbiddenAction: "rm -rf dist", codebase: { repo: "atlas" } } }
+    });
+
+    const blocked = service.guardAction({ userId: "u1", action: "rm -rf dist", codebaseScope: { repo: "atlas" } });
+
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.blockedBy).toEqual(expect.arrayContaining([expect.objectContaining({ memoryId: safe.id }), expect.objectContaining({ memoryId: unsafe.id })]));
   });
 
   it("uses harness evidence judgement to suppress unsupported retrieval without static query rules", () => {
@@ -2816,6 +3352,27 @@ describe("TypeScript memory core", () => {
     }
   }, 30_000);
 
+  it("resumes queued dream jobs through a worker after service restart", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "memory-dream-worker-"));
+    try {
+      const path = join(dir, "memory.json");
+      const service = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      service.add({ userId: "u1", content: "Queued dream workers must resume release jobs after restart.", source: { kind: "human", confidence: 0.96 } });
+      const queued = await service.startDreamJob({ userId: "u1", trigger: "before_release", mode: "dream", budget: "release" }, fetch, 10_000, { queueOnly: true });
+      expect(queued).toMatchObject({ status: "queued", priority: 100, attemptCount: 0 });
+
+      const reloaded = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      expect(reloaded.dreamJobStatus(queued.jobId)[0]).toMatchObject({ status: "queued", attemptCount: 0 });
+
+      const completed = await reloaded.runDreamJobWorkerOnce(fetch, 10_000);
+      expect(completed).toMatchObject({ jobId: queued.jobId, status: "done", attemptCount: 1 });
+      expect(completed?.progress.memoriesEvaluated).toBeGreaterThan(0);
+      await expect(reloaded.runDreamJobWorkerOnce(fetch, 10_000)).resolves.toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   it("cancels and retries dream jobs through the persisted job surface", async () => {
     const service = new MemoryService({ autoDream: { enabled: false } });
     service.add({ userId: "u1", content: "Release dream cancellation must keep an operator-visible job state.", source: { kind: "human", confidence: 0.96 } });
@@ -3293,6 +3850,11 @@ describe("TypeScript memory core", () => {
     expect(source).not.toContain('"psql"');
     expect(source).toContain("cognibrain_repository_state");
     expect(source).toContain("cognibrain_claims");
+    expect(source).toContain("cognibrain_current_truth");
+    expect(source).toContain("claimRepository");
+    expect(source).toContain("truthRepository");
+    expect(source).toContain("async registerClaim");
+    expect(source).toContain("async currentForClaim");
     expect(source).toContain("cognibrain_conflict_sets");
     expect(source).toContain("cognibrain_dream_jobs");
     expect(source).toContain("cognibrain_connector_sync_states");
@@ -3306,6 +3868,115 @@ describe("TypeScript memory core", () => {
     expect(buildSource).toContain('external: ["pg"]');
     expect(buildSource).toContain("splitting: true");
     expect(buildSource).toContain('chunkNames: "chunks/[name]-[hash]"');
+  });
+
+  it("hydrates production Postgres startup from repository rows before legacy service_state", async () => {
+    const store = new MemoryStore();
+    const memory = store.add({
+      userId: "u1",
+      content: "Production Postgres startup rebuilds from cognibrain_memories rows.",
+      source: { kind: "human", confidence: 0.96 }
+    });
+    let legacyStateRead = false;
+    const rowBacked = await createProductionPersistedFileFromRepository({
+      list: async () => [memory],
+      loadStateAsync: async () => {
+        legacyStateRead = true;
+        return { version: 2, memories: [] };
+      }
+    });
+
+    expect(rowBacked?.memories?.map((item) => item.id)).toEqual([memory.id]);
+    expect(legacyStateRead).toBe(false);
+
+    const legacy = await createProductionPersistedFileFromRepository({
+      list: async () => [],
+      loadStateAsync: async () => ({ version: 2, memories: [memory] })
+    }, { allowServiceStateFallback: true });
+    expect(legacy?.memories?.[0]?.id).toBe(memory.id);
+  });
+
+  it("does not read legacy service_state for strict DB-primary production startup", async () => {
+    let legacyStateRead = false;
+    const loaded = await createProductionPersistedFileFromRepository({
+      list: async () => [],
+      loadStateAsync: async () => {
+        legacyStateRead = true;
+        return { version: 2, memories: [{ id: "legacy-memory" }] };
+      }
+    }, { allowServiceStateFallback: false });
+
+    expect(loaded).toBeUndefined();
+    expect(legacyStateRead).toBe(false);
+    const serviceSource = readFileSync("src/api/service/memoryService.ts", "utf8");
+    expect(serviceSource).toContain("isStrictDbPrimaryBackend");
+    expect(serviceSource).toContain("allowServiceStateFallback: !isStrictDbPrimaryBackend(backend)");
+  });
+
+  it("flushes production Postgres persistence through rows and projection tables without service_state", async () => {
+    const service = new MemoryService();
+    const imported: unknown[] = [];
+    const projections: unknown[] = [];
+    let legacySnapshotWrites = 0;
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        import: async (memories: unknown[]) => {
+          imported.push(...memories);
+        },
+        saveProjectionRowsAsync: async (payload: unknown) => {
+          projections.push(payload);
+        },
+        saveStateAsync: async () => {
+          legacySnapshotWrites += 1;
+        }
+      }
+    });
+
+    const memory = service.add({
+      userId: "u1",
+      content: "Production Postgres writes memory rows and projection tables, not service_state.",
+      source: { kind: "human", confidence: 0.96 }
+    });
+    await (service as unknown as { productionAsyncFlush?: Promise<void> }).productionAsyncFlush;
+
+    expect(imported).toEqual(expect.arrayContaining([expect.objectContaining({ id: memory.id })]));
+    expect(projections).toEqual([expect.objectContaining({ memories: expect.arrayContaining([expect.objectContaining({ id: memory.id })]) })]);
+    expect(legacySnapshotWrites).toBe(0);
+  });
+
+  it("keeps production Postgres dream jobs on a leased DB-backed queue", () => {
+    const repositorySource = readFileSync(join(process.cwd(), "src/api/repositories/postgresRepository.ts"), "utf8");
+    expect(repositorySource).toContain("implements RepositoryStatePersistence, MemoryEventJournal, AsyncDreamJobRepository");
+    expect(repositorySource).toContain("async claimDueJob");
+    expect(repositorySource).toContain("for update skip locked");
+    expect(repositorySource).toContain("lease_until is null or lease_until <= $1");
+    expect(repositorySource).toContain("dream.job_completed");
+  });
+
+  it("exposes production Postgres domain repositories for row-backed projections", () => {
+    const repositorySource = readFileSync(join(process.cwd(), "src/api/repositories/postgresRepository.ts"), "utf8");
+    expect(repositorySource).toContain("readonly conflictRepository: AsyncConflictRepository");
+    expect(repositorySource).toContain("readonly evidencePackRepository: AsyncEvidencePackRepository");
+    expect(repositorySource).toContain("readonly connectorSyncRepository: AsyncConnectorSyncRepository");
+    expect(repositorySource).toContain("readonly policyRepository: AsyncPolicyRepository");
+    expect(repositorySource).toContain("readonly dreamJobRepository: AsyncDreamJobRepository");
+    expect(repositorySource).toContain("createUnitOfWork(): AsyncUnitOfWork");
+    expect(repositorySource).toContain("executeUnitOfWork<T>(operation: (unitOfWork: AsyncUnitOfWork) => Promise<T>): Promise<T>");
+    expect(repositorySource).toContain("createClientUnitOfWork(client: PoolClient): AsyncUnitOfWork");
+    expect(repositorySource).toContain("return this.transaction((client) => operation(this.createClientUnitOfWork(client)))");
+    expect(repositorySource).toContain("upsertMemoryWithClient(client, memory");
+    expect(repositorySource).toContain("memoryRepository: this");
+    expect(repositorySource).toContain("eventJournal: this");
+    expect(repositorySource).toContain("async saveConflict");
+    expect(repositorySource).toContain("async saveEvidencePack");
+    expect(repositorySource).toContain("async saveConnectorSyncState");
+    expect(repositorySource).toContain("async savePolicyRule");
+    expect(repositorySource).toContain("async saveRetentionRule");
+    expect(repositorySource).toContain("cognibrain_conflict_sets");
+    expect(repositorySource).toContain("cognibrain_evidence_packs");
+    expect(repositorySource).toContain("cognibrain_connector_sync_states");
+    expect(repositorySource).toContain("cognibrain_policy_rules");
+    expect(repositorySource).toContain("cognibrain_retention_rules");
   });
 
   it("runs Postgres repository live tests only with explicit test credentials", () => {

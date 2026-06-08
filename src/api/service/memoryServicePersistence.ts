@@ -317,8 +317,29 @@ export class MemoryServicePersistence extends MemoryServiceInsightsMaintenance {
       policyRules: [...this.policyRules.values()],
       retentionRules: [...this.retentionRules.values()]
     };
+    this.flushProductionAsyncRepository(memories, payload);
     if (this.persistence) this.persistence.save(payload);
     else this.saveRepositoryState(payload);
+  }
+
+  private flushProductionAsyncRepository(memories: Memory[], payload: PersistedMemoryFile): void {
+    const repository = (this as {
+      productionAsyncRepository?: {
+        import?: (memories: Memory[]) => Promise<unknown>;
+        saveProjectionRowsAsync?: (payload: PersistedMemoryFile) => Promise<unknown>;
+        saveStateAsync?: (payload: PersistedMemoryFile) => Promise<unknown>;
+      };
+      productionAsyncFlush?: Promise<void>;
+      productionAsyncFlushError?: string;
+    }).productionAsyncRepository;
+    if (!repository) return;
+    const flush = (async () => {
+      if (typeof repository.import === "function") await repository.import(memories);
+      if (typeof repository.saveProjectionRowsAsync === "function") await repository.saveProjectionRowsAsync(payload);
+    })();
+    (this as { productionAsyncFlush?: Promise<void>; productionAsyncFlushError?: string }).productionAsyncFlush = flush.catch((error) => {
+      (this as { productionAsyncFlushError?: string }).productionAsyncFlushError = error instanceof Error ? error.message : "production async repository flush failed";
+    });
   }
 
   private compactEvidencePacksForPersistence(packs: EvidencePack[]): EvidencePack[] {

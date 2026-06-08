@@ -46,6 +46,13 @@ export interface MetricsReport {
   lowConfidenceSearches?: number;
   averageSearchResults: number;
   averageQualityScore: number;
+  truthGate?: {
+    excluded: number;
+    reviewed: number;
+    missingClaim: number;
+    suppressedClaims: number;
+    revalidate: number;
+  };
   dreamActions?: Record<string, number>;
   benchmarkRuns?: number;
   sessions?: Record<string, { searches: number; noHitSearches: number; averageResults: number }>;

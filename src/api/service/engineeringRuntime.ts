@@ -1,4 +1,4 @@
-import { buildPatchEvidenceTrail, citationFor, evaluateForbiddenAction, getEngineeringMetadata, type ActionGuardReport, type CodebaseScope, type EngineeringMemoryKind, type Memory, type MemoryInput, type PatchEvidenceTrail, type SearchResult } from "../../core";
+import { applyTruthGateDecision, buildPatchEvidenceTrail, citationFor, evaluateForbiddenAction, getEngineeringMetadata, type ActionGuardReport, type CodebaseScope, type EngineeringMemoryKind, type Memory, type MemoryInput, type PatchEvidenceTrail, type SearchResult } from "../../core";
 import { clamp01, contentHash, inferCorrectActionFromCorrection, inferCorrectionKind, inferForbiddenActionFromCorrection, normalizeActionPhrase, repoPolicyFromCorrection, safeGet } from "./helpers";
 
 export function recordCodeCorrection(service: any, input: {
@@ -201,14 +201,14 @@ export function guardAction(service: any, input: {
         const engineering = getEngineeringMetadata(memory);
         return Boolean(engineering && ["forbidden_action", "generated_file_rule", "repo_policy", "procedure", "test_strategy"].includes(engineering.kind) && engineeringActionMatches(input.action, engineering));
       })
-      .map((memory) => ({
+      .map((memory) => applyTruthGateDecision({
         memory,
         score: 0.72,
         signals: { semantic: 0, keyword: 0.72, entity: 0, temporal: 0, trust: memory.trust, graph: 0, access: 0 },
         citation: citationFor(memory),
         stale: memory.beliefState === "stale" || memory.beliefState === "needs_verification",
         explanation: ["action guard supplemental engineering-memory match"]
-      }));
+      }, service.currentTruthForMemory(memory)));
     const report = evaluateForbiddenAction({ userId: input.userId, action: input.action, results: [...results, ...supplemental] });
     service.recordAudit(report.allowed ? "search.run" : "policy.violation", { userId: input.userId, metadata: { resource: "action-guard", action: input.action, allowed: report.allowed, evidenceIds: report.evidenceIds } });
     return report;

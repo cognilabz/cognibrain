@@ -16,3 +16,5 @@ export * from "./entityRegistry";
 export * from "./graphReasoning";
 export * from "./embeddings";
 export * from "./engineeringMemory";
+export * from "./truthGate";
+export * from "./eventJournal";

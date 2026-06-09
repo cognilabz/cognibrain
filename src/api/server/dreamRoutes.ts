@@ -4,7 +4,7 @@ import { z } from "zod";
 import { defaultService } from "../service";
 import type { DreamCycleTrigger } from "../../core";
 import { sanitizedRuntimeEnv } from "../../core/runtimeEnv";
-import { json, send, serialize, serializeDreamCycleReport, serializeHarnessLifecycleEvent } from "./helpers";
+import { json, productionMode, send, serialize, serializeDreamCycleReport, serializeHarnessLifecycleEvent } from "./helpers";
 
 const dreamTriggerSchema = z.enum(["manual_reflect", "manual_dream", "auto_write_threshold", "auto_interval", "harness_session_end", "harness_handoff", "before_release", "after_connector_sync", "after_negative_feedback", "after_contradiction_detected"]);
 const dreamModeSchema = z.enum(["reflect", "dream"]);
@@ -101,6 +101,11 @@ export async function handleDreamRoutes(input: {
 
     if (method === "POST" && url.pathname === "/dream/run") {
       const body = dreamCycleBodySchema.parse(await json(request));
+      if (productionMode()) {
+        const job = await defaultService.startDreamJob({ ...body, mode: body.mode ?? "dream", trigger: body.trigger ?? "manual_dream" }, fetch, body.waitTimeoutMs, { queueOnly: true });
+        send(response, 202, { plan: job.plan, job });
+        return true;
+      }
       send(response, 202, serializeDreamCycleReport(await defaultService.runDreamCycleAsync({ ...body, mode: body.mode ?? "dream", trigger: body.trigger ?? "manual_dream" })));
       return true;
     }
@@ -194,6 +199,17 @@ export async function handleDreamRoutes(input: {
         });
         return true;
       }
+      if (productionMode() && body.run) {
+        const job = await defaultService.startDreamJob({
+          ...body,
+          mode: body.mode ?? "dream",
+          trigger,
+          budget: body.budget ?? (trigger === "before_release" ? "release" : undefined),
+          sourceRefresh: body.sourceRefresh ?? trigger !== "harness_session_end"
+        }, fetch, body.waitTimeoutMs, { queueOnly: true });
+        send(response, 202, { plan: job.plan, job });
+        return true;
+      }
       const prepared = defaultService.prepareDream({
         ...body,
         mode: body.mode ?? "dream",
@@ -211,6 +227,13 @@ export async function handleDreamRoutes(input: {
 
     if (method === "POST" && (url.pathname === "/reflection" || url.pathname === "/dream")) {
       const body = z.object({ userId: z.string().min(1) }).parse(await json(request));
+      if (productionMode()) {
+        const mode = url.pathname === "/dream" ? "dream" : "reflect";
+        const trigger = url.pathname === "/dream" ? "manual_dream" : "manual_reflect";
+        const job = await defaultService.startDreamJob({ userId: body.userId, mode, trigger }, fetch, undefined, { queueOnly: true });
+        send(response, 202, { plan: job.plan, job });
+        return true;
+      }
       const report = url.pathname === "/dream" ? defaultService.dream(body.userId) : defaultService.reflect(body.userId);
       send(response, 202, serializeDreamCycleReport(report));
       return true;
@@ -234,7 +257,7 @@ export async function handleDreamRoutes(input: {
     }
 
     if (method === "POST" && url.pathname === "/maintenance/dream-due") {
-      send(response, 202, { dreamedUsers: defaultService.runDueDreams() });
+      send(response, 202, { dreamedUsers: productionMode() ? await defaultService.runDueDreamJobsAsync() : defaultService.runDueDreams() });
       return true;
     }
   return false;

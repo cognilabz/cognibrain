@@ -3516,6 +3516,75 @@ describe("TypeScript memory core", () => {
     }
   });
 
+  it("queues due auto dream jobs instead of running inline in production", async () => {
+    const previousSecurityMode = process.env.MEMORY_SECURITY_MODE;
+    try {
+      const service = new MemoryService({ autoDream: { enabled: true, writeThreshold: 1, intervalHours: 6 } });
+      service.setPolicyRule({
+        label: "Allow production auto dream fixture writes",
+        effect: "allow",
+        operations: ["write"],
+        scope: { userId: "u1" },
+        priority: 100
+      });
+      const calls: DreamJob[] = [];
+      Object.defineProperty(service, "productionAsyncRepository", {
+        value: {
+          dreamJobRepository: {
+            queue: async (job: DreamJob) => {
+              calls.push(job);
+              return { ...job, status: "queued" };
+            }
+          }
+        },
+        configurable: true
+      });
+      process.env.MEMORY_SECURITY_MODE = "production";
+
+      service.add({ userId: "u1", content: "Production auto dream should enqueue after writes.", source: { kind: "human", confidence: 0.96 } });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toMatchObject({ status: "queued", trigger: "auto_write_threshold", mode: "dream" });
+      expect(service.metricsReport().dreams).toBe(0);
+      expect(service.maintenanceStatus().users.u1.writesSinceDream).toBe(1);
+    } finally {
+      if (previousSecurityMode === undefined) delete process.env.MEMORY_SECURITY_MODE;
+      else process.env.MEMORY_SECURITY_MODE = previousSecurityMode;
+    }
+  });
+
+  it("queues due maintenance dream jobs through the production repository", async () => {
+    const previousSecurityMode = process.env.MEMORY_SECURITY_MODE;
+    try {
+      const service = new MemoryService({ autoDream: { enabled: true, writeThreshold: 100, intervalHours: 6 } });
+      service.add({ userId: "u1", content: "Production maintenance dream due should enqueue worker jobs.", source: { kind: "human", confidence: 0.96 } });
+      (service as any).maintenance.users.u1.lastDreamAt = "2026-06-04T00:00:00.000Z";
+      const calls: DreamJob[] = [];
+      Object.defineProperty(service, "productionAsyncRepository", {
+        value: {
+          dreamJobRepository: {
+            queue: async (job: DreamJob) => {
+              calls.push(job);
+              return { ...job, status: "queued" };
+            }
+          }
+        },
+        configurable: true
+      });
+      process.env.MEMORY_SECURITY_MODE = "production";
+
+      await expect(service.runDueDreamJobsAsync(new Date("2026-06-04T07:00:00.000Z"))).resolves.toEqual(["u1"]);
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toMatchObject({ status: "queued", trigger: "auto_interval", mode: "dream" });
+      expect(service.metricsReport().dreams).toBe(0);
+    } finally {
+      if (previousSecurityMode === undefined) delete process.env.MEMORY_SECURITY_MODE;
+      else process.env.MEMORY_SECURITY_MODE = previousSecurityMode;
+    }
+  });
+
   it("persists dream cancel and retry controls through the async repository when available", async () => {
     const service = new MemoryService({ autoDream: { enabled: false } });
     service.add({ userId: "u1", content: "Repository-backed dream controls must persist operator cancel and retry decisions.", source: { kind: "human", confidence: 0.96 } });
@@ -4298,6 +4367,10 @@ describe("TypeScript memory core", () => {
     expect(routeSource).toContain("url.pathname === \"/dream/jobs\"");
     expect(routeSource).toContain("defaultService.startDreamJob");
     expect(routeSource).toContain("{ queueOnly: true }");
+    expect(routeSource).toContain("productionMode()");
+    expect(routeSource).toContain("url.pathname === \"/dream/run\"");
+    expect(routeSource).toContain("url.pathname === \"/reflection\" || url.pathname === \"/dream\"");
+    expect(routeSource).toContain("defaultService.runDueDreamJobsAsync()");
   });
 
   it("keeps HTTP memory mutation routes on async production-aware service methods", () => {

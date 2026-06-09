@@ -3236,6 +3236,112 @@ describe("TypeScript memory core", () => {
     expect((service.get(memory.id).metadata.sourceRevalidation as { sourceRecord?: { hash?: string } }).sourceRecord?.hash).toBe("live-hash");
   });
 
+  it("commits production source revalidation through async UnitOfWork and post-commit write triggers", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.registerSourceResolver({
+      connectorId: "live-docs",
+      get: (sourceRef) => ({
+        sourceRef,
+        version: sourceRef.version,
+        hash: sourceRef.hash,
+        updatedAt: "2026-05-01T00:00:00.000Z"
+      }),
+      fetch: async (sourceRef) => ({
+        sourceRef: { ...sourceRef, version: "2", hash: "live-hash" },
+        version: "2",
+        hash: "live-hash",
+        updatedAt: "2026-05-04T00:00:00.000Z"
+      })
+    });
+    const deletedSource = service.add({
+      userId: "u1",
+      content: "Deleted source memories must be revalidated through production writes.",
+      source: { kind: "import", confidence: 0.84 },
+      sourceRef: { connectorId: "deleted-docs", externalId: "ADR-7", version: "1", hash: "old-hash" },
+      metadata: { sourceDeletedAt: "2026-05-03T00:00:00.000Z" }
+    });
+    const liveSource = service.add({
+      userId: "u1",
+      content: "Live source memories must use resolver decisions through production writes.",
+      source: { kind: "import", confidence: 0.88 },
+      sourceRef: { connectorId: "live-docs", externalId: "ADR-8", version: "1", hash: "old-hash" }
+    });
+    const calls: string[] = [];
+    const originalStoreUpdate = service.store.update.bind(service.store);
+    const originalAfterWrite = (service as any).afterWrite.bind(service);
+    (service as any).afterWrite = (userId: string) => {
+      calls.push(`afterWrite:${userId}`);
+      originalAfterWrite(userId);
+    };
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
+          calls.push("uow.begin");
+          const result = await operation({
+            memoryRepository: {
+              update: async (id: string, patch: any) => {
+                calls.push(`memory.update:${id}`);
+                return originalStoreUpdate(id, patch);
+              }
+            },
+            claimRepository: {
+              register: async (claim: any) => {
+                calls.push(`claim.register:${claim.sourceMemoryId}`);
+                return claim;
+              }
+            },
+            truthRepository: {
+              decide: async (decision: any) => {
+                calls.push(`truth.decide:${decision.selectedMemoryId}`);
+                return decision;
+              }
+            },
+            conflictRepository: {
+              save: async (conflict: any) => {
+                calls.push(`conflict.save:${conflict.id}`);
+                return conflict;
+              }
+            }
+          });
+          calls.push("uow.commit");
+          return result;
+        }
+      }
+    });
+    service.store.update = () => {
+      throw new Error("revalidateMemoryAsync must not use sync store.update");
+    };
+    (service as any).revalidateMemorySourceRefFallback = () => {
+      throw new Error("revalidateMemoryAsync must not use sync fallback revalidation");
+    };
+    (service as any).applySourceResolverDecision = () => {
+      throw new Error("revalidateMemoryAsync must not use sync source resolver decision");
+    };
+
+    const missing = await service.revalidateMemoryAsync(deletedSource.id, "u1");
+    const changed = await service.revalidateMemoryAsync(liveSource.id, "u1");
+
+    expect(missing).toMatchObject({ status: "source_missing", connectorId: "deleted-docs", externalId: "ADR-7" });
+    expect(changed).toMatchObject({ status: "source_updated", connectorId: "live-docs", externalId: "ADR-8", currentVersion: "2" });
+    expect(service.get(deletedSource.id).beliefState).toBe("needs_verification");
+    expect(service.get(liveSource.id).beliefState).toBe("needs_verification");
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(2);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(2);
+    expect(calls).toEqual(expect.arrayContaining([
+      `memory.update:${deletedSource.id}`,
+      `memory.update:${liveSource.id}`,
+      `claim.register:${deletedSource.id}`,
+      `claim.register:${liveSource.id}`,
+      `truth.decide:${deletedSource.id}`,
+      `truth.decide:${liveSource.id}`,
+      "afterWrite:u1",
+      "afterWrite:u1"
+    ]));
+    expect(calls.filter((call) => call === "afterWrite:u1")).toHaveLength(2);
+    expect(service.auditTrail().some((event) => event.type === "memory.update" && event.memoryId === deletedSource.id && event.metadata?.action === "source_revalidation" && event.metadata?.productionUnitOfWork === true)).toBe(true);
+    expect(service.auditTrail().some((event) => event.type === "memory.update" && event.memoryId === liveSource.id && event.metadata?.action === "source_revalidation" && event.metadata?.productionUnitOfWork === true)).toBe(true);
+  });
+
   it("default GitHub source resolver fetches current provider state when credentials are configured", async () => {
     const previousFetch = globalThis.fetch;
     const previousRepo = process.env.MEMORY_GITHUB_REPO;

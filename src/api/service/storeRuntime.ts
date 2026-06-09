@@ -1,4 +1,4 @@
-import type { DurabilityDecision, EpisodeInput, EpisodeRecord, ExtractionReport, Memory, MemoryClaim, MemoryExtractionEvent, MemoryInput, MemoryScope } from "../../core";
+import type { AsyncUnitOfWorkExecutor, ClaimRecord, DurabilityDecision, EpisodeInput, EpisodeRecord, ExtractionReport, Memory, MemoryClaim, MemoryExtractionEvent, MemoryInput, MemoryScope } from "../../core";
 import { classifyDurability, extractAddOnlyMemories, extractClaim, withEngineeringMemoryMetadata } from "../../core";
 import { applyRedactionPolicy } from "../../core/privacy";
 import { enrichmentCandidatesFor, extractionConfidence, hasLocalMediaExtraction, learnedRuleSuggestions, markExtractionStage, normalizeMediaExtractionEvent, ruleExtractionFailures } from "../extractionPipeline";
@@ -6,6 +6,63 @@ import { contentHash, safeGet, syntheticExtractionEvent, withProceduralMetadata 
 import { linkStateChange } from "./engineering";
 
 export function add(service: any, input: MemoryInput) {
+    const checked = prepareMemoryForWrite(service, input);
+    const memory = service.entities.ingest(service.storage.create(checked));
+    service.registerMemoryClaim(memory);
+    if (memory.metadata.archivedOnWrite) service.storage.archive(memory.id);
+    service.metrics.memoriesAdded += 1;
+    service.recordAudit("memory.write", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id });
+    service.afterWrite(memory.userId);
+    return memory;
+  }
+
+export async function addAsync(service: any, input: MemoryInput): Promise<Memory> {
+    const executor = service.productionAsyncRepository as AsyncUnitOfWorkExecutor | undefined;
+    if (!executor?.executeUnitOfWork) {
+      const memory = service.add(input);
+      if (typeof service.waitForProductionAsyncFlush === "function") await service.waitForProductionAsyncFlush();
+      return memory;
+    }
+    const checked = prepareMemoryForWrite(service, input);
+    const claimsBefore = new Map(service.claims);
+    const conflictSetsBefore = new Map(service.conflictSets);
+    let claim: ClaimRecord | undefined;
+    const memory = await executor.executeUnitOfWork(async (uow) => {
+      let created = await uow.memoryRepository.create(checked);
+      if (created.metadata.archivedOnWrite) {
+        created = await uow.memoryRepository.update(created.id, {
+          archivedAt: new Date().toISOString(),
+          beliefState: "archived"
+        } as any);
+      }
+      claim = claimRecordForMemory(service, created);
+      if (claim) {
+        service.claims.set(claim.id, claim);
+        service.rebuildConflictSetFor(claim.subject, claim.predicate);
+        const decision = service.currentTruthForClaim(claim);
+        await uow.claimRepository.register(claim);
+        await uow.truthRepository.decide(decision);
+        const conflictSet = service.conflictSetFor(claim.subject, claim.predicate);
+        if (conflictSet) await uow.conflictRepository.save(conflictSet);
+      }
+      return created;
+    }).catch((error) => {
+      service.claims = claimsBefore;
+      service.conflictSets = conflictSetsBefore;
+      throw error;
+    });
+    const memories = service.store.export().filter((item: Memory) => item.id !== memory.id);
+    service.repository.import([...memories, memory]);
+    service.syncReadModelFromRepository();
+    service.entities.ingest(memory);
+    if (claim) service.claims.set(claim.id, claim);
+    service.metrics.memoriesAdded += 1;
+    service.recordAudit("memory.write", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { productionUnitOfWork: true } });
+    service.afterWrite(memory.userId);
+    return memory;
+  }
+
+function prepareMemoryForWrite(service: any, input: MemoryInput): MemoryInput {
     const sourceDefaultConsent = input.sourceId ? service.sources.get(input.sourceId)?.defaultConsent : undefined;
     const agentPersona = input.agentId ? service.personaForAgent(input.agentId) : undefined;
     const personaConsent = agentPersona?.privacyDefault ? { visibility: agentPersona.privacyDefault } : undefined;
@@ -23,13 +80,48 @@ export function add(service: any, input: MemoryInput) {
     if (checked.rejected || !checked.input) {
       throw new Error(`Memory rejected by redaction policy: ${checked.matches.map((match) => match.detector).join(", ")}`);
     }
-    const memory = service.entities.ingest(service.storage.create(checked.input));
-    service.registerMemoryClaim(memory);
-    if (memory.metadata.archivedOnWrite) service.storage.archive(memory.id);
-    service.metrics.memoriesAdded += 1;
-    service.recordAudit("memory.write", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id });
-    service.afterWrite(memory.userId);
-    return memory;
+    return checked.input;
+  }
+
+function claimRecordForMemory(service: any, memory: Memory): ClaimRecord | undefined {
+    const rawClaim = memory.metadata?.claim as MemoryClaim | undefined;
+    const claim = rawClaim ?? extractClaim(memory.content, syntheticEventForMemory(memory), memory.scope, memory.source, memory.entities);
+    if (!claim.subject || !claim.predicate || !claim.object) return undefined;
+    const now = new Date().toISOString();
+    const existing = [...service.claims.values()].find((item: ClaimRecord) => item.sourceMemoryId === memory.id);
+    return {
+      id: existing?.id ?? `claim_${contentHash(`${memory.id}:${claim.subject}:${claim.predicate}:${claim.object}`).slice(2, 18)}`,
+      subject: claim.subject,
+      predicate: claim.predicate,
+      object: claim.object,
+      qualifiers: claim.qualifiers ?? {},
+      sourceMemoryId: memory.id,
+      sourceRef: memory.provenance.sourceRef,
+      validFrom: memory.temporal.validFrom ?? memory.createdAt,
+      validUntil: memory.temporal.validUntil,
+      confidence: claim.confidence,
+      trust: memory.trust,
+      state: claimStateForMemory(memory),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+  }
+
+function syntheticEventForMemory(memory: Memory): MemoryExtractionEvent {
+    return {
+      role: "user",
+      content: memory.content,
+      timestamp: memory.createdAt,
+      source: memory.source,
+      sourceRef: memory.provenance.sourceRef
+    };
+  }
+
+function claimStateForMemory(memory: Memory): ClaimRecord["state"] {
+    if (memory.beliefState === "archived") return "needs_verification";
+    if (memory.beliefState === "stale") return "needs_verification";
+    if (memory.beliefState === "active") return "active";
+    return memory.beliefState;
   }
 
 export function createEpisode(service: any, input: EpisodeInput): EpisodeRecord {

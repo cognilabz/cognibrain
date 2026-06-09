@@ -73,7 +73,7 @@ export async function handleMemoryRoutes(context: RouteContext): Promise<boolean
 
   if (method === "POST" && url.pathname === "/memories") {
     const body = memoryInputSchema.parse(await json(request));
-    send(response, 201, serialize(defaultService.add(body)));
+    send(response, 201, serialize(await defaultService.addAsync(body)));
     return true;
   }
 

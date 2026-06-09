@@ -107,7 +107,7 @@ export async function handleDreamRoutes(input: {
 
     if (method === "POST" && url.pathname === "/dream/jobs") {
       const body = dreamJobBodySchema.parse(await json(request));
-      send(response, 202, await defaultService.startDreamJob({ ...body, mode: body.mode ?? "dream", trigger: body.trigger ?? "manual_dream" }));
+      send(response, 202, await defaultService.startDreamJob({ ...body, mode: body.mode ?? "dream", trigger: body.trigger ?? "manual_dream" }, fetch, undefined, { queueOnly: true }));
       return true;
     }
 

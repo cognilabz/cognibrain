@@ -4074,6 +4074,70 @@ describe("TypeScript memory core", () => {
     expect(legacySnapshotWrites).toBe(0);
   });
 
+  it("commits production memory writes through an async UnitOfWork before returning", async () => {
+    const service = new MemoryService();
+    const calls: string[] = [];
+    const store = new MemoryStore();
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
+          calls.push("uow.begin");
+          const result = await operation({
+            memoryRepository: {
+              create: async (input: any) => {
+                calls.push("memory.create");
+                return store.add(input);
+              },
+              update: async (id: string, patch: any) => {
+                calls.push("memory.update");
+                return store.update(id, patch);
+              }
+            },
+            claimRepository: {
+              register: async (claim: any) => {
+                calls.push(`claim.register:${claim.sourceMemoryId}`);
+                return claim;
+              }
+            },
+            truthRepository: {
+              decide: async (decision: any) => {
+                calls.push(`truth.decide:${decision.selectedMemoryId}`);
+                return decision;
+              }
+            },
+            conflictRepository: {
+              save: async (conflict: any) => {
+                calls.push(`conflict.save:${conflict.id}`);
+                return conflict;
+              }
+            }
+          });
+          calls.push("uow.commit");
+          return result;
+        },
+        import: async () => {
+          throw new Error("addAsync should not use async projection flush for the primary memory write");
+        }
+      }
+    });
+
+    const memory = await service.addAsync({
+      userId: "u1",
+      content: "Production addAsync writes memory claim and truth through UnitOfWork.",
+      source: { kind: "human", confidence: 0.96 }
+    });
+
+    expect(service.get(memory.id)).toMatchObject({ id: memory.id });
+    expect(calls).toEqual([
+      "uow.begin",
+      "memory.create",
+      `claim.register:${memory.id}`,
+      `truth.decide:${memory.id}`,
+      "uow.commit"
+    ]);
+    expect(service.currentTruthForMemory(memory)).toMatchObject({ selectedMemoryId: memory.id, state: "selected" });
+  });
+
   it("surfaces production Postgres flush failures through an explicit awaitable barrier", async () => {
     const service = new MemoryService();
     Object.defineProperty(service, "productionAsyncRepository", {
@@ -4100,6 +4164,13 @@ describe("TypeScript memory core", () => {
     expect(repositorySource).toContain("for update skip locked");
     expect(repositorySource).toContain("lease_until is null or lease_until <= $1");
     expect(repositorySource).toContain("dream.job_completed");
+  });
+
+  it("keeps HTTP dream job creation enqueue-only for worker-owned execution", () => {
+    const routeSource = readFileSync(join(process.cwd(), "src/api/server/dreamRoutes.ts"), "utf8");
+    expect(routeSource).toContain("url.pathname === \"/dream/jobs\"");
+    expect(routeSource).toContain("defaultService.startDreamJob");
+    expect(routeSource).toContain("{ queueOnly: true }");
   });
 
   it("exposes production Postgres domain repositories for row-backed projections", () => {

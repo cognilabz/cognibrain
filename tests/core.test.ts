@@ -4334,13 +4334,19 @@ describe("TypeScript memory core", () => {
     expect(() => service.get(memory.id)).toThrow();
   });
 
-  it("commits production code corrections and derived memories through async UnitOfWork writes before returning", async () => {
+  it("commits production code correction pipeline in one async UnitOfWork", async () => {
     const service = new MemoryService();
     const previous = service.add({
       userId: "u1",
       content: "Previous wrong action: skip CI after editing release code.",
       source: { kind: "human", confidence: 0.91 }
     });
+    const postCommitWrites: string[] = [];
+    const originalAfterWrite = (service as any).afterWrite.bind(service);
+    (service as any).afterWrite = (userId: string) => {
+      postCommitWrites.push(userId);
+      originalAfterWrite(userId);
+    };
     const calls: string[] = [];
     Object.defineProperty(service, "productionAsyncRepository", {
       value: {
@@ -4365,7 +4371,7 @@ describe("TypeScript memory core", () => {
             },
             truthRepository: {
               decide: async (decision: any) => {
-                calls.push(`truth.decide:${decision.selectedMemoryId}`);
+                calls.push(`truth.decide:${decision.selectedMemoryId ?? decision.selectedClaimId}`);
                 return decision;
               }
             },
@@ -4398,15 +4404,66 @@ describe("TypeScript memory core", () => {
 
     expect(correction.tags).toContain("engineering-correction");
     expect(service.get(previous.id).beliefState).toBe("superseded");
-    expect((correction.metadata?.correctionPipeline as { derivedMemoryIds?: string[] } | undefined)?.derivedMemoryIds?.length).toBeGreaterThan(0);
+    const derivedMemoryIds = (correction.metadata?.correctionPipeline as { derivedMemoryIds?: string[] } | undefined)?.derivedMemoryIds ?? [];
+    expect(derivedMemoryIds.length).toBeGreaterThan(0);
+    const expectedPostCommitWrites = 1 + 1 + derivedMemoryIds.length + 1;
+    expect(postCommitWrites).toEqual(Array(expectedPostCommitWrites).fill("u1"));
+    expect(service.maintenanceStatus().users.u1.writesSinceDream).toBe(1 + expectedPostCommitWrites);
     expect(calls).toEqual(expect.arrayContaining([
       expect.stringContaining("memory.create:Reviewer correction"),
       `memory.update:${previous.id}:superseded`,
       expect.stringContaining("memory.create:Procedure"),
       `memory.update:${correction.id}:metadata`
     ]));
-    expect(calls.filter((call) => call === "uow.begin").length).toBeGreaterThanOrEqual(4);
-    expect(calls.filter((call) => call === "uow.commit").length).toBeGreaterThanOrEqual(4);
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(1);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(1);
+    expect(calls[0]).toBe("uow.begin");
+    expect(calls.at(-1)).toBe("uow.commit");
+  });
+
+  it("rolls back production code correction pipeline read models when UnitOfWork truth writes fail", async () => {
+    const service = new MemoryService();
+    const previous = service.add({
+      userId: "u1",
+      content: "Previous wrong action: skip CI after editing release code.",
+      source: { kind: "human", confidence: 0.91 }
+    });
+    const claimsBefore = new Map((service as any).claims);
+    const conflictsBefore = new Map((service as any).conflictSets);
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => operation({
+          memoryRepository: {
+            create: async (input: any) => service.store.add(input),
+            update: async (id: string, patch: any) => service.store.update(id, patch)
+          },
+          claimRepository: {
+            register: async (claim: any) => claim
+          },
+          truthRepository: {
+            decide: async () => {
+              throw new Error("truth repository unavailable");
+            }
+          },
+          conflictRepository: {
+            save: async (conflict: any) => conflict
+          }
+        })
+      }
+    });
+
+    await expect(service.recordCodeCorrectionAsync({
+      userId: "u1",
+      content: "Reviewer correction: always run CI before release code merges.",
+      previousMemoryId: previous.id,
+      kind: "review_correction",
+      correctAction: "run CI before release code merges"
+    })).rejects.toThrow("truth repository unavailable");
+
+    expect(service.store.list("u1").map((memory) => memory.id)).toEqual([previous.id]);
+    expect(service.get(previous.id).beliefState).toBe("active");
+    expect((service as any).claims).toEqual(claimsBefore);
+    expect((service as any).conflictSets).toEqual(conflictsBefore);
   });
 
   it("commits production patch evidence through a UnitOfWork event before returning", async () => {

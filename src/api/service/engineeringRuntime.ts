@@ -1,5 +1,6 @@
-import { applyTruthGateDecision, buildPatchEvidenceTrail, citationFor, evaluateForbiddenAction, getEngineeringMetadata, type ActionGuardReport, type AsyncUnitOfWorkExecutor, type CodebaseScope, type EngineeringMemoryKind, type Memory, type MemoryInput, type PatchEvidenceTrail, type SearchResult } from "../../core";
-import { clamp01, contentHash, inferCorrectActionFromCorrection, inferCorrectionKind, inferForbiddenActionFromCorrection, normalizeActionPhrase, repoPolicyFromCorrection, safeGet } from "./helpers";
+import { applyTruthGateDecision, buildPatchEvidenceTrail, citationFor, evaluateForbiddenAction, getEngineeringMetadata, withEngineeringMemoryMetadata, type ActionGuardReport, type AsyncUnitOfWork, type AsyncUnitOfWorkExecutor, type ClaimRecord, type CodebaseScope, type EngineeringMemoryKind, type Memory, type MemoryInput, type PatchEvidenceTrail, type SearchResult } from "../../core";
+import { applyRedactionPolicy } from "../../core/privacy";
+import { clamp01, contentHash, inferCorrectActionFromCorrection, inferCorrectionKind, inferForbiddenActionFromCorrection, normalizeActionPhrase, repoPolicyFromCorrection, safeGet, withProceduralMetadata } from "./helpers";
 
 type CodeCorrectionInput = {
     userId: string;
@@ -46,6 +47,10 @@ export async function recordCodeCorrectionAsync(service: any, input: CodeCorrect
     const providerDecision = input.kind ? undefined : service.defaultEngineeringClassifier?.classifyEngineering({ content: input.content, metadata: { codebase: input.codebase, evidenceIds: input.evidenceIds }, now: new Date() });
     const kind = input.kind ?? providerDecision?.kind ?? inferCorrectionKind(input.content);
     const previous = input.previousMemoryId ? safeGet(service.store, input.previousMemoryId) : undefined;
+    const executor = service.productionAsyncRepository as AsyncUnitOfWorkExecutor | undefined;
+    if (executor?.executeUnitOfWork) {
+      return recordCodeCorrectionInUnitOfWork(service, input, kind, providerDecision, previous, executor);
+    }
     const memory = await service.addAsync(codeCorrectionMemoryInput(input, kind, providerDecision, previous));
     await applySupersessionAsync(service, memory);
     const derivedMemories: Memory[] = [];
@@ -66,6 +71,135 @@ export async function recordCodeCorrectionAsync(service: any, input: CodeCorrect
       : memory;
     service.recordAudit("memory.write", { userId: input.userId, memoryId: finalMemory.id, metadata: { resource: "engineering-correction", previousMemoryId: previous?.id, kind, derivedMemoryIds: derivedMemories.map((item: Memory) => item.id), productionUnitOfWork: true } });
     return finalMemory;
+  }
+
+async function recordCodeCorrectionInUnitOfWork(service: any, input: CodeCorrectionInput, kind: EngineeringMemoryKind, providerDecision: any, previous: Memory | undefined, executor: AsyncUnitOfWorkExecutor): Promise<Memory> {
+    const claimsBefore = new Map(service.claims);
+    const conflictSetsBefore = new Map(service.conflictSets);
+    const storeBefore = service.store.export();
+    const committed = await executor.executeUnitOfWork(async (uow) => {
+      const memory = await createMemoryInUnitOfWork(service, uow, codeCorrectionMemoryInput(input, kind, providerDecision, previous));
+      const superseded = await supersedePreviousInUnitOfWork(service, uow, memory);
+      const derivedMemories: Memory[] = [];
+      for (const item of derivedCorrectionInputs(service, input, memory, previous)) {
+        derivedMemories.push(await createMemoryInUnitOfWork(service, uow, item));
+      }
+      const finalMemory = derivedMemories.length
+        ? await updateMemoryInUnitOfWork(service, uow, memory.id, {
+            metadata: {
+              ...memory.metadata,
+              correctionPipeline: {
+                derivedMemoryIds: derivedMemories.map((item: Memory) => item.id),
+                derivedKinds: derivedMemories.map((item: Memory) => getEngineeringMetadata(item)?.kind).filter(Boolean),
+                previousMemoryId: previous?.id
+              }
+            }
+          })
+        : memory;
+      return { finalMemory, derivedMemories, superseded };
+    }).catch((error) => {
+      service.claims = claimsBefore;
+      service.conflictSets = conflictSetsBefore;
+      service.repository.import(storeBefore);
+      service.store.clear();
+      service.store.import(storeBefore);
+      service.syncReadModelFromRepository();
+      throw error;
+    });
+    commitUnitOfWorkReadModel(service, [committed.finalMemory, ...committed.derivedMemories, ...committed.superseded]);
+    service.metrics.memoriesAdded += 1 + committed.derivedMemories.length;
+    for (const superseded of committed.superseded) {
+      service.recordAudit("memory.update", { userId: superseded.userId, brainId: superseded.brainId, sourceId: superseded.sourceId, memoryId: superseded.id, metadata: { action: "superseded", supersededBy: committed.finalMemory.id, productionUnitOfWork: true } });
+    }
+    const postCommitWriteTriggers = postCommitWriteTriggerCount(committed.derivedMemories.length, committed.superseded.length);
+    service.recordAudit("memory.write", { userId: input.userId, memoryId: committed.finalMemory.id, metadata: { resource: "engineering-correction", previousMemoryId: previous?.id, kind, derivedMemoryIds: committed.derivedMemories.map((item: Memory) => item.id), atomicUnitOfWork: true, productionUnitOfWork: true, postCommitWriteTriggers } });
+    triggerPostCommitWrites(service, input.userId, postCommitWriteTriggers);
+    return committed.finalMemory;
+  }
+
+async function createMemoryInUnitOfWork(service: any, uow: AsyncUnitOfWork, input: MemoryInput): Promise<Memory> {
+    const memory = await uow.memoryRepository.create(prepareEngineeringMemoryForWrite(service, input));
+    await persistTruthForMemory(service, uow, memory);
+    return memory;
+  }
+
+async function updateMemoryInUnitOfWork(service: any, uow: AsyncUnitOfWork, id: string, patch: Partial<MemoryInput> & { trust?: number; importance?: number }): Promise<Memory> {
+    const memory = await uow.memoryRepository.update(id, patch);
+    await persistTruthForMemory(service, uow, memory);
+    return memory;
+  }
+
+async function supersedePreviousInUnitOfWork(service: any, uow: AsyncUnitOfWork, memory: Memory): Promise<Memory[]> {
+    const supersedes = memory.relations.filter((relation) => relation.type === "supersedes" && relation.targetId);
+    const updated: Memory[] = [];
+    if (!supersedes.length) return updated;
+    const validUntil = new Date(memory.temporal.validFrom ?? memory.createdAt).toISOString();
+    for (const relation of supersedes) {
+      const target = safeGet(service.store, relation.targetId!);
+      if (!target || target.beliefState === "retracted") continue;
+      updated.push(await updateMemoryInUnitOfWork(service, uow, target.id, {
+        beliefState: "superseded",
+        temporal: {
+          ...target.temporal,
+          validUntil,
+          supersededAt: validUntil
+        },
+        metadata: {
+          ...target.metadata,
+          supersededBy: memory.id,
+          supersessionReason: `Superseded by ${memory.id}`
+        }
+      }));
+    }
+    return updated;
+  }
+
+async function persistTruthForMemory(service: any, uow: AsyncUnitOfWork, memory: Memory): Promise<ClaimRecord | undefined> {
+    const claim = service.registerMemoryClaim(memory);
+    if (!claim) return undefined;
+    const decision = service.currentTruthForClaim(claim);
+    await uow.claimRepository.register(claim);
+    await uow.truthRepository.decide(decision);
+    const conflictSet = service.conflictSetFor(claim.subject, claim.predicate);
+    if (conflictSet) await uow.conflictRepository.save(conflictSet);
+    return claim;
+  }
+
+function prepareEngineeringMemoryForWrite(service: any, input: MemoryInput): MemoryInput {
+    const sourceDefaultConsent = input.sourceId ? service.sources.get(input.sourceId)?.defaultConsent : undefined;
+    const agentPersona = input.agentId ? service.personaForAgent(input.agentId) : undefined;
+    const personaConsent = agentPersona?.privacyDefault ? { visibility: agentPersona.privacyDefault } : undefined;
+    const scopedInput = { ...input, consent: { ...personaConsent, ...sourceDefaultConsent, ...(input.consent ?? {}) } };
+    const enriched = service.applyDomainEnrichment(scopedInput);
+    const engineeringized = withEngineeringMemoryMetadata(enriched, service.defaultEngineeringClassifier);
+    const proceduralized = withProceduralMetadata(engineeringized);
+    service.ensureScopedAccess(proceduralized);
+    const writeDecision = service.evaluatePolicy("write", proceduralized);
+    if (!writeDecision.allowed) {
+      service.recordAudit("policy.violation", { userId: proceduralized.userId, brainId: proceduralized.brainId, sourceId: proceduralized.sourceId, metadata: { operation: "write", decision: writeDecision } });
+      throw new Error(`Memory write denied by policy: ${writeDecision.reasons.join("; ")}`);
+    }
+    const checked = applyRedactionPolicy(proceduralized, service.redactionPolicy);
+    if (checked.rejected || !checked.input) {
+      throw new Error(`Memory rejected by redaction policy: ${checked.matches.map((match) => match.detector).join(", ")}`);
+    }
+    return checked.input;
+  }
+
+function commitUnitOfWorkReadModel(service: any, memories: Memory[]): void {
+    const ids = new Set(memories.map((memory) => memory.id));
+    const existing = service.store.export().filter((memory: Memory) => !ids.has(memory.id));
+    service.repository.import([...existing, ...memories]);
+    service.syncReadModelFromRepository();
+    for (const memory of memories) service.entities.ingest(memory);
+  }
+
+function postCommitWriteTriggerCount(derivedCount: number, supersededCount: number): number {
+    return 1 + supersededCount + derivedCount + (derivedCount > 0 ? 1 : 0);
+  }
+
+function triggerPostCommitWrites(service: any, userId: string, count: number): void {
+    for (let index = 0; index < count; index += 1) service.afterWrite(userId);
   }
 
 export function derivedCorrectionMemories(service: any, input: CodeCorrectionInput, correction: Memory, previous?: Memory): Memory[] {

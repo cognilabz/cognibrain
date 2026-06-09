@@ -17,6 +17,8 @@ export type MemoryEventType =
   | "memory.created"
   | "memory.updated"
   | "memory.deleted"
+  | "episode.created"
+  | "episode.updated"
   | "claim.registered"
   | "conflict.opened"
   | "current_truth.decided"

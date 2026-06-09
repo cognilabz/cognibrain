@@ -201,9 +201,36 @@ function claimStateForMemory(memory: Memory): ClaimRecord["state"] {
   }
 
 export function createEpisode(service: any, input: EpisodeInput): EpisodeRecord {
+    const episode = buildEpisode(input);
+    service.episodes.set(episode.id, episode);
+    service.recordAudit("memory.write", { userId: episode.userId, brainId: episode.scope.brainId, sourceId: episode.scope.sourceId, metadata: { resource: "episode", episodeId: episode.id, events: episode.rawConversation.length } });
+    service.persist();
+    return episode;
+  }
+
+export async function createEpisodeAsync(service: any, input: EpisodeInput): Promise<EpisodeRecord> {
+    const executor = service.productionAsyncRepository as AsyncUnitOfWorkExecutor | undefined;
+    if (!executor?.executeUnitOfWork) {
+      const episode = service.createEpisode(input);
+      if (typeof service.waitForProductionAsyncFlush === "function") await service.waitForProductionAsyncFlush();
+      return episode;
+    }
+    const episode = buildEpisode(input);
+    await executor.executeUnitOfWork(async (uow) => {
+      const occurredAt = typeof episode.createdAt === "string" ? episode.createdAt : episode.createdAt.toISOString();
+      await uow.appendEvent({ type: "episode.created", aggregateId: episode.id, occurredAt, payload: episode });
+      return episode;
+    });
+    service.episodes.set(episode.id, episode);
+    service.recordAudit("memory.write", { userId: episode.userId, brainId: episode.scope.brainId, sourceId: episode.scope.sourceId, metadata: { resource: "episode", episodeId: episode.id, events: episode.rawConversation.length, productionUnitOfWork: true } });
+    service.persist();
+    return episode;
+  }
+
+function buildEpisode(input: EpisodeInput): EpisodeRecord {
     const now = new Date().toISOString();
     const hash = contentHash(JSON.stringify({ scope: input.scope, events: input.events, toolCalls: input.toolCalls ?? [], filesTouched: input.filesTouched ?? [] }));
-    const episode: EpisodeRecord = {
+    return {
       id: `ep_${hash.slice(2, 14)}`,
       userId: input.scope.userId,
       scope: input.scope,
@@ -215,10 +242,6 @@ export function createEpisode(service: any, input: EpisodeInput): EpisodeRecord 
       memoryIds: [],
       createdAt: now
     };
-    service.episodes.set(episode.id, episode);
-    service.recordAudit("memory.write", { userId: episode.userId, brainId: episode.scope.brainId, sourceId: episode.scope.sourceId, metadata: { resource: "episode", episodeId: episode.id, events: episode.rawConversation.length } });
-    service.persist();
-    return episode;
   }
 
 export function listEpisodes(service: any, userId?: string): EpisodeRecord[] {
@@ -298,7 +321,7 @@ export function extract(service: any, events: MemoryExtractionEvent[], scope: Ex
 
 export async function extractAsync(service: any, events: MemoryExtractionEvent[], scope: ExtractionScope): Promise<ExtractionReport> {
     const normalizedEvents = events.map(normalizeMediaExtractionEvent);
-    const episode = service.createEpisode({ scope: scope as MemoryScope, events: normalizedEvents });
+    const episode = await service.createEpisodeAsync({ scope: scope as MemoryScope, events: normalizedEvents });
     const existing = service.store.list(scope.userId) as Memory[];
     const failures = ruleExtractionFailures(normalizedEvents);
     const needsProvider = Boolean(service.defaultExtractor);
@@ -342,8 +365,7 @@ export async function extractAsync(service: any, events: MemoryExtractionEvent[]
       memories.push(await service.addAsync(linkStateChange(input, service.store.list(scope.userId))));
     }
     for (const memory of memories) await applySupersessionForExtractionAsync(service, memory);
-    service.episodes.set(episode.id, { ...episode, memoryIds: memories.map((memory) => memory.id) });
-    service.persist();
+    await updateEpisodeMemoryIdsAsync(service, episode, memories.map((memory) => memory.id));
     const enrichmentCandidates = enrichmentCandidatesFor(service.store.list(scope.userId));
     const learnedRules = learnedRuleSuggestions(normalizedEvents, failures);
     stages.push({
@@ -362,6 +384,23 @@ export async function extractAsync(service: any, events: MemoryExtractionEvent[]
       }
     }
     return { memories, entityLinks, stages, failures, claims, durabilityDecisions, enrichmentCandidates, learnedRules };
+  }
+
+async function updateEpisodeMemoryIdsAsync(service: any, episode: EpisodeRecord, memoryIds: string[]): Promise<EpisodeRecord> {
+    const updated = { ...episode, memoryIds };
+    const executor = service.productionAsyncRepository as AsyncUnitOfWorkExecutor | undefined;
+    if (!executor?.executeUnitOfWork) {
+      service.episodes.set(episode.id, updated);
+      service.persist();
+      return updated;
+    }
+    await executor.executeUnitOfWork(async (uow) => {
+      await uow.appendEvent({ type: "episode.updated", aggregateId: episode.id, occurredAt: new Date().toISOString(), payload: updated });
+      return updated;
+    });
+    service.episodes.set(episode.id, updated);
+    service.persist();
+    return updated;
   }
 
 export function list(service: any, userId?: string) {

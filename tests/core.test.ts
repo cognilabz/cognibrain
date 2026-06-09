@@ -4450,6 +4450,10 @@ describe("TypeScript memory core", () => {
         executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
           calls.push("uow.begin");
           const result = await operation({
+            appendEvent: async (event: any) => {
+              calls.push(`event:${event.type}:${event.aggregateId}`);
+              return event;
+            },
             memoryRepository: {
               create: async (input: any) => {
                 calls.push(`memory.create:${input.content}`);
@@ -4571,6 +4575,10 @@ describe("TypeScript memory core", () => {
         executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
           calls.push("uow.begin");
           const result = await operation({
+            appendEvent: async (event: any) => {
+              calls.push(`event:${event.type}:${event.aggregateId}`);
+              return event;
+            },
             memoryRepository: {
               create: async (input: any) => {
                 calls.push(`memory.create:${input.content}`);
@@ -4612,6 +4620,9 @@ describe("TypeScript memory core", () => {
     service.add = () => {
       throw new Error("extractAsync must not use sync add");
     };
+    service.createEpisode = () => {
+      throw new Error("extractAsync must not use sync createEpisode");
+    };
 
     const extracted = await service.extractAsync([
       { role: "user", content: "Atlas now uses Redis for cache." }
@@ -4624,13 +4635,44 @@ describe("TypeScript memory core", () => {
     expect(extracted.memories.length).toBeGreaterThan(0);
     expect(media.memories.length).toBeGreaterThan(0);
     expect(calls).toEqual(expect.arrayContaining([
+      expect.stringContaining("event:episode.created:"),
+      expect.stringContaining("event:episode.updated:"),
       expect.stringContaining("memory.create:Atlas"),
       expect.stringContaining("claim.register:"),
       expect.stringContaining("truth.decide:")
     ]));
-    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(extracted.memories.length + media.memories.length);
-    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(extracted.memories.length + media.memories.length);
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(extracted.memories.length + media.memories.length + 4);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(extracted.memories.length + media.memories.length + 4);
     expect(service.listEpisodes("u1").flatMap((episode) => episode.memoryIds).length).toBe(extracted.memories.length + media.memories.length);
+  });
+
+  it("does not publish extraction episodes or memories when the production episode event fails", async () => {
+    const service = new MemoryService();
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => operation({
+          appendEvent: async (event: any) => {
+            if (event.type === "episode.created") throw new Error("episode event journal unavailable");
+            return event;
+          },
+          memoryRepository: {
+            create: async () => {
+              throw new Error("memory create should not run when episode event fails");
+            }
+          }
+        })
+      }
+    });
+    service.createEpisode = () => {
+      throw new Error("extractAsync must not use sync createEpisode");
+    };
+
+    await expect(service.extractAsync([
+      { role: "user", content: "Atlas stores failed episode checks." }
+    ], { userId: "u1", sessionId: "s1" })).rejects.toThrow("episode event journal unavailable");
+
+    expect(service.listEpisodes("u1")).toHaveLength(0);
+    expect(service.list("u1")).toHaveLength(0);
   });
 
   it("commits production patch evidence through a UnitOfWork event before returning", async () => {

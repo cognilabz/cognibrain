@@ -3432,6 +3432,12 @@ describe("TypeScript memory core", () => {
       content: "Release dream workers must schedule risky memories through async writes.",
       source: { kind: "agent", confidence: 0.7 }
     });
+    const expired = service.add({
+      userId: "u1",
+      content: "Release dream workers must enforce expired retention through async writes.",
+      consent: { retentionUntil: "2020-01-01T00:00:00.000Z" },
+      source: { kind: "human", confidence: 0.9 }
+    });
     for (const item of [1, 2, 3]) {
       service.add({
         userId: "u1",
@@ -3500,6 +3506,9 @@ describe("TypeScript memory core", () => {
     service.store.archive = () => {
       throw new Error("runDreamCycleAsync must not use sync store.archive for reflection lifecycle changes");
     };
+    service.store.delete = () => {
+      throw new Error("runDreamCycleAsync must not use sync store.delete for retention lifecycle changes");
+    };
     service.revalidateSourceRefs = () => {
       throw new Error("runDreamCycleAsync must not call sync revalidateSourceRefs");
     };
@@ -3525,13 +3534,15 @@ describe("TypeScript memory core", () => {
     expect(job.report?.dreamCycle.verificationScheduled).toBeGreaterThanOrEqual(1);
     expect(job.report?.created.some((memory) => memory.layer === "reflection" && memory.metadata.theme === "atlas-dream")).toBe(true);
     expect(service.get(risky.id).temporal.verificationDueAt).toBeTruthy();
+    expect(service.get(expired.id).archivedAt).toBeTruthy();
     expect(service.store.list("u1").some((memory) => memory.layer === "reflection" && memory.metadata.theme === "atlas-dream")).toBe(true);
     expect(calls.filter((call) => call === `memory.update:${queued.id}`)).toHaveLength(2);
     expect(calls.filter((call) => call === `memory.update:${risky.id}`)).toHaveLength(1);
+    expect(calls.filter((call) => call === `memory.update:${expired.id}`)).toHaveLength(1);
     expect(calls.some((call) => call.startsWith("memory.create:Reflection on atlas-dream"))).toBe(true);
-    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(5);
-    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(5);
-    expect(calls.filter((call) => call === "afterWrite:u1")).toHaveLength(5);
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(6);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(6);
+    expect(calls.filter((call) => call === "afterWrite:u1")).toHaveLength(6);
   });
 
   it("default GitHub source resolver fetches current provider state when credentials are configured", async () => {

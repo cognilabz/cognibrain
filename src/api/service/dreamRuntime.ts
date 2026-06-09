@@ -259,7 +259,7 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
         limit: plan.budget === "standard" ? 100 : plan.budget === "deep" ? 500 : undefined
       })
       : undefined;
-    service.enforceRetention(new Date(), input.userId);
+    await service.enforceRetentionAsync(new Date(), input.userId);
     const blocked = service.memoriesDeniedForOperation(input.userId, "dream");
     if (blocked.length) {
       const blockedReport = service.blockedReflectionReport(input.userId, mode, blocked);

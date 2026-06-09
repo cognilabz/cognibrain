@@ -59,6 +59,43 @@ export function enforceRetention(service: any, now = new Date(), userId?: string
     return report;
   }
 
+export async function enforceRetentionAsync(service: any, now = new Date(), userId?: string): Promise<RetentionEnforcementReport> {
+    const report: RetentionEnforcementReport = {
+      generatedAt: now.toISOString(),
+      evaluated: 0,
+      archived: [],
+      deleted: [],
+      episodeArchived: [],
+      episodeDeleted: [],
+      rulesMatched: {}
+    };
+    const memories = (service.store.list(userId) as Memory[]).filter((memory: Memory) => !memory.archivedAt);
+    for (const memory of memories) {
+      report.evaluated += 1;
+      const consentExpired = memory.consent.retentionUntil && new Date(memory.consent.retentionUntil).getTime() <= now.getTime();
+      const matchedRules = ([...service.retentionRules.values()] as RetentionRule[]).filter((rule: RetentionRule) => retentionRuleMatches(memory, rule, now));
+      for (const rule of matchedRules) report.rulesMatched[rule.id] = (report.rulesMatched[rule.id] ?? 0) + 1;
+      const deleteRule = matchedRules.find((rule) => rule.action === "delete");
+      if (deleteRule) {
+        const deleted = await service.deleteAsync(memory.id);
+        if (!deleted) continue;
+        service.applyEpisodeRetention(memory.id, "delete", "retention.rule", deleteRule.id, now, report);
+        report.deleted.push(memory.id);
+        service.recordAudit("retention.enforce", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "delete", ruleId: deleteRule.id, before: memory, productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
+        continue;
+      }
+      const archiveRule = matchedRules[0];
+      if (consentExpired || archiveRule) {
+        const archived = await service.archiveAsync(memory.id);
+        service.applyEpisodeRetention(memory.id, "archive", consentExpired ? "consent.retentionUntil" : "retention.rule", archiveRule?.id, now, report);
+        report.archived.push(memory.id);
+        service.recordAudit("retention.enforce", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "archive", reason: consentExpired ? "consent.retentionUntil" : "retention.rule", ruleId: archiveRule?.id, after: archived, productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
+      }
+    }
+    if (report.archived.length || report.deleted.length) service.persist();
+    return report;
+  }
+
 export function retentionReview(service: any, now = new Date(), userId?: string): RetentionReviewReport {
     const expiredMemories: RetentionReviewReport["expiredMemories"] = [];
     const episodeRiskMap = new Map<string, RetentionReviewReport["episodeRisks"][number]>();

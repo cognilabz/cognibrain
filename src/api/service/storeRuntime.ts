@@ -5,6 +5,9 @@ import { enrichmentCandidatesFor, extractionConfidence, hasLocalMediaExtraction,
 import { contentHash, safeGet, syntheticExtractionEvent, withProceduralMetadata } from "./helpers";
 import { linkStateChange } from "./engineering";
 
+type ExtractionScope = Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId" | "deviceId" | "runId">;
+type MediaIngestScope = Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId">;
+
 export function add(service: any, input: MemoryInput) {
     const checked = prepareMemoryForWrite(service, input);
     const memory = service.entities.ingest(service.storage.create(checked));
@@ -228,7 +231,7 @@ export function getEpisode(service: any, id: string): EpisodeRecord {
     return episode;
   }
 
-export function extract(service: any, events: MemoryExtractionEvent[], scope: Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId" | "deviceId" | "runId">): ExtractionReport {
+export function extract(service: any, events: MemoryExtractionEvent[], scope: ExtractionScope): ExtractionReport {
     const normalizedEvents = events.map(normalizeMediaExtractionEvent);
     const episode = service.createEpisode({ scope: scope as MemoryScope, events: normalizedEvents });
     const existing = service.store.list(scope.userId) as Memory[];
@@ -293,6 +296,74 @@ export function extract(service: any, events: MemoryExtractionEvent[], scope: Pi
     return { memories, entityLinks, stages, failures, claims, durabilityDecisions, enrichmentCandidates, learnedRules };
   }
 
+export async function extractAsync(service: any, events: MemoryExtractionEvent[], scope: ExtractionScope): Promise<ExtractionReport> {
+    const normalizedEvents = events.map(normalizeMediaExtractionEvent);
+    const episode = service.createEpisode({ scope: scope as MemoryScope, events: normalizedEvents });
+    const existing = service.store.list(scope.userId) as Memory[];
+    const failures = ruleExtractionFailures(normalizedEvents);
+    const needsProvider = Boolean(service.defaultExtractor);
+    const providerInputs = needsProvider ? service.defaultExtractor?.extract({ events: normalizedEvents, scope, existing, now: new Date() }).map((input: MemoryInput) => markExtractionStage({ ...scope, ...input }, "provider")) ?? [] : [];
+    const ruleInputs = providerInputs.length ? [] : extractAddOnlyMemories(normalizedEvents, scope).map((input: MemoryInput) => markExtractionStage(input, "rules"));
+    const stages: ExtractionReport["stages"] = [
+      ...(needsProvider
+        ? [{ stage: "provider" as const, inputEvents: normalizedEvents.length, extracted: providerInputs.length, confidence: providerInputs.length ? 0.78 : 0.2, reason: providerInputs.length ? "provider extractor produced candidate memories" : "provider extractor returned no candidates" }]
+        : []),
+      { stage: "rules", inputEvents: normalizedEvents.length, extracted: ruleInputs.length, confidence: extractionConfidence(normalizedEvents, ruleInputs.length), reason: providerInputs.length ? "skipped because provider extraction succeeded" : "deterministic fallback rules" }
+    ];
+    const claims: MemoryClaim[] = [];
+    const durabilityDecisions: DurabilityDecision[] = [];
+    const classifiedInputs = [...ruleInputs, ...providerInputs].flatMap((input) => {
+      const event = syntheticExtractionEvent(input);
+      const providerStage = (input.metadata?.extraction as { stage?: unknown } | undefined)?.stage === "provider";
+      const claim = (input.metadata?.claim as MemoryClaim | undefined) ?? (providerStage ? providerClaim(input, event, scope) : extractClaim(input.content, event, scope, input.source, input.entities ?? []));
+      const decision = (input.metadata?.durabilityDecision as DurabilityDecision | undefined) ?? (providerStage ? providerDurability(input, claim) : classifyDurability(input.content, event, claim));
+      claims.push(claim);
+      durabilityDecisions.push(decision);
+      if (decision.action === "ignore" || decision.action === "ask_user") return [];
+      const next: MemoryInput = {
+        ...input,
+        layer: decision.action === "session_only" || decision.action === "working_memory" ? "working" as const : input.layer,
+        tags: decision.action === "session_only" || decision.action === "working_memory" ? [...(input.tags ?? []), "session-only"] : input.tags,
+        metadata: { ...(input.metadata ?? {}), claim, durabilityDecision: decision }
+      };
+      return [next];
+    });
+    const existingHashes = new Set(existing.map((memory) => memory.metadata.contentHash).filter(Boolean));
+    const seenHashes = new Set<string>();
+    const inputs = classifiedInputs.filter((input) => {
+      const hash = contentHash(`${input.content}:${input.source?.kind ?? ""}:${input.timestamp ?? ""}`);
+      input.metadata = { ...(input.metadata ?? {}), contentHash: hash, episodeId: episode.id };
+      if (existingHashes.has(hash) || seenHashes.has(hash)) return false;
+      seenHashes.add(hash);
+      return true;
+    });
+    const memories: Memory[] = [];
+    for (const input of inputs) {
+      memories.push(await service.addAsync(linkStateChange(input, service.store.list(scope.userId))));
+    }
+    for (const memory of memories) await applySupersessionForExtractionAsync(service, memory);
+    service.episodes.set(episode.id, { ...episode, memoryIds: memories.map((memory) => memory.id) });
+    service.persist();
+    const enrichmentCandidates = enrichmentCandidatesFor(service.store.list(scope.userId));
+    const learnedRules = learnedRuleSuggestions(normalizedEvents, failures);
+    stages.push({
+      stage: "enrichment",
+      inputEvents: normalizedEvents.length,
+      extracted: enrichmentCandidates.length,
+      confidence: enrichmentCandidates.length ? 0.72 : 1,
+      reason: enrichmentCandidates.length ? "entity attention threshold produced candidates" : "no entity crossed enrichment threshold"
+    });
+    service.recordAudit("extract.run", { userId: scope.userId, brainId: scope.brainId, sourceId: scope.sourceId, metadata: { events: normalizedEvents.length, memories: memories.length, claims: claims.length, durabilityDecisions, stages, failures: failures.length, learnedRules: learnedRules.length, productionUnitOfWork: Boolean((service.productionAsyncRepository as AsyncUnitOfWorkExecutor | undefined)?.executeUnitOfWork) } });
+    const entityLinks: Record<string, string[]> = {};
+    for (const memory of memories) {
+      for (const entity of memory.entities) {
+        entityLinks[entity] ??= [];
+        entityLinks[entity].push(memory.id);
+      }
+    }
+    return { memories, entityLinks, stages, failures, claims, durabilityDecisions, enrichmentCandidates, learnedRules };
+  }
+
 export function list(service: any, userId?: string) {
     return service.storage.list(userId);
   }
@@ -336,12 +407,44 @@ export function listMemories(service: any, userId: string, options: { limit?: nu
       .slice(0, limit)) as Memory[];
   }
 
-export function ingestMedia(service: any, event: MemoryExtractionEvent, scope: Pick<MemoryInput, "userId" | "brainId" | "sourceId" | "agentId" | "sessionId" | "appId" | "orgId" | "projectId">): ExtractionReport {
+export function ingestMedia(service: any, event: MemoryExtractionEvent, scope: MediaIngestScope): ExtractionReport {
     const media = normalizeMediaExtractionEvent(event);
     const normalized = media.language && !/^en/i.test(media.language)
       ? { ...media, content: service.translateText(media.content, media.language, "en").translated, metadata: { ...(media.metadata ?? {}), translatedFrom: media.language, originalContent: media.content } }
       : media;
     return service.extract([normalized], scope);
+  }
+
+export async function ingestMediaAsync(service: any, event: MemoryExtractionEvent, scope: MediaIngestScope): Promise<ExtractionReport> {
+    const media = normalizeMediaExtractionEvent(event);
+    const normalized = media.language && !/^en/i.test(media.language)
+      ? { ...media, content: service.translateText(media.content, media.language, "en").translated, metadata: { ...(media.metadata ?? {}), translatedFrom: media.language, originalContent: media.content } }
+      : media;
+    return service.extractAsync([normalized], scope);
+  }
+
+async function applySupersessionForExtractionAsync(service: any, memory: Memory): Promise<void> {
+    const supersedes = memory.relations.filter((relation) => relation.type === "supersedes" && relation.targetId);
+    if (!supersedes.length) return;
+    const validUntil = new Date(memory.temporal.validFrom ?? memory.createdAt).toISOString();
+    for (const relation of supersedes) {
+      const target = safeGet(service.store, relation.targetId!);
+      if (!target || target.beliefState === "retracted") continue;
+      const updated = await service.updateAsync(target.id, {
+        beliefState: "superseded",
+        temporal: {
+          ...target.temporal,
+          validUntil,
+          supersededAt: validUntil
+        },
+        metadata: {
+          ...target.metadata,
+          supersededBy: memory.id,
+          supersessionReason: `Superseded by ${memory.id}`
+        }
+      });
+      service.recordAudit("memory.update", { userId: updated.userId, brainId: updated.brainId, sourceId: updated.sourceId, memoryId: updated.id, metadata: { action: "superseded", supersededBy: memory.id, productionUnitOfWork: Boolean((service.productionAsyncRepository as AsyncUnitOfWorkExecutor | undefined)?.executeUnitOfWork) } });
+    }
   }
 
 function providerClaim(input: MemoryInput, event: MemoryExtractionEvent, scope: Partial<MemoryScope> & Pick<MemoryScope, "userId">): MemoryClaim {

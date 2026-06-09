@@ -81,7 +81,7 @@ export async function handleMemoryRoutes(context: RouteContext): Promise<boolean
   if (method === "POST" && url.pathname === "/extract") {
     const body = extractSchema.parse(await json(request));
     const { events, ...scope } = body;
-    const report = defaultService.extract(events, scope);
+    const report = await defaultService.extractAsync(events, scope);
     send(response, 201, serializeExtractionReport(report));
     return true;
   }
@@ -113,10 +113,10 @@ export async function handleMemoryRoutes(context: RouteContext): Promise<boolean
         orgId: z.string().optional(),
         projectId: z.string().optional(),
         event: extractionEventSchema
-      })
+    })
       .parse(await json(request));
     const { event, ...scope } = body;
-    send(response, 201, serializeExtractionReport(defaultService.ingestMedia(event, scope)));
+    send(response, 201, serializeExtractionReport(await defaultService.ingestMediaAsync(event, scope)));
     return true;
   }
 

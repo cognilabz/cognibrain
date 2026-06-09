@@ -4466,6 +4466,76 @@ describe("TypeScript memory core", () => {
     expect((service as any).conflictSets).toEqual(conflictsBefore);
   });
 
+  it("commits production extract and media ingest memories through async UnitOfWork writes", async () => {
+    const service = new MemoryService();
+    const calls: string[] = [];
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
+          calls.push("uow.begin");
+          const result = await operation({
+            memoryRepository: {
+              create: async (input: any) => {
+                calls.push(`memory.create:${input.content}`);
+                return service.store.add(input);
+              },
+              update: async (id: string, patch: any) => {
+                calls.push(`memory.update:${id}:${patch.beliefState ?? "metadata"}`);
+                return service.store.update(id, patch);
+              },
+              delete: async (id: string) => {
+                calls.push(`memory.delete:${id}`);
+                return service.store.delete(id);
+              }
+            },
+            claimRepository: {
+              register: async (claim: any) => {
+                calls.push(`claim.register:${claim.sourceMemoryId}`);
+                return claim;
+              }
+            },
+            truthRepository: {
+              decide: async (decision: any) => {
+                calls.push(`truth.decide:${decision.selectedMemoryId ?? decision.selectedClaimId}`);
+                return decision;
+              }
+            },
+            conflictRepository: {
+              save: async (conflict: any) => {
+                calls.push(`conflict.save:${conflict.id}`);
+                return conflict;
+              }
+            }
+          });
+          calls.push("uow.commit");
+          return result;
+        }
+      }
+    });
+    service.add = () => {
+      throw new Error("extractAsync must not use sync add");
+    };
+
+    const extracted = await service.extractAsync([
+      { role: "user", content: "Atlas now uses Redis for cache." }
+    ], { userId: "u1", sessionId: "s1" });
+    const media = await service.ingestMediaAsync(
+      { role: "operator", content: "Atlas now stores release notes.", mediaType: "audio", language: "en" },
+      { userId: "u1", sessionId: "s1" }
+    );
+
+    expect(extracted.memories.length).toBeGreaterThan(0);
+    expect(media.memories.length).toBeGreaterThan(0);
+    expect(calls).toEqual(expect.arrayContaining([
+      expect.stringContaining("memory.create:Atlas"),
+      expect.stringContaining("claim.register:"),
+      expect.stringContaining("truth.decide:")
+    ]));
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(extracted.memories.length + media.memories.length);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(extracted.memories.length + media.memories.length);
+    expect(service.listEpisodes("u1").flatMap((episode) => episode.memoryIds).length).toBe(extracted.memories.length + media.memories.length);
+  });
+
   it("commits production patch evidence through a UnitOfWork event before returning", async () => {
     const service = new MemoryService();
     const evidenceMemory = service.add({
@@ -4575,8 +4645,10 @@ describe("TypeScript memory core", () => {
 
   it("keeps HTTP memory mutation routes on async production-aware service methods", () => {
     const routeSource = readFileSync(join(process.cwd(), "src/api/server/routes/memoryRoutes.ts"), "utf8");
+    expect(routeSource).toContain("await defaultService.extractAsync");
     expect(routeSource).toContain("await defaultService.recordHarnessActionAsync");
     expect(routeSource).toContain("await defaultService.recordCodeCorrectionAsync");
+    expect(routeSource).toContain("await defaultService.ingestMediaAsync");
     expect(routeSource).toContain("await defaultService.patchEvidenceTrailAsync");
     expect(routeSource).toContain("await defaultService.updateAsync");
     expect(routeSource).toContain("await defaultService.archiveAsync");

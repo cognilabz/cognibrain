@@ -240,6 +240,89 @@ export function recordHarnessLifecycleEvent(service: any, input: HarnessLifecycl
     return { eventMemory, actionMemory, dream };
   }
 
+export async function recordHarnessLifecycleEventAsync(service: any, input: HarnessLifecycleEventInput): Promise<HarnessLifecycleEventReport> {
+    const timestamp = input.timestamp ?? new Date().toISOString();
+    const eventLabel = input.event.replace(/_/g, " ");
+    const content = input.content ?? [
+      `Harness event: ${eventLabel}.`,
+      input.command ? `Command: ${input.command}.` : undefined,
+      input.cwd ? `Working directory: ${input.cwd}.` : undefined,
+      typeof input.exitCode === "number" ? `Exit code: ${input.exitCode}.` : undefined,
+      input.failureReason ? `Failure reason: ${input.failureReason}.` : undefined,
+      input.successReason ? `Success reason: ${input.successReason}.` : undefined,
+      input.filesChanged?.length ? `Files changed: ${input.filesChanged.join(", ")}.` : undefined,
+      input.tests?.length ? `Tests: ${input.tests.map((test) => `${test.status}:${test.name}`).join(", ")}.` : undefined,
+      input.outputSummary ? `Output summary: ${input.outputSummary}.` : undefined
+    ].filter(Boolean).join(" ");
+    const eventMemory = await service.addAsync({
+      userId: input.userId,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      appId: input.appId,
+      orgId: input.orgId,
+      projectId: input.projectId,
+      content,
+      type: input.event === "user_corrected" ? "feedback" : "episodic",
+      layer: input.event === "user_corrected" ? "long_term" : "episodic",
+      source: { kind: input.event === "user_corrected" ? "human" : "tool", confidence: input.event === "user_corrected" ? 0.95 : 0.82 },
+      tags: [
+        "harness-event",
+        `harness:${input.event}`,
+        ...(input.event.includes("failed") ? ["test-failure"] : []),
+        ...(input.event === "user_corrected" ? ["engineering-correction", "correction"] : []),
+        ...(input.event === "release_candidate" ? ["release"] : [])
+      ],
+      entities: [...(input.filesChanged ?? []), ...(input.command ? [firstCommandToken(input.command)] : [])],
+      temporal: { eventAt: timestamp },
+      metadata: {
+        harnessEvent: {
+          event: input.event,
+          harnessRunId: input.harnessRunId,
+          command: input.command,
+          cwd: input.cwd,
+          exitCode: input.exitCode,
+          durationMs: input.durationMs,
+          filesChanged: input.filesChanged ?? [],
+          filesTouched: input.filesTouched ?? [],
+          tests: input.tests ?? [],
+          metadata: input.metadata ?? {}
+        }
+      }
+    });
+    const shouldRecordAction = Boolean(input.command || input.tests?.length || input.filesChanged?.length || input.failureReason || input.successReason);
+    const actionMemory = shouldRecordAction
+      ? await service.recordHarnessActionAsync({
+        userId: input.userId,
+        agentId: input.agentId,
+        sessionId: input.sessionId,
+        appId: input.appId,
+        orgId: input.orgId,
+        projectId: input.projectId,
+        command: input.command ?? input.event,
+        cwd: input.cwd,
+        exitCode: input.exitCode,
+        durationMs: input.durationMs,
+        outputSummary: input.outputSummary,
+        failureReason: input.failureReason,
+        successReason: input.successReason,
+        filesChanged: input.filesChanged,
+        filesTouched: input.filesTouched,
+        tests: input.tests,
+        timestamp,
+        content: input.event === "tool_called" ? undefined : content
+      })
+      : undefined;
+    const dreamInput = dreamInputForHarnessEvent(input);
+    const dream = service.prepareDream({
+      ...dreamInput,
+      run: input.runDream,
+      force: input.forceDream ?? dreamInput.force
+    });
+    service.recordAudit("reflect.run", { userId: input.userId, memoryId: eventMemory.id, metadata: { resource: "harness-lifecycle-event", event: input.event, dreamShouldRun: dream.plan.shouldDream, ranDream: Boolean(dream.report), productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
+    service.persist();
+    return { eventMemory, actionMemory, dream };
+  }
+
 export function retractMemory(service: any, memoryId: string, userId?: string, reason?: string): Memory {
     const memory = service.store.get(memoryId);
     if (userId && memory.userId !== userId) throw new Error(`User ${userId} cannot retract memory ${memoryId}`);

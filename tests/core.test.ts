@@ -4431,6 +4431,85 @@ describe("TypeScript memory core", () => {
     expect(service.auditTrail().some((event) => event.type === "memory.revert" && event.metadata?.productionUnitOfWork === true)).toBe(true);
   });
 
+  it("commits production harness lifecycle events through async writes before dream planning", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    const calls: string[] = [];
+    const originalAfterWrite = (service as any).afterWrite.bind(service);
+    (service as any).afterWrite = (userId: string) => {
+      calls.push(`afterWrite:${userId}`);
+      originalAfterWrite(userId);
+    };
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
+          calls.push("uow.begin");
+          const result = await operation({
+            memoryRepository: {
+              create: async (input: any) => {
+                calls.push(`memory.create:${input.content}`);
+                return service.store.add(input);
+              },
+              update: async (id: string, patch: any) => {
+                calls.push(`memory.update:${id}`);
+                return service.store.update(id, patch);
+              }
+            },
+            claimRepository: {
+              register: async (claim: any) => {
+                calls.push(`claim.register:${claim.sourceMemoryId}`);
+                return claim;
+              }
+            },
+            truthRepository: {
+              decide: async (decision: any) => {
+                calls.push(`truth.decide:${decision.selectedMemoryId ?? decision.selectedClaimId}`);
+                return decision;
+              }
+            },
+            conflictRepository: {
+              save: async (conflict: any) => {
+                calls.push(`conflict.save:${conflict.id}`);
+                return conflict;
+              }
+            }
+          });
+          calls.push("uow.commit");
+          return result;
+        }
+      }
+    });
+    service.add = () => {
+      throw new Error("recordHarnessLifecycleEventAsync must not use sync add");
+    };
+    service.recordHarnessAction = () => {
+      throw new Error("recordHarnessLifecycleEventAsync must not use sync harness action");
+    };
+
+    const report = await service.recordHarnessLifecycleEventAsync({
+      userId: "u1",
+      event: "tests_failed",
+      command: "npm test",
+      cwd: "/repo",
+      tests: [{ name: "vitest", status: "failed" }],
+      failureReason: "unit regression",
+      runDream: false
+    });
+
+    expect(report.eventMemory.tags).toContain("harness:tests_failed");
+    expect(report.actionMemory?.tags).toContain("test-failure");
+    expect(report.dream.plan.trigger).toBe("after_negative_feedback");
+    expect(report.dream.plan.shouldDream).toBe(true);
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(2);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(2);
+    expect(calls).toEqual(expect.arrayContaining([
+      expect.stringContaining("memory.create:Harness event: tests failed"),
+      expect.stringContaining("memory.create:Harness event: tests failed"),
+      `afterWrite:u1`
+    ]));
+    expect(calls.filter((call) => call === "afterWrite:u1")).toHaveLength(2);
+    expect(service.auditTrail().some((event) => event.type === "reflect.run" && event.metadata?.resource === "harness-lifecycle-event" && event.metadata?.productionUnitOfWork === true)).toBe(true);
+  });
+
   it("commits production code correction pipeline in one async UnitOfWork", async () => {
     const service = new MemoryService();
     const previous = service.add({
@@ -4797,6 +4876,7 @@ describe("TypeScript memory core", () => {
     expect(routeSource).toContain("await defaultService.deleteAsync");
     expect(dreamRouteSource).toContain("await defaultService.confirmMemoryAsync");
     expect(dreamRouteSource).toContain("await defaultService.retractMemoryAsync");
+    expect(dreamRouteSource).toContain("await defaultService.recordHarnessLifecycleEventAsync");
   });
 
   it("exposes production Postgres domain repositories for row-backed projections", () => {

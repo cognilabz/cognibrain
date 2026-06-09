@@ -151,7 +151,7 @@ export async function handleDreamRoutes(input: {
     }
 
     if (method === "POST" && url.pathname === "/harness/events") {
-      send(response, 202, serializeHarnessLifecycleEvent(defaultService.recordHarnessLifecycleEvent(harnessLifecycleEventBodySchema.parse(await json(request)))));
+      send(response, 202, serializeHarnessLifecycleEvent(await defaultService.recordHarnessLifecycleEventAsync(harnessLifecycleEventBodySchema.parse(await json(request)))));
       return true;
     }
 
@@ -165,7 +165,7 @@ export async function handleDreamRoutes(input: {
         cwd: body.cwd ?? process.cwd(),
         timeoutMs: body.timeoutMs ?? 30_000
       });
-      const event = defaultService.recordHarnessLifecycleEvent({
+      const event = await defaultService.recordHarnessLifecycleEventAsync({
         userId: body.userId,
         event: result.exitCode === 0 ? "tool_succeeded" : "tool_failed",
         command: body.command,

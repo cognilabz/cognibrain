@@ -4475,6 +4475,12 @@ describe("TypeScript memory core", () => {
           });
           calls.push("uow.commit");
           return result;
+        },
+        dreamJobRepository: {
+          queue: async (job: any) => {
+            calls.push(`dream.queue:${job.trigger}`);
+            return job;
+          }
         }
       }
     });
@@ -4484,6 +4490,9 @@ describe("TypeScript memory core", () => {
     service.recordHarnessAction = () => {
       throw new Error("recordHarnessLifecycleEventAsync must not use sync harness action");
     };
+    service.runDreamCycle = () => {
+      throw new Error("production harness lifecycle runDream must queue a dream job");
+    };
 
     const report = await service.recordHarnessLifecycleEventAsync({
       userId: "u1",
@@ -4492,22 +4501,24 @@ describe("TypeScript memory core", () => {
       cwd: "/repo",
       tests: [{ name: "vitest", status: "failed" }],
       failureReason: "unit regression",
-      runDream: false
+      runDream: true
     });
 
     expect(report.eventMemory.tags).toContain("harness:tests_failed");
     expect(report.actionMemory?.tags).toContain("test-failure");
     expect(report.dream.plan.trigger).toBe("after_negative_feedback");
     expect(report.dream.plan.shouldDream).toBe(true);
+    expect(report.dream.report).toBeUndefined();
     expect(calls.filter((call) => call === "uow.begin")).toHaveLength(2);
     expect(calls.filter((call) => call === "uow.commit")).toHaveLength(2);
     expect(calls).toEqual(expect.arrayContaining([
       expect.stringContaining("memory.create:Harness event: tests failed"),
       expect.stringContaining("memory.create:Harness event: tests failed"),
-      `afterWrite:u1`
+      `afterWrite:u1`,
+      "dream.queue:after_negative_feedback"
     ]));
     expect(calls.filter((call) => call === "afterWrite:u1")).toHaveLength(2);
-    expect(service.auditTrail().some((event) => event.type === "reflect.run" && event.metadata?.resource === "harness-lifecycle-event" && event.metadata?.productionUnitOfWork === true)).toBe(true);
+    expect(service.auditTrail().some((event) => event.type === "reflect.run" && event.metadata?.resource === "harness-lifecycle-event" && event.metadata?.productionUnitOfWork === true && typeof event.metadata?.queuedDreamJobId === "string")).toBe(true);
   });
 
   it("commits production code correction pipeline in one async UnitOfWork", async () => {

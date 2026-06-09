@@ -313,12 +313,26 @@ export async function recordHarnessLifecycleEventAsync(service: any, input: Harn
       })
       : undefined;
     const dreamInput = dreamInputForHarnessEvent(input);
-    const dream = service.prepareDream({
-      ...dreamInput,
-      run: input.runDream,
-      force: input.forceDream ?? dreamInput.force
-    });
-    service.recordAudit("reflect.run", { userId: input.userId, memoryId: eventMemory.id, metadata: { resource: "harness-lifecycle-event", event: input.event, dreamShouldRun: dream.plan.shouldDream, ranDream: Boolean(dream.report), productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
+    const productionUnitOfWork = Boolean(service.productionAsyncRepository?.executeUnitOfWork);
+    const forcedDream = input.forceDream ?? dreamInput.force;
+    let queuedDreamJobId: string | undefined;
+    const dream = productionUnitOfWork && input.runDream
+      ? { plan: service.dreamPlan({ ...dreamInput, force: forcedDream }) }
+      : service.prepareDream({
+        ...dreamInput,
+        run: input.runDream,
+        force: forcedDream
+      });
+    if (productionUnitOfWork && input.runDream && (dream.plan.shouldDream || forcedDream)) {
+      const job = await service.startDreamJob({
+        ...dreamInput,
+        mode: dreamInput.mode ?? dream.plan.mode,
+        trigger: dream.plan.trigger,
+        force: forcedDream
+      }, fetch, undefined, { queueOnly: true });
+      queuedDreamJobId = job.jobId;
+    }
+    service.recordAudit("reflect.run", { userId: input.userId, memoryId: eventMemory.id, metadata: { resource: "harness-lifecycle-event", event: input.event, dreamShouldRun: dream.plan.shouldDream, ranDream: Boolean(dream.report), queuedDreamJobId, productionUnitOfWork } });
     service.persist();
     return { eventMemory, actionMemory, dream };
   }

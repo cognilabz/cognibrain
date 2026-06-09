@@ -135,8 +135,11 @@ const checks = [
     files.memoryService.includes("createProductionPersistedFileFromRepository"),
     files.memoryService.includes("const memories = await repository.list({});") && files.memoryService.includes("if (memories.length > 0)") && files.memoryService.includes("allowServiceStateFallback"),
     files.memoryService.includes("isStrictDbPrimaryBackend") && files.memoryService.includes("allowServiceStateFallback: !isStrictDbPrimaryBackend(backend)"),
+    files.persistence.includes("waitForProductionAsyncFlush") && files.persistence.includes("productionAsyncFlushError"),
     files.coreTests.includes("hydrates production Postgres startup from repository rows before legacy service_state"),
     files.coreTests.includes("does not read legacy service_state for strict DB-primary production startup"),
+    files.coreTests.includes("surfaces production Postgres flush failures through an explicit awaitable barrier"),
+    files.coreTests.includes("await service.waitForProductionAsyncFlush()"),
     files.persistence.includes("previousHash") && files.persistence.includes("payloadHash") && files.persistence.includes("replayAuditEvents"),
     files.coreTests.includes("supports an append-only durable persistence backend"),
     files.coreTests.includes("previousHash") && files.apiTests.includes("/audit/chain")

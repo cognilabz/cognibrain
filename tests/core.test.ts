@@ -4067,11 +4067,30 @@ describe("TypeScript memory core", () => {
       content: "Production Postgres writes memory rows and projection tables, not service_state.",
       source: { kind: "human", confidence: 0.96 }
     });
-    await (service as unknown as { productionAsyncFlush?: Promise<void> }).productionAsyncFlush;
+    await service.waitForProductionAsyncFlush();
 
     expect(imported).toEqual(expect.arrayContaining([expect.objectContaining({ id: memory.id })]));
     expect(projections).toEqual([expect.objectContaining({ memories: expect.arrayContaining([expect.objectContaining({ id: memory.id })]) })]);
     expect(legacySnapshotWrites).toBe(0);
+  });
+
+  it("surfaces production Postgres flush failures through an explicit awaitable barrier", async () => {
+    const service = new MemoryService();
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        import: async () => {
+          throw new Error("projection database unavailable");
+        }
+      }
+    });
+
+    service.add({
+      userId: "u1",
+      content: "Production callers must be able to observe async repository write failures.",
+      source: { kind: "human", confidence: 0.96 }
+    });
+
+    await expect(service.waitForProductionAsyncFlush()).rejects.toThrow("projection database unavailable");
   });
 
   it("keeps production Postgres dream jobs on a leased DB-backed queue", () => {

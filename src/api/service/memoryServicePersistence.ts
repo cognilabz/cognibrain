@@ -322,6 +322,15 @@ export class MemoryServicePersistence extends MemoryServiceInsightsMaintenance {
     else this.saveRepositoryState(payload);
   }
 
+  async waitForProductionAsyncFlush(): Promise<void> {
+    const state = this as {
+      productionAsyncFlush?: Promise<void>;
+      productionAsyncFlushError?: string;
+    };
+    await state.productionAsyncFlush;
+    if (state.productionAsyncFlushError) throw new Error(state.productionAsyncFlushError);
+  }
+
   private flushProductionAsyncRepository(memories: Memory[], payload: PersistedMemoryFile): void {
     const repository = (this as {
       productionAsyncRepository?: {
@@ -333,6 +342,7 @@ export class MemoryServicePersistence extends MemoryServiceInsightsMaintenance {
       productionAsyncFlushError?: string;
     }).productionAsyncRepository;
     if (!repository) return;
+    (this as { productionAsyncFlushError?: string }).productionAsyncFlushError = undefined;
     const flush = (async () => {
       if (typeof repository.import === "function") await repository.import(memories);
       if (typeof repository.saveProjectionRowsAsync === "function") await repository.saveProjectionRowsAsync(payload);

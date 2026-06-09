@@ -3342,6 +3342,155 @@ describe("TypeScript memory core", () => {
     expect(service.auditTrail().some((event) => event.type === "memory.update" && event.memoryId === liveSource.id && event.metadata?.action === "source_revalidation" && event.metadata?.productionUnitOfWork === true)).toBe(true);
   });
 
+  it("commits production verification resolution through async source revalidation writes", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    const queued = service.add({
+      userId: "u1",
+      content: "Verification resolution must use async source revalidation writes.",
+      beliefState: "needs_verification",
+      source: { kind: "import", confidence: 0.84 },
+      sourceRef: { connectorId: "deleted-docs", externalId: "ADR-9", version: "1", hash: "old-hash" },
+      metadata: { sourceDeletedAt: "2026-05-03T00:00:00.000Z" }
+    });
+    const calls: string[] = [];
+    const originalStoreUpdate = service.store.update.bind(service.store);
+    const originalAfterWrite = (service as any).afterWrite.bind(service);
+    (service as any).afterWrite = (userId: string) => {
+      calls.push(`afterWrite:${userId}`);
+      originalAfterWrite(userId);
+    };
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
+          calls.push("uow.begin");
+          const result = await operation({
+            memoryRepository: {
+              update: async (id: string, patch: any) => {
+                calls.push(`memory.update:${id}`);
+                return originalStoreUpdate(id, patch);
+              }
+            },
+            claimRepository: {
+              register: async (claim: any) => {
+                calls.push(`claim.register:${claim.sourceMemoryId}`);
+                return claim;
+              }
+            },
+            truthRepository: {
+              decide: async (decision: any) => {
+                calls.push(`truth.decide:${decision.selectedMemoryId}`);
+                return decision;
+              }
+            },
+            conflictRepository: {
+              save: async (conflict: any) => {
+                calls.push(`conflict.save:${conflict.id}`);
+                return conflict;
+              }
+            }
+          });
+          calls.push("uow.commit");
+          return result;
+        }
+      }
+    });
+    service.store.update = () => {
+      throw new Error("resolveVerificationQueueAsync must not use sync store.update");
+    };
+    (service as any).revalidateMemorySourceRef = () => {
+      throw new Error("resolveVerificationQueueAsync must not use sync source revalidation");
+    };
+
+    const resolved = await service.resolveVerificationQueueAsync("u1");
+
+    expect(resolved.results.find((result) => result.memoryId === queued.id)).toMatchObject({ status: "source_missing" });
+    expect(service.get(queued.id).beliefState).toBe("needs_verification");
+    expect(calls).toEqual(expect.arrayContaining([
+      "uow.begin",
+      `memory.update:${queued.id}`,
+      `claim.register:${queued.id}`,
+      `truth.decide:${queued.id}`,
+      "uow.commit",
+      "afterWrite:u1"
+    ]));
+    expect(calls.filter((call) => call === "afterWrite:u1")).toHaveLength(1);
+    expect(service.auditTrail().some((event) => event.type === "reflect.run" && event.metadata?.resource === "verification-resolver" && event.metadata?.mode === "live" && event.metadata?.productionUnitOfWork === true)).toBe(true);
+  });
+
+  it("runs production dream jobs with async source revalidation and verification resolution", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    const queued = service.add({
+      userId: "u1",
+      content: "Release dream workers must not use sync source resolution.",
+      beliefState: "needs_verification",
+      source: { kind: "import", confidence: 0.84 },
+      sourceRef: { connectorId: "deleted-docs", externalId: "ADR-10", version: "1", hash: "old-hash" },
+      metadata: { sourceDeletedAt: "2026-05-03T00:00:00.000Z" }
+    });
+    const calls: string[] = [];
+    const originalStoreUpdate = service.store.update.bind(service.store);
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
+          calls.push("uow.begin");
+          const result = await operation({
+            memoryRepository: {
+              update: async (id: string, patch: any) => {
+                calls.push(`memory.update:${id}`);
+                return originalStoreUpdate(id, patch);
+              }
+            },
+            claimRepository: {
+              register: async (claim: any) => {
+                calls.push(`claim.register:${claim.sourceMemoryId}`);
+                return claim;
+              }
+            },
+            truthRepository: {
+              decide: async (decision: any) => {
+                calls.push(`truth.decide:${decision.selectedMemoryId}`);
+                return decision;
+              }
+            },
+            conflictRepository: {
+              save: async (conflict: any) => {
+                calls.push(`conflict.save:${conflict.id}`);
+                return conflict;
+              }
+            }
+          });
+          calls.push("uow.commit");
+          return result;
+        }
+      }
+    });
+    service.revalidateSourceRefs = () => {
+      throw new Error("runDreamCycleAsync must not call sync revalidateSourceRefs");
+    };
+    service.resolveVerificationQueue = () => {
+      throw new Error("runDreamCycleAsync must not call sync resolveVerificationQueue");
+    };
+    (service as any).revalidateMemorySourceRef = () => {
+      throw new Error("runDreamCycleAsync must not call sync memory source revalidation");
+    };
+
+    const job = await service.startDreamJob({
+      userId: "u1",
+      mode: "dream",
+      trigger: "before_release",
+      budget: "release",
+      force: true,
+      sourceRefresh: true
+    }, fetch, 10_000, { wait: true });
+
+    expect(job.status).toBe("done");
+    expect(job.report?.dreamCycle.sourceRevalidation?.results.find((result) => result.memoryId === queued.id)).toMatchObject({ status: "source_missing" });
+    expect(job.report?.dreamCycle.verificationResolution?.results.find((result) => result.memoryId === queued.id)).toMatchObject({ status: "source_missing" });
+    expect(calls.filter((call) => call === `memory.update:${queued.id}`)).toHaveLength(2);
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(2);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(2);
+  });
+
   it("default GitHub source resolver fetches current provider state when credentials are configured", async () => {
     const previousFetch = globalThis.fetch;
     const previousRepo = process.env.MEMORY_GITHUB_REPO;

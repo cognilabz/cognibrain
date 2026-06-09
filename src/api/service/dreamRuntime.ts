@@ -167,6 +167,7 @@ export function runDreamCycle(service: any, input: DreamCycleInput): DreamCycleR
     const mode = input.mode ?? modeForTrigger(input.trigger);
     const trigger = input.trigger ?? triggerForMode(mode);
     const plan = service.dreamPlan({ ...input, mode, trigger });
+    const skipSyncSourceResolution = Boolean((input as DreamCycleInput & { __skipSyncSourceResolution?: boolean }).__skipSyncSourceResolution);
     service.enforceRetention(new Date(), input.userId);
     const blocked = service.memoriesDeniedForOperation(input.userId, "dream");
     if (blocked.length) {
@@ -187,7 +188,7 @@ export function runDreamCycle(service: any, input: DreamCycleInput): DreamCycleR
         }
       };
     }
-    const shouldRevalidateSources = mode === "dream" && plan.budget !== "quick";
+    const shouldRevalidateSources = mode === "dream" && plan.budget !== "quick" && !skipSyncSourceResolution;
     const sourceRevalidation = shouldRevalidateSources
       ? service.revalidateSourceRefs(input.userId, {
         connectorIds: plan.connectorIds,
@@ -198,7 +199,7 @@ export function runDreamCycle(service: any, input: DreamCycleInput): DreamCycleR
       : undefined;
     const report = service.reflection.run(input.userId);
     const verificationScheduled = mode === "dream" ? service.scheduleVerificationFromDream(input.userId) : 0;
-    const verificationResolution = mode === "dream" && plan.budget === "release"
+    const verificationResolution = mode === "dream" && plan.budget === "release" && !skipSyncSourceResolution
       ? service.resolveVerificationQueue(input.userId, { connectorIds: plan.connectorIds.length ? plan.connectorIds : undefined, limit: 250 })
       : undefined;
     if (sourceRevalidation?.evaluated) report.lifecycle.actions.push(`revalidated ${sourceRevalidation.evaluated} source-backed memories`);
@@ -249,7 +250,6 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
     const connectorRefresh = mode === "dream" && plan.sourceRefresh
       ? await service.refreshDreamSources({ ...input, mode, trigger }, plan, fetchImpl, timeoutMs)
       : undefined;
-    const report = service.runDreamCycle({ ...input, mode, trigger, connectorIds: plan.connectorIds, sourceRefresh: plan.sourceRefresh });
     const shouldRevalidateSources = mode === "dream" && plan.budget !== "quick";
     const liveSourceRevalidation = shouldRevalidateSources
       ? await service.revalidateSourceRefsAsync(input.userId, {
@@ -259,9 +259,17 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
         limit: plan.budget === "standard" ? 100 : plan.budget === "deep" ? 500 : undefined
       })
       : undefined;
+    const report = service.runDreamCycle({ ...input, mode, trigger, connectorIds: plan.connectorIds, sourceRefresh: plan.sourceRefresh, __skipSyncSourceResolution: true });
     if (liveSourceRevalidation?.evaluated) {
       report.dreamCycle.sourceRevalidation = liveSourceRevalidation;
       report.lifecycle.actions.push(`live-revalidated ${liveSourceRevalidation.evaluated} source-backed memories`);
+    }
+    const liveVerificationResolution = mode === "dream" && plan.budget === "release"
+      ? await service.resolveVerificationQueueAsync(input.userId, { connectorIds: plan.connectorIds.length ? plan.connectorIds : undefined, limit: 250 })
+      : undefined;
+    if (liveVerificationResolution?.resolved) {
+      report.dreamCycle.verificationResolution = liveVerificationResolution;
+      report.lifecycle.actions.push(`live-resolved ${liveVerificationResolution.resolved} verification queue items`);
     }
     if (connectorRefresh) {
       report.dreamCycle.connectorRefresh = connectorRefresh;
@@ -281,7 +289,7 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
         }
       });
     }
-    if (connectorRefresh || liveSourceRevalidation?.evaluated) service.persist();
+    if (connectorRefresh || liveSourceRevalidation?.evaluated || liveVerificationResolution?.results.length) service.persist();
     return report;
   }
 

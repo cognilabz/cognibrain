@@ -146,7 +146,7 @@ export async function handleDreamRoutes(input: {
 
     if (method === "POST" && url.pathname === "/verification/resolve") {
       const body = sourceRevalidationBodySchema.parse(await json(request));
-      send(response, 202, defaultService.resolveVerificationQueue(body.userId, { connectorIds: body.connectorIds, limit: body.limit }));
+      send(response, 202, await defaultService.resolveVerificationQueueAsync(body.userId, { connectorIds: body.connectorIds, limit: body.limit }));
       return true;
     }
 

@@ -41,6 +41,26 @@ export function resolveVerificationQueue(service: any, userId: string, options: 
     return report;
   }
 
+export async function resolveVerificationQueueAsync(service: any, userId: string, options: { limit?: number; connectorIds?: string[] } = {}): Promise<VerificationResolutionReport> {
+    const connectorIds = new Set(options.connectorIds ?? []);
+    const queue = (service.verificationQueue(userId).items as VerificationQueueReport["items"])
+      .filter((item) => {
+        const memory = service.store.get(item.memoryId);
+        const connectorId = memory.provenance.sourceRef?.connectorId;
+        return !connectorIds.size || connectorIds.has(connectorId ?? "");
+      })
+      .slice(0, options.limit ?? 100);
+    const results: SourceRevalidationResult[] = [];
+    for (const item of queue) {
+      results.push(await service.revalidateMemorySourceRefAsync(item.memoryId, userId) as SourceRevalidationResult);
+    }
+    const resolved = results.filter((result) => result.status === "confirmed" || result.status === "superseded" || result.status === "contradicted" || result.status === "source_missing" || result.status === "source_updated").length;
+    const report: VerificationResolutionReport = { userId, generatedAt: new Date().toISOString(), resolved, results };
+    service.recordAudit("reflect.run", { userId, metadata: { resource: "verification-resolver", mode: "live", evaluated: results.length, resolved, summary: sourceRevalidationSummary(results), productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
+    service.persist();
+    return report;
+  }
+
 export function confirmMemory(service: any, memoryId: string, userId?: string): Memory {
     const memory = service.store.get(memoryId);
     if (userId && memory.userId !== userId) throw new Error(`User ${userId} cannot confirm memory ${memoryId}`);

@@ -1,7 +1,7 @@
 import { applyTruthGateDecision, buildPatchEvidenceTrail, citationFor, evaluateForbiddenAction, getEngineeringMetadata, type ActionGuardReport, type CodebaseScope, type EngineeringMemoryKind, type Memory, type MemoryInput, type PatchEvidenceTrail, type SearchResult } from "../../core";
 import { clamp01, contentHash, inferCorrectActionFromCorrection, inferCorrectionKind, inferForbiddenActionFromCorrection, normalizeActionPhrase, repoPolicyFromCorrection, safeGet } from "./helpers";
 
-export function recordCodeCorrection(service: any, input: {
+type CodeCorrectionInput = {
     userId: string;
     agentId?: string;
     sessionId?: string;
@@ -17,11 +17,63 @@ export function recordCodeCorrection(service: any, input: {
     source?: MemoryInput["source"];
     timestamp?: Date | string;
     evidenceIds?: string[];
-  }): Memory {
+  };
+
+export function recordCodeCorrection(service: any, input: CodeCorrectionInput): Memory {
     const providerDecision = input.kind ? undefined : service.defaultEngineeringClassifier?.classifyEngineering({ content: input.content, metadata: { codebase: input.codebase, evidenceIds: input.evidenceIds }, now: new Date() });
     const kind = input.kind ?? providerDecision?.kind ?? inferCorrectionKind(input.content);
     const previous = input.previousMemoryId ? safeGet(service.store, input.previousMemoryId) : undefined;
-    const memory = service.add({
+    const memory = service.add(codeCorrectionMemoryInput(input, kind, providerDecision, previous));
+    service.applySupersession(memory);
+    const derivedMemories = service.derivedCorrectionMemories(input, memory, previous);
+    const finalMemory = derivedMemories.length
+      ? service.update(memory.id, {
+          metadata: {
+            ...memory.metadata,
+            correctionPipeline: {
+              derivedMemoryIds: derivedMemories.map((item: Memory) => item.id),
+              derivedKinds: derivedMemories.map((item: Memory) => getEngineeringMetadata(item)?.kind).filter(Boolean),
+              previousMemoryId: previous?.id
+            }
+          }
+        })
+      : memory;
+    service.recordAudit("memory.write", { userId: input.userId, memoryId: finalMemory.id, metadata: { resource: "engineering-correction", previousMemoryId: previous?.id, kind, derivedMemoryIds: derivedMemories.map((item: Memory) => item.id) } });
+    return finalMemory;
+  }
+
+export async function recordCodeCorrectionAsync(service: any, input: CodeCorrectionInput): Promise<Memory> {
+    const providerDecision = input.kind ? undefined : service.defaultEngineeringClassifier?.classifyEngineering({ content: input.content, metadata: { codebase: input.codebase, evidenceIds: input.evidenceIds }, now: new Date() });
+    const kind = input.kind ?? providerDecision?.kind ?? inferCorrectionKind(input.content);
+    const previous = input.previousMemoryId ? safeGet(service.store, input.previousMemoryId) : undefined;
+    const memory = await service.addAsync(codeCorrectionMemoryInput(input, kind, providerDecision, previous));
+    await applySupersessionAsync(service, memory);
+    const derivedMemories: Memory[] = [];
+    for (const item of derivedCorrectionInputs(service, input, memory, previous)) {
+      derivedMemories.push(await service.addAsync(item));
+    }
+    const finalMemory = derivedMemories.length
+      ? await service.updateAsync(memory.id, {
+          metadata: {
+            ...memory.metadata,
+            correctionPipeline: {
+              derivedMemoryIds: derivedMemories.map((item: Memory) => item.id),
+              derivedKinds: derivedMemories.map((item: Memory) => getEngineeringMetadata(item)?.kind).filter(Boolean),
+              previousMemoryId: previous?.id
+            }
+          }
+        })
+      : memory;
+    service.recordAudit("memory.write", { userId: input.userId, memoryId: finalMemory.id, metadata: { resource: "engineering-correction", previousMemoryId: previous?.id, kind, derivedMemoryIds: derivedMemories.map((item: Memory) => item.id), productionUnitOfWork: true } });
+    return finalMemory;
+  }
+
+export function derivedCorrectionMemories(service: any, input: CodeCorrectionInput, correction: Memory, previous?: Memory): Memory[] {
+    return derivedCorrectionInputs(service, input, correction, previous).map((item) => service.add(item));
+  }
+
+function codeCorrectionMemoryInput(input: CodeCorrectionInput, kind: EngineeringMemoryKind, providerDecision: any, previous?: Memory): MemoryInput {
+    return {
       userId: input.userId,
       agentId: input.agentId,
       sessionId: input.sessionId,
@@ -54,64 +106,34 @@ export function recordCodeCorrection(service: any, input: {
           evidenceIds: input.evidenceIds ?? []
         }
       }
-    });
-    service.applySupersession(memory);
-    const derivedMemories = service.derivedCorrectionMemories(input, memory, previous);
-    const finalMemory = derivedMemories.length
-      ? service.update(memory.id, {
-          metadata: {
-            ...memory.metadata,
-            correctionPipeline: {
-              derivedMemoryIds: derivedMemories.map((item: Memory) => item.id),
-              derivedKinds: derivedMemories.map((item: Memory) => getEngineeringMetadata(item)?.kind).filter(Boolean),
-              previousMemoryId: previous?.id
-            }
-          }
-        })
-      : memory;
-    service.recordAudit("memory.write", { userId: input.userId, memoryId: finalMemory.id, metadata: { resource: "engineering-correction", previousMemoryId: previous?.id, kind, derivedMemoryIds: derivedMemories.map((item: Memory) => item.id) } });
-    return finalMemory;
+    };
   }
 
-export async function recordCodeCorrectionAsync(service: any, input: {
-    userId: string;
-    agentId?: string;
-    sessionId?: string;
-    appId?: string;
-    orgId?: string;
-    projectId?: string;
-    content: string;
-    previousMemoryId?: string;
-    previousWrongAction?: string;
-    correctAction?: string;
-    kind?: EngineeringMemoryKind;
-    codebase?: CodebaseScope;
-    source?: MemoryInput["source"];
-    timestamp?: Date | string;
-    evidenceIds?: string[];
-  }): Promise<Memory> {
-    const memory = service.recordCodeCorrection(input);
-    if (typeof service.waitForProductionAsyncFlush === "function") await service.waitForProductionAsyncFlush();
-    return memory;
+async function applySupersessionAsync(service: any, memory: Memory): Promise<void> {
+    const supersedes = memory.relations.filter((relation) => relation.type === "supersedes" && relation.targetId);
+    if (!supersedes.length) return;
+    const validUntil = new Date(memory.temporal.validFrom ?? memory.createdAt).toISOString();
+    for (const relation of supersedes) {
+      const target = safeGet(service.store, relation.targetId!);
+      if (!target || target.beliefState === "retracted") continue;
+      const updated = await service.updateAsync(target.id, {
+        beliefState: "superseded",
+        temporal: {
+          ...target.temporal,
+          validUntil,
+          supersededAt: validUntil
+        },
+        metadata: {
+          ...target.metadata,
+          supersededBy: memory.id,
+          supersessionReason: `Superseded by ${memory.id}`
+        }
+      });
+      service.recordAudit("memory.update", { userId: updated.userId, brainId: updated.brainId, sourceId: updated.sourceId, memoryId: updated.id, metadata: { action: "superseded", supersededBy: memory.id, productionUnitOfWork: true } });
+    }
   }
 
-export function derivedCorrectionMemories(service: any, input: {
-    userId: string;
-    agentId?: string;
-    sessionId?: string;
-    appId?: string;
-    orgId?: string;
-    projectId?: string;
-    content: string;
-    previousMemoryId?: string;
-    previousWrongAction?: string;
-    correctAction?: string;
-    kind?: EngineeringMemoryKind;
-    codebase?: CodebaseScope;
-    source?: MemoryInput["source"];
-    timestamp?: Date | string;
-    evidenceIds?: string[];
-  }, correction: Memory, previous?: Memory): Memory[] {
+function derivedCorrectionInputs(service: any, input: CodeCorrectionInput, correction: Memory, previous?: Memory): MemoryInput[] {
     const primaryKind = getEngineeringMetadata(correction)?.kind;
     const codebase = input.codebase ?? { repo: input.projectId };
     const source = input.source ?? { kind: "reviewed_code" as const, confidence: 0.88 };
@@ -191,7 +213,7 @@ export function derivedCorrectionMemories(service: any, input: {
       });
     }
 
-    return derived.map((item) => service.add(item));
+    return derived;
   }
 
 export function guardAction(service: any, input: {

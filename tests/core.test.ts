@@ -4334,6 +4334,81 @@ describe("TypeScript memory core", () => {
     expect(() => service.get(memory.id)).toThrow();
   });
 
+  it("commits production code corrections and derived memories through async UnitOfWork writes before returning", async () => {
+    const service = new MemoryService();
+    const previous = service.add({
+      userId: "u1",
+      content: "Previous wrong action: skip CI after editing release code.",
+      source: { kind: "human", confidence: 0.91 }
+    });
+    const calls: string[] = [];
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
+          calls.push("uow.begin");
+          const result = await operation({
+            memoryRepository: {
+              create: async (input: any) => {
+                calls.push(`memory.create:${input.content}`);
+                return service.store.add(input);
+              },
+              update: async (id: string, patch: any) => {
+                calls.push(`memory.update:${id}:${patch.beliefState ?? "metadata"}`);
+                return service.store.update(id, patch);
+              }
+            },
+            claimRepository: {
+              register: async (claim: any) => {
+                calls.push(`claim.register:${claim.sourceMemoryId}`);
+                return claim;
+              }
+            },
+            truthRepository: {
+              decide: async (decision: any) => {
+                calls.push(`truth.decide:${decision.selectedMemoryId}`);
+                return decision;
+              }
+            },
+            conflictRepository: {
+              save: async (conflict: any) => {
+                calls.push(`conflict.save:${conflict.id}`);
+                return conflict;
+              }
+            }
+          });
+          calls.push("uow.commit");
+          return result;
+        }
+      }
+    });
+    service.add = () => {
+      throw new Error("recordCodeCorrectionAsync must not use sync add");
+    };
+    service.update = () => {
+      throw new Error("recordCodeCorrectionAsync must not use sync update");
+    };
+
+    const correction = await service.recordCodeCorrectionAsync({
+      userId: "u1",
+      content: "Reviewer correction: always run CI before release code merges.",
+      previousMemoryId: previous.id,
+      kind: "review_correction",
+      correctAction: "run CI before release code merges"
+    });
+
+    expect(correction.tags).toContain("engineering-correction");
+    expect(service.get(previous.id).beliefState).toBe("superseded");
+    expect((correction.metadata?.correctionPipeline as { derivedMemoryIds?: string[] } | undefined)?.derivedMemoryIds?.length).toBeGreaterThan(0);
+    expect(calls).toEqual(expect.arrayContaining([
+      expect.stringContaining("memory.create:Reviewer correction"),
+      `memory.update:${previous.id}:superseded`,
+      expect.stringContaining("memory.create:Procedure"),
+      `memory.update:${correction.id}:metadata`
+    ]));
+    expect(calls.filter((call) => call === "uow.begin").length).toBeGreaterThanOrEqual(4);
+    expect(calls.filter((call) => call === "uow.commit").length).toBeGreaterThanOrEqual(4);
+  });
+
   it("surfaces production Postgres flush failures through an explicit awaitable barrier", async () => {
     const service = new MemoryService();
     Object.defineProperty(service, "productionAsyncRepository", {

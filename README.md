@@ -62,6 +62,52 @@ Cognibrain is a local/self-hosted memory layer for engineering agents. It is not
 
 The important design choice: injected memory is useful only when it is usable. Cognibrain keeps review-only, low-confidence, stale, conflicted or unsafe memories visible in diagnostics, but blocks them from the context body until the relevant claim/evidence gate says they are safe enough to inject.
 
+## Plain-English Model
+
+Think of Cognibrain as a small engineering memory service that runs beside a coding agent:
+
+```mermaid
+flowchart LR
+  human["Human or team"] --> rules["repo rules, corrections, decisions"]
+  agent["Coding agent"] --> actions["commands, patches, outcomes"]
+  tools["GitHub, Jira, docs, chat and other tools"] --> sources["source records"]
+  rules --> brain["Cognibrain"]
+  actions --> brain
+  sources --> brain
+  brain --> context["short context before work"]
+  brain --> guard["risk warning before action"]
+  brain --> proof["patch evidence after work"]
+```
+
+The point is not to save everything. The point is to save the few facts that prevent repeated mistakes:
+
+| Concept | Simple meaning | Example |
+| --- | --- | --- |
+| Memory | A durable fact the agent may need later. | "Run `npm test` before release." |
+| Evidence | Why Cognibrain believes a memory is useful or current. | A passing CI run, patch evidence, source ref or correction. |
+| Context pack | A compact set of relevant memories for one task. | Repo rules and prior failures for "fix CI". |
+| Action guard | A preflight check before a command or edit. | "Do not push to main unless the user explicitly asked." |
+| Patch evidence | The after-action receipt. | Files changed, commands run, checks passed and unresolved limits. |
+| Dream job | Background maintenance. | Revalidate sources, refresh summaries and find stale claims. |
+| Truth gate | The filter between "known somewhere" and "safe to inject". | Suppress an old claim when newer evidence supersedes it. |
+
+In day-to-day use, that becomes a simple before, during and after loop:
+
+```mermaid
+sequenceDiagram
+  participant Agent as Agent
+  participant Brain as Cognibrain
+  participant Repo as Repo or tools
+  Agent->>Brain: context(task)
+  Brain-->>Agent: relevant repo rules and prior evidence
+  Agent->>Brain: guard(action)
+  Brain-->>Agent: allow, warn or block
+  Agent->>Repo: edit, test, build or inspect
+  Repo-->>Agent: result
+  Agent->>Brain: outcome and patch-evidence
+  Brain-->>Brain: update retrieval, truth and maintenance state
+```
+
 ## How It Works
 
 At runtime, Cognibrain keeps a small set of surfaces around one shared service state:
@@ -83,6 +129,21 @@ flowchart TB
 ```
 
 The service writes memories, claims, truth decisions, connector state, audit events and dream jobs. Retrieval then builds a compact evidence pack from those records. If a memory is stale, contradicted, missing claim proof or marked review-only, it can still appear in diagnostics, but it is not injected into the agent's working context.
+
+The retrieval path is intentionally conservative:
+
+```mermaid
+flowchart TB
+  query["task or question"] --> candidates["candidate memories"]
+  candidates --> scoring["semantic, lexical, graph, trust, time and access scoring"]
+  scoring --> truth["truth and evidence gate"]
+  truth --> safe["safe context body"]
+  truth --> review["diagnostics only"]
+  safe --> agent["agent prompt or tool result"]
+  review --> operator["operator review, audits or debug output"]
+```
+
+That split matters. A memory can be searchable and still not be safe to inject into an agent prompt. This keeps old, conflicted or low-proof information visible for debugging without letting it steer the next coding action.
 
 Production dream jobs are deliberately worker-owned. HTTP can enqueue work, but production execution must be claimed from the durable repository-backed queue:
 

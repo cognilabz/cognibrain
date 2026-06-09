@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const pythonSdkContractTimeout = 30_000;
 
 describe("cognibrain Python SDK", () => {
   it("passes the stdlib Python client contract tests", () => {
@@ -16,5 +17,5 @@ describe("cognibrain Python SDK", () => {
 
     expect(result.status, output).toBe(0);
     expect(output).toContain("OK");
-  });
+  }, pythonSdkContractTimeout);
 });

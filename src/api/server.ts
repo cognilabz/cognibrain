@@ -87,6 +87,7 @@ import {
   json,
   parseRelationTypes,
   rememberRequestAuth,
+  productionMode,
   routePermission,
   send,
   sendText,
@@ -232,7 +233,15 @@ if (process.env.NODE_ENV !== "test") {
   });
   if (dreamCheckIntervalMinutes > 0) {
     setInterval(
-      () => defaultService.runDueDreams(),
+      () => {
+        if (productionMode()) {
+          void defaultService.runDueDreamJobsAsync().catch((error) => {
+            console.error("production dream interval failed", error);
+          });
+          return;
+        }
+        defaultService.runDueDreams();
+      },
       dreamCheckIntervalMinutes * 60_000
     ).unref();
   }

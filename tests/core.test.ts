@@ -4364,6 +4364,7 @@ describe("TypeScript memory core", () => {
 
   it("keeps HTTP dream job creation enqueue-only for worker-owned execution", () => {
     const routeSource = readFileSync(join(process.cwd(), "src/api/server/dreamRoutes.ts"), "utf8");
+    const serverSource = readFileSync(join(process.cwd(), "src/api/server.ts"), "utf8");
     expect(routeSource).toContain("url.pathname === \"/dream/jobs\"");
     expect(routeSource).toContain("defaultService.startDreamJob");
     expect(routeSource).toContain("{ queueOnly: true }");
@@ -4371,6 +4372,9 @@ describe("TypeScript memory core", () => {
     expect(routeSource).toContain("url.pathname === \"/dream/run\"");
     expect(routeSource).toContain("url.pathname === \"/reflection\" || url.pathname === \"/dream\"");
     expect(routeSource).toContain("defaultService.runDueDreamJobsAsync()");
+    expect(serverSource).toContain("productionMode()");
+    expect(serverSource).toContain("defaultService.runDueDreamJobsAsync()");
+    expect(serverSource).toContain("defaultService.runDueDreams()");
   });
 
   it("keeps HTTP memory mutation routes on async production-aware service methods", () => {

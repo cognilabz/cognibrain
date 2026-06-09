@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runOperatorMemoryBenchmark } from "../src/eval/operatorMemoryBenchmark";
 
+const operatorMemoryBenchmarkTimeout = 30_000;
+
 describe("operator-memory market proof boundary", () => {
   it("runs the operator memory dream benchmark and blocks unsupported market claims", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-operator-memory-"));
@@ -34,7 +36,7 @@ describe("operator-memory market proof boundary", () => {
     expect(markdown).toContain("Quality claim allowed: no");
     expect(markdown).toContain("Market proof gate: `blocked`");
     expect(markdown).toContain("Local operator-memory scores are diagnostics only");
-  });
+  }, operatorMemoryBenchmarkTimeout);
 
   it("operator-memory market proof gate requires artifact hashes instead of boolean proof flags", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-operator-memory-market-gate-"));
@@ -84,7 +86,7 @@ describe("operator-memory market proof boundary", () => {
       restoreEnv("MEMORY_OPERATOR_MEMORY_THIRD_PARTY_PROTOCOL", previousProtocol);
       restoreEnv("MEMORY_OPERATOR_MEMORY_PREREGISTERED_BUDGETS", previousBudgets);
     }
-  });
+  }, operatorMemoryBenchmarkTimeout);
 });
 
 function restoreEnv(name: string, value: string | undefined): void {

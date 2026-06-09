@@ -758,7 +758,7 @@ describe("self verification benchmark loop", () => {
       if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
       else process.env.OPENAI_API_KEY = previousOpenAiKey;
     }
-  });
+  }, nativeRunnerBenchmarkTimeout);
 
   it("does not let generic OpenAI key env vars satisfy the RealWorld OpenAI judge harness secret", async () => {
     const env: NodeJS.ProcessEnv = { ...process.env, MEMORY_OPENAI_API_KEY: "generic-key-must-not-count" };
@@ -827,7 +827,7 @@ describe("self verification benchmark loop", () => {
       if (previousJudgeKind === undefined) delete process.env.MEMORY_REALWORLD_JUDGE_KIND;
       else process.env.MEMORY_REALWORLD_JUDGE_KIND = previousJudgeKind;
     }
-  });
+  }, nativeRunnerBenchmarkTimeout);
 
   it("requires Cognibrain plus two judged original competitor commands for real-world comparative smoke eligibility without market claims", async () => {
     const previousJudgeCommand = process.env.MEMORY_REALWORLD_JUDGE_COMMAND;

@@ -79,7 +79,7 @@ export async function enforceRetentionAsync(service: any, now = new Date(), user
       if (deleteRule) {
         const deleted = await service.deleteAsync(memory.id);
         if (!deleted) continue;
-        service.applyEpisodeRetention(memory.id, "delete", "retention.rule", deleteRule.id, now, report);
+        await applyEpisodeRetentionAsync(service, memory.id, "delete", "retention.rule", deleteRule.id, now, report);
         report.deleted.push(memory.id);
         service.recordAudit("retention.enforce", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "delete", ruleId: deleteRule.id, before: memory, productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
         continue;
@@ -87,13 +87,58 @@ export async function enforceRetentionAsync(service: any, now = new Date(), user
       const archiveRule = matchedRules[0];
       if (consentExpired || archiveRule) {
         const archived = await service.archiveAsync(memory.id);
-        service.applyEpisodeRetention(memory.id, "archive", consentExpired ? "consent.retentionUntil" : "retention.rule", archiveRule?.id, now, report);
+        await applyEpisodeRetentionAsync(service, memory.id, "archive", consentExpired ? "consent.retentionUntil" : "retention.rule", archiveRule?.id, now, report);
         report.archived.push(memory.id);
         service.recordAudit("retention.enforce", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "archive", reason: consentExpired ? "consent.retentionUntil" : "retention.rule", ruleId: archiveRule?.id, after: archived, productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
       }
     }
     if (report.archived.length || report.deleted.length) service.persist();
     return report;
+  }
+
+async function applyEpisodeRetentionAsync(
+  service: any,
+  memoryId: string,
+  action: "archive" | "delete",
+  reason: string,
+  ruleId: string | undefined,
+  now: Date,
+  report: RetentionEnforcementReport
+): Promise<void> {
+    const executor = service.productionAsyncRepository;
+    for (const episode of [...service.episodes.values()]) {
+      if (!episode.memoryIds.includes(memoryId)) continue;
+      if (action === "delete") {
+        if (executor?.executeUnitOfWork) {
+          await executor.executeUnitOfWork(async (uow: any) => {
+            await uow.appendEvent({ type: "episode.deleted", aggregateId: episode.id, occurredAt: now.toISOString(), payload: { episode, reason, ruleId, memoryId } });
+          });
+        }
+        service.episodes.delete(episode.id);
+        report.episodeDeleted.push(episode.id);
+        service.recordAudit("retention.enforce", { userId: episode.userId, metadata: { resource: "episode", action, reason, ruleId, episodeId: episode.id, memoryId, productionUnitOfWork: Boolean(executor?.executeUnitOfWork) } });
+        continue;
+      }
+      const previous = episode.retention;
+      const updated = {
+        ...episode,
+        retention: {
+          action: "archive" as const,
+          reason,
+          ruleId,
+          memoryIds: [...new Set([...(previous?.memoryIds ?? []), memoryId])],
+          at: now.toISOString()
+        }
+      };
+      if (executor?.executeUnitOfWork) {
+        await executor.executeUnitOfWork(async (uow: any) => {
+          await uow.appendEvent({ type: "episode.updated", aggregateId: episode.id, occurredAt: now.toISOString(), payload: updated });
+        });
+      }
+      service.episodes.set(episode.id, updated);
+      report.episodeArchived.push(episode.id);
+      service.recordAudit("retention.enforce", { userId: episode.userId, metadata: { resource: "episode", action, reason, ruleId, episodeId: episode.id, memoryId, productionUnitOfWork: Boolean(executor?.executeUnitOfWork) } });
+    }
   }
 
 export function retentionReview(service: any, now = new Date(), userId?: string): RetentionReviewReport {

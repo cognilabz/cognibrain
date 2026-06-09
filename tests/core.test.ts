@@ -3438,6 +3438,11 @@ describe("TypeScript memory core", () => {
       consent: { retentionUntil: "2020-01-01T00:00:00.000Z" },
       source: { kind: "human", confidence: 0.9 }
     });
+    const expiredEpisode = service.createEpisode({
+      scope: { userId: "u1" },
+      events: [{ role: "user", content: "Release retention episode must follow async dream retention.", timestamp: "2020-01-01T00:00:00.000Z" }]
+    });
+    (service as any).episodes.set(expiredEpisode.id, { ...expiredEpisode, memoryIds: [expired.id] });
     for (const item of [1, 2, 3]) {
       service.add({
         userId: "u1",
@@ -3463,6 +3468,10 @@ describe("TypeScript memory core", () => {
         executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
           calls.push("uow.begin");
           const result = await operation({
+            appendEvent: async (event: any) => {
+              calls.push(`event.append:${event.type}:${event.aggregateId}`);
+              return event;
+            },
             memoryRepository: {
               create: async (input: any) => {
                 calls.push(`memory.create:${input.content}`);
@@ -3509,6 +3518,9 @@ describe("TypeScript memory core", () => {
     service.store.delete = () => {
       throw new Error("runDreamCycleAsync must not use sync store.delete for retention lifecycle changes");
     };
+    (service as any).applyEpisodeRetention = () => {
+      throw new Error("runDreamCycleAsync must not use sync applyEpisodeRetention for episode retention");
+    };
     service.revalidateSourceRefs = () => {
       throw new Error("runDreamCycleAsync must not call sync revalidateSourceRefs");
     };
@@ -3535,13 +3547,15 @@ describe("TypeScript memory core", () => {
     expect(job.report?.created.some((memory) => memory.layer === "reflection" && memory.metadata.theme === "atlas-dream")).toBe(true);
     expect(service.get(risky.id).temporal.verificationDueAt).toBeTruthy();
     expect(service.get(expired.id).archivedAt).toBeTruthy();
+    expect(service.getEpisode(expiredEpisode.id).retention).toMatchObject({ action: "archive", memoryIds: [expired.id] });
     expect(service.store.list("u1").some((memory) => memory.layer === "reflection" && memory.metadata.theme === "atlas-dream")).toBe(true);
     expect(calls.filter((call) => call === `memory.update:${queued.id}`)).toHaveLength(2);
     expect(calls.filter((call) => call === `memory.update:${risky.id}`)).toHaveLength(1);
     expect(calls.filter((call) => call === `memory.update:${expired.id}`)).toHaveLength(1);
+    expect(calls.filter((call) => call === `event.append:episode.updated:${expiredEpisode.id}`)).toHaveLength(1);
     expect(calls.some((call) => call.startsWith("memory.create:Reflection on atlas-dream"))).toBe(true);
-    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(6);
-    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(6);
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(7);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(7);
     expect(calls.filter((call) => call === "afterWrite:u1")).toHaveLength(6);
   });
 

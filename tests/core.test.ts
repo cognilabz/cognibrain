@@ -3462,6 +3462,60 @@ describe("TypeScript memory core", () => {
     expect(queuedJob).toMatchObject({ jobId: job.jobId, status: "done", leaseOwner: "repository-worker" });
   });
 
+  it("keeps production dream job wait worker-owned after repository enqueue", async () => {
+    const previousSecurityMode = process.env.MEMORY_SECURITY_MODE;
+    try {
+      const service = new MemoryService({ autoDream: { enabled: false } });
+      service.add({ userId: "u1", content: "Production wait should enqueue release jobs without inline worker execution.", source: { kind: "human", confidence: 0.96 } });
+      process.env.MEMORY_SECURITY_MODE = "production";
+      const calls: string[] = [];
+      let queuedJob: DreamJob | undefined;
+      Object.defineProperty(service, "productionAsyncRepository", {
+        value: {
+          dreamJobRepository: {
+            queue: async (job: DreamJob) => {
+              calls.push("queue");
+              queuedJob = { ...job, status: "queued" };
+              return queuedJob;
+            },
+            claimDueJob: async () => {
+              calls.push("claim");
+              throw new Error("production wait must not claim inline");
+            }
+          }
+        },
+        configurable: true
+      });
+
+      const job = await service.startDreamJob({ userId: "u1", trigger: "before_release", mode: "dream", budget: "release", sourceRefresh: true }, fetch, 10_000, { wait: true });
+
+      expect(calls).toEqual(["queue"]);
+      expect(job).toMatchObject({ status: "queued", trigger: "before_release", priority: 100, attemptCount: 0 });
+      expect(queuedJob).toMatchObject({ jobId: job.jobId, status: "queued" });
+    } finally {
+      if (previousSecurityMode === undefined) delete process.env.MEMORY_SECURITY_MODE;
+      else process.env.MEMORY_SECURITY_MODE = previousSecurityMode;
+    }
+  });
+
+  it("fails closed instead of using in-process dream fallback in production", async () => {
+    const previousSecurityMode = process.env.MEMORY_SECURITY_MODE;
+    try {
+      const service = new MemoryService({ autoDream: { enabled: false } });
+      service.add({ userId: "u1", content: "Production dream jobs require a durable repository queue.", source: { kind: "human", confidence: 0.96 } });
+      process.env.MEMORY_SECURITY_MODE = "production";
+
+      await expect(service.startDreamJob({ userId: "u1", trigger: "before_release", mode: "dream", budget: "release" }, fetch, 10_000, { queueOnly: true }))
+        .rejects.toThrow("Production dream jobs require a repository-backed worker queue");
+      expect(service.dreamJobStatus()).toEqual([]);
+      await expect(service.runDreamJobWorkerOnce(fetch, 10_000))
+        .rejects.toThrow("Production dream jobs require a repository-backed worker queue");
+    } finally {
+      if (previousSecurityMode === undefined) delete process.env.MEMORY_SECURITY_MODE;
+      else process.env.MEMORY_SECURITY_MODE = previousSecurityMode;
+    }
+  });
+
   it("persists dream cancel and retry controls through the async repository when available", async () => {
     const service = new MemoryService({ autoDream: { enabled: false } });
     service.add({ userId: "u1", content: "Repository-backed dream controls must persist operator cancel and retry decisions.", source: { kind: "human", confidence: 0.96 } });

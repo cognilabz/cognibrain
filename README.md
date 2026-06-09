@@ -6,6 +6,39 @@ Your agent should not rediscover the same repo rules, failed commands, reviewer 
 
 The practical promise is simple: Stop fixing the same agent mistake twice.
 
+## The Short Version
+
+Cognibrain is a self-hosted memory operating layer for coding agents. It sits beside an agent, CLI, MCP host or HTTP integration and gives it four simple abilities:
+
+1. Remember what matters from previous engineering work.
+2. Retrieve only the relevant, current and safe parts before the next task.
+3. Warn before repeating a known bad action.
+4. Record what changed and which verification proved it.
+
+The normal loop looks like this:
+
+```mermaid
+flowchart LR
+  task["Task starts"] --> context["context: fetch relevant memories"]
+  context --> guard["guard: check planned action"]
+  guard --> work["agent edits code or runs commands"]
+  work --> verify["tests, build, audits or CI"]
+  verify --> evidence["patch-evidence and outcome"]
+  evidence --> memory["durable memory for next session"]
+  memory --> context
+```
+
+For humans, the mental model is:
+
+| Question | Cognibrain answer |
+| --- | --- |
+| What should the agent remember before acting? | `context` and `coding-context` |
+| Is this command or edit risky? | `guard` |
+| What happened after the command ran? | `outcome` |
+| What files changed and how was it verified? | `patch-evidence` |
+| Is this memory safe to inject into a prompt? | truth gate, evidence gate and `unsafeToInject` |
+| What background maintenance should run? | dream jobs and source revalidation |
+
 ```bash
 npm i @cognilabz/cognibrain
 npx cognibrain init --yes
@@ -28,6 +61,46 @@ Cognibrain is a local/self-hosted memory layer for engineering agents. It is not
 | Proof | Publishes bounded audits and benchmark artifacts without turning diagnostics into market claims. | `scripts/release/`, `src/eval/`, `docs/evidence.md` |
 
 The important design choice: injected memory is useful only when it is usable. Cognibrain keeps review-only, low-confidence, stale, conflicted or unsafe memories visible in diagnostics, but blocks them from the context body until the relevant claim/evidence gate says they are safe enough to inject.
+
+## How It Works
+
+At runtime, Cognibrain keeps a small set of surfaces around one shared service state:
+
+```mermaid
+flowchart TB
+  agent["Coding agent"] --> cli["CLI lifecycle commands"]
+  agent --> mcp["MCP tools"]
+  app["Custom app or dashboard"] --> http["HTTP API"]
+  cli --> daemon["Cognibrain daemon"]
+  mcp --> daemon
+  http --> daemon
+  daemon --> service["Memory service"]
+  service --> retrieval["retrieval and truth gate"]
+  service --> guard["action guard"]
+  service --> dream["dream worker queue"]
+  service --> connectors["connectors and source refs"]
+  service --> store["JSON, SQLite or Postgres storage"]
+```
+
+The service writes memories, claims, truth decisions, connector state, audit events and dream jobs. Retrieval then builds a compact evidence pack from those records. If a memory is stale, contradicted, missing claim proof or marked review-only, it can still appear in diagnostics, but it is not injected into the agent's working context.
+
+Production dream jobs are deliberately worker-owned. HTTP can enqueue work, but production execution must be claimed from the durable repository-backed queue:
+
+```mermaid
+sequenceDiagram
+  participant API as HTTP or CLI
+  participant Repo as DreamJobRepository
+  participant Worker as Dream worker
+  participant Service as Memory service
+  API->>Repo: queue dream job
+  API-->>API: return queued job
+  Worker->>Repo: claim due job with lease
+  Worker->>Service: run source refresh, reflection, verification
+  Service-->>Worker: completed report
+  Worker->>Repo: complete or retry job
+```
+
+Local development can still use the lightweight in-process fallback. Production mode fails closed if the repository-backed queue is missing.
 
 ## Public Surface
 

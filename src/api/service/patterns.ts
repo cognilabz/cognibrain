@@ -173,7 +173,11 @@ export function policyRuleMatches(rule: MemoryPolicyRule, target: Memory | Memor
 }
 
 export function productionPolicyMode(): boolean {
-  return process.env.MEMORY_POLICY_MODE === "production" || process.env.MEMORY_SECURITY_MODE === "production" || process.env.MEMORY_PRODUCTION_MODE === "true";
+  return process.env.MEMORY_POLICY_MODE === "production"
+    || process.env.MEMORY_SECURITY_MODE === "production"
+    || process.env.COGNIBRAIN_SECURITY_MODE === "production"
+    || process.env.MEMORY_PRODUCTION_MODE === "true"
+    || process.env.COGNIBRAIN_PRODUCTION_MODE === "true";
 }
 
 export function retentionRuleMatches(memory: Memory, rule: RetentionRule, now: Date): boolean {

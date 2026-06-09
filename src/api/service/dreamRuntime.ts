@@ -1,5 +1,5 @@
 import type { DreamCycleInput, DreamCycleReport, DreamJob, DreamPlanReport, DreamPreparationReport, Memory } from "../../core";
-import { budgetForTrigger, contentHash, modeForTrigger, triggerForMode, uniqueStrings } from "./helpers";
+import { budgetForTrigger, contentHash, modeForTrigger, productionPolicyMode, triggerForMode, uniqueStrings } from "./helpers";
 
 export function reflect(service: any, userId: string): DreamCycleReport {
     return service.runDreamCycle({ userId, mode: "reflect", trigger: "manual_reflect" });
@@ -310,9 +310,11 @@ export async function startDreamJob(service: any, input: DreamCycleInput, fetchI
       const queued = await repository.queue(job);
       service.dreamJobs.set(queued.jobId, queued);
       if (options.queueOnly) return queued;
+      if (productionDreamWorkerMode()) return queued;
       if (options.wait) return (await runDreamJobWorkerOnce(service, fetchImpl, timeoutMs)) ?? queued;
       return queued;
     }
+    assertProductionDreamRepositoryAvailable("queue dream jobs");
     service.dreamJobs.set(job.jobId, job);
     service.persist();
     if (options.queueOnly) return job;
@@ -338,6 +340,7 @@ export async function runDreamJobWorkerOnce(service: any, fetchImpl: typeof fetc
       if (repository.completeJob) await repository.completeJob(finished.jobId, finished);
       return finished;
     }
+    assertProductionDreamRepositoryAvailable("claim and execute dream jobs");
     const now = options.now ? new Date(options.now).getTime() : Date.now();
     const due = [...service.dreamJobs.values()]
       .filter((job: DreamJob) => {
@@ -365,4 +368,15 @@ function dreamJobPriority(budget: DreamPlanReport["budget"]): number {
   if (budget === "deep") return 75;
   if (budget === "standard") return 50;
   return 25;
+}
+
+export function productionDreamWorkerMode(): boolean {
+  return productionPolicyMode()
+    || process.env.COGNIBRAIN_SECURITY_MODE === "production"
+    || process.env.COGNIBRAIN_PRODUCTION_MODE === "true";
+}
+
+function assertProductionDreamRepositoryAvailable(action: string): void {
+  if (!productionDreamWorkerMode()) return;
+  throw new Error(`Production dream jobs require a repository-backed worker queue to ${action}; in-process fallback is disabled.`);
 }

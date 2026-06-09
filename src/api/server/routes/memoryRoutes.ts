@@ -226,7 +226,7 @@ export async function handleMemoryRoutes(context: RouteContext): Promise<boolean
   }
 
   if (method === "POST" && url.pathname === "/patch-evidence") {
-    send(response, 200, defaultService.patchEvidenceTrail(patchEvidenceSchema.parse(await json(request))));
+    send(response, 200, await defaultService.patchEvidenceTrailAsync(patchEvidenceSchema.parse(await json(request))));
     return true;
   }
 

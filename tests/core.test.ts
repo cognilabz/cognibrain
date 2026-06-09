@@ -4409,6 +4409,70 @@ describe("TypeScript memory core", () => {
     expect(calls.filter((call) => call === "uow.commit").length).toBeGreaterThanOrEqual(4);
   });
 
+  it("commits production patch evidence through a UnitOfWork event before returning", async () => {
+    const service = new MemoryService();
+    const evidenceMemory = service.add({
+      userId: "u1",
+      content: "Patch evidence needs a durable event before callers see the trail.",
+      source: { kind: "tool", confidence: 0.93 }
+    });
+    const calls: string[] = [];
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
+          calls.push("uow.begin");
+          const result = await operation({
+            appendEvent: async (event: any) => {
+              calls.push(`event:${event.type}:${event.aggregateId}`);
+              return event;
+            }
+          });
+          calls.push("uow.commit");
+          return result;
+        }
+      }
+    });
+    (service as any).persist = () => {
+      throw new Error("patchEvidenceTrailAsync must not use sync persist in the UnitOfWork path");
+    };
+
+    const trail = await service.patchEvidenceTrailAsync({
+      userId: "u1",
+      task: "release patch evidence",
+      memoryIds: [evidenceMemory.id],
+      filesChanged: ["src/api/service/engineeringRuntime.ts"],
+      commandsRun: ["npm test"]
+    });
+
+    expect((service as any).patchEvidenceTrails.get(trail.id)).toBe(trail);
+    expect(calls).toEqual(["uow.begin", `event:patch_evidence.created:${trail.id}`, "uow.commit"]);
+  });
+
+  it("does not publish patch evidence read models when UnitOfWork event append fails", async () => {
+    const service = new MemoryService();
+    const evidenceMemory = service.add({
+      userId: "u1",
+      content: "Failed patch evidence commits must not leak a read model.",
+      source: { kind: "tool", confidence: 0.91 }
+    });
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => operation({
+          appendEvent: async () => {
+            throw new Error("event journal unavailable");
+          }
+        })
+      }
+    });
+
+    await expect(service.patchEvidenceTrailAsync({
+      userId: "u1",
+      task: "failed release patch evidence",
+      memoryIds: [evidenceMemory.id]
+    })).rejects.toThrow("event journal unavailable");
+    expect((service as any).patchEvidenceTrails.size).toBe(0);
+  });
+
   it("surfaces production Postgres flush failures through an explicit awaitable barrier", async () => {
     const service = new MemoryService();
     Object.defineProperty(service, "productionAsyncRepository", {
@@ -4456,6 +4520,7 @@ describe("TypeScript memory core", () => {
     const routeSource = readFileSync(join(process.cwd(), "src/api/server/routes/memoryRoutes.ts"), "utf8");
     expect(routeSource).toContain("await defaultService.recordHarnessActionAsync");
     expect(routeSource).toContain("await defaultService.recordCodeCorrectionAsync");
+    expect(routeSource).toContain("await defaultService.patchEvidenceTrailAsync");
     expect(routeSource).toContain("await defaultService.updateAsync");
     expect(routeSource).toContain("await defaultService.archiveAsync");
     expect(routeSource).toContain("await defaultService.deleteAsync");

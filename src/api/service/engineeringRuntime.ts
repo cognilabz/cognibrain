@@ -1,4 +1,4 @@
-import { applyTruthGateDecision, buildPatchEvidenceTrail, citationFor, evaluateForbiddenAction, getEngineeringMetadata, type ActionGuardReport, type CodebaseScope, type EngineeringMemoryKind, type Memory, type MemoryInput, type PatchEvidenceTrail, type SearchResult } from "../../core";
+import { applyTruthGateDecision, buildPatchEvidenceTrail, citationFor, evaluateForbiddenAction, getEngineeringMetadata, type ActionGuardReport, type AsyncUnitOfWorkExecutor, type CodebaseScope, type EngineeringMemoryKind, type Memory, type MemoryInput, type PatchEvidenceTrail, type SearchResult } from "../../core";
 import { clamp01, contentHash, inferCorrectActionFromCorrection, inferCorrectionKind, inferForbiddenActionFromCorrection, normalizeActionPhrase, repoPolicyFromCorrection, safeGet } from "./helpers";
 
 type CodeCorrectionInput = {
@@ -325,4 +325,88 @@ export function patchEvidenceTrail(service: any, input: {
     service.recordAudit("search.run", { userId: input.userId, metadata: { resource: "patch-evidence-trail", trailId: trail.id, memories: trail.memoryIds.length } });
     service.persist();
     return trail;
+  }
+
+export async function patchEvidenceTrailAsync(service: any, input: {
+    userId: string;
+    task: string;
+    agentId?: string;
+    sessionId?: string;
+    appId?: string;
+    orgId?: string;
+    projectId?: string;
+    codebaseScope?: CodebaseScope;
+    filesChanged?: string[];
+    commandsRun?: string[];
+    memoryIds?: string[];
+  }): Promise<PatchEvidenceTrail> {
+    const trail = patchEvidenceTrailData(service, input);
+    const executor = service.productionAsyncRepository as AsyncUnitOfWorkExecutor | undefined;
+    if (executor?.executeUnitOfWork) {
+      await executor.executeUnitOfWork(async (uow) => {
+        await uow.appendEvent({
+          type: "patch_evidence.created",
+          aggregateId: trail.id,
+          occurredAt: trail.generatedAt,
+          payload: trail
+        });
+        return trail;
+      });
+      service.patchEvidenceTrails.set(trail.id, trail);
+      service.recordAudit("search.run", { userId: input.userId, metadata: { resource: "patch-evidence-trail", trailId: trail.id, memories: trail.memoryIds.length, productionUnitOfWork: true } });
+      return trail;
+    }
+    const syncTrail = service.patchEvidenceTrail(input);
+    if (typeof service.waitForProductionAsyncFlush === "function") await service.waitForProductionAsyncFlush();
+    return syncTrail;
+  }
+
+function patchEvidenceTrailData(service: any, input: {
+    userId: string;
+    task: string;
+    agentId?: string;
+    sessionId?: string;
+    appId?: string;
+    orgId?: string;
+    projectId?: string;
+    codebaseScope?: CodebaseScope;
+    filesChanged?: string[];
+    commandsRun?: string[];
+    memoryIds?: string[];
+  }): PatchEvidenceTrail {
+    const results: SearchResult[] = input.memoryIds?.length
+      ? input.memoryIds.map((id) => safeGet(service.store, id)).filter((memory): memory is Memory => Boolean(memory)).map((memory) => ({
+          memory,
+          score: 1,
+          signals: { semantic: 0, keyword: 0, entity: 0, temporal: 0, trust: memory.trust, graph: 0, access: 0 },
+          citation: citationFor(memory),
+          stale: memory.beliefState === "stale" || memory.beliefState === "needs_verification",
+          explanation: ["explicit evidence memory id supplied"]
+        }))
+      : service.search({
+          userId: input.userId,
+          agentId: input.agentId,
+          sessionId: input.sessionId,
+          appId: input.appId,
+          orgId: input.orgId,
+          projectId: input.projectId,
+          query: `${input.task} correction procedure tool outcome architecture policy`,
+          limit: 18,
+          codebaseScope: input.codebaseScope,
+          filters: { engineeringKinds: ["repo_policy", "architecture_decision", "review_correction", "tool_outcome", "procedure", "test_strategy", "dependency_rule", "migration_note"] }
+        });
+    const excludedStaleRules = results
+      .filter((result) => result.memory.beliefState === "superseded" || result.memory.beliefState === "stale" || result.memory.beliefState === "needs_verification" || result.decision === "exclude")
+      .map((result) => ({ memoryId: result.memory.id, reason: `belief=${result.memory.beliefState} decision=${result.decision ?? "include"}` }));
+    const evidenceSource = results.find((result) => typeof getEngineeringMetadata(result.memory)?.evidenceIds?.[0] === "string");
+    return buildPatchEvidenceTrail({
+      id: `patch_ev_${contentHash(`${input.userId}:${input.task}:${results.map((result) => result.memory.id).join(",")}`).slice(2, 14)}`,
+      userId: input.userId,
+      task: input.task,
+      results,
+      contextPackId: evidenceSource ? getEngineeringMetadata(evidenceSource.memory)?.evidenceIds?.[0] : undefined,
+      filesChanged: input.filesChanged,
+      commandsRun: input.commandsRun,
+      excludedStaleRules
+    });
   }

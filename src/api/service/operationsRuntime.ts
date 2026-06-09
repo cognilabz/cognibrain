@@ -183,6 +183,13 @@ export function updateConsent(service: any, memoryId: string, consent: Partial<C
     return memory;
   }
 
+export async function updateConsentAsync(service: any, memoryId: string, consent: Partial<ConsentPolicy>): Promise<Memory> {
+    const before = service.store.get(memoryId);
+    const memory = await service.updateAsync(memoryId, { consent });
+    service.recordAudit("memory.consent", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId, metadata: { before, after: memory, beforeConsent: before.consent, afterConsent: memory.consent, productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
+    return memory;
+  }
+
 export function revertMemory(service: any, memoryId: string, auditEventId?: string): Memory {
     const candidates = (service.auditEvents as AuditEvent[])
       .filter((event) => event.memoryId === memoryId && (event.type === "memory.update" || event.type === "memory.consent" || event.type === "memory.delete"))
@@ -193,6 +200,18 @@ export function revertMemory(service: any, memoryId: string, auditEventId?: stri
     const restored = service.restoreMemorySnapshot(before);
     service.recordAudit("memory.revert", { userId: restored.userId, brainId: restored.brainId, sourceId: restored.sourceId, memoryId, metadata: { revertedEventId: event.id } });
     service.persist();
+    return restored;
+  }
+
+export async function revertMemoryAsync(service: any, memoryId: string, auditEventId?: string): Promise<Memory> {
+    const candidates = (service.auditEvents as AuditEvent[])
+      .filter((event) => event.memoryId === memoryId && (event.type === "memory.update" || event.type === "memory.consent" || event.type === "memory.delete"))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const event = auditEventId ? candidates.find((candidate) => candidate.id === auditEventId) : candidates[0];
+    const before = event?.metadata?.before as Memory | undefined;
+    if (!event || !before) throw new Error(`No revert snapshot found for memory ${memoryId}`);
+    const restored = await service.updateAsync(before.id, before);
+    service.recordAudit("memory.revert", { userId: restored.userId, brainId: restored.brainId, sourceId: restored.sourceId, memoryId, metadata: { revertedEventId: event.id, productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
     return restored;
   }
 

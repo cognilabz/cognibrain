@@ -53,6 +53,18 @@ export function confirmMemory(service: any, memoryId: string, userId?: string): 
     return confirmed;
   }
 
+export async function confirmMemoryAsync(service: any, memoryId: string, userId?: string): Promise<Memory> {
+    const memory = service.store.get(memoryId);
+    if (userId && memory.userId !== userId) throw new Error(`User ${userId} cannot confirm memory ${memoryId}`);
+    const confirmed = await service.updateAsync(memoryId, {
+      beliefState: "active",
+      temporal: { ...memory.temporal, lastConfirmedAt: new Date().toISOString(), verificationDueAt: undefined, stalenessRisk: 0 },
+      metadata: { verification: { status: "confirmed", at: new Date().toISOString() } }
+    });
+    service.recordAudit("memory.update", { userId: confirmed.userId, memoryId, metadata: { action: "confirm", productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
+    return confirmed;
+  }
+
 export function recordHarnessAction(service: any, input: HarnessActionInput): Memory {
     return service.add(harnessActionMemoryInput(input));
   }
@@ -237,6 +249,18 @@ export function retractMemory(service: any, memoryId: string, userId?: string, r
       metadata: { verification: { status: "retracted", at: new Date().toISOString(), reason } }
     });
     service.recordAudit("memory.update", { userId: retracted.userId, memoryId, metadata: { action: "retract", reason } });
+    return retracted;
+  }
+
+export async function retractMemoryAsync(service: any, memoryId: string, userId?: string, reason?: string): Promise<Memory> {
+    const memory = service.store.get(memoryId);
+    if (userId && memory.userId !== userId) throw new Error(`User ${userId} cannot retract memory ${memoryId}`);
+    const retracted = await service.updateAsync(memoryId, {
+      beliefState: "retracted",
+      trust: 0,
+      metadata: { verification: { status: "retracted", at: new Date().toISOString(), reason } }
+    });
+    service.recordAudit("memory.update", { userId: retracted.userId, memoryId, metadata: { action: "retract", reason, productionUnitOfWork: Boolean(service.productionAsyncRepository?.executeUnitOfWork) } });
     return retracted;
   }
 

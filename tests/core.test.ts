@@ -4334,6 +4334,103 @@ describe("TypeScript memory core", () => {
     expect(() => service.get(memory.id)).toThrow();
   });
 
+  it("commits production lifecycle memory updates through async UnitOfWork and post-commit write triggers", async () => {
+    const service = new MemoryService();
+    const review = service.add({
+      userId: "u1",
+      content: "Production review memory needs operator confirmation.",
+      beliefState: "needs_verification",
+      source: { kind: "agent", confidence: 0.72 }
+    });
+    const active = service.add({
+      userId: "u1",
+      content: "Production active memory may need retraction.",
+      source: { kind: "human", confidence: 0.94 }
+    });
+    const consented = service.add({
+      userId: "u1",
+      content: "Production consent updates must be durable.",
+      source: { kind: "human", confidence: 0.95 }
+    });
+    const revertible = service.add({
+      userId: "u1",
+      content: "Production revert starts with original content.",
+      source: { kind: "human", confidence: 0.96 }
+    });
+    service.update(revertible.id, { content: "Production revert has a temporary content change." });
+    const postCommitWrites: string[] = [];
+    const originalAfterWrite = (service as any).afterWrite.bind(service);
+    (service as any).afterWrite = (userId: string) => {
+      postCommitWrites.push(userId);
+      originalAfterWrite(userId);
+    };
+    const calls: string[] = [];
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
+          calls.push("uow.begin");
+          const result = await operation({
+            memoryRepository: {
+              update: async (id: string, patch: any) => {
+                calls.push(`memory.update:${id}`);
+                return service.store.update(id, patch);
+              }
+            },
+            claimRepository: {
+              register: async (claim: any) => {
+                calls.push(`claim.register:${claim.sourceMemoryId}`);
+                return claim;
+              }
+            },
+            truthRepository: {
+              decide: async (decision: any) => {
+                calls.push(`truth.decide:${decision.selectedMemoryId}`);
+                return decision;
+              }
+            },
+            conflictRepository: {
+              save: async (conflict: any) => {
+                calls.push(`conflict.save:${conflict.id}`);
+                return conflict;
+              }
+            }
+          });
+          calls.push("uow.commit");
+          return result;
+        }
+      }
+    });
+    service.update = () => {
+      throw new Error("production lifecycle async methods must not use sync update");
+    };
+
+    const confirmed = await service.confirmMemoryAsync(review.id, "u1");
+    const retracted = await service.retractMemoryAsync(active.id, "u1", "operator rejected");
+    const consent = await service.updateConsentAsync(consented.id, { visibility: "public", allowTraining: true });
+    const reverted = await service.revertMemoryAsync(revertible.id);
+
+    expect(confirmed.beliefState).toBe("active");
+    expect(retracted).toMatchObject({ beliefState: "retracted", trust: 0 });
+    expect(consent.consent).toMatchObject({ visibility: "public", allowTraining: true });
+    expect(reverted.content).toBe("Production revert starts with original content.");
+    expect(postCommitWrites).toEqual(["u1", "u1", "u1", "u1"]);
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(4);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(4);
+    expect(calls).toEqual(expect.arrayContaining([
+      `memory.update:${review.id}`,
+      `memory.update:${active.id}`,
+      `memory.update:${consented.id}`,
+      `memory.update:${revertible.id}`,
+      `claim.register:${review.id}`,
+      `claim.register:${active.id}`,
+      `claim.register:${consented.id}`,
+      `claim.register:${revertible.id}`
+    ]));
+    expect(calls.filter((call) => call.startsWith("truth.decide:"))).toHaveLength(4);
+    expect(service.auditTrail().some((event) => event.type === "memory.consent" && event.metadata?.productionUnitOfWork === true)).toBe(true);
+    expect(service.auditTrail().some((event) => event.type === "memory.revert" && event.metadata?.productionUnitOfWork === true)).toBe(true);
+  });
+
   it("commits production code correction pipeline in one async UnitOfWork", async () => {
     const service = new MemoryService();
     const previous = service.add({
@@ -4645,14 +4742,19 @@ describe("TypeScript memory core", () => {
 
   it("keeps HTTP memory mutation routes on async production-aware service methods", () => {
     const routeSource = readFileSync(join(process.cwd(), "src/api/server/routes/memoryRoutes.ts"), "utf8");
+    const dreamRouteSource = readFileSync(join(process.cwd(), "src/api/server/dreamRoutes.ts"), "utf8");
     expect(routeSource).toContain("await defaultService.extractAsync");
     expect(routeSource).toContain("await defaultService.recordHarnessActionAsync");
     expect(routeSource).toContain("await defaultService.recordCodeCorrectionAsync");
     expect(routeSource).toContain("await defaultService.ingestMediaAsync");
     expect(routeSource).toContain("await defaultService.patchEvidenceTrailAsync");
     expect(routeSource).toContain("await defaultService.updateAsync");
+    expect(routeSource).toContain("await defaultService.updateConsentAsync");
+    expect(routeSource).toContain("await defaultService.revertMemoryAsync");
     expect(routeSource).toContain("await defaultService.archiveAsync");
     expect(routeSource).toContain("await defaultService.deleteAsync");
+    expect(dreamRouteSource).toContain("await defaultService.confirmMemoryAsync");
+    expect(dreamRouteSource).toContain("await defaultService.retractMemoryAsync");
   });
 
   it("exposes production Postgres domain repositories for row-backed projections", () => {

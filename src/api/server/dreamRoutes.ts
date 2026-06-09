@@ -246,13 +246,13 @@ export async function handleDreamRoutes(input: {
 
     if (method === "POST" && parts[0] === "memories" && parts[1] && parts[2] === "confirm") {
       const body = z.object({ userId: z.string().optional() }).parse(await json(request));
-      send(response, 200, serialize(defaultService.confirmMemory(parts[1], body.userId)));
+      send(response, 200, serialize(await defaultService.confirmMemoryAsync(parts[1], body.userId)));
       return true;
     }
 
     if (method === "POST" && parts[0] === "memories" && parts[1] && parts[2] === "retract") {
       const body = z.object({ userId: z.string().optional(), reason: z.string().optional() }).parse(await json(request));
-      send(response, 200, serialize(defaultService.retractMemory(parts[1], body.userId, body.reason)));
+      send(response, 200, serialize(await defaultService.retractMemoryAsync(parts[1], body.userId, body.reason)));
       return true;
     }
 

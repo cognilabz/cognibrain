@@ -153,12 +153,12 @@ export async function handleMemoryRoutes(context: RouteContext): Promise<boolean
           deleteOnRequest: z.boolean().optional()
         })
         .parse(await json(request));
-      send(response, 202, serialize(defaultService.updateConsent(parts[1], body)));
+      send(response, 202, serialize(await defaultService.updateConsentAsync(parts[1], body)));
       return true;
     }
     if (method === "POST" && parts[2] === "revert") {
       const body = z.object({ auditEventId: z.string().optional() }).parse(await json(request));
-      send(response, 202, serialize(defaultService.revertMemory(parts[1], body.auditEventId)));
+      send(response, 202, serialize(await defaultService.revertMemoryAsync(parts[1], body.auditEventId)));
       return true;
     }
     if (method === "POST" && parts[2] === "archive") {

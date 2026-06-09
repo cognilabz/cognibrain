@@ -608,4 +608,22 @@ export class MemoryServiceSourceRevalidation extends MemoryServiceDreamEngineeri
     }
     return scheduled;
   }
+
+  protected async scheduleVerificationFromDreamAsync(userId: string): Promise<number> {
+    const dueAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    let scheduled = 0;
+    for (const memory of this.store.list(userId)) {
+      if (memory.archivedAt || memory.pinned || memory.temporal.verificationDueAt) continue;
+      const risk = memory.temporal.stalenessRisk ?? 0;
+      if (memory.beliefState === "contradicted" || memory.beliefState === "needs_verification" || (risk >= 0.65 && memory.importance >= 0.5)) {
+        await this.updateAsync(memory.id, {
+          beliefState: memory.beliefState === "active" ? "needs_verification" : memory.beliefState,
+          temporal: { ...memory.temporal, verificationDueAt: dueAt },
+          metadata: { verification: { status: "queued", at: new Date().toISOString(), reason: "dream belief revision" } }
+        });
+        scheduled += 1;
+      }
+    }
+    return scheduled;
+  }
 }

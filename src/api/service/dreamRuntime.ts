@@ -198,7 +198,7 @@ export function runDreamCycle(service: any, input: DreamCycleInput): DreamCycleR
       })
       : undefined;
     const report = service.reflection.run(input.userId);
-    const verificationScheduled = mode === "dream" ? service.scheduleVerificationFromDream(input.userId) : 0;
+    const verificationScheduled = mode === "dream" && !skipSyncSourceResolution ? service.scheduleVerificationFromDream(input.userId) : 0;
     const verificationResolution = mode === "dream" && plan.budget === "release" && !skipSyncSourceResolution
       ? service.resolveVerificationQueue(input.userId, { connectorIds: plan.connectorIds.length ? plan.connectorIds : undefined, limit: 250 })
       : undefined;
@@ -264,6 +264,13 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
       report.dreamCycle.sourceRevalidation = liveSourceRevalidation;
       report.lifecycle.actions.push(`live-revalidated ${liveSourceRevalidation.evaluated} source-backed memories`);
     }
+    const liveVerificationScheduled = mode === "dream"
+      ? await service.scheduleVerificationFromDreamAsync(input.userId)
+      : 0;
+    if (liveVerificationScheduled) {
+      report.dreamCycle.verificationScheduled = liveVerificationScheduled;
+      report.lifecycle.actions.push(`live-scheduled ${liveVerificationScheduled} memories from dream verification queue`);
+    }
     const liveVerificationResolution = mode === "dream" && plan.budget === "release"
       ? await service.resolveVerificationQueueAsync(input.userId, { connectorIds: plan.connectorIds.length ? plan.connectorIds : undefined, limit: 250 })
       : undefined;
@@ -289,7 +296,7 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
         }
       });
     }
-    if (connectorRefresh || liveSourceRevalidation?.evaluated || liveVerificationResolution?.results.length) service.persist();
+    if (connectorRefresh || liveSourceRevalidation?.evaluated || liveVerificationScheduled || liveVerificationResolution?.results.length) service.persist();
     return report;
   }
 

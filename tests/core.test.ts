@@ -3427,8 +3427,22 @@ describe("TypeScript memory core", () => {
       sourceRef: { connectorId: "deleted-docs", externalId: "ADR-10", version: "1", hash: "old-hash" },
       metadata: { sourceDeletedAt: "2026-05-03T00:00:00.000Z" }
     });
+    const risky = service.add({
+      userId: "u1",
+      content: "Release dream workers must schedule risky memories through async writes.",
+      source: { kind: "agent", confidence: 0.7 }
+    });
+    service.update(risky.id, {
+      importance: 0.8,
+      temporal: { ...risky.temporal, stalenessRisk: 0.8 }
+    });
     const calls: string[] = [];
     const originalStoreUpdate = service.store.update.bind(service.store);
+    const originalAfterWrite = (service as any).afterWrite.bind(service);
+    (service as any).afterWrite = (userId: string) => {
+      calls.push(`afterWrite:${userId}`);
+      originalAfterWrite(userId);
+    };
     Object.defineProperty(service, "productionAsyncRepository", {
       value: {
         executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
@@ -3464,6 +3478,9 @@ describe("TypeScript memory core", () => {
         }
       }
     });
+    service.store.update = () => {
+      throw new Error("runDreamCycleAsync must not use sync store.update for source or dream verification scheduling");
+    };
     service.revalidateSourceRefs = () => {
       throw new Error("runDreamCycleAsync must not call sync revalidateSourceRefs");
     };
@@ -3486,9 +3503,13 @@ describe("TypeScript memory core", () => {
     expect(job.status).toBe("done");
     expect(job.report?.dreamCycle.sourceRevalidation?.results.find((result) => result.memoryId === queued.id)).toMatchObject({ status: "source_missing" });
     expect(job.report?.dreamCycle.verificationResolution?.results.find((result) => result.memoryId === queued.id)).toMatchObject({ status: "source_missing" });
+    expect(job.report?.dreamCycle.verificationScheduled).toBeGreaterThanOrEqual(1);
+    expect(service.get(risky.id).temporal.verificationDueAt).toBeTruthy();
     expect(calls.filter((call) => call === `memory.update:${queued.id}`)).toHaveLength(2);
-    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(2);
-    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(2);
+    expect(calls.filter((call) => call === `memory.update:${risky.id}`)).toHaveLength(1);
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(3);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(3);
+    expect(calls.filter((call) => call === "afterWrite:u1")).toHaveLength(3);
   });
 
   it("default GitHub source resolver fetches current provider state when credentials are configured", async () => {

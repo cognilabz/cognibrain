@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, InMemoryEventJournal, InMemoryMemoryRepository, LOCAL_CONTEXT_RERANKER_PROFILE, MemoryProjectionBuilder, MemoryStore, ReflectionEngine, RepositoryBackedStorageAdapter, RetrievalEngine, healthReport, rankMemories, tokenize, extractEntities, rebuildMemoryStoreFromEvents, type EngineeringMemoryKind, type MemoryClaim } from "../src/core";
+import { CODING_DOMAIN_MODULE, DOMAIN_MODULES, InMemoryEventJournal, InMemoryMemoryRepository, LOCAL_CONTEXT_RERANKER_PROFILE, MemoryProjectionBuilder, MemoryStore, ReflectionEngine, RepositoryBackedStorageAdapter, RetrievalEngine, healthReport, rankMemories, tokenize, extractEntities, rebuildMemoryStoreFromEvents, type DreamJob, type EngineeringMemoryKind, type MemoryClaim } from "../src/core";
 import { JsonCommandMemoryIntelligence } from "../src/core/providers";
 import { HarnessMemoryHook } from "../src/connectors/harnessHook";
 import { connectorAuthHeaders, createConnectorManifest, createPlatformIntegration, createWritebackPlan, runConnectorPoll } from "../src/connectors/sdk";
@@ -431,7 +431,7 @@ describe("TypeScript memory core", () => {
     }
   });
 
-  it("claims due dream jobs through a durable SQLite lease repository", async () => {
+  it("prevents duplicate dream job execution across two durable lease workers", async () => {
     if (!sqliteRepositoryAvailable()) return;
     const dir = mkdtempSync(join(tmpdir(), "memory-dream-queue-"));
     try {
@@ -831,6 +831,7 @@ describe("TypeScript memory core", () => {
     const pack = service.evidencePack({ userId: "u1", projectId: "atlas", query: "Atlas package manager", limit: 2 });
     expect(pack.truthDecisions?.some((decision) => decision.selectedMemoryId === currentMemory.id)).toBe(true);
     expect(pack.excludedResults?.some((result) => result.memoryId === oldMemory.id && result.truthDecision?.selectedMemoryId === currentMemory.id)).toBe(true);
+    expect(pack.results.find((result) => result.memoryId === currentMemory.id)?.retrieval.truth?.suppressedClaimIds).toEqual(expect.arrayContaining(oldTruth?.suppressedClaimIds ?? []));
     expect(JSON.stringify(pack.results)).toContain("truth state");
     expect(pack.context).toContain(`truth=selected selected=${currentMemory.id}`);
     expect(pack.context).toContain("safe_to_inject=");
@@ -3372,6 +3373,135 @@ describe("TypeScript memory core", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 30_000);
+
+  it("runs dream workers from the async repository queue when available", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.add({ userId: "u1", content: "Repository-backed dream workers must execute release jobs from the durable queue.", source: { kind: "human", confidence: 0.96 } });
+    const plan = service.dreamPlan({ userId: "u1", trigger: "before_release", mode: "dream", budget: "release", sourceRefresh: true });
+    const queued: DreamJob = {
+      jobId: "repo-job-release",
+      userId: "u1",
+      status: "running" as const,
+      trigger: "before_release" as const,
+      mode: "dream" as const,
+      queuedAt: "2026-06-05T00:00:00.000Z",
+      startedAt: "2026-06-05T00:00:01.000Z",
+      priority: 100,
+      leaseOwner: "repository-worker",
+      leaseUntil: "2026-06-05T00:05:01.000Z",
+      attemptCount: 1,
+      progress: { connectorPolls: 0, memoriesEvaluated: 0, contradictions: 0, sourceRevalidations: 0, verificationScheduled: 0 },
+      plan,
+      input: { userId: "u1", trigger: "before_release" as const, mode: "dream" as const, budget: "release" as const, sourceRefresh: true }
+    };
+    const calls: string[] = [];
+    let completed: DreamJob | undefined;
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        dreamJobRepository: {
+          claimDueJob: async () => {
+            calls.push("claim");
+            return queued;
+          },
+          completeJob: async (_jobId: string, patch: DreamJob) => {
+            calls.push("complete");
+            completed = patch;
+            return patch;
+          }
+        }
+      },
+      configurable: true
+    });
+
+    const job = await service.runDreamJobWorkerOnce(fetch, 10_000);
+
+    expect(calls).toEqual(["claim", "complete"]);
+    expect(job).toMatchObject({ jobId: "repo-job-release", status: "done", leaseOwner: "repository-worker", attemptCount: 1 });
+    expect(completed).toMatchObject({ jobId: "repo-job-release", status: "done", progress: { memoriesEvaluated: 1 } });
+  });
+
+  it("queues started dream jobs through the async repository before waiting", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.add({ userId: "u1", content: "Started release jobs should enter the durable repository queue before execution.", source: { kind: "human", confidence: 0.96 } });
+    const calls: string[] = [];
+    let queuedJob: DreamJob | undefined;
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        dreamJobRepository: {
+          queue: async (job: DreamJob) => {
+            calls.push("queue");
+            queuedJob = { ...job, status: "queued" };
+            return queuedJob;
+          },
+          claimDueJob: async () => {
+            calls.push("claim");
+            if (!queuedJob) return undefined;
+            queuedJob = {
+              ...queuedJob,
+              status: "running",
+              leaseOwner: "repository-worker",
+              leaseUntil: "2026-06-05T00:05:01.000Z",
+              attemptCount: (queuedJob.attemptCount ?? 0) + 1
+            };
+            return queuedJob;
+          },
+          completeJob: async (_jobId: string, patch: DreamJob) => {
+            calls.push("complete");
+            queuedJob = patch;
+            return patch;
+          }
+        }
+      },
+      configurable: true
+    });
+
+    const job = await service.startDreamJob({ userId: "u1", trigger: "before_release", mode: "dream", budget: "release", sourceRefresh: true }, fetch, 10_000, { wait: true });
+
+    expect(calls).toEqual(["queue", "claim", "complete"]);
+    expect(job).toMatchObject({ status: "done", trigger: "before_release", priority: 100, attemptCount: 1 });
+    expect(queuedJob).toMatchObject({ jobId: job.jobId, status: "done", leaseOwner: "repository-worker" });
+  });
+
+  it("persists dream cancel and retry controls through the async repository when available", async () => {
+    const service = new MemoryService({ autoDream: { enabled: false } });
+    service.add({ userId: "u1", content: "Repository-backed dream controls must persist operator cancel and retry decisions.", source: { kind: "human", confidence: 0.96 } });
+    const job = await service.startDreamJob({ userId: "u1", trigger: "before_release", mode: "dream", budget: "release" }, fetch, 10_000, { queueOnly: true });
+    const calls: string[] = [];
+    let persistedCancel: DreamJob | undefined;
+    let persistedRetry: DreamJob | undefined;
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        dreamJobRepository: {
+          completeJob: async (_jobId: string, patch: DreamJob) => {
+            calls.push("complete");
+            persistedCancel = { ...patch };
+            return persistedCancel;
+          },
+          retryJob: async (_jobId: string, patch: DreamJob) => {
+            calls.push("retry");
+            persistedRetry = {
+              ...patch,
+              status: "retry_scheduled",
+              leaseOwner: undefined,
+              leaseUntil: undefined,
+              nextRunAt: patch.nextRunAt ?? "2026-06-05T00:01:00.000Z"
+            };
+            return persistedRetry;
+          }
+        }
+      },
+      configurable: true
+    });
+
+    const cancelled = await service.cancelDreamJobAsync(job.jobId, "operator paused release gate");
+    expect(cancelled).toMatchObject({ status: "cancelled", error: "operator paused release gate" });
+    const retry = await service.retryDreamJob(job.jobId);
+
+    expect(retry).toMatchObject({ jobId: job.jobId, status: "retry_scheduled", leaseOwner: undefined, leaseUntil: undefined });
+    expect(persistedCancel).toMatchObject({ jobId: job.jobId, status: "cancelled" });
+    expect(persistedRetry).toMatchObject({ jobId: job.jobId, status: "retry_scheduled" });
+    expect(calls).toEqual(["complete", "retry"]);
+  });
 
   it("cancels and retries dream jobs through the persisted job surface", async () => {
     const service = new MemoryService({ autoDream: { enabled: false } });

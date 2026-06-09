@@ -36,7 +36,21 @@ async function main() {
   }
 }
 
-function prepare(trigger: "harness_session_end" | "harness_handoff" | "before_release", input: Record<string, unknown>) {
+async function prepare(trigger: "harness_session_end" | "harness_handoff" | "before_release", input: Record<string, unknown>) {
+  if (trigger === "before_release" && input.wait === true) {
+    const job = await defaultService.startDreamJob({
+      ...input,
+      trigger,
+      mode: input.mode ?? "dream",
+      budget: input.budget ?? "release",
+      sourceRefresh: input.sourceRefresh ?? true
+    } as any, fetch, typeof input.waitTimeoutMs === "number" ? input.waitTimeoutMs : undefined, { wait: true });
+    return {
+      plan: job.plan,
+      report: job.report,
+      job
+    };
+  }
   const prepared = defaultService.prepareDream({
     ...input,
     trigger,

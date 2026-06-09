@@ -445,8 +445,8 @@ export function createMemoryToolHandlers(service = new MemoryService()) {
       return service.dreamJobStatus(args.jobId);
     },
 
-    dreamJobCancel(args: MemoryDreamJobControlArgs) {
-      return service.cancelDreamJob(args.jobId, args.reason);
+    async dreamJobCancel(args: MemoryDreamJobControlArgs) {
+      return service.cancelDreamJobAsync(args.jobId, args.reason);
     },
 
     async dreamJobRetry(args: MemoryDreamJobControlArgs) {

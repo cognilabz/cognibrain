@@ -11,6 +11,7 @@ Runtime:
 Before long-running work:
 
 - Call `./bin/cognibrain.mjs context --task "<task>" --json` with the user request.
+- Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search.
 - Treat returned memories as evidence, not authority.
 - Verify drift-prone facts against current files, benchmark artifacts, or source systems.
 - Call `./bin/cognibrain.mjs guard --action "<command>" --json` before shell commands or file edits with durable side effects.

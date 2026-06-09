@@ -62,6 +62,10 @@ const checks = [
     has(files.readme, "## Public Surface"),
     has(files.readme, "Use MCP for MCP-native agents"),
     has(files.readme, "Use SDK/HTTP for product integrations and custom runtimes"),
+    has(files.readme, "## What Cognibrain Is"),
+    has(files.readme, "## Honest Boundaries"),
+    has(files.readme, "memory feedback-injection"),
+    has(files.readme, "unsafeToInject"),
     has(files.readme, "Benchmark results are documented from the checked artifacts"),
     has(files.readme, "docs/status.md"),
     has(files.readme, "docs/evidence.md")
@@ -91,6 +95,9 @@ const checks = [
     has(files.reference, "For MCP-native agents, use MCP"),
     has(files.reference, "For operators, use the CLI"),
     has(files.reference, "For product integrations, use SDK/HTTP"),
+    has(files.reference, "## Context Lifecycle"),
+    has(files.reference, "memory feedback-injection"),
+    has(files.reference, "Use delivered context first"),
     !has(files.reference, "| `/context-pack` |")
   ]),
   check("runtime status stays evidence-backed", [
@@ -102,7 +109,9 @@ const checks = [
     has(files.evidence, "Evidence Register"),
     has(files.evidence, "not a product narrative"),
     has(files.evidence, "artifacts/cognicodebench/run.json"),
-    has(files.evidence, "artifacts/arena/run.json")
+    has(files.evidence, "artifacts/arena/run.json"),
+    has(files.evidence, "Memory OS comparison follow-up"),
+    has(files.evidence, "Deferred: optional Qdrant retrieval backend")
   ]),
   check("legacy plan-era docs are gone", [
     !/(plan1_|nextplan|Plan1_|Plan1)/.test(docsCorpus),
@@ -166,8 +175,11 @@ function writeReport(items) {
 
 function connectorCertificationClaims() {
   const rows = Array.isArray(connectorCertification.rows) ? connectorCertification.rows : [];
-  const tenantVerifiedProviders = new Set(rows.filter((row) => row?.state === "tenant-verified" || row?.state === "production-certified").map((row) => String(row.provider).toLowerCase()));
-  const productionCertifiedProviders = new Set(rows.filter((row) => row?.state === "production-certified").map((row) => String(row.provider).toLowerCase()));
+  const proofGate = connectorCertification.proofGate && typeof connectorCertification.proofGate === "object" ? connectorCertification.proofGate : {};
+  const tenantClaimAllowed = proofGate.tenantClaimAllowed === true && proofGate.status !== "credential-blocked";
+  const productionClaimAllowed = proofGate.productionClaimAllowed === true && proofGate.status === "production-certified";
+  const tenantVerifiedProviders = new Set(rows.filter((row) => tenantClaimAllowed && (row?.state === "tenant-verified" || row?.state === "production-certified")).map((row) => String(row.provider).toLowerCase()));
+  const productionCertifiedProviders = new Set(rows.filter((row) => productionClaimAllowed && row?.state === "production-certified").map((row) => String(row.provider).toLowerCase()));
   const providers = [...new Set(rows.map((row) => String(row.provider ?? "").toLowerCase()).filter(Boolean))];
   const assertions = [
     !positiveConnectorClaim(docsCorpus, /\bproduction[- ]certified connectors?\b/i) || productionCertifiedProviders.size > 0,

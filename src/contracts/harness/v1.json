@@ -62,7 +62,7 @@
     },
     "release-prepare": {
       "required": ["userId"],
-      "properties": ["userId", "repo", "branch", "harnessRunId", "sourceRefresh", "runDreamIfDue", "force", "budget"]
+      "properties": ["userId", "repo", "branch", "harnessRunId", "sourceRefresh", "runDreamIfDue", "force", "budget", "wait", "waitTimeoutMs"]
     },
     "dream-plan": {
       "required": ["userId"],

@@ -30,10 +30,11 @@ Run `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor` when setup or runtime b
 
 1. Use the daemon-backed CLI lifecycle as the default integration path.
 2. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs context --task "<task>" --json` before multi-step coding, repo archaeology, debugging loops, benchmark work, or user-preference-sensitive edits.
-3. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs guard --action "<command>" --json` before shell commands or file edits with durable side effects.
-4. Treat returned memories as evidence, not authority.
-5. Verify drift-prone facts against current files, benchmark artifacts, or source systems before acting on them.
-6. Use MCP tools such as `memory_coding_context_pack` and `memory_action_guard` only as optional native adapters when this host exposes them.
+3. Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search.
+4. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs guard --action "<command>" --json` before shell commands or file edits with durable side effects.
+5. Treat returned memories as evidence, not authority.
+6. Verify drift-prone facts against current files, benchmark artifacts, or source systems before acting on them.
+7. Use MCP tools such as `memory_coding_context_pack` and `memory_action_guard` only as optional native adapters when this host exposes them.
 
 Additional memory search:
 

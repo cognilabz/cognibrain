@@ -8,7 +8,7 @@ Runtime:
 - Check health with `./bin/cognibrain.mjs status`.
 - Use the CLI lifecycle commands as the default integration path.
 
-Before multi-step coding, run `./bin/cognibrain.mjs context --task "<task>" --json`. Treat memory as evidence: verify current files, tests, and source systems before acting on stale facts.
+Before multi-step coding, run `./bin/cognibrain.mjs context --task "<task>" --json`. Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search. Treat memory as evidence: verify current files, tests, and source systems before acting on stale facts.
 
 Before shell commands or file edits with durable side effects, run `./bin/cognibrain.mjs guard --action "<command>" --json`.
 

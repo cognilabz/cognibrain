@@ -52,6 +52,7 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
     dreamRuntime: read("src/api/service/dreamRuntime.ts"),
     dreamEngineering: read("src/api/service/memoryServiceDreamEngineering.ts"),
     searchRuntime: read("src/api/service/searchRuntime.ts"),
+    truthGate: read("src/core/truthGate.ts"),
     memctl: read("src/cli/memctl.ts"),
     memoryCommands: read("src/cli/memctl/memoryCommands.ts"),
     reflectionCommands: read("src/cli/memctl/reflectionCommands.ts"),
@@ -171,7 +172,7 @@ export function generatePlanGapAudit(options: { out?: string; markdown?: string 
       ["src/api/repositories/postgresRepository.ts", "cognibrain_conflict_sets"],
       ["src/api/repositories/postgresRepository.ts", "cognibrain_claim_evidence"],
       ["src/api/repositories/postgresRepository.ts", "cognibrain_truth_resolutions"],
-      ["src/api/service/searchRuntime.ts", "suppressedClaimIds"],
+      ["src/core/truthGate.ts", "suppressedClaimIds"],
       ["tests/core.test.ts", "suppressedClaimIds"]
     ]),
     check("retrieval.risk-aware", "truth", "Retrieval and action guard expose truth and risk decisions for destructive/release-critical tasks.", files, [
@@ -340,6 +341,7 @@ function keyForPath(path: string): string {
     dreamRuntime: "src/api/service/dreamRuntime.ts",
     dreamEngineering: "src/api/service/memoryServiceDreamEngineering.ts",
     searchRuntime: "src/api/service/searchRuntime.ts",
+    truthGate: "src/core/truthGate.ts",
     memctl: "src/cli/memctl.ts",
     memoryCommands: "src/cli/memctl/memoryCommands.ts",
     reflectionCommands: "src/cli/memctl/reflectionCommands.ts",

@@ -283,6 +283,7 @@ export interface EvidencePack {
       citation: string;
       contradiction?: SearchResult["contradiction"];
       plan?: QueryPlan;
+      truth?: SearchResult["truth"];
     };
     policyDecision?: PolicyDecision;
     contradictionWarnings?: string[];
@@ -292,6 +293,7 @@ export interface EvidencePack {
     memoryId: string;
     reason: string;
     decision?: SearchResult["decision"];
+    unsafeToInject?: boolean;
     policyDecision?: PolicyDecision;
     score?: number;
     truthDecision?: CurrentTruthDecision;

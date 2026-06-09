@@ -139,6 +139,7 @@ interface OperatorMemoryBenchmarkReport {
     metrics: string[];
     requiredExternalProofForMarketClaim: string[];
   };
+  marketProofGate: OperatorMemoryMarketProofGate;
   systems: SystemResult[];
   leaderboard: Array<{ system: string; score: number; proofLevel: string }>;
   summary: {
@@ -153,6 +154,32 @@ interface OperatorMemoryBenchmarkReport {
     marketSuperiorityBlockers: string[];
   };
   passed: boolean;
+}
+
+interface OperatorMemoryMarketProofGate {
+  status: "blocked" | "eligible";
+  required: string[];
+  inputs: {
+    publicArtifactHash?: string;
+    independentReplicationHash?: string;
+    liveConnectorProofHash?: string;
+    vendorSignedArtifactHash?: string;
+    thirdPartyProtocol?: string;
+    preregisteredBudgets?: string;
+  };
+  checks: {
+    qualityClaimAllowed: boolean;
+    enoughNativeCompetitors: boolean;
+    nativeCompetitorsJudged: boolean;
+    cognibrainBeatsNativeCompetitors: boolean;
+    publicArtifactHash: boolean;
+    independentReplicationHash: boolean;
+    liveConnectorProofHash: boolean;
+    vendorOrIndependentProof: boolean;
+    thirdPartyProtocol: boolean;
+    preregisteredBudgets: boolean;
+  };
+  blockers: string[];
 }
 
 const SYSTEMS: SystemId[] = ["cognibrain-dream", "retrieval-only", "connector-import-only", "reflect-only", "recency-only"];
@@ -182,12 +209,18 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
     "Local operator-memory scenario checks are deterministic diagnostics only; set MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND for LLM/harness report judging before quality claims.",
     ...(qualityJudge && !qualityJudge.passed ? [`Configured operator-memory quality judge did not pass: ${qualityJudge.reason}`] : [])
   ];
+  const marketProofGate = operatorMemoryMarketProofGate({
+    qualityClaimAllowed,
+    realCompetitors,
+    missingNative,
+    unjudgedRealCompetitors,
+    cognibrainScore: cognibrain?.score ?? 0
+  });
   const marketSuperiorityBlockers = [
     ...qualityClaimBlockers,
     ...missingNative.map((system) => `${displayName(system)} same-run native/cloud artifact is missing or credential-blocked.`),
     ...unjudgedRealCompetitors.map((system) => `${system.displayName} native/cloud artifact is unjudged; set MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND before market claims.`),
-    ...(process.env.MEMORY_OPERATOR_MEMORY_LIVE_CONNECTOR_PROOF === "true" ? [] : ["No live GitHub/Jira/Confluence/Notion credentialed tenant run was supplied."]),
-    ...(process.env.MEMORY_OPERATOR_MEMORY_INDEPENDENT_PROOF === "true" ? [] : ["No vendor-signed or independently reproduced artifact was supplied."])
+    ...marketProofGate.blockers
   ];
   const marketSuperiorityClaimAllowed = Boolean(
     qualityClaimAllowed &&
@@ -196,6 +229,7 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
     missingNative.length === 0 &&
     cognibrain.score > Math.max(...realCompetitors.map((system) => system.score)) &&
     cognibrain.score >= 0.95 &&
+    marketProofGate.status === "eligible" &&
     marketSuperiorityBlockers.length === 0
   );
   const report: OperatorMemoryBenchmarkReport = {
@@ -241,9 +275,12 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
       requiredExternalProofForMarketClaim: [
         "same-run adapters for Mem0, Zep/Graphiti, LangMem and at least one hosted memory API",
         "credentialed connector tenant run for GitHub, Jira, Confluence and Notion",
-        "public artifact with scenario rows and methodology metadata"
+        "public artifact with scenario rows and methodology metadata",
+        "independent replication or vendor-signed artifact hash",
+        "third-party sourced protocol and preregistered cost/latency budgets"
       ]
     },
+    marketProofGate,
     systems,
     leaderboard,
     summary: {
@@ -268,6 +305,79 @@ export async function runOperatorMemoryBenchmark(options: { out?: string; markdo
     writeFileSync(options.markdown, renderMarkdown(report));
   }
   return report;
+}
+
+function operatorMemoryMarketProofGate(input: {
+  qualityClaimAllowed: boolean;
+  realCompetitors: SystemResult[];
+  missingNative: readonly SystemId[];
+  unjudgedRealCompetitors: SystemResult[];
+  cognibrainScore: number;
+}): OperatorMemoryMarketProofGate {
+  const publicArtifactHash = envHash("MEMORY_OPERATOR_MEMORY_PUBLIC_ARTIFACT_HASH");
+  const independentReplicationHash = envHash("MEMORY_OPERATOR_MEMORY_INDEPENDENT_REPLICATION_HASH");
+  const liveConnectorProofHash = envHash("MEMORY_OPERATOR_MEMORY_LIVE_CONNECTOR_PROOF_HASH");
+  const vendorSignedArtifactHash = envHash("MEMORY_OPERATOR_MEMORY_VENDOR_SIGNED_ARTIFACT_HASH");
+  const thirdPartyProtocol = nonEmptyEnv("MEMORY_OPERATOR_MEMORY_THIRD_PARTY_PROTOCOL");
+  const preregisteredBudgets = nonEmptyEnv("MEMORY_OPERATOR_MEMORY_PREREGISTERED_BUDGETS");
+  const enoughNativeCompetitors = input.realCompetitors.length >= 3 && input.missingNative.length === 0;
+  const nativeCompetitorsJudged = input.unjudgedRealCompetitors.length === 0 && input.realCompetitors.length > 0;
+  const bestNative = Math.max(0, ...input.realCompetitors.map((system) => system.score));
+  const checks = {
+    qualityClaimAllowed: input.qualityClaimAllowed,
+    enoughNativeCompetitors,
+    nativeCompetitorsJudged,
+    cognibrainBeatsNativeCompetitors: input.realCompetitors.length > 0 && input.cognibrainScore > bestNative,
+    publicArtifactHash: Boolean(publicArtifactHash),
+    independentReplicationHash: Boolean(independentReplicationHash),
+    liveConnectorProofHash: Boolean(liveConnectorProofHash),
+    vendorOrIndependentProof: Boolean(independentReplicationHash || vendorSignedArtifactHash),
+    thirdPartyProtocol: Boolean(thirdPartyProtocol),
+    preregisteredBudgets: Boolean(preregisteredBudgets)
+  };
+  const blockers = [
+    ...(!checks.qualityClaimAllowed ? ["operator-memory quality claim is not LLM/harness-judged"] : []),
+    ...(!checks.enoughNativeCompetitors ? ["fewer than three required native/cloud competitors are judged on the same scenario stream"] : []),
+    ...(!checks.nativeCompetitorsJudged ? ["native/cloud competitor raw evidence is unjudged"] : []),
+    ...(!checks.cognibrainBeatsNativeCompetitors ? ["Cognibrain has not beaten judged native/cloud competitors on this artifact"] : []),
+    ...(!checks.publicArtifactHash ? ["MEMORY_OPERATOR_MEMORY_PUBLIC_ARTIFACT_HASH must be a 64-character artifact hash"] : []),
+    ...(!checks.liveConnectorProofHash ? ["MEMORY_OPERATOR_MEMORY_LIVE_CONNECTOR_PROOF_HASH must identify a credentialed GitHub/Jira/Confluence/Notion tenant proof artifact"] : []),
+    ...(!checks.vendorOrIndependentProof ? ["MEMORY_OPERATOR_MEMORY_INDEPENDENT_REPLICATION_HASH or MEMORY_OPERATOR_MEMORY_VENDOR_SIGNED_ARTIFACT_HASH must be a 64-character proof hash"] : []),
+    ...(!checks.thirdPartyProtocol ? ["MEMORY_OPERATOR_MEMORY_THIRD_PARTY_PROTOCOL must identify the public third-party scenario protocol"] : []),
+    ...(!checks.preregisteredBudgets ? ["MEMORY_OPERATOR_MEMORY_PREREGISTERED_BUDGETS must identify preregistered latency and cost budgets"] : [])
+  ];
+  return {
+    status: blockers.length === 0 ? "eligible" : "blocked",
+    required: [
+      "LLM/harness report-level quality judge",
+      "at least three judged native/cloud competitor runs on the same scenario stream",
+      "public immutable artifact hash",
+      "credentialed live connector proof hash for GitHub/Jira/Confluence/Notion",
+      "independent replication hash or vendor-signed artifact hash",
+      "third-party scenario protocol",
+      "preregistered latency and cost budgets"
+    ],
+    inputs: {
+      publicArtifactHash,
+      independentReplicationHash,
+      liveConnectorProofHash,
+      vendorSignedArtifactHash,
+      thirdPartyProtocol,
+      preregisteredBudgets
+    },
+    checks,
+    blockers
+  };
+}
+
+function envHash(name: string): string | undefined {
+  const value = nonEmptyEnv(name);
+  return value && /^[a-f0-9]{64}$/i.test(value) ? value.toLowerCase() : undefined;
+}
+
+function nonEmptyEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
 }
 
 async function runSystem(system: SystemId, scenarios: OperatorMemoryScenario[]): Promise<SystemResult> {
@@ -918,7 +1028,12 @@ Quality claim allowed: ${report.qualityClaimAllowed ? "yes" : "no"}.
 Market claim allowed: ${report.marketClaimAllowed ? "yes" : "no"}.
 Proof: \`${report.proof}\` / \`${report.claimBoundary.scorer}\`.
 
-Local operator-memory scores are diagnostics only. Quality claims require \`MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND\` LLM/harness report judging; market-superiority claims additionally require judged native/cloud competitor runs, credentialed connector tenant runs and independent artifacts.
+Local operator-memory scores are diagnostics only. Quality claims require \`MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND\` LLM/harness report judging; market-superiority claims additionally require judged native/cloud competitor runs, credentialed connector tenant runs, public artifact hashes, independent or vendor-signed proof, a third-party protocol and preregistered budgets.
+
+Market proof gate: \`${report.marketProofGate.status}\`.
+
+Required market proof:
+${report.marketProofGate.required.map((item) => `- ${item}`).join("\n")}
 
 | System | Score | Proof | Adapter | Current truth | Stale suppression | Source revalidation |
 | --- | ---: | --- | --- | ---: | ---: | ---: |

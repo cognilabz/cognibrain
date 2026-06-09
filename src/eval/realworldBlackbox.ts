@@ -129,7 +129,7 @@ interface RealWorldReport {
   schemaVersion: "1.0";
   generatedAt: string;
   benchmark: "realworld-blackbox";
-  status: "neutral-harness-ready-results-not-leaderboard" | "comparative-smoke-eligible-results-not-market-leaderboard";
+  status: "neutral-harness-ready-results-not-leaderboard" | "comparative-smoke-eligible-results-not-market-leaderboard" | "market-leaderboard-eligible";
   manifestHash: string;
   runProvenance: {
     judge: {
@@ -144,6 +144,13 @@ interface RealWorldReport {
       commandFingerprint: string | null;
     };
     externalCommands: Record<string, { configured: boolean; commandEnv: string; commandFingerprint: string | null }>;
+    marketProof: {
+      publicArtifactHash: string | null;
+      independentReplicationHash: string | null;
+      thirdPartyProtocol: boolean;
+      thirdPartyTaskCount: number;
+      preregisteredCostLatencyBudgets: boolean;
+    };
     redaction: string;
   };
   judgeReadiness: {
@@ -179,6 +186,10 @@ interface RealWorldReport {
     resourceTelemetryRecorded: boolean;
     llmOrHarnessJudged: boolean;
     enoughOriginalSystems: boolean;
+    publicArtifactHashPresent: boolean;
+    thirdPartyProtocolReady: boolean;
+    independentReplicationPresent: boolean;
+    preregisteredCostLatencyBudgets: boolean;
   };
   systems: SystemResult[];
   leaderboardEligibleSystems: string[];
@@ -187,7 +198,7 @@ interface RealWorldReport {
   leaderboardEligible: boolean;
   marketClaimAllowed: boolean;
   claimBoundary: {
-    proof: "realworld-smoke-diagnostic" | "realworld-central-judge-smoke";
+    proof: "realworld-smoke-diagnostic" | "realworld-central-judge-smoke" | "realworld-market-leaderboard-proof";
     claimAllowed: boolean;
     comparativeSmokeEligible: boolean;
     leaderboardEligible: boolean;
@@ -280,11 +291,13 @@ interface RealWorldJudge {
 }
 
 const PREREGISTERED_AT = "2026-06-02T09:43:59.063Z";
+const MIN_THIRD_PARTY_MARKET_TASKS = 30;
 
 export async function generateRealWorldBlackBoxBenchmark(options: { out?: string; markdown?: string; successOut?: string; successMarkdown?: string; systems?: string[] } = {}): Promise<RealWorldReport> {
   const manifest = buildManifest();
   const manifestHash = sha256(stableStringify(manifest));
   const judge = createJudge();
+  const marketProof = readMarketProof();
   const requested = (options.systems ?? ["cognibrain", "keyword", "mem0", "basicmemory", "langmem", "graphiti", "zep", "cognee", "gbrain"]).map((system) => system.trim()).filter(Boolean);
   const systems: SystemResult[] = [];
   for (const id of requested) {
@@ -312,24 +325,46 @@ export async function generateRealWorldBlackBoxBenchmark(options: { out?: string
     costLatencyRecorded: systems.every((system) => metricsHaveFiniteCostLatency(system.metrics) && system.setup.metricContractValid !== false),
     resourceTelemetryRecorded: systems.every(hasResourceTelemetry),
     llmOrHarnessJudged: systems.every((system) => system.evidenceClass === "credential-blocked" || system.qualityClaimAllowed),
-    enoughOriginalSystems: cognibrainComparativeSmokeEligible && originalCompetitorEligibleSystems.length >= 2
+    enoughOriginalSystems: cognibrainComparativeSmokeEligible && originalCompetitorEligibleSystems.length >= 2,
+    publicArtifactHashPresent: Boolean(marketProof.publicArtifactHash),
+    thirdPartyProtocolReady: marketProof.thirdPartyProtocol && marketProof.thirdPartyTaskCount >= MIN_THIRD_PARTY_MARKET_TASKS,
+    independentReplicationPresent: Boolean(marketProof.independentReplicationHash),
+    preregisteredCostLatencyBudgets: marketProof.preregisteredCostLatencyBudgets
   };
-  const comparativeSmokeEligible = Object.values(eligibilityGate).every(Boolean);
-  const marketClaimAllowed = false;
-  const leaderboardEligible = false;
-  const claimBoundary = realWorldClaimBoundary(comparativeSmokeEligible);
+  const comparativeSmokeEligible = [
+    eligibilityGate.manifestCoverageReady,
+    eligibilityGate.sameManifestForAllSystems,
+    eligibilityGate.blackBoxContract,
+    eligibilityGate.rawOutputsRetained,
+    eligibilityGate.costLatencyRecorded,
+    eligibilityGate.resourceTelemetryRecorded,
+    eligibilityGate.llmOrHarnessJudged,
+    eligibilityGate.enoughOriginalSystems
+  ].every(Boolean);
+  const leaderboardEligible = comparativeSmokeEligible &&
+    eligibilityGate.publicArtifactHashPresent &&
+    eligibilityGate.thirdPartyProtocolReady &&
+    eligibilityGate.independentReplicationPresent &&
+    eligibilityGate.preregisteredCostLatencyBudgets;
+  const marketClaimAllowed = leaderboardEligible;
+  const claimBoundary = realWorldClaimBoundary({ comparativeSmokeEligible, leaderboardEligible, marketProof });
+  if (leaderboardEligible) {
+    for (const system of systems) {
+      if (system.comparativeSmokeEligible) system.leaderboardEligible = true;
+    }
+  }
   const report: RealWorldReport = {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
     benchmark: "realworld-blackbox",
-    status: comparativeSmokeEligible ? "comparative-smoke-eligible-results-not-market-leaderboard" : "neutral-harness-ready-results-not-leaderboard",
+    status: leaderboardEligible ? "market-leaderboard-eligible" : comparativeSmokeEligible ? "comparative-smoke-eligible-results-not-market-leaderboard" : "neutral-harness-ready-results-not-leaderboard",
     manifestHash,
-    runProvenance: buildRunProvenance(requested, judge),
+    runProvenance: buildRunProvenance(requested, judge, marketProof),
     judgeReadiness: buildJudgeReadiness(judge),
     manifest,
     eligibilityGate,
     systems,
-    leaderboardEligibleSystems: [],
+    leaderboardEligibleSystems: leaderboardEligible ? comparativeSmokeEligibleSystems : [],
     comparativeSmokeEligibleSystems,
     comparativeSmokeEligible,
     leaderboardEligible,
@@ -347,18 +382,20 @@ export async function generateRealWorldBlackBoxBenchmark(options: { out?: string
   return report;
 }
 
-function realWorldClaimBoundary(comparativeSmokeEligible: boolean): RealWorldReport["claimBoundary"] {
+function realWorldClaimBoundary(input: { comparativeSmokeEligible: boolean; leaderboardEligible: boolean; marketProof: ReturnType<typeof readMarketProof> }): RealWorldReport["claimBoundary"] {
+  const { comparativeSmokeEligible, leaderboardEligible, marketProof } = input;
   return {
-    proof: comparativeSmokeEligible ? "realworld-central-judge-smoke" : "realworld-smoke-diagnostic",
-    claimAllowed: false,
+    proof: leaderboardEligible ? "realworld-market-leaderboard-proof" : comparativeSmokeEligible ? "realworld-central-judge-smoke" : "realworld-smoke-diagnostic",
+    claimAllowed: leaderboardEligible,
     comparativeSmokeEligible,
-    leaderboardEligible: false,
-    marketClaimAllowed: false,
+    leaderboardEligible,
+    marketClaimAllowed: leaderboardEligible,
     claimBlockers: [
       ...(!comparativeSmokeEligible ? ["Comparative smoke requires Cognibrain plus at least two original systems judged by the same central LLM/harness judge on the frozen manifest."] : []),
-      "Market leaderboard claims require a larger third-party-sourced task set beyond realworld-blackbox-v1.",
-      "Market leaderboard claims require more original memory systems executed without repair on the same preregistered protocol.",
-      "Market leaderboard claims require preregistered latency and cost budgets for the LLM/harness judge and all attached systems."
+      ...(!marketProof.publicArtifactHash ? ["Market leaderboard claims require a public immutable artifact hash for the exact judged run."] : []),
+      ...(!(marketProof.thirdPartyProtocol && marketProof.thirdPartyTaskCount >= MIN_THIRD_PARTY_MARKET_TASKS) ? [`Market leaderboard claims require a larger third-party-sourced protocol with at least ${MIN_THIRD_PARTY_MARKET_TASKS} tasks; current supplied count is ${marketProof.thirdPartyTaskCount}.`] : []),
+      ...(!marketProof.independentReplicationHash ? ["Market leaderboard claims require an independent replication artifact hash."] : []),
+      ...(!marketProof.preregisteredCostLatencyBudgets ? ["Market leaderboard claims require preregistered latency and cost budgets for the LLM/harness judge and all attached systems."] : [])
     ]
   };
 }
@@ -372,7 +409,7 @@ function isSuccessfulJudgedOriginalRun(report: RealWorldReport): boolean {
   );
 }
 
-function buildRunProvenance(requestedSystems: string[], judge?: RealWorldJudge): RealWorldReport["runProvenance"] {
+function buildRunProvenance(requestedSystems: string[], judge: RealWorldJudge | undefined, marketProof: ReturnType<typeof readMarketProof>): RealWorldReport["runProvenance"] {
   const externalCommands: RealWorldReport["runProvenance"]["externalCommands"] = {};
   for (const system of requestedSystems) {
     const commandEnv = `MEMORY_REALWORLD_${system.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_COMMAND`;
@@ -397,8 +434,32 @@ function buildRunProvenance(requestedSystems: string[], judge?: RealWorldJudge):
       commandFingerprint: evidenceCommand ? sha256Text(evidenceCommand) : null
     },
     externalCommands,
+    marketProof,
     redaction: "command values and diagnostic text are secret-redacted; fingerprints are sha256 for reproducibility without exposing credentials"
   };
+}
+
+function readMarketProof(): RealWorldReport["runProvenance"]["marketProof"] {
+  const publicArtifactHash = normalizedSha256Env("MEMORY_REALWORLD_PUBLIC_ARTIFACT_HASH");
+  const independentReplicationHash = normalizedSha256Env("MEMORY_REALWORLD_INDEPENDENT_REPLICATION_HASH");
+  const thirdPartyTaskCount = Math.max(0, Number.parseInt(process.env.MEMORY_REALWORLD_THIRD_PARTY_TASK_COUNT ?? "0", 10) || 0);
+  return {
+    publicArtifactHash,
+    independentReplicationHash,
+    thirdPartyProtocol: boolEnv("MEMORY_REALWORLD_THIRD_PARTY_PROTOCOL"),
+    thirdPartyTaskCount,
+    preregisteredCostLatencyBudgets: boolEnv("MEMORY_REALWORLD_PREREGISTERED_COST_LATENCY_BUDGETS")
+  };
+}
+
+function normalizedSha256Env(name: string): string | null {
+  const value = process.env[name]?.trim().toLowerCase();
+  return value && /^[a-f0-9]{64}$/.test(value) ? value : null;
+}
+
+function boolEnv(name: string): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
 }
 
 function createRealWorldEvidenceIntelligence(): MemoryServiceOptions["intelligence"] | undefined {
@@ -712,27 +773,7 @@ function buildManifest(): RealWorldManifest {
         expectedEvidenceIds: ["oss-generated-client-boundary"],
         topK: 3
       },
-      {
-        id: "q-thirdparty-next-axios-memory-leak",
-        bucket: "third-party-oss-workflows",
-        question: "In the public Next.js issue about axios and AbortSignal, which middleware path leaked memory and what reproduction steps proved it?",
-        expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"],
-        topK: 3
-      },
-      {
-        id: "q-thirdparty-next-turbopack-refresh-loop",
-        bucket: "third-party-oss-workflows",
-        question: "What reproduced the Next.js Turbopack Fast Refresh loop and which route/component requests were involved?",
-        expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"],
-        topK: 3
-      },
-      {
-        id: "q-thirdparty-pytest-asyncio-warning",
-        bucket: "third-party-oss-workflows",
-        question: "What did pytest-asyncio issue 293 warn about even without asyncio tests, and what behavior did the reporter want instead?",
-        expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"],
-        topK: 3
-      },
+      ...thirdPartyOssWorkflowQueries(),
       {
         id: "q-northstar-theme",
         bucket: "personal-project-notes",
@@ -816,6 +857,46 @@ function buildManifest(): RealWorldManifest {
       }
     ]
   };
+}
+
+function thirdPartyOssWorkflowQueries(): RealWorldManifest["queries"] {
+  const querySpecs: Array<{ id: string; question: string; expectedEvidenceIds: string[] }> = [
+    { id: "q-thirdparty-next-axios-memory-leak-summary", question: "In the public Next.js issue about axios and AbortSignal, which middleware path leaked memory and what reproduction steps proved it?", expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"] },
+    { id: "q-thirdparty-next-axios-memory-leak-repo", question: "Which reproduction repository was used for the Next.js axios AbortSignal memory leak?", expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"] },
+    { id: "q-thirdparty-next-axios-memory-leak-request-count", question: "How many requests did the Next.js axios AbortSignal memory leak reproduction send before taking heap snapshots?", expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"] },
+    { id: "q-thirdparty-next-axios-memory-leak-heap-signal", question: "Which signal was sent to the next-server PID to capture heap snapshots in the axios AbortSignal issue?", expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"] },
+    { id: "q-thirdparty-next-axios-memory-leak-retained-objects", question: "Which retained objects were associated with the middleware axios path in the Next.js AbortSignal memory leak?", expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"] },
+    { id: "q-thirdparty-next-axios-memory-leak-avoiding-paths", question: "Which alternatives avoided the Next.js middleware memory leak in the axios AbortSignal report?", expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"] },
+    { id: "q-thirdparty-next-axios-memory-leak-mock-server", question: "Which mock server command appeared in the Next.js axios AbortSignal memory leak reproduction flow?", expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"] },
+    { id: "q-thirdparty-next-axios-memory-leak-adapter", question: "Which axios adapter was involved in the Next.js middleware AbortSignal memory leak report?", expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"] },
+    { id: "q-thirdparty-next-axios-memory-leak-scope", question: "Was the axios AbortSignal memory leak described in Next.js middleware or in a production build step?", expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"] },
+    { id: "q-thirdparty-next-axios-memory-leak-evidence", question: "What evidence did the reporter use to show retained signal and abort objects in the Next.js axios issue?", expectedEvidenceIds: ["thirdparty-next-axios-abortsignal-memory-leak"] },
+    { id: "q-thirdparty-next-turbopack-refresh-loop-summary", question: "What reproduced the Next.js Turbopack Fast Refresh loop and which route/component requests were involved?", expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"] },
+    { id: "q-thirdparty-next-turbopack-refresh-loop-repro", question: "Which reproduction repository was used for the Next.js Turbopack Fast Refresh issue?", expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"] },
+    { id: "q-thirdparty-next-turbopack-refresh-loop-route", question: "Which route did the reporter visit to reproduce the Turbopack Fast Refresh loop?", expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"] },
+    { id: "q-thirdparty-next-turbopack-refresh-loop-files", question: "Which toast component files produced repeated 404 requests in the Turbopack Fast Refresh issue?", expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"] },
+    { id: "q-thirdparty-next-turbopack-refresh-loop-next-versions", question: "Which Next.js version range was affected by the Turbopack Fast Refresh reproduction?", expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"] },
+    { id: "q-thirdparty-next-turbopack-refresh-loop-unaffected", question: "Which modes or versions were not affected by the Turbopack Fast Refresh bug report?", expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"] },
+    { id: "q-thirdparty-next-turbopack-refresh-loop-command", question: "Which dev mode flag was involved in the Next.js Turbopack Fast Refresh loop?", expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"] },
+    { id: "q-thirdparty-next-turbopack-refresh-loop-observed-logs", question: "What repeated logs or requests did the Turbopack Fast Refresh reporter observe after reloading?", expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"] },
+    { id: "q-thirdparty-next-turbopack-refresh-loop-production", question: "Did the Turbopack Fast Refresh report affect production builds or only dev mode?", expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"] },
+    { id: "q-thirdparty-next-turbopack-refresh-loop-webpack", question: "How did webpack compare to Turbopack in the Fast Refresh reproduction?", expectedEvidenceIds: ["thirdparty-next-turbopack-fast-refresh-loop"] },
+    { id: "q-thirdparty-pytest-asyncio-warning-summary", question: "What did pytest-asyncio issue 293 warn about even without asyncio tests, and what behavior did the reporter want instead?", expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"] },
+    { id: "q-thirdparty-pytest-asyncio-warning-version", question: "Which pytest-asyncio version emitted the unused asyncio_mode warning in issue 293?", expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"] },
+    { id: "q-thirdparty-pytest-asyncio-warning-minimal-test", question: "What minimal test still emitted the pytest-asyncio asyncio_mode warning?", expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"] },
+    { id: "q-thirdparty-pytest-asyncio-warning-default-change", question: "What future asyncio_mode default change did the pytest-asyncio warning mention?", expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"] },
+    { id: "q-thirdparty-pytest-asyncio-warning-suggested-settings", question: "Which explicit asyncio_mode settings did the pytest-asyncio warning suggest?", expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"] },
+    { id: "q-thirdparty-pytest-asyncio-warning-requested-behavior", question: "When did the reporter want pytest-asyncio to emit the asyncio_mode warning?", expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"] },
+    { id: "q-thirdparty-pytest-asyncio-warning-clean-dir", question: "What clean-directory condition still triggered the pytest-asyncio warning?", expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"] },
+    { id: "q-thirdparty-pytest-asyncio-warning-plugin-use", question: "Was pytest-asyncio actually used by the test suite that triggered the warning in issue 293?", expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"] },
+    { id: "q-thirdparty-pytest-asyncio-warning-mode-names", question: "Which mode names appeared in the pytest-asyncio issue 293 warning?", expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"] },
+    { id: "q-thirdparty-pytest-asyncio-warning-no-async-test", question: "What kind of non-async test demonstrated the unnecessary pytest-asyncio warning?", expectedEvidenceIds: ["thirdparty-pytest-asyncio-unused-mode-warning"] }
+  ];
+  return querySpecs.map((query) => ({
+    ...query,
+    bucket: "third-party-oss-workflows" as const,
+    topK: 3
+  }));
 }
 
 async function runSystem(adapter: Adapter, manifest: RealWorldManifest, judge?: RealWorldJudge): Promise<SystemResult> {

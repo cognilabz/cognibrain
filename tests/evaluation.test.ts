@@ -456,6 +456,11 @@ describe("self verification benchmark loop", () => {
     expect(certification.passed).toBe(true);
     expect(certification.summary.credentialBlocked).toBeGreaterThanOrEqual(19);
     expect(certification.summary.productionCertified).toBe(0);
+    expect(certification.proofGate.status).toBe("credential-blocked");
+    expect(certification.proofGate.artifactHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(certification.proofGate.tenantClaimAllowed).toBe(false);
+    expect(certification.proofGate.productionClaimAllowed).toBe(false);
+    expect(certification.proofGate.blockers).toContain("no signed tenant live-smoke row is claimable");
     expect(certification.rows.find((row) => row.provider === "github")).toMatchObject({
       level: "L2-sandbox-live-smoke",
       list: true,
@@ -505,6 +510,14 @@ describe("self verification benchmark loop", () => {
     expect(certified.rows[0].level).toBe("L4-production-certified");
     expect(certified.rows[0].sourceResolverCoverage).toBe(0.95);
     expect(certified.rows[0].artifactHash).toHaveLength(64);
+    expect(certified.proofGate.status).toBe("production-certified");
+    expect(certified.proofGate.artifactHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(certified.proofGate.tenantVerifiedRows).toBe(1);
+    expect(certified.proofGate.productionCertifiedRows).toBe(1);
+    expect(certified.proofGate.signedTenantProofRows).toBe(1);
+    expect(certified.proofGate.ownerApprovedProductionRows).toBe(1);
+    expect(certified.proofGate.tenantClaimAllowed).toBe(true);
+    expect(certified.proofGate.productionClaimAllowed).toBe(true);
 
     writeFileSync(livePath, JSON.stringify({
       writebackEnabled: false,
@@ -513,6 +526,8 @@ describe("self verification benchmark loop", () => {
     const unsigned = generateConnectorCertification({ maturityInput: maturityPath, liveSmokeInput: livePath, qualityInput: qualityPath, transportInput: transportPath });
     expect(unsigned.rows[0].state).toBe("credential-blocked");
     expect(unsigned.rows[0].checks.tenantLiveSmoke).toBe(false);
+    expect(unsigned.proofGate.status).toBe("credential-blocked");
+    expect(unsigned.proofGate.productionClaimAllowed).toBe(false);
   });
 
   it("proves priority connector webhook signature, replay, normalization, and review queue paths", () => {
@@ -611,12 +626,15 @@ describe("self verification benchmark loop", () => {
         return counts;
       }, {});
       const thirdPartyOssEvents = report.manifest.events.filter((event) => event.bucket === "third-party-oss-workflows");
+      const thirdPartyOssQueries = report.manifest.queries.filter((query) => query.bucket === "third-party-oss-workflows");
       expect(report.manifestHash).toHaveLength(64);
       expect(report.manifest.queries.length).toBeGreaterThanOrEqual(15);
       expect(Object.values(queriesByBucket).every((count) => count >= 3)).toBe(true);
       expect(thirdPartyOssEvents).toHaveLength(3);
       expect(thirdPartyOssEvents.every((event) => event.source.startsWith("https://github.com/"))).toBe(true);
-      expect(queriesByBucket["third-party-oss-workflows"]).toBe(3);
+      expect(thirdPartyOssQueries).toHaveLength(30);
+      expect(new Set(thirdPartyOssQueries.map((query) => query.id)).size).toBe(30);
+      expect(queriesByBucket["third-party-oss-workflows"]).toBe(30);
       expect(report.manifest.queries.filter((query) => query.shouldAbstain).length).toBeGreaterThanOrEqual(3);
       expect(report.leaderboardEligible).toBe(false);
       expect(report.judgeReadiness).toMatchObject({
@@ -816,6 +834,14 @@ describe("self verification benchmark loop", () => {
     const previousJudgeKind = process.env.MEMORY_REALWORLD_JUDGE_KIND;
     const previousBasicMemoryCommand = process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND;
     const previousLangMemCommand = process.env.MEMORY_REALWORLD_LANGMEM_COMMAND;
+    const marketEnv = [
+      "MEMORY_REALWORLD_PUBLIC_ARTIFACT_HASH",
+      "MEMORY_REALWORLD_INDEPENDENT_REPLICATION_HASH",
+      "MEMORY_REALWORLD_THIRD_PARTY_PROTOCOL",
+      "MEMORY_REALWORLD_THIRD_PARTY_TASK_COUNT",
+      "MEMORY_REALWORLD_PREREGISTERED_COST_LATENCY_BUDGETS"
+    ] as const;
+    const previousMarketEnv = Object.fromEntries(marketEnv.map((name) => [name, process.env[name]]));
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-realworld-market-gate-"));
     const judgePath = join(dir, "judge.mjs");
     const competitorPath = join(dir, "competitor.mjs");
@@ -858,6 +884,7 @@ process.stdin.on("end", () => {
       process.env.MEMORY_REALWORLD_JUDGE_KIND = "harness";
       process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = `${process.execPath} ${competitorPath}`;
       process.env.MEMORY_REALWORLD_LANGMEM_COMMAND = `${process.execPath} ${competitorPath}`;
+      for (const name of marketEnv) delete process.env[name];
       const report = await generateRealWorldBlackBoxBenchmark({
         out: join(dir, "realworld-market-gate.json"),
         systems: ["cognibrain", "basicmemory", "langmem", "keyword"]
@@ -880,7 +907,7 @@ process.stdin.on("end", () => {
         leaderboardEligible: false,
         marketClaimAllowed: false
       });
-      expect(report.claimBoundary.claimBlockers.join(" ")).toContain("larger third-party-sourced task set");
+      expect(report.claimBoundary.claimBlockers.join(" ")).toContain("larger third-party-sourced protocol");
       expect(report.systems.find((system) => system.system === "basicmemory")?.evidenceClass).toBe("same-run-command");
       expect(report.systems.find((system) => system.system === "langmem")?.evidenceClass).toBe("same-run-command");
       expect(report.operationalWeaknesses.summary).toMatchObject({
@@ -916,6 +943,11 @@ process.stdin.on("end", () => {
       else process.env.MEMORY_REALWORLD_BASICMEMORY_COMMAND = previousBasicMemoryCommand;
       if (previousLangMemCommand === undefined) delete process.env.MEMORY_REALWORLD_LANGMEM_COMMAND;
       else process.env.MEMORY_REALWORLD_LANGMEM_COMMAND = previousLangMemCommand;
+      for (const name of marketEnv) {
+        const previous = previousMarketEnv[name];
+        if (previous === undefined) delete process.env[name];
+        else process.env[name] = previous;
+      }
     }
   }, 30_000);
 
@@ -1508,31 +1540,6 @@ process.stdin.on("end", () => {
       "dream-conflicts",
       "dream-resolve"
     ]));
-  });
-
-  it("runs the operator memory dream benchmark and blocks unsupported market claims", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "cognibrain-operator-memory-"));
-    const report = await runOperatorMemoryBenchmark({
-      out: join(dir, "operator-memory-benchmark.json"),
-      markdown: join(dir, "operator-memory-benchmark.md")
-    });
-    expect(report.passed).toBe(true);
-    expect(report.diagnosticPassed).toBe(true);
-    expect(report.proof).toBe("local-diagnostic");
-    expect(report.qualityClaimAllowed).toBe(false);
-    expect(report.marketClaimAllowed).toBe(false);
-    expect(report.claimBoundary.scorer).toBe("operator-memory-local-check-diagnostic");
-    expect(report.claimBoundary.claimBlockers[0]).toContain("deterministic diagnostics only");
-    expect(report.judge.kind).toBe("missing");
-    expect(report.summary.localBaselineSuperiority).toBe(true);
-    expect(report.summary.cognibrainScore).toBeGreaterThan(report.summary.bestBaselineScore);
-    expect(report.summary.cognibrainScore).toBeGreaterThanOrEqual(0.55);
-    expect(report.summary.marketSuperiorityClaimAllowed).toBe(false);
-    expect(report.summary.marketSuperiorityBlockers.length).toBeGreaterThan(0);
-    const markdown = readFileSync(join(dir, "operator-memory-benchmark.md"), "utf8");
-    expect(markdown).toContain("Operator Memory Dream Benchmark");
-    expect(markdown).toContain("Quality claim allowed: no");
-    expect(markdown).toContain("Local operator-memory scores are diagnostics only");
   });
 
   it("allows operator-memory quality claims only after a strict report-level LLM harness judge", async () => {

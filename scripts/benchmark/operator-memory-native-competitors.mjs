@@ -133,6 +133,7 @@ function writeReport(details) {
       capabilityGaps: system.capabilityGaps
     })),
     summary: details.operatorMemory?.summary ?? null,
+    marketProofGate: details.operatorMemory?.marketProofGate ?? null,
     realCompetitorRuns: (details.operatorMemory?.systems ?? []).filter((system) => system.system !== "cognibrain-dream" && ["same-run-native", "same-run-cloud-api"].includes(system.proofLevel)).length,
     judgeReadiness: {
       scenarioJudgeCommandConfigured: Boolean(env.MEMORY_OPERATOR_MEMORY_JUDGE_COMMAND),

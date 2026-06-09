@@ -2,7 +2,9 @@
 
 Self-hosted engineering memory for coding agents.
 
-Cognibrain stores durable engineering context such as repo rules, reviewer corrections, failed commands, connector events and patch evidence, then returns compact context before the next agent action. The practical promise is simple: Stop fixing the same agent mistake twice.
+Your agent should not rediscover the same repo rules, failed commands, reviewer corrections and release constraints every session. Cognibrain stores durable engineering context, retrieves the compact parts that matter before the next action, warns before known bad actions, and records patch evidence after the work is done.
+
+The practical promise is simple: Stop fixing the same agent mistake twice.
 
 ```bash
 npm i @cognilabz/cognibrain
@@ -10,7 +12,22 @@ npx cognibrain init --yes
 npx cognibrain status
 ```
 
-`init` defaults to the `solo-dev` profile. That writes local setup state, Codex/Cursor harness files, local JSON storage, local-only auth, a GitHub connector stub, and a SQLite storage adapter stub. The default command shows a stable operator CLI snapshot with runtime state, memory health, connections and next actions. It is intentionally text-first, so it works in small panes, CI logs and remote shells.
+`init` defaults to the `solo-dev` profile. It writes local setup state, Codex/Cursor harness files, local JSON storage, local-only auth, a GitHub connector stub and a SQLite storage adapter stub. The default command shows a stable operator CLI snapshot with runtime state, memory health, connections and next actions. It is intentionally text-first, so it works in small panes, CI logs and remote shells.
+
+## What Cognibrain Is
+
+Cognibrain is a local/self-hosted memory layer for engineering agents. It is not just a vector store and not just a prompt file. The current repo implements a few cooperating surfaces:
+
+| Layer | What it does | Evidence |
+| --- | --- | --- |
+| Capture | Records repo rules, user corrections, connector events, tool outcomes, patch evidence and source refs. | `src/api/service/`, `src/cli/memctl/`, `src/connectors/` |
+| Retrieval | Builds scored evidence packs and coding context packs with semantic, lexical, graph, trust, temporal and access signals. | `src/core/retrieval.ts`, `src/api/service/searchRuntime.ts` |
+| Truth and safety | Keeps claim/current-truth decisions, suppresses superseded claims and excludes unsafe evidence from injected context. | `src/core/truthGate.ts`, `tests/core.test.ts` |
+| Action guard | Checks a planned shell command or file edit against prior corrections and risk signals before the action runs. | `bin/lib/lifecycleCli.mjs`, `src/api/service/engineering.ts` |
+| Feedback loop | Tracks whether injected memories were accepted or rejected and uses that signal to update retrieval profiles and dream policy. | `src/cli/memctl/reflectionCommands.ts`, `tests/core-integrations.test.ts` |
+| Proof | Publishes bounded audits and benchmark artifacts without turning diagnostics into market claims. | `scripts/release/`, `src/eval/`, `docs/evidence.md` |
+
+The important design choice: injected memory is useful only when it is usable. Cognibrain keeps review-only, low-confidence, stale, conflicted or unsafe memories visible in diagnostics, but blocks them from the context body until the relevant claim/evidence gate says they are safe enough to inject.
 
 ## Public Surface
 
@@ -44,8 +61,7 @@ npm install
 ./bin/cognibrain.mjs doctor --fix
 ```
 
-The browser Operator UI is an optional commercial add-on. It is not included in
-the MIT npm package; licensed checkouts can start it with:
+The browser Operator UI is an optional commercial add-on. It is not included in the MIT npm package; licensed checkouts can start it with:
 
 ```bash
 npx cognibrain dashboard
@@ -53,14 +69,32 @@ npx cognibrain dashboard
 
 More detail: [docs/install.md](docs/install.md).
 
-## Daily Usage
+## Daily Lifecycle
+
+Ask for context before work:
 
 ```bash
-npx cognibrain memories add "This repo uses npm test before release."
+npx cognibrain context --task "prepare the release patch" --json
 npx cognibrain memories coding-context "prepare the release patch"
+```
+
+Check a risky action before doing it:
+
+```bash
 npx cognibrain guard --action "edit src/api/server.ts" --json
+```
+
+Record the outcome and patch evidence:
+
+```bash
+npx cognibrain outcome --command "npm test" --exit-code 0 --json
 npx cognibrain patch-evidence --task "release patch" --json
-npx cognibrain proof
+```
+
+Feed back whether injected memories were actually useful:
+
+```bash
+npx cognibrain memory feedback-injection "release graph proof" accepted mem_1,mem_2
 ```
 
 For MCP-capable agents, MCP is an optional native adapter. The default integration path is still the CLI lifecycle because every shell-capable coding agent and CI runner can call it:
@@ -74,6 +108,28 @@ npx cognibrain health --json
 ```
 
 `cognibrain harness ...` remains a backward-compatible alias for existing scripts.
+
+## Why It Is Different
+
+Many memory tools stop at storage plus search. Cognibrain is built around engineering execution:
+
+- It separates memory that may be useful from memory that is safe to inject.
+- It keeps claim boundaries explicit through current-truth records, evidence packs and `unsafeToInject`.
+- It uses action guards before commands or edits, not only recall after the fact.
+- It records patch evidence so later sessions can connect decisions to changed files and verification commands.
+- It exposes compact text/JSON surfaces first, so agents, humans and CI can all use the same lifecycle.
+
+## Honest Boundaries
+
+This repo is intentionally strict about claims:
+
+- Benchmark results are documented from the checked artifacts under `artifacts/`; local diagnostic scores are not presented as public market proof unless the corresponding judge/market gate allows that claim.
+- Connector drivers and fixtures are present, but tenant verification or production certification requires live signed artifacts and owner approval.
+- Postgres-backed deployments need their own database, auth and secret configuration.
+- The Operator UI is a separately licensed add-on, not part of the MIT npm package.
+- Generated artifacts are local review outputs and are not shipped as source documentation.
+
+The short version: the README can sell the product, but proof still comes from current code, tests, generated artifacts, audits and CI.
 
 ## Connectors
 
@@ -114,12 +170,22 @@ python3 -m unittest discover -s tests
 
 See [docs/integrations.md](docs/integrations.md) and [sdk/python/README.md](sdk/python/README.md).
 
-## Benchmarks
+## Benchmarks And Proof
 
-Benchmark results are documented from the checked artifacts under
-`artifacts/`. The public benchmark page shows the current result rows, proof
-levels and dataset hash; it does not describe benchmark execution as product
-evidence.
+Use these when you need code-backed confidence:
+
+```bash
+npm test
+npm run build
+npm run release:check
+npm run internal -- audit:truth
+npm run internal -- audit:plan-gaps
+npm run internal -- proof:plan
+```
+
+Benchmark results are documented from the checked artifacts under `artifacts/`. The public benchmark page shows current result rows, proof levels and dataset hashes; it does not describe benchmark execution as product evidence.
+
+See [docs/benchmarks.md](docs/benchmarks.md), [docs/status.md](docs/status.md) and [docs/evidence.md](docs/evidence.md).
 
 ## Development
 

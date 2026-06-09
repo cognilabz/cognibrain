@@ -20,6 +20,7 @@ const files = {
   helpers: read("src/api/server/helpers.ts"),
   dreamRoutes: read("src/api/server/dreamRoutes.ts"),
   dreamRuntime: read("src/api/service/memoryServiceDreamEngineering.ts"),
+  dreamWorkerRuntime: read("src/api/service/dreamRuntime.ts"),
   memoryService: read("src/api/service/memoryService.ts"),
   searchRuntime: read("src/api/service/searchRuntime.ts"),
   truthGate: read("src/core/truthGate.ts"),
@@ -37,7 +38,8 @@ const files = {
   planGaps: readJson("artifacts/plan-gaps-audit.json", { passed: false, checks: [] }),
   connectorCertification: readJson("artifacts/connector-certification.json", { passed: false, rows: [] }),
   arena: readJson("artifacts/arena/run.json", { systems: [], claimBoundary: {} }),
-  cognicode: readJson("artifacts/cognicodebench/run.json", { scenarioCount: 0, claimBoundary: {} })
+  cognicode: readJson("artifacts/cognicodebench/run.json", { scenarioCount: 0, claimBoundary: {} }),
+  operatorMemoryBenchmark: readJson("artifacts/operator-memory-benchmark.json", { marketProofGate: {}, marketClaimAllowed: false })
 };
 
 const checks = [
@@ -131,8 +133,24 @@ const checks = [
     files.dreamRuntime.includes("leaseDreamJob"),
     files.dreamRuntime.includes("queueOnly"),
     files.dreamRuntime.includes("runDreamJobWorkerOnce"),
+    files.dreamWorkerRuntime.includes("productionAsyncRepository?.dreamJobRepository"),
+    files.dreamWorkerRuntime.includes("repository.queue"),
+    files.dreamWorkerRuntime.includes("repository.claimDueJob"),
+    files.dreamWorkerRuntime.includes("repository.completeJob"),
+    files.dreamRuntime.includes("repository?.completeJob"),
+    files.dreamRuntime.includes("repository?.retryJob"),
+    files.dreamRuntime.includes("cancelDreamJobAsync"),
+    files.dreamRoutes.includes("await defaultService.cancelDreamJobAsync"),
+    files.lifecycleCli.includes("boolOption(options, \"wait\")"),
+    files.dreamRoutes.includes("body.wait"),
+    files.cliTests.includes("\"release-prepare\", \"--user\", \"harness-all-daemon\", \"--repo\", \"demo/harness-all\", \"--wait\""),
     files.coreTests.includes("persists dream job queue state across service restarts"),
     files.coreTests.includes("resumes queued dream jobs through a worker after service restart"),
+    files.coreTests.includes("prevents duplicate dream job execution across two durable lease workers"),
+    files.coreTests.includes("runs dream workers from the async repository queue when available"),
+    files.coreTests.includes("queues started dream jobs through the async repository before waiting"),
+    files.coreTests.includes("persists dream cancel and retry controls through the async repository when available"),
+    files.coreTests.includes("expect(second).toBeUndefined()"),
     files.coreTests.includes("leaseOwner"),
     files.coreTests.includes("releaseBlockers"),
     files.lightweightMcp.includes("memory_dream_job_start"),
@@ -142,6 +160,9 @@ const checks = [
     files.connectorCertification.passed === true,
     (files.connectorCertification.rows ?? []).length >= 10,
     (files.connectorCertification.rows ?? []).some((row) => row.state === "credential-blocked"),
+    /^[a-f0-9]{64}$/.test(String(files.connectorCertification.proofGate?.artifactHash ?? "")),
+    files.connectorCertification.proofGate?.status === "credential-blocked" || files.connectorCertification.proofGate?.tenantClaimAllowed === true,
+    files.connectorCertification.proofGate?.productionClaimAllowed !== true || files.connectorCertification.proofGate?.status === "production-certified",
     files.connectorRuntime.includes("certification:"),
     files.coreTests.includes("productionCertified: false"),
     files.productTruth.checks?.some((item) => item.id === "connector-certification-boundary" && item.passed),
@@ -153,7 +174,12 @@ const checks = [
     files.cognicode.claimBoundary?.marketClaimAllowed === false,
     files.arena.systems?.some((system) => system.system === "cognibrain" && system.proofLevel === "same-run-full"),
     files.arena.claimBoundary?.marketClaimAllowed === false,
-    files.productTruth.checks?.some((item) => item.id === "benchmark-release-claim-boundary" && item.passed)
+    files.operatorMemoryBenchmark.marketClaimAllowed === false,
+    files.operatorMemoryBenchmark.marketProofGate?.status === "blocked",
+    files.operatorMemoryBenchmark.marketProofGate?.checks?.publicArtifactHash === false,
+    files.operatorMemoryBenchmark.marketProofGate?.checks?.vendorOrIndependentProof === false,
+    files.productTruth.checks?.some((item) => item.id === "benchmark-release-claim-boundary" && item.passed),
+    files.productTruth.checks?.some((item) => item.id === "operator-memory-market-proof-boundary" && item.passed)
   ]),
   check("release.goal-proof-gated", "Release, CI and proof scripts include all plan audits and this full-plan proof gate.", [
     files.packageJson.scripts?.["proof:plan"] === "node scripts/release/full-plan-proof.mjs",

@@ -321,6 +321,16 @@ export function evidencePack(service: any, options: SearchOptions & { tokenBudge
           citation: result.citation,
           contradiction: result.contradiction,
           plan: result.queryPlan,
+          truth: result.truth
+            ? {
+                selectedClaimId: result.truth.selectedClaimId,
+                selectedMemoryId: result.truth.selectedMemoryId,
+                currentTruthState: result.truth.currentTruthState,
+                suppressedClaimIds: result.truth.suppressedClaimIds,
+                reason: result.truth.reason,
+                conflictSetId: result.truth.conflictSetId
+              }
+            : undefined,
           unsafeToInject: result.unsafeToInject
         },
         policyDecision,

@@ -31,6 +31,7 @@ interface ConnectorCertificationReport {
   generatedAt: string;
   mode: "connector-certification";
   rows: CertificationRow[];
+  proofGate: ConnectorCertificationProofGate;
   summary: {
     total: number;
     implementationReady: number;
@@ -40,6 +41,21 @@ interface ConnectorCertificationReport {
     failed: number;
   };
   passed: boolean;
+}
+
+interface ConnectorCertificationProofGate {
+  status: "credential-blocked" | "tenant-verified" | "production-certified";
+  artifactHash: string;
+  rowHashes: string[];
+  tenantVerifiedRows: number;
+  productionCertifiedRows: number;
+  signedTenantProofRows: number;
+  ownerApprovedProductionRows: number;
+  requiredForTenantVerification: string[];
+  requiredForProductionCertification: string[];
+  blockers: string[];
+  tenantClaimAllowed: boolean;
+  productionClaimAllowed: boolean;
 }
 
 interface ConnectorCertificationOptions {
@@ -76,11 +92,13 @@ export function generateConnectorCertification(options: ConnectorCertificationOp
     productionCertified: rows.filter((row) => row.state === "production-certified").length,
     failed: rows.filter((row) => row.state === "failed").length
   };
+  const proofGate = connectorCertificationProofGate(rows, artifactPaths);
   const report: ConnectorCertificationReport = {
     schemaVersion: "1.0",
     generatedAt: new Date().toISOString(),
     mode: "connector-certification",
     rows,
+    proofGate,
     summary,
     passed: rows.length >= 19 && summary.failed === 0 && rows.every((row) => row.canBecomeTenantVerified)
   };
@@ -182,6 +200,62 @@ function certificationRow(
   };
 }
 
+function connectorCertificationProofGate(
+  rows: CertificationRow[],
+  artifactPaths: {
+    maturity: string;
+    liveSmoke: string;
+    transport: string;
+    quality: string;
+  }
+): ConnectorCertificationProofGate {
+  const tenantRows = rows.filter((row) => row.state === "tenant-verified" || row.state === "production-certified");
+  const productionRows = rows.filter((row) => row.state === "production-certified");
+  const signedTenantProofRows = rows.filter((row) => row.checks.signedLiveSmokeArtifact && row.checks.tenantLiveSmoke).length;
+  const ownerApprovedProductionRows = rows.filter((row) => row.checks.ownerApprovedProductionArtifact && row.checks.productionCertification).length;
+  const tenantClaimAllowed = tenantRows.length > 0 && tenantRows.length === signedTenantProofRows;
+  const productionClaimAllowed = productionRows.length > 0 && productionRows.length === ownerApprovedProductionRows && productionRows.every((row) => row.checks.tenantLiveSmoke);
+  const blockers = [
+    ...(!tenantClaimAllowed ? ["no signed tenant live-smoke row is claimable"] : []),
+    ...(!productionClaimAllowed ? ["no owner-approved production certification row is claimable"] : []),
+    ...rows.filter((row) => row.state === "failed").map((row) => `${row.provider}: ${row.blockedBy.join(", ")}`)
+  ];
+  const rowHashes = rows.map((row) => row.artifactHash).sort();
+  const artifactHash = hashCertificationRow({
+    schemaVersion: "1.0",
+    mode: "connector-certification-proof-gate",
+    rowHashes,
+    tenantVerifiedRows: tenantRows.length,
+    productionCertifiedRows: productionRows.length,
+    signedTenantProofRows,
+    ownerApprovedProductionRows,
+    artifactPaths
+  });
+  return {
+    status: productionClaimAllowed ? "production-certified" : tenantClaimAllowed ? "tenant-verified" : "credential-blocked",
+    artifactHash,
+    rowHashes,
+    tenantVerifiedRows: tenantRows.length,
+    productionCertifiedRows: productionRows.length,
+    signedTenantProofRows,
+    ownerApprovedProductionRows,
+    requiredForTenantVerification: [
+      "MEMORY_VENDOR_LIVE_SMOKE=true",
+      "provider credentials configured outside the artifact",
+      "live-smoke provider row with signature.status=verified"
+    ],
+    requiredForProductionCertification: [
+      "tenant verification proof",
+      "ownerApproval.status=approved",
+      "ownerApproval.actor",
+      "ownerApproval.signedAt"
+    ],
+    blockers,
+    tenantClaimAllowed,
+    productionClaimAllowed
+  };
+}
+
 function connectorCapabilities(
   row: Record<string, unknown>,
   qualityRow: Record<string, unknown> | undefined,
@@ -247,6 +321,8 @@ function renderMarkdown(report: ConnectorCertificationReport): string {
 Generated at ${report.generatedAt}.
 
 This page is the production-certification boundary. A row can be implementation-ready without being tenant-verified. Tenant verification requires real customer or deployment credentials and \`MEMORY_VENDOR_LIVE_SMOKE=true npm run internal -- verify:vendor-live\`. Production certification requires an owner-approved deployment artifact; ${certificationBoundary}.
+
+Proof gate: \`${report.proofGate.status}\`; artifact hash \`${report.proofGate.artifactHash}\`; tenant claims ${report.proofGate.tenantClaimAllowed ? "allowed" : "blocked"}; production claims ${report.proofGate.productionClaimAllowed ? "allowed" : "blocked"}.
 
 | Provider | State | Can become tenant verified | Tenant live smoke | Production certified | Blocked by |
 | --- | --- | ---: | ---: | ---: | --- |

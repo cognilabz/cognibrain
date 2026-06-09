@@ -21,6 +21,28 @@ cognibrain service install --activate
 
 The CLI is stable text output by default and supports JSON where automation needs it.
 
+## Context Lifecycle
+
+The useful loop is:
+
+1. Retrieve a context or coding-context pack before work.
+2. Use delivered context first; if the evidence pack already answers the question, avoid rediscovering the same fact with another search.
+3. Run an action guard before edits, destructive commands, release work or credential-sensitive operations.
+4. Record command outcomes while the result is still fresh.
+5. Record patch evidence with the task, files changed, commands run and memory ids used.
+6. Send injection feedback when a delivered memory was accepted or rejected.
+
+```bash
+cognibrain context --task "prepare release patch" --json
+cognibrain guard --action "npm test" --json
+cognibrain outcome --command "npm test" --exit-code 0 --json
+cognibrain patch-evidence --task "release patch" --files package.json --commands "npm test" --json
+cognibrain memory feedback-injection "release proof" accepted mem_1,mem_2
+```
+
+This feedback path is what lets Cognibrain measure whether retrieved memories
+were actually useful, rather than only measuring whether they matched a query.
+
 ## Harness CLI
 
 `cognibrain harness ...` is the JSON-first lifecycle path for any agent host, git hook or CI runner that can execute shell commands. Top-level lifecycle commands such as `cognibrain context`, `cognibrain guard` and `cognibrain outcome` share the same contract.

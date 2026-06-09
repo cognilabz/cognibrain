@@ -49,6 +49,7 @@ const files = {
   operatorMemoryNativeCompetitorBenchmark: read("scripts/benchmark/operator-memory-native-competitors.mjs"),
   operatorMemoryNativePythonRunner: read("scripts/benchmark/competitors/operator_memory_native_runner.py"),
   operatorMemoryNativePythonRunnerWrapper: read("scripts/benchmark/competitors/operator-memory-native-python-runner.mjs"),
+  operatorMemoryMarketTests: read("tests/operator-memory-market.test.ts"),
   basicMemoryExternalRunner: read("scripts/benchmark/competitors/basic_memory_external_runner.py"),
   realworldNativeCompetitorBenchmark: read("scripts/benchmark/benchmark-realworld-native-competitors.mjs"),
   hardArenaBenchmark: read("scripts/benchmark/benchmark-hard-arena.mjs"),
@@ -88,7 +89,7 @@ const files = {
   cliTests: read("tests/cli.test.ts"),
   coreTests: read("tests/core.test.ts"),
   coreIntegrationTests: read("tests/core-integrations.test.ts"),
-  evaluationTests: readMany(["tests/evaluation.test.ts", "tests/openai-runner-judges.test.ts"]),
+  evaluationTests: readMany(["tests/evaluation.test.ts", "tests/openai-runner-judges.test.ts", "tests/realworld-market.test.ts", "tests/realworld-protocol.test.ts"]),
   storageAdapter: read("src/core/storageAdapter.ts"),
   runtimeEnvSource: read("src/core/runtimeEnv.ts"),
   cliRuntimeEnvSource: read("bin/lib/runtimeEnv.mjs"),
@@ -133,6 +134,12 @@ const webhookRows = Array.isArray(files.connectorWebhooks.rows) ? files.connecto
 const webhookVerifiedRows = maturityRows.filter((row) => row?.maturity?.webhook === true);
 const certificationRows = Array.isArray(files.connectorCertification.rows) ? files.connectorCertification.rows : [];
 const certificationCredentialBlockedRows = certificationRows.filter((row) => row?.state === "credential-blocked");
+const certificationTenantVerifiedRows = certificationRows.filter((row) => row?.state === "tenant-verified" || row?.state === "production-certified");
+const certificationProductionCertifiedRows = certificationRows.filter((row) => row?.state === "production-certified");
+const connectorCertificationProofGate = files.connectorCertification.proofGate && typeof files.connectorCertification.proofGate === "object" ? files.connectorCertification.proofGate : {};
+const certificationTenantClaimAllowed = connectorCertificationProofGate.tenantClaimAllowed === true && connectorCertificationProofGate.status !== "credential-blocked";
+const certificationProductionClaimAllowed = connectorCertificationProofGate.productionClaimAllowed === true && connectorCertificationProofGate.status === "production-certified";
+const certificationArtifactHashPresent = typeof connectorCertificationProofGate.artifactHash === "string" && /^[a-f0-9]{64}$/.test(connectorCertificationProofGate.artifactHash);
 const qualityRows = Array.isArray(files.connectorQuality.rows) ? files.connectorQuality.rows : [];
 const priorityWebhookProviders = new Set(["github", "jira", "confluence", "notion", "linear", "gitlab", "slack", "teams", "sentry", "pagerduty"]);
 const harnessRows = Array.isArray(files.harnessMaturity.rows) ? files.harnessMaturity.rows : [];
@@ -330,7 +337,19 @@ const bodyLimitPresent = /bodyLimit|maxBody|payload too large|413/i.test(files.s
 const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmarks, files.integrations, files.operations, files.evidence, files.status, files.sameBenchmark].join("\n\n");
 const realworldArtifacts = Array.isArray(files.realworldProtocol.currentArtifacts) ? files.realworldProtocol.currentArtifacts : [];
 const realworldEligibleArtifacts = Array.isArray(files.realworldProtocol.leaderboardEligibleArtifacts) ? files.realworldProtocol.leaderboardEligibleArtifacts : [];
-const realworldAllClassified = realworldArtifacts.length >= 6 && realworldArtifacts.every((artifact) => artifact?.path && artifact?.className && artifact.leaderboardEligible === false && Array.isArray(artifact.missingForLeaderboard));
+const realworldMarketProofGate = Array.isArray(files.realworldProtocol.marketProofGate?.required) &&
+  files.realworldProtocol.marketProofGate.required.includes("public immutable artifact hash for the exact judged run") &&
+  files.realworldProtocol.marketProofGate.required.includes("independent replication artifact hash") &&
+  files.realworldProtocol.marketProofGate.required.includes("third-party protocol with at least 30 tasks") &&
+  files.realworldProtocol.marketProofGate.required.includes("preregistered latency and cost budgets") &&
+  files.realworldProtocol.marketProofGate.sourceEnv?.includes("MEMORY_REALWORLD_PUBLIC_ARTIFACT_HASH") &&
+  files.realworldProtocol.marketProofGate.sourceEnv?.includes("MEMORY_REALWORLD_INDEPENDENT_REPLICATION_HASH") &&
+  files.realworldProtocol.marketProofGate.minThirdPartyTasks === 30 &&
+  files.realworldProtocol.marketProofGate.runtimeGate === "src/eval/realworldBlackbox.ts" &&
+  files.evaluationTests.includes("publishes concrete market proof blockers instead of stale broad leaderboard language");
+const realworldAllClassified = realworldArtifacts.length >= 6 &&
+  realworldMarketProofGate &&
+  realworldArtifacts.every((artifact) => artifact?.path && artifact?.className && artifact.leaderboardEligible === false && Array.isArray(artifact.missingForLeaderboard));
 const realworldNativeProtocolArtifact = realworldArtifacts.find((artifact) => artifact?.path === "artifacts/realworld-native-competitors.json");
 const realworldOriginalRawOutputSystems = (files.realworldNativeCompetitors.systems ?? [])
   .filter((system) => system?.evidenceClass === "same-run-command" && Number(system.rawOutputCount ?? 0) >= 15)
@@ -387,12 +406,17 @@ const realworldEvidenceHarnessIsolation = files.realworldBlackboxSource.includes
   files.evaluationTests.includes("MEMORY_REALWORLD_EVIDENCE_COMMAND");
 const realworldBlackboxHarnessReady = files.realworldBlackbox.manifestHash?.length === 64 && files.realworldBlackbox.leaderboardEligible === false && files.realworldBlackbox.eligibilityGate?.manifestCoverageReady === true && files.realworldBlackbox.eligibilityGate?.rawOutputsRetained === true && files.realworldBlackbox.eligibilityGate?.costLatencyRecorded === true && files.realworldBlackbox.eligibilityGate?.resourceTelemetryRecorded === true && realworldBlackboxRawRetained && realworldBlackboxJudgeBlocked && realworldJudgeReadinessProof && benchmarkHarnessScopedOpenAiSecrets && realworldEvidenceHarnessIsolation;
 const realworldBlackboxMarketGateStrict = files.realworldBlackboxSource.includes("cognibrainComparativeSmokeEligible") &&
-  files.realworldBlackboxSource.includes("leaderboardEligibleSystems: []") &&
+  files.realworldBlackboxSource.includes("leaderboardEligibleSystems: leaderboardEligible ? comparativeSmokeEligibleSystems : []") &&
   files.realworldBlackboxSource.includes("originalCompetitorEligibleSystems.length >= 2") &&
   files.realworldBlackboxSource.includes('system.system !== "cognibrain"') &&
   files.realworldBlackboxSource.includes('system.evidenceClass === "same-run-command"') &&
   files.realworldBlackboxSource.includes("system.comparativeSmokeEligible") &&
-  files.realworldBlackboxSource.includes("Cognibrain plus at least 2");
+  files.realworldBlackboxSource.includes("publicArtifactHashPresent") &&
+  files.realworldBlackboxSource.includes("independentReplicationPresent") &&
+  files.realworldBlackboxSource.includes("preregisteredCostLatencyBudgets") &&
+  files.realworldBlackboxSource.includes("MIN_THIRD_PARTY_MARKET_TASKS") &&
+  files.realworldBlackboxSource.includes("Cognibrain plus at least 2") &&
+  files.evaluationTests.includes("opens real-world market leaderboard eligibility only with public hash and independent replication proof");
 const realworldNativeCompetitorPath = files.internalRunner.includes("benchmark-realworld-native-competitors.mjs") &&
   files.realworldNativeCompetitorBenchmark.includes("realworld-native-competitor-run") &&
   files.realworldNativeCompetitorBenchmark.includes("basic_memory_realworld_runner.py") &&
@@ -477,6 +501,7 @@ const thirdPartyOssSources = [
   "https://github.com/vercel/next.js/issues/78957",
   "https://github.com/pytest-dev/pytest-asyncio/issues/293"
 ];
+const minRealworldThirdPartyOssQueries = 30;
 const realworldThirdPartyOssEvents = Array.isArray(files.realworldBlackbox?.manifest?.events)
   ? files.realworldBlackbox.manifest.events.filter((event) => event?.bucket === "third-party-oss-workflows")
   : [];
@@ -491,23 +516,34 @@ const realworldThirdPartyOssBucket =
   thirdPartyOssSources.every((source) => files.realworldBlackboxSource.includes(source)) &&
   realworldThirdPartyOssEvents.length >= 3 &&
   realworldThirdPartyOssEvents.every((event) => typeof event?.source === "string" && event.source.startsWith("https://github.com/")) &&
-  realworldThirdPartyOssQueries.length >= 3 &&
+  realworldThirdPartyOssQueries.length >= minRealworldThirdPartyOssQueries &&
   files.realworldProtocol?.thirdPartyOssSourceEvidence?.present === true &&
+  files.realworldProtocol?.thirdPartyOssSourceEvidence?.queryCount >= minRealworldThirdPartyOssQueries &&
   thirdPartyOssSources.every((source) => protocolThirdPartyOssSources.includes(source)) &&
   files.evaluationTests.includes("third-party-oss-workflows") &&
   files.evaluationTests.includes("https://github.com/");
 const realworldSmokeMarketBoundary = files.realworldBlackboxSource.includes("comparativeSmokeEligible") &&
   files.realworldBlackboxSource.includes("marketClaimAllowed") &&
-  files.realworldBlackboxSource.includes("leaderboardEligibleSystems: []") &&
+  files.realworldBlackboxSource.includes("leaderboardEligibleSystems: leaderboardEligible ? comparativeSmokeEligibleSystems : []") &&
   files.realworldBlackboxSource.includes("system.comparativeSmokeEligible") &&
   files.realworldBlackboxSource.includes("comparativeSmokeEligible: originalRun") &&
-  files.realworldBlackboxSource.includes("leaderboardEligible: false") &&
+  files.realworldBlackboxSource.includes("publicArtifactHashPresent") &&
+  files.realworldBlackboxSource.includes("thirdPartyProtocolReady") &&
+  files.realworldBlackboxSource.includes("independentReplicationPresent") &&
+  files.realworldBlackboxSource.includes("MEMORY_REALWORLD_PUBLIC_ARTIFACT_HASH") &&
+  files.realworldBlackboxSource.includes("MEMORY_REALWORLD_INDEPENDENT_REPLICATION_HASH") &&
+  files.realworldBlackboxSource.includes("market-leaderboard-eligible") &&
   files.realworldBlackboxSource.includes("comparative-smoke-eligible-results-not-market-leaderboard") &&
-  files.realworldBlackboxSource.includes("Market leaderboard claims require a larger third-party-sourced task set") &&
+  files.realworldBlackboxSource.includes("Market leaderboard claims require a public immutable artifact hash") &&
+  files.realworldBlackboxSource.includes("Market leaderboard claims require a larger third-party-sourced protocol") &&
   files.realworldBlackboxSource.includes("claimBoundary") &&
+  files.realworldBlackbox.leaderboardEligible === false &&
+  files.realworldBlackbox.marketClaimAllowed === false &&
   files.evaluationTests.includes("comparative smoke eligibility without market claims") &&
   files.evaluationTests.includes("report.leaderboardEligibleSystems).toEqual([]") &&
-  files.evaluationTests.includes("marketClaimAllowed).toBe(false)");
+  files.evaluationTests.includes("marketClaimAllowed).toBe(false)") &&
+  files.evaluationTests.includes("opens real-world market leaderboard eligibility only with public hash and independent replication proof") &&
+  files.evaluationTests.includes("report.marketClaimAllowed).toBe(true)");
 const benchmarkReleaseRows = Array.isArray(files.benchmarkRelease.releases) ? files.benchmarkRelease.releases : [];
 const benchmarkReleaseClaimBoundary = files.benchmarkRelease.passed === true &&
   files.benchmarkRelease.publication?.qualityClaimAllowed === false &&
@@ -591,6 +627,25 @@ const operatorMemoryQualityClaimBoundary = files.operatorMemoryBenchmarkSource.i
   !files.operatorMemoryNativeCompetitorBenchmark.includes("env.MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND =") &&
   files.operatorMemoryNativeCompetitorBenchmark.includes("MEMORY_OPERATOR_MEMORY_QUALITY_JUDGE_COMMAND") &&
   files.evaluationTests.includes("records OpenAI-compatible operator-memory report quality judge usage, cost and latency");
+const operatorMemoryMarketProofGate = files.operatorMemoryBenchmark.marketProofGate && typeof files.operatorMemoryBenchmark.marketProofGate === "object" ? files.operatorMemoryBenchmark.marketProofGate : {};
+const operatorMemoryMarketProofBoundary = files.operatorMemoryBenchmarkSource.includes("marketProofGate") &&
+  files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_PUBLIC_ARTIFACT_HASH") &&
+  files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_INDEPENDENT_REPLICATION_HASH") &&
+  files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_VENDOR_SIGNED_ARTIFACT_HASH") &&
+  files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_LIVE_CONNECTOR_PROOF_HASH") &&
+  files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_THIRD_PARTY_PROTOCOL") &&
+  files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_PREREGISTERED_BUDGETS") &&
+  !files.operatorMemoryBenchmarkSource.includes("MEMORY_OPERATOR_MEMORY_INDEPENDENT_PROOF === \"true\"") &&
+  files.operatorMemoryBenchmark.marketClaimAllowed === false &&
+  operatorMemoryMarketProofGate.status === "blocked" &&
+  operatorMemoryMarketProofGate.checks?.publicArtifactHash === false &&
+  operatorMemoryMarketProofGate.checks?.liveConnectorProofHash === false &&
+  operatorMemoryMarketProofGate.checks?.vendorOrIndependentProof === false &&
+  Array.isArray(operatorMemoryMarketProofGate.required) &&
+  operatorMemoryMarketProofGate.required.includes("public immutable artifact hash") &&
+  Array.isArray(operatorMemoryMarketProofGate.blockers) &&
+  operatorMemoryMarketProofGate.blockers.some((item) => typeof item === "string" && item.includes("MEMORY_OPERATOR_MEMORY_PUBLIC_ARTIFACT_HASH")) &&
+  files.operatorMemoryMarketTests.includes("operator-memory market proof gate requires artifact hashes instead of boolean proof flags");
 const cognicodeArtifactRequiredProof = Array.isArray(files.cognicodeBench.methodology?.requiredExternalProofForQualityClaim) && files.cognicodeBench.methodology.requiredExternalProofForQualityClaim.includes("ablation baselines may simulate from visible repo metadata only; hidden expected commands and files stay evaluator-only");
 const cognicodeArtifactBaselineBoundary = Array.isArray(files.cognicodeBench.baselines) && files.cognicodeBench.baselines.length > 0 && files.cognicodeBench.baselines.every((baseline) => Array.isArray(baseline.notes) && baseline.notes.some((note) => typeof note === "string" && note.includes("hidden expected commands/files are evaluator-only")));
 const cognicodeArtifactAblationBoundary = files.cognicodeBench.ablation && Object.keys(files.cognicodeBench.ablation).filter((name) => name !== "cognibrain_full").every((name) => Array.isArray(files.cognicodeBench.ablation[name]?.notes) && files.cognicodeBench.ablation[name].notes.some((note) => typeof note === "string" && note.includes("hidden expected commands/files are evaluator-only")));
@@ -709,12 +764,14 @@ const checks = [
   ]), "fail", {
     docs: ["README.md", "docs/benchmarks.md", "docs/evidence.md"]
   }),
-  check("realworld-benchmark-boundary", "Real-world benchmark protocol demotes current adapted/internal artifacts from comparative leaderboard evidence.", realworldAllClassified && realworldEligibleArtifacts.length === 0 && docsContainAll([
+  check("realworld-benchmark-boundary", "Real-world benchmark protocol demotes current adapted/internal artifacts from comparative leaderboard evidence and publishes concrete market-proof blockers.", realworldAllClassified && realworldEligibleArtifacts.length === 0 && docsContainAll([
     "The real-world protocol currently classifies 0 checked artifacts as fair",
     "Cognibrain-shaped",
-    "custom-adapter-diagnostic"
+    "custom-adapter-diagnostic",
+    "public immutable artifact hash"
   ]), "fail", {
     artifact: "artifacts/realworld-benchmark-protocol.json",
+    marketProofGate: files.realworldProtocol.marketProofGate,
     classifiedArtifacts: realworldArtifacts.map((artifact) => `${artifact.path}:${artifact.className}:${artifact.leaderboardEligible ? "eligible" : "not-eligible"}`),
     leaderboardEligibleArtifacts: realworldEligibleArtifacts
   }),
@@ -766,7 +823,7 @@ const checks = [
     summary: files.realworldBlackbox?.operationalWeaknesses?.summary,
     rawErrorClasses: files.realworldBlackbox?.operationalWeaknesses?.rawErrorClasses?.map((item) => item.className)
   }),
-  check("realworld-third-party-oss-workflows", "Real-world black-box coverage includes a third-party OSS workflow bucket sourced from public GitHub issues, and protocol evidence keeps those source URLs visible without allowing market claims.", realworldThirdPartyOssBucket, "fail", {
+  check("realworld-third-party-oss-workflows", "Real-world black-box coverage includes at least 30 preregistered third-party OSS workflow queries sourced from public GitHub issues, and protocol evidence keeps those source URLs visible without allowing market claims.", realworldThirdPartyOssBucket, "fail", {
     source: "src/eval/realworldBlackbox.ts",
     tests: "tests/evaluation.test.ts",
     artifacts: ["artifacts/realworld-blackbox.json", "artifacts/realworld-benchmark-protocol.json"],
@@ -831,6 +888,11 @@ const checks = [
   }),
   check("operator-memory-quality-claim-boundary", "Operator Memory local source-aware checks remain diagnostic-only unless a report-level LLM/harness judge validates quality claims.", operatorMemoryQualityClaimBoundary, "fail", {
     source: "src/eval/operatorMemoryBenchmark.ts"
+  }),
+  check("operator-memory-market-proof-boundary", "Operator Memory market-superiority claims require concrete public, connector, independent/vendor and protocol proof artifacts instead of boolean proof flags.", operatorMemoryMarketProofBoundary, "fail", {
+    source: "src/eval/operatorMemoryBenchmark.ts",
+    artifact: "artifacts/operator-memory-benchmark.json",
+    gate: operatorMemoryMarketProofGate
   }),
   check("cognicodebench-quality-claim-boundary", "CogniCodeBench local scenario, ablation and patch-proposal diagnostics remain claim-blocked unless a report-level LLM/harness judge validates quality; patch planning is separated from hidden expected actions and ablation simulations keep hidden expected commands/files evaluator-only.", cognicodeQualityClaimBoundary, "fail", {
     source: "src/eval/cognicodeBench.ts",
@@ -914,10 +976,18 @@ const checks = [
     rows: qualityRows.length,
     checkedCases: files.connectorQuality.summary?.checkedCases ?? 0
   }),
-  check("connector-certification-boundary", "Connector certification matrix exists and marks tenant certification as credential-blocked unless live tenant proof exists.", files.connectorCertification.passed === true && certificationRows.length >= 19 && certificationCredentialBlockedRows.length >= 19 && productionCertifiedRows.length === 0, "fail", {
+  check("connector-certification-boundary", "Connector certification matrix exists and gates tenant/production claims through artifact-level proof hashes.", files.connectorCertification.passed === true && certificationRows.length >= 19 && certificationArtifactHashPresent && (
+    (connectorCertificationProofGate.status === "credential-blocked" && certificationCredentialBlockedRows.length >= 19 && certificationProductionCertifiedRows.length === 0 && !certificationTenantClaimAllowed && !certificationProductionClaimAllowed) ||
+    (certificationTenantClaimAllowed && Number(connectorCertificationProofGate.signedTenantProofRows ?? 0) > 0 && Number(connectorCertificationProofGate.tenantVerifiedRows ?? 0) > 0) ||
+    (certificationProductionClaimAllowed && Number(connectorCertificationProofGate.ownerApprovedProductionRows ?? 0) > 0 && Number(connectorCertificationProofGate.productionCertifiedRows ?? 0) > 0)
+  ), "fail", {
     artifact: "artifacts/connector-certification.json",
+    proofGate: connectorCertificationProofGate.status,
+    artifactHash: connectorCertificationProofGate.artifactHash,
     credentialBlocked: certificationCredentialBlockedRows.length,
-    productionCertified: productionCertifiedRows.length
+    tenantClaimAllowed: certificationTenantClaimAllowed,
+    productionClaimAllowed: certificationProductionClaimAllowed,
+    productionCertified: certificationProductionCertifiedRows.length
   }),
   check("status-matrix-current", "A current compact implementation status matrix exists with surface/state/evidence columns.", files.status.includes("| Surface | Current state | Evidence anchor |") && countStatusRows(files.status) >= 7 && files.readme.includes("docs/status.md") && files.docsHome.includes("status.md"), "fail", {
     docs: ["docs/status.md", "README.md", "docs/README.md"],
@@ -1089,11 +1159,12 @@ const checks = [
     requestRateLimitPresent,
     bodyLimitPresent
   }),
-  check("gap-connector-certification", "Connector certification workflow is implemented; tenant production certification remains externally credential-gated.", files.connectorCertification.passed === true && certificationRows.length >= 19 && (certificationCredentialBlockedRows.length >= 19 || productionCertifiedRows.length > 0), "gap", {
+  check("gap-connector-certification", "Connector certification workflow is implemented; tenant production certification remains externally credential-gated unless proofGate opens it.", files.connectorCertification.passed === true && certificationRows.length >= 19 && certificationArtifactHashPresent && (certificationCredentialBlockedRows.length >= 19 || certificationTenantClaimAllowed || certificationProductionClaimAllowed), "gap", {
     artifact: "artifacts/connector-certification.json",
+    proofGate: connectorCertificationProofGate.status,
     credentialBlocked: certificationCredentialBlockedRows.length,
-    tenantVerified: liveSmokeRows.length,
-    productionCertified: productionCertifiedRows.length
+    tenantVerified: certificationTenantVerifiedRows.length,
+    productionCertified: certificationProductionCertifiedRows.length
   })
 ];
 
@@ -1124,8 +1195,8 @@ const report = {
     hermeticDrivers: hermeticRows.length,
     liveSmokeReadyConnectors: liveSmokeReadyRows.length,
     apiSpecVerifiedConnectors: apiSpecVerifiedRows.length,
-    tenantLiveSmokes: liveSmokeRows.length,
-    productionCertifiedConnectors: productionCertifiedRows.length,
+    tenantLiveSmokes: certificationTenantVerifiedRows.length,
+    productionCertifiedConnectors: certificationProductionCertifiedRows.length,
     connectorCertificationRows: certificationRows.length,
     connectorCredentialBlockedRows: certificationCredentialBlockedRows.length,
     webhookVerifiedConnectors: webhookVerifiedRows.length,
@@ -1162,7 +1233,7 @@ const report = {
     ["connectors.certificationRows", certificationRows.length, "artifacts/connector-certification.json"],
     ["connectors.credentialBlocked", certificationCredentialBlockedRows.length, "artifacts/connector-certification.json"],
     ["connectors.tenantLiveSmokes", liveSmokeRows.length, "artifacts/vendor-live-smoke.json"],
-    ["connectors.productionCertified", productionCertifiedRows.length, "artifacts/connector-maturity.json"],
+    ["connectors.productionCertified", certificationProductionCertifiedRows.length, "artifacts/connector-certification.json"],
     ["connectors.webhookVerified", webhookVerifiedRows.length, "artifacts/connector-webhooks.json"],
     ["harness.generated", generatedHarnessRows.length, "artifacts/harness-maturity.json"],
     ["harness.goldenPaths", harnessGoldenPaths.length, "artifacts/harness-maturity.json"],
@@ -1233,7 +1304,7 @@ function runtimeStatusReport() {
     readinessRow("Storage", dbPrimaryStorage && memoryRepositoryBoundary && !hardWiredServiceStore ? "MemoryRepository runtime boundary with granular DB row upserts" : dbPrimaryStorage ? "DB row persistence detected, runtime repository boundary incomplete" : "DB-primary repository not detected", "storage reports and Postgres verifier", "connection adapters", "n/a", "tests/core.test.ts, src/eval/postgresLive.ts", "artifacts/postgres-live.json", dbPrimaryStorage && memoryRepositoryBoundary && !hardWiredServiceStore ? "production storage candidate" : "production gap", "Snapshots are backup/compaction artifacts, not the primary write path."),
     readinessRow("Security/Auth", oidcVerifierPresent ? "API keys plus optional JWT/OIDC verifier, actor scopes and RBAC" : "No JWT/OIDC verifier detected", "/health open, other routes protected by configured auth", "doctor/status", "agent tools inherit the API boundary", "tests/api.test.ts", "src/api/server.ts", oidcVerifierPresent ? "enterprise auth candidate" : "production gap", "Deployments still own issuer/audience/key configuration and TLS."),
     readinessRow("Policy/Tenant Isolation", defaultAllowPolicy ? "Policy engine exists, default allow without matching rule" : "Production policy mode default-denies", "policy evaluation routes", "policy and retention commands", "context pack policy decisions", "tests/core.test.ts", "src/api/service.ts", defaultAllowPolicy ? "production gap" : "production policy candidate", "DB-level row isolation is deployment-specific; service-level actor binding is implemented."),
-    readinessRow("Connectors", `${maturityRows.length} connector rows, ${apiSpecVerifiedRows.length} API/spec verified, ${certificationRows.length} certification rows`, "connector sync/poll/writeback", "connections and connector commands", "connector actions through API/SDK", "tests/evaluation.test.ts", "artifacts/connector-certification.json", `${liveSmokeRows.length} tenant-verified, ${productionCertifiedRows.length} production-certified, ${certificationCredentialBlockedRows.length} credential-blocked`, "Native driver and implementation-ready certification do not equal customer production certification."),
+    readinessRow("Connectors", `${maturityRows.length} connector rows, ${apiSpecVerifiedRows.length} API/spec verified, ${certificationRows.length} certification rows`, "connector sync/poll/writeback", "connections and connector commands", "connector actions through API/SDK", "tests/evaluation.test.ts", "artifacts/connector-certification.json", `${certificationTenantVerifiedRows.length} tenant-verified, ${certificationProductionCertifiedRows.length} production-certified, ${certificationCredentialBlockedRows.length} credential-blocked`, "Native driver and implementation-ready certification do not equal customer production certification."),
     readinessRow("Harness Integrations", `${generatedHarnessRows.length} generated packages`, "HTTP fallback for non-MCP helpers", "config all/config refresh", `${harnessRows.filter((row) => row?.maturity?.mcp === true).length} MCP-capable targets`, "tests/cli.test.ts", "artifacts/harness-maturity.json", "generated plus simulator proof", "Vendor-native hooks are claimed only where a row proves them."),
     readinessRow("Benchmarks", "CogniCodeBench and Arena tooling plus hardening artifact exist", "publishable artifacts", "benchmark/proof commands", "n/a", "tests/evaluation.test.ts", "artifacts/benchmark-hardening.json", "immutable synthetic dataset plus public workflow fixtures", "Synthetic/API-shape rows are not vendor certification or field proof."),
     readinessRow("Operations", "Release check, doctor, services and optional Docker exist", "status, metrics and health routes", "service plan/install/status", "maintenance tools", "release:check", "artifacts/release-check.json", "self-hosted production candidate", "Managed SaaS, autoscaling, billing and hosted support are not claimed.")
@@ -1251,8 +1322,8 @@ function runtimeStatusReport() {
   ].filter(Boolean);
   const externalBlockedGaps = [
     liveSmokeRows.length === 0 && "tenant-verified-connectors",
-    productionCertifiedRows.length === 0 && "production-certified-connectors",
-    productionCertifiedRows.length === 0 && "managed-production-certification"
+    certificationProductionCertifiedRows.length === 0 && "production-certified-connectors",
+    certificationProductionCertifiedRows.length === 0 && "managed-production-certification"
   ].filter(Boolean);
   return {
     schemaVersion: "1.0",
@@ -1267,8 +1338,8 @@ function runtimeStatusReport() {
       builtInOidcRbac: oidcVerifierPresent,
       defaultDenyPolicy: !defaultAllowPolicy,
       httpHardened: !corsWildcard && requestRateLimitPresent && bodyLimitPresent,
-      tenantVerifiedConnectors: liveSmokeRows.length,
-      productionCertifiedConnectors: productionCertifiedRows.length,
+      tenantVerifiedConnectors: certificationTenantVerifiedRows.length,
+      productionCertifiedConnectors: certificationProductionCertifiedRows.length,
       connectorCredentialBlockedRows: certificationCredentialBlockedRows.length,
       externalBlockedGaps,
       criticalOpenGaps

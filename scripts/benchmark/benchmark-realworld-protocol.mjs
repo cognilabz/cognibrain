@@ -6,9 +6,20 @@ import { dirname, join } from "node:path";
 const root = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const outputPath = optionValue("--out") ?? "artifacts/realworld-benchmark-protocol.json";
 const markdownPath = optionValue("--markdown") ?? "artifacts/docs/realworld-benchmark-protocol.md";
+const minThirdPartyMarketTasks = 30;
 const openaiIntelligenceSummary = summarizeRealWorldArtifact("artifacts/realworld-blackbox-openai-intelligence.json");
 const nativeCompetitorSummary = summarizeNativeCompetitorArtifact("artifacts/realworld-native-competitors.json");
 const thirdPartyOssSummary = summarizeThirdPartyOssBucket();
+const marketProofBlockers = [
+  "public immutable artifact hash for the exact judged run",
+  "independent replication artifact hash",
+  `third-party protocol with at least ${minThirdPartyMarketTasks} tasks`,
+  "preregistered latency and cost budgets"
+];
+const marketScaleBlockers = [
+  "more original memory systems executed without repair",
+  ...marketProofBlockers
+];
 
 const gate = [
   {
@@ -93,7 +104,7 @@ const currentArtifacts = [
     leaderboardEligible: false,
     why: "Runs a preregistered generic reset/ingest/query/export contract with raw outputs and latency/cost fields, but quality scoring is blocked until an LLM/harness judge is configured and current checked competitors are command-blocked.",
     allowedUse: "Readiness proof for the neutral harness, raw-output diagnostics, and setup/latency visibility for systems that are actually executed.",
-    missingForLeaderboard: ["LLM/harness judge command configured", "at least two original non-baseline systems executed on the same manifest", "external competitor commands configured", "larger third-party-sourced task set"],
+    missingForLeaderboard: ["LLM/harness judge command configured", "at least two original non-baseline systems executed on the same manifest", "external competitor commands configured", ...marketProofBlockers],
   }),
   classifyArtifact({
     path: "artifacts/realworld-blackbox-openai-intelligence.json",
@@ -112,10 +123,10 @@ const currentArtifacts = [
         ? "Comparative raw-output smoke evidence on realworld-blackbox-v1; score, recall, abstention and leakage metrics remain blocked until the shared LLM/harness judge succeeds."
         : "Evidence that provider-driven retrieval can suppress stale/forbidden evidence before the final LLM judge scores delivered outputs.",
     missingForLeaderboard: openaiIntelligenceSummary.originalEligibleSystems >= 2
-      ? ["larger third-party-sourced task set", "more original memory systems executed without repair", "latency and cost budget preregistered for LLM intelligence"]
+      ? marketScaleBlockers
       : openaiIntelligenceSummary.originalRawOutputSystems >= 2
-        ? ["LLM/harness judge command succeeds on the current raw outputs", "larger third-party-sourced task set", "more original memory systems executed without repair", "latency and cost budget preregistered for LLM intelligence"]
-      : ["at least two original non-baseline systems executed on the same manifest", "external competitor commands configured", "larger third-party-sourced task set", "latency and cost budget preregistered for LLM intelligence"],
+        ? ["LLM/harness judge command succeeds on the current raw outputs", ...marketScaleBlockers]
+      : ["at least two original non-baseline systems executed on the same manifest", "external competitor commands configured", ...marketProofBlockers],
   }),
   classifyArtifact({
     path: "artifacts/realworld-blackbox-openai-intelligence-success.json",
@@ -123,7 +134,7 @@ const currentArtifacts = [
     leaderboardEligible: false,
     why: "Stores the most recent scoreable LLM/harness judged run separately from the latest attempt, so credential-blocked reruns do not overwrite scientific success evidence.",
     allowedUse: "Historical successful judged smoke evidence only; use alongside the latest-attempt artifact and never as proof that current credentials or current external state are green.",
-    missingForLeaderboard: ["current latest attempt also scoreable", "larger third-party-sourced task set", "more original memory systems executed without repair", "latency and cost budget preregistered for LLM intelligence"],
+    missingForLeaderboard: ["current latest attempt also scoreable", ...marketScaleBlockers],
   }),
   classifyArtifact({
     path: "artifacts/realworld-native-competitors.json",
@@ -138,8 +149,8 @@ const currentArtifacts = [
       ? "Same-manifest original-package raw-output proof for Basic Memory and LangMem runner coverage; score, recall, abstention, leakage and market claims remain blocked."
       : "Setup and runner-path proof only; original competitor raw outputs are not currently present.",
     missingForLeaderboard: nativeCompetitorSummary.originalRawOutputRuns >= 2
-      ? ["LLM/harness judge command succeeds on original raw outputs", "larger third-party-sourced task set", "more original memory systems executed without repair", "preregistered latency and cost budgets"]
-      : ["at least two original non-baseline systems with retained raw outputs", "LLM/harness judge command succeeds on original raw outputs", "larger third-party-sourced task set", "more original memory systems executed without repair"],
+      ? ["LLM/harness judge command succeeds on original raw outputs", ...marketScaleBlockers]
+      : ["at least two original non-baseline systems with retained raw outputs", "LLM/harness judge command succeeds on original raw outputs", ...marketScaleBlockers],
   }),
   classifyArtifact({
     path: "artifacts/original-public-benchmarks.json",
@@ -213,6 +224,18 @@ const report = {
   },
   realWorldBuckets,
   thirdPartyOssSourceEvidence: thirdPartyOssSummary,
+  marketProofGate: {
+    required: marketProofBlockers,
+    sourceEnv: [
+      "MEMORY_REALWORLD_PUBLIC_ARTIFACT_HASH",
+      "MEMORY_REALWORLD_INDEPENDENT_REPLICATION_HASH",
+      "MEMORY_REALWORLD_THIRD_PARTY_PROTOCOL",
+      "MEMORY_REALWORLD_THIRD_PARTY_TASK_COUNT",
+      "MEMORY_REALWORLD_PREREGISTERED_COST_LATENCY_BUDGETS"
+    ],
+    minThirdPartyTasks: minThirdPartyMarketTasks,
+    runtimeGate: "src/eval/realworldBlackbox.ts"
+  },
   currentArtifacts,
   leaderboardEligibleArtifacts: currentArtifacts.filter((artifact) => artifact.leaderboardEligible).map((artifact) => artifact.path),
   nextCognibrainImprovements: [
@@ -224,8 +247,8 @@ const report = {
     openaiIntelligenceSummary.originalEligibleSystems >= 2
       ? {
           priority: "P0",
-          item: "Expand the neutral black-box harness beyond the first original competitor smoke.",
-          reason: `Current checked smoke has ${openaiIntelligenceSummary.originalEligibleSystems} original non-baseline systems; a market claim still needs more original systems and a larger third-party-sourced task set.`,
+          item: "Expand the neutral black-box harness beyond the first original competitor smoke and attach public proof hashes.",
+          reason: `Current checked smoke has ${openaiIntelligenceSummary.originalEligibleSystems} original non-baseline systems; a market claim still needs more original systems, public artifact hash, independent replication hash, third-party task count, and preregistered cost/latency budgets.`,
         }
       : openaiIntelligenceSummary.originalRawOutputSystems >= 2
         ? {
@@ -267,10 +290,10 @@ const report = {
     {
       priority: "P1",
       item: thirdPartyOssSummary.present
-        ? "Expand third-party OSS workflow coverage beyond the first public-issue smoke."
+        ? "Publish public and independently replicated proof for the preregistered third-party OSS workflow protocol."
         : "Add real OSS engineering workflows as a third-party-sourced bucket.",
       reason: thirdPartyOssSummary.present
-        ? `${thirdPartyOssSummary.eventCount} public GitHub issue events are present; market claims still need a larger preregistered third-party corpus.`
+          ? `${thirdPartyOssSummary.eventCount} public GitHub issue events and ${thirdPartyOssSummary.queryCount} preregistered third-party OSS tasks are present; market claims still need public and independent replication artifact hashes.`
         : "Cognibrain's strongest internal story is coding lifecycle memory, so the fair version must come from external repos/issues rather than our own scenario generator.",
     },
     {
@@ -372,10 +395,11 @@ function summarizeThirdPartyOssBucket() {
   const sourcePresent = requiredSources.filter((source) => sourceText.includes(source) || artifactSources.includes(source));
   const sourceBacked = sourcePresent.length === requiredSources.length;
   const sourceBucketPresent = sourceText.includes('bucket: "third-party-oss-workflows"') || artifactEvents.length > 0;
+  const sourceQueryIds = [...sourceText.matchAll(/id: "q-thirdparty-[^"]+"/g)].map((match) => match[0]);
   const eventCount = Math.max(artifactEvents.length, sourcePresent.length);
-  const queryCount = Math.max(artifactQueries.length, sourceText.includes("q-thirdparty-") ? sourcePresent.length : 0);
+  const queryCount = Math.max(artifactQueries.length, sourceQueryIds.length);
   return {
-    present: sourceBacked && sourceBucketPresent && eventCount >= 3 && queryCount >= 3,
+    present: sourceBacked && sourceBucketPresent && eventCount >= 3 && queryCount >= minThirdPartyMarketTasks,
     eventCount,
     queryCount,
     sourceCount: sourcePresent.length,

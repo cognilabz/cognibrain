@@ -5,7 +5,7 @@ globs:
 alwaysApply: true
 ---
 
-Before long-running coding tasks, query cognibrain through the CLI lifecycle: `./bin/cognibrain.mjs context --task "<task>" --json`.
+Before long-running coding tasks, query cognibrain through the CLI lifecycle: `./bin/cognibrain.mjs context --task "<task>" --json`. Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search.
 
 Start the local runtime with `./bin/cognibrain.mjs start` when API or dashboard access is needed. Inspect it with `./bin/cognibrain.mjs status`.
 

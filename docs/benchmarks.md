@@ -124,6 +124,10 @@ dataset, prompts, scoring, budgets, and adapter contract are frozen before
 system tuning; every system receives the same input stream; every system runs
 through its original package, CLI, SDK, service, or official API; and raw
 outputs, cost, latency, versions, errors, and scorer traces are retained.
+Market leaderboard eligibility also requires a public immutable artifact hash
+for the exact judged run, an independent replication artifact hash, a
+third-party protocol with at least 30 tasks, and preregistered latency/cost
+budgets for the judge and attached systems.
 
 Current artifact classes:
 

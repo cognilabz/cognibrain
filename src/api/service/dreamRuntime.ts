@@ -305,6 +305,14 @@ export async function startDreamJob(service: any, input: DreamCycleInput, fetchI
       input: { ...input, mode, trigger },
       logs: [{ at: queuedAt, level: "info", message: "dream job queued", payload: { trigger, mode, durable: true } }]
     };
+    const repository = service.productionAsyncRepository?.dreamJobRepository;
+    if (repository?.queue) {
+      const queued = await repository.queue(job);
+      service.dreamJobs.set(queued.jobId, queued);
+      if (options.queueOnly) return queued;
+      if (options.wait) return (await runDreamJobWorkerOnce(service, fetchImpl, timeoutMs)) ?? queued;
+      return queued;
+    }
     service.dreamJobs.set(job.jobId, job);
     service.persist();
     if (options.queueOnly) return job;
@@ -314,6 +322,22 @@ export async function startDreamJob(service: any, input: DreamCycleInput, fetchI
   }
 
 export async function runDreamJobWorkerOnce(service: any, fetchImpl: typeof fetch = fetch, timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000), options: { now?: string } = {}): Promise<DreamJob | undefined> {
+    const repository = service.productionAsyncRepository?.dreamJobRepository;
+    if (repository?.claimDueJob) {
+      const workerId = process.env.MEMORY_DREAM_WORKER_ID ?? `pid-${process.pid}`;
+      const claimed = await repository.claimDueJob({
+        workerId,
+        now: options.now,
+        leaseMs: Number(process.env.MEMORY_DREAM_JOB_LEASE_MS ?? 300_000)
+      });
+      if (!claimed) return undefined;
+      service.dreamJobs.set(claimed.jobId, claimed);
+      const input = claimed.input ?? { userId: claimed.userId, trigger: claimed.trigger, mode: claimed.mode, budget: claimed.plan.budget, sourceRefresh: claimed.plan.sourceRefresh, connectorIds: claimed.plan.connectorIds };
+      await service.executeDreamJob(claimed, input, claimed.mode, claimed.trigger, fetchImpl, timeoutMs, { alreadyLeased: true });
+      const finished = service.dreamJobs.get(claimed.jobId) ?? claimed;
+      if (repository.completeJob) await repository.completeJob(finished.jobId, finished);
+      return finished;
+    }
     const now = options.now ? new Date(options.now).getTime() : Date.now();
     const due = [...service.dreamJobs.values()]
       .filter((job: DreamJob) => {

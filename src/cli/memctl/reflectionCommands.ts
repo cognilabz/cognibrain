@@ -100,7 +100,7 @@ export async function handleReflectionCommands(command: string | undefined, args
   case "dream-cancel": {
     const jobId = args[0];
     if (!jobId) fail("Usage: memctl dream-cancel <job-id> [reason]");
-    console.log(JSON.stringify(service.cancelDreamJob(jobId, args.slice(1).join(" ") || undefined), null, 2));
+    console.log(JSON.stringify(await service.cancelDreamJobAsync(jobId, args.slice(1).join(" ") || undefined), null, 2));
     return true;
   }
   case "dream-retry": {

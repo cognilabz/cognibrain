@@ -224,6 +224,8 @@ function payloadForCommand(command, options, common, codebaseScope) {
         budget: stringOption(options, "budget") ?? (command === "release-prepare" ? "release" : undefined),
         sourceRefresh: boolOption(options, "source-refresh") ?? (command === "release-prepare" ? true : undefined),
         run: boolOption(options, "run-dream-if-due") ?? false,
+        wait: command === "release-prepare" ? boolOption(options, "wait") ?? false : undefined,
+        waitTimeoutMs: command === "release-prepare" ? numberOption(options, "wait-timeout-ms") : undefined,
         force: boolOption(options, "force")
       });
     case "health":
@@ -315,7 +317,10 @@ class DaemonBackend {
 
   async call(command, payload) {
     const route = routeFor(command, payload);
-    const data = await httpJson(route.method, `${this.baseUrl}${route.path}`, route.body, { timeoutMs: 4_000, headers: this.authHeaders, exitCodes: EXIT_CODES });
+    const timeoutMs = command === "release-prepare" && payload.wait
+      ? Math.max(4_000, Number(payload.waitTimeoutMs ?? 60_000))
+      : 4_000;
+    const data = await httpJson(route.method, `${this.baseUrl}${route.path}`, route.body, { timeoutMs, headers: this.authHeaders, exitCodes: EXIT_CODES });
     return { data, backend: this.description(), warnings: [] };
   }
 }
@@ -493,7 +498,7 @@ function parseOptions(argv) {
       continue;
     }
     const name = item.slice(2);
-    if (["json", "local-direct", "no-autostart", "require-daemon", "run-dream-if-due", "source-refresh", "force"].includes(name)) {
+    if (["json", "local-direct", "no-autostart", "require-daemon", "run-dream-if-due", "source-refresh", "force", "wait"].includes(name)) {
       flags.add(name);
       continue;
     }
@@ -594,7 +599,7 @@ function printLifecycleUsage(context = { prefix: "cognibrain", alias: false }) {
   ${prefix} outcome --user <id> --command <command> [--exit-code n] [--cwd path] [--summary text] --json
   ${prefix} correction --user <id> --text <correction> [--wrong-action text] [--correct-action text] --json
   ${prefix} patch-evidence --user <id> --task <text> [--files a,b] [--commands "npm test"] --json
-  ${prefix} session-end|handoff|release-prepare --user <id> [--run-dream-if-due] --json
+  ${prefix} session-end|handoff|release-prepare --user <id> [--run-dream-if-due] [--wait] --json
   ${prefix} dream-plan|source-revalidate|conflicts|health --json
 
 Backend flags:

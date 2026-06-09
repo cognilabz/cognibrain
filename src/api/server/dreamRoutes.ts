@@ -28,7 +28,9 @@ const dreamCycleBodySchema = z.object({
   connectorIds: z.array(z.string()).optional(),
   harnessRunId: z.string().optional(),
   force: z.boolean().optional(),
-  run: z.boolean().optional()
+  run: z.boolean().optional(),
+  wait: z.boolean().optional(),
+  waitTimeoutMs: z.number().int().positive().max(600_000).optional()
 });
 const dreamJobBodySchema = dreamCycleBodySchema.extend({
   jobId: z.string().optional()
@@ -116,7 +118,7 @@ export async function handleDreamRoutes(input: {
 
     if (method === "POST" && parts[0] === "dream" && parts[1] === "jobs" && parts[2] && parts[3] === "cancel") {
       const body = z.object({ reason: z.string().optional() }).parse(await json(request).catch(() => ({})));
-      send(response, 202, defaultService.cancelDreamJob(parts[2], body.reason));
+      send(response, 202, await defaultService.cancelDreamJobAsync(parts[2], body.reason));
       return true;
     }
 
@@ -177,6 +179,21 @@ export async function handleDreamRoutes(input: {
     if (method === "POST" && (url.pathname === "/harness/session-end" || url.pathname === "/harness/handoff-prepare" || url.pathname === "/harness/release-prepare")) {
       const body = dreamCycleBodySchema.parse(await json(request));
       const trigger: DreamCycleTrigger = url.pathname === "/harness/session-end" ? "harness_session_end" : url.pathname === "/harness/handoff-prepare" ? "harness_handoff" : "before_release";
+      if (trigger === "before_release" && body.wait) {
+        const job = await defaultService.startDreamJob({
+          ...body,
+          mode: body.mode ?? "dream",
+          trigger,
+          budget: body.budget ?? "release",
+          sourceRefresh: body.sourceRefresh ?? true
+        }, fetch, body.waitTimeoutMs ?? Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000), { wait: true });
+        send(response, 202, {
+          plan: job.plan,
+          report: job.report ? serializeDreamCycleReport(job.report) : undefined,
+          job
+        });
+        return true;
+      }
       const prepared = defaultService.prepareDream({
         ...body,
         mode: body.mode ?? "dream",

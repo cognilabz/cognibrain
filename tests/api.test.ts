@@ -291,16 +291,18 @@ describe("cognibrain HTTP API contract", () => {
     expect(create.status).toBe(201);
     const memory = (await create.json()) as { id: string };
 
+    const archivedAt = "2026-06-09T16:30:00.000Z";
     const patch = await fetch(`${baseUrl}/memories/${memory.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ content: "CRUD update reached the API.", tags: ["after"], trust: 0.77 })
+      body: JSON.stringify({ content: "CRUD update reached the API.", tags: ["after"], trust: 0.77, archivedAt })
     });
     expect(patch.status).toBe(200);
-    const patched = (await patch.json()) as { content: string; tags: string[]; trust: number };
+    const patched = (await patch.json()) as { content: string; tags: string[]; trust: number; archivedAt?: string };
     expect(patched.content).toBe("CRUD update reached the API.");
     expect(patched.tags).toEqual(["after"]);
     expect(patched.trust).toBe(0.77);
+    expect(patched.archivedAt).toBe(archivedAt);
 
     const consent = await fetch(`${baseUrl}/memories/${memory.id}/consent`, {
       method: "POST",

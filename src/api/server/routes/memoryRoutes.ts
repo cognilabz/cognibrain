@@ -14,7 +14,8 @@ type RouteContext = {
 };
 const memoryPatchSchema = memoryInputSchema.partial().extend({
   trust: z.number().min(0).max(1).optional(),
-  importance: z.number().min(0).max(1).optional()
+  importance: z.number().min(0).max(1).optional(),
+  archivedAt: z.string().optional()
 });
 
 export async function handleMemoryRoutes(context: RouteContext): Promise<boolean> {

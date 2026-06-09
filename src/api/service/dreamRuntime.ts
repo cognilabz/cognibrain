@@ -1,4 +1,4 @@
-import type { DreamCycleInput, DreamCycleReport, DreamJob, DreamPlanReport, DreamPreparationReport, Memory } from "../../core";
+import type { DreamCycleInput, DreamCycleReport, DreamJob, DreamPlanReport, DreamPreparationReport, Memory, MemoryInput, ReflectionReport } from "../../core";
 import { budgetForTrigger, contentHash, modeForTrigger, productionPolicyMode, triggerForMode, uniqueStrings } from "./helpers";
 
 export function reflect(service: any, userId: string): DreamCycleReport {
@@ -259,29 +259,82 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
         limit: plan.budget === "standard" ? 100 : plan.budget === "deep" ? 500 : undefined
       })
       : undefined;
-    const report = service.runDreamCycle({ ...input, mode, trigger, connectorIds: plan.connectorIds, sourceRefresh: plan.sourceRefresh, __skipSyncSourceResolution: true });
+    service.enforceRetention(new Date(), input.userId);
+    const blocked = service.memoriesDeniedForOperation(input.userId, "dream");
+    if (blocked.length) {
+      const blockedReport = service.blockedReflectionReport(input.userId, mode, blocked);
+      return {
+        ...blockedReport,
+        dreamCycle: {
+          trigger,
+          mode,
+          budget: plan.budget,
+          sourceRefresh: plan.sourceRefresh,
+          connectorIds: plan.connectorIds,
+          harnessRunId: input.harnessRunId,
+          blocked: true,
+          verificationScheduled: 0,
+          sourceRevalidation: liveSourceRevalidation,
+          plan
+        }
+      };
+    }
+    const report = await runReflectionWithAsyncWrites(service, input.userId);
     if (liveSourceRevalidation?.evaluated) {
-      report.dreamCycle.sourceRevalidation = liveSourceRevalidation;
       report.lifecycle.actions.push(`live-revalidated ${liveSourceRevalidation.evaluated} source-backed memories`);
     }
     const liveVerificationScheduled = mode === "dream"
       ? await service.scheduleVerificationFromDreamAsync(input.userId)
       : 0;
     if (liveVerificationScheduled) {
-      report.dreamCycle.verificationScheduled = liveVerificationScheduled;
       report.lifecycle.actions.push(`live-scheduled ${liveVerificationScheduled} memories from dream verification queue`);
     }
     const liveVerificationResolution = mode === "dream" && plan.budget === "release"
       ? await service.resolveVerificationQueueAsync(input.userId, { connectorIds: plan.connectorIds.length ? plan.connectorIds : undefined, limit: 250 })
       : undefined;
     if (liveVerificationResolution?.resolved) {
-      report.dreamCycle.verificationResolution = liveVerificationResolution;
       report.lifecycle.actions.push(`live-resolved ${liveVerificationResolution.resolved} verification queue items`);
     }
+    service.recordDream(report.lifecycle.qualityScore, report.contradictions.length, report.lifecycle.actions);
+    service.recordAudit("reflect.run", {
+      userId: input.userId,
+      metadata: {
+        created: report.created.length,
+        demoted: report.demoted.length,
+        contradictions: report.contradictions.length,
+        trigger,
+        mode,
+        budget: plan.budget,
+        sourceRefresh: plan.sourceRefresh,
+        connectorIds: plan.connectorIds,
+        harnessRunId: input.harnessRunId,
+        verificationScheduled: liveVerificationScheduled,
+        sourceRevalidation: liveSourceRevalidation,
+        verificationResolution: liveVerificationResolution,
+        productionReflectionWrites: Boolean(service.productionAsyncRepository?.executeUnitOfWork)
+      }
+    });
+    service.markDreamed(input.userId);
+    const dreamReport: DreamCycleReport = {
+      ...report,
+      dreamCycle: {
+        trigger,
+        mode,
+        budget: plan.budget,
+        sourceRefresh: plan.sourceRefresh,
+        connectorIds: plan.connectorIds,
+        harnessRunId: input.harnessRunId,
+        blocked: false,
+        verificationScheduled: liveVerificationScheduled,
+        sourceRevalidation: liveSourceRevalidation,
+        verificationResolution: liveVerificationResolution,
+        plan
+      }
+    };
     if (connectorRefresh) {
-      report.dreamCycle.connectorRefresh = connectorRefresh;
+      dreamReport.dreamCycle.connectorRefresh = connectorRefresh;
       if (connectorRefresh.attempted || connectorRefresh.skipped) {
-        report.lifecycle.actions.push(`connector refresh applied ${connectorRefresh.applied}/${connectorRefresh.attempted} polls before dream`);
+        dreamReport.lifecycle.actions.push(`connector refresh applied ${connectorRefresh.applied}/${connectorRefresh.attempted} polls before dream`);
       }
       service.recordAudit("reflect.run", {
         userId: input.userId,
@@ -296,8 +349,113 @@ export async function runDreamCycleAsync(service: any, input: DreamCycleInput, f
         }
       });
     }
-    if (connectorRefresh || liveSourceRevalidation?.evaluated || liveVerificationScheduled || liveVerificationResolution?.results.length) service.persist();
-    return report;
+    service.persist();
+    return dreamReport;
+  }
+
+async function runReflectionWithAsyncWrites(service: any, userId: string): Promise<ReflectionReport> {
+    if (!service.productionAsyncRepository?.executeUnitOfWork) return service.reflection.run(userId);
+    const plan = service.reflection.plan(userId);
+    const committedByPlannedId = new Map<string, Memory>();
+    for (const memory of plan.updates) {
+      committedByPlannedId.set(memory.id, await service.updateAsync(memory.id, patchFromPlannedMemory(memory)));
+    }
+    for (const memory of plan.creates) {
+      committedByPlannedId.set(memory.id, await service.addAsync(inputFromPlannedMemory(memory)));
+    }
+    return remapReflectionReport(service, plan.report, committedByPlannedId);
+  }
+
+function inputFromPlannedMemory(memory: Memory): MemoryInput {
+    return {
+      brainId: memory.brainId,
+      sourceId: memory.sourceId,
+      userId: memory.userId,
+      agentId: memory.agentId,
+      sessionId: memory.sessionId,
+      appId: memory.appId,
+      orgId: memory.orgId,
+      projectId: memory.projectId,
+      deviceId: memory.deviceId,
+      runId: memory.runId,
+      content: memory.content,
+      type: memory.type,
+      layer: memory.layer,
+      source: memory.source,
+      tags: memory.tags,
+      entities: memory.entities,
+      relations: memory.relations,
+      consent: memory.consent,
+      temporal: memory.temporal,
+      timestamp: memory.createdAt,
+      pinned: memory.pinned,
+      confidence: memory.confidence,
+      beliefState: memory.beliefState,
+      metadata: memory.metadata,
+      sourceRef: memory.provenance.sourceRef
+    };
+  }
+
+function patchFromPlannedMemory(memory: Memory): Partial<MemoryInput> & { trust?: number; importance?: number; archivedAt?: Date | string } {
+    return {
+      brainId: memory.brainId,
+      sourceId: memory.sourceId,
+      userId: memory.userId,
+      agentId: memory.agentId,
+      sessionId: memory.sessionId,
+      appId: memory.appId,
+      orgId: memory.orgId,
+      projectId: memory.projectId,
+      deviceId: memory.deviceId,
+      runId: memory.runId,
+      content: memory.content,
+      type: memory.type,
+      layer: memory.layer,
+      source: memory.source,
+      tags: memory.tags,
+      entities: memory.entities,
+      relations: memory.relations,
+      consent: memory.consent,
+      temporal: memory.temporal,
+      pinned: memory.pinned,
+      confidence: memory.confidence,
+      beliefState: memory.beliefState,
+      metadata: memory.metadata,
+      sourceRef: memory.provenance.sourceRef,
+      trust: memory.trust,
+      importance: memory.importance,
+      archivedAt: memory.archivedAt
+    };
+  }
+
+function remapReflectionReport(service: any, report: ReflectionReport, committedByPlannedId: Map<string, Memory>): ReflectionReport {
+    const remapMemory = (memory: Memory): Memory => {
+      const committed = committedByPlannedId.get(memory.id);
+      if (committed) return committed;
+      try {
+        return service.get(memory.id);
+      } catch {
+        return memory;
+      }
+    };
+    const remapText = (text: string): string => {
+      let value = text;
+      for (const [plannedId, committed] of committedByPlannedId.entries()) value = value.split(plannedId).join(committed.id);
+      return value;
+    };
+    return {
+      created: report.created.map(remapMemory),
+      demoted: report.demoted.map(remapMemory),
+      contradictions: report.contradictions.map((item) => ({
+        ...item,
+        kept: remapMemory(item.kept),
+        demoted: remapMemory(item.demoted)
+      })),
+      lifecycle: {
+        ...report.lifecycle,
+        actions: report.lifecycle.actions.map(remapText)
+      }
+    };
   }
 
 export async function startDreamJob(service: any, input: DreamCycleInput, fetchImpl: typeof fetch = fetch, timeoutMs = Number(process.env.MEMORY_CONNECTOR_TIMEOUT_MS ?? 10_000), options: { wait?: boolean; queueOnly?: boolean } = {}): Promise<DreamJob> {

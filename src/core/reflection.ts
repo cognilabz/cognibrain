@@ -3,6 +3,12 @@ import { tokenize } from "./text";
 import { clamp, MemoryStore } from "./store";
 import { DEFAULT_LIFECYCLE_POLICY, normalizeLifecyclePolicy, type LifecyclePolicy } from "./config";
 
+export interface ReflectionMutationPlan {
+  report: ReflectionReport;
+  creates: Memory[];
+  updates: Memory[];
+}
+
 export class ReflectionEngine {
   private readonly policy: LifecyclePolicy;
   private readonly contradictionDetector?: ContradictionDetector;
@@ -60,6 +66,32 @@ export class ReflectionEngine {
         ]
       }
     };
+  }
+
+  plan(userId: string, now = new Date()): ReflectionMutationPlan {
+    const before = this.store.export();
+    const sandbox = new MemoryStore();
+    sandbox.import(before);
+    const planned = new ReflectionEngine(sandbox, {
+      ...this.policy,
+      contradictionDetector: this.contradictionDetector,
+      summarizer: this.summarizer,
+      evaluator: this.evaluator
+    });
+    const report = planned.run(userId, now);
+    const beforeById = new Map(before.map((memory) => [memory.id, memory]));
+    const creates: Memory[] = [];
+    const updates: Memory[] = [];
+    for (const memory of sandbox.export()) {
+      if (memory.userId !== userId) continue;
+      const previous = beforeById.get(memory.id);
+      if (!previous) {
+        creates.push(memory);
+        continue;
+      }
+      if (canonicalMemory(previous) !== canonicalMemory(memory)) updates.push(memory);
+    }
+    return { report, creates, updates };
   }
 
   private activeMemories(userId: string): Memory[] {
@@ -590,4 +622,11 @@ function uniqueMemories(memories: Memory[]): Memory[] {
 
 function latestDate(memories: Memory[]): Date {
   return new Date(Math.max(...memories.map((memory) => (memory.temporal.eventAt ? new Date(memory.temporal.eventAt) : memory.createdAt).getTime())));
+}
+
+function canonicalMemory(memory: Memory): string {
+  return JSON.stringify(memory, (_key, value) => {
+    if (value instanceof Date) return value.toISOString();
+    return value;
+  });
 }

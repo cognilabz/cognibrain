@@ -3432,11 +3432,20 @@ describe("TypeScript memory core", () => {
       content: "Release dream workers must schedule risky memories through async writes.",
       source: { kind: "agent", confidence: 0.7 }
     });
+    for (const item of [1, 2, 3]) {
+      service.add({
+        userId: "u1",
+        content: `Atlas dream reflection evidence ${item} must be summarized by the production worker.`,
+        tags: ["atlas-dream"],
+        source: { kind: "human", confidence: 0.9 }
+      });
+    }
     service.update(risky.id, {
       importance: 0.8,
       temporal: { ...risky.temporal, stalenessRisk: 0.8 }
     });
     const calls: string[] = [];
+    const originalStoreAdd = service.store.add.bind(service.store);
     const originalStoreUpdate = service.store.update.bind(service.store);
     const originalAfterWrite = (service as any).afterWrite.bind(service);
     (service as any).afterWrite = (userId: string) => {
@@ -3449,6 +3458,10 @@ describe("TypeScript memory core", () => {
           calls.push("uow.begin");
           const result = await operation({
             memoryRepository: {
+              create: async (input: any) => {
+                calls.push(`memory.create:${input.content}`);
+                return originalStoreAdd(input);
+              },
               update: async (id: string, patch: any) => {
                 calls.push(`memory.update:${id}`);
                 return originalStoreUpdate(id, patch);
@@ -3478,8 +3491,14 @@ describe("TypeScript memory core", () => {
         }
       }
     });
+    service.store.add = () => {
+      throw new Error("runDreamCycleAsync must not use sync store.add for reflection summaries");
+    };
     service.store.update = () => {
-      throw new Error("runDreamCycleAsync must not use sync store.update for source or dream verification scheduling");
+      throw new Error("runDreamCycleAsync must not use sync store.update for source, reflection, or dream verification scheduling");
+    };
+    service.store.archive = () => {
+      throw new Error("runDreamCycleAsync must not use sync store.archive for reflection lifecycle changes");
     };
     service.revalidateSourceRefs = () => {
       throw new Error("runDreamCycleAsync must not call sync revalidateSourceRefs");
@@ -3504,12 +3523,15 @@ describe("TypeScript memory core", () => {
     expect(job.report?.dreamCycle.sourceRevalidation?.results.find((result) => result.memoryId === queued.id)).toMatchObject({ status: "source_missing" });
     expect(job.report?.dreamCycle.verificationResolution?.results.find((result) => result.memoryId === queued.id)).toMatchObject({ status: "source_missing" });
     expect(job.report?.dreamCycle.verificationScheduled).toBeGreaterThanOrEqual(1);
+    expect(job.report?.created.some((memory) => memory.layer === "reflection" && memory.metadata.theme === "atlas-dream")).toBe(true);
     expect(service.get(risky.id).temporal.verificationDueAt).toBeTruthy();
+    expect(service.store.list("u1").some((memory) => memory.layer === "reflection" && memory.metadata.theme === "atlas-dream")).toBe(true);
     expect(calls.filter((call) => call === `memory.update:${queued.id}`)).toHaveLength(2);
     expect(calls.filter((call) => call === `memory.update:${risky.id}`)).toHaveLength(1);
-    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(3);
-    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(3);
-    expect(calls.filter((call) => call === "afterWrite:u1")).toHaveLength(3);
+    expect(calls.some((call) => call.startsWith("memory.create:Reflection on atlas-dream"))).toBe(true);
+    expect(calls.filter((call) => call === "uow.begin")).toHaveLength(5);
+    expect(calls.filter((call) => call === "uow.commit")).toHaveLength(5);
+    expect(calls.filter((call) => call === "afterWrite:u1")).toHaveLength(5);
   });
 
   it("default GitHub source resolver fetches current provider state when credentials are configured", async () => {

@@ -62,6 +62,73 @@ export async function addAsync(service: any, input: MemoryInput): Promise<Memory
     return memory;
   }
 
+export async function updateAsync(service: any, id: string, patch: Partial<MemoryInput> & { trust?: number; importance?: number }): Promise<Memory> {
+    const executor = service.productionAsyncRepository as AsyncUnitOfWorkExecutor | undefined;
+    if (!executor?.executeUnitOfWork) {
+      const memory = service.update(id, patch);
+      if (typeof service.waitForProductionAsyncFlush === "function") await service.waitForProductionAsyncFlush();
+      return memory;
+    }
+    const before = service.storage.get(id);
+    const claimsBefore = new Map(service.claims);
+    const conflictSetsBefore = new Map(service.conflictSets);
+    let claim: ClaimRecord | undefined;
+    const memory = await executor.executeUnitOfWork(async (uow) => {
+      const updated = await uow.memoryRepository.update(id, patch);
+      claim = claimRecordForMemory(service, updated);
+      if (claim) {
+        service.claims.set(claim.id, claim);
+        service.rebuildConflictSetFor(claim.subject, claim.predicate);
+        const decision = service.currentTruthForClaim(claim);
+        await uow.claimRepository.register(claim);
+        await uow.truthRepository.decide(decision);
+        const conflictSet = service.conflictSetFor(claim.subject, claim.predicate);
+        if (conflictSet) await uow.conflictRepository.save(conflictSet);
+      }
+      return updated;
+    }).catch((error) => {
+      service.claims = claimsBefore;
+      service.conflictSets = conflictSetsBefore;
+      throw error;
+    });
+    replaceReadModelMemory(service, memory);
+    service.entities.ingest(memory);
+    if (claim) service.claims.set(claim.id, claim);
+    service.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { before, after: memory, productionUnitOfWork: true } });
+    service.afterWrite(memory.userId);
+    return memory;
+  }
+
+export async function archiveAsync(service: any, id: string): Promise<Memory> {
+    const before = service.storage.get(id);
+    const memory = await updateAsync(service, id, {
+      archivedAt: new Date().toISOString(),
+      beliefState: "archived",
+      metadata: { ...(before.metadata ?? {}), archived: true }
+    } as Partial<MemoryInput> & { trust?: number; importance?: number });
+    service.recordAudit("memory.update", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { action: "archive", before, after: memory, productionUnitOfWork: Boolean((service.productionAsyncRepository as AsyncUnitOfWorkExecutor | undefined)?.executeUnitOfWork) } });
+    return memory;
+  }
+
+export async function deleteMemoryAsync(service: any, id: string): Promise<boolean> {
+    const executor = service.productionAsyncRepository as AsyncUnitOfWorkExecutor | undefined;
+    if (!executor?.executeUnitOfWork) {
+      const deleted = service.delete(id);
+      if (typeof service.waitForProductionAsyncFlush === "function") await service.waitForProductionAsyncFlush();
+      return deleted;
+    }
+    const memory = service.storage.get(id);
+    const deleted = await executor.executeUnitOfWork((uow) => uow.memoryRepository.delete(id));
+    if (deleted) {
+      const memories = service.store.export().filter((item: Memory) => item.id !== id);
+      service.repository.import(memories);
+      service.syncReadModelFromRepository();
+      service.recordAudit("memory.delete", { userId: memory.userId, brainId: memory.brainId, sourceId: memory.sourceId, memoryId: memory.id, metadata: { before: memory, productionUnitOfWork: true } });
+      service.afterWrite(memory.userId);
+    }
+    return deleted;
+  }
+
 function prepareMemoryForWrite(service: any, input: MemoryInput): MemoryInput {
     const sourceDefaultConsent = input.sourceId ? service.sources.get(input.sourceId)?.defaultConsent : undefined;
     const agentPersona = input.agentId ? service.personaForAgent(input.agentId) : undefined;
@@ -81,6 +148,12 @@ function prepareMemoryForWrite(service: any, input: MemoryInput): MemoryInput {
       throw new Error(`Memory rejected by redaction policy: ${checked.matches.map((match) => match.detector).join(", ")}`);
     }
     return checked.input;
+  }
+
+function replaceReadModelMemory(service: any, memory: Memory): void {
+    const memories = service.store.export().filter((item: Memory) => item.id !== memory.id);
+    service.repository.import([...memories, memory]);
+    service.syncReadModelFromRepository();
   }
 
 function claimRecordForMemory(service: any, memory: Memory): ClaimRecord | undefined {

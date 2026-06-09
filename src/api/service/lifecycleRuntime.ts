@@ -1,4 +1,4 @@
-import type { FeedbackEvent, FeedbackKind, HarnessActionInput, HarnessLifecycleEventInput, HarnessLifecycleEventReport, InjectionFeedbackEvent, InjectionFeedbackReport, Memory, SourceRevalidationResult, VerificationQueueReport, VerificationResolutionReport } from "../../core";
+import type { FeedbackEvent, FeedbackKind, HarnessActionInput, HarnessLifecycleEventInput, HarnessLifecycleEventReport, InjectionFeedbackEvent, InjectionFeedbackReport, Memory, MemoryInput, SourceRevalidationResult, VerificationQueueReport, VerificationResolutionReport } from "../../core";
 import { clamp01, contentHash, feedbackDelta, safeGet } from "./helpers";
 import { dreamInputForHarnessEvent, sourceRevalidationSummary } from "./dreamHelpers";
 
@@ -54,6 +54,14 @@ export function confirmMemory(service: any, memoryId: string, userId?: string): 
   }
 
 export function recordHarnessAction(service: any, input: HarnessActionInput): Memory {
+    return service.add(harnessActionMemoryInput(input));
+  }
+
+export async function recordHarnessActionAsync(service: any, input: HarnessActionInput): Promise<Memory> {
+    return service.addAsync(harnessActionMemoryInput(input));
+  }
+
+function harnessActionMemoryInput(input: HarnessActionInput): MemoryInput {
     const passed = input.tests?.filter((test) => test.status === "passed").map((test) => test.name) ?? [];
     const failed = input.tests?.filter((test) => test.status === "failed").map((test) => test.name) ?? [];
     const content = input.content ?? [
@@ -73,7 +81,7 @@ export function recordHarnessAction(service: any, input: HarnessActionInput): Me
       input.pullRequest ? `Pull request created: ${input.pullRequest}.` : undefined,
       input.errorFixed ? `Fixed error: ${input.errorFixed}.` : undefined
     ].filter(Boolean).join(" ");
-    return service.add({
+    return {
       userId: input.userId,
       agentId: input.agentId,
       sessionId: input.sessionId,
@@ -134,7 +142,7 @@ export function recordHarnessAction(service: any, input: HarnessActionInput): Me
           evidenceIds: input.evidencePackId ? [input.evidencePackId] : []
         }
       }
-    });
+    };
   }
 
 export function recordHarnessLifecycleEvent(service: any, input: HarnessLifecycleEventInput): HarnessLifecycleEventReport {

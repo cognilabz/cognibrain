@@ -68,13 +68,14 @@ export class MemoryStore {
     return memory;
   }
 
-  update(id: string, patch: Partial<MemoryInput> & { trust?: number; importance?: number }): Memory {
+  update(id: string, patch: Partial<MemoryInput> & { trust?: number; importance?: number; archivedAt?: Date | string }): Memory {
     const memory = this.get(id);
     const content = patch.content?.trim() ?? memory.content;
     const source = patch.source ?? memory.source;
     const temporal = patch.temporal ? normalizeTemporal({ ...memory.temporal, ...patch.temporal }) : memory.temporal;
     const scope = memoryScope({ ...memory, ...patch, userId: patch.userId ?? memory.userId });
-    const nextState = patch.beliefState ?? beliefStateFor({ temporal, metadata: patch.metadata ? { ...memory.metadata, ...patch.metadata } : memory.metadata, archivedAt: memory.archivedAt });
+    const archivedAt = patch.archivedAt === undefined ? memory.archivedAt : new Date(patch.archivedAt);
+    const nextState = patch.beliefState ?? beliefStateFor({ temporal, metadata: patch.metadata ? { ...memory.metadata, ...patch.metadata } : memory.metadata, archivedAt });
     const audit = [...(memory.audit ?? [])];
     const now = new Date();
     if (nextState !== memory.beliefState) audit.push({ type: "state_changed", at: now, actor: source.kind, previousState: memory.beliefState, nextState });
@@ -111,6 +112,7 @@ export class MemoryStore {
         extractedFromEpisodeId: typeof memory.metadata.episodeId === "string" ? memory.metadata.episodeId : undefined,
         sourceRef: patch.sourceRef ?? memory.provenance.sourceRef
       },
+      archivedAt,
       audit,
       pinned: patch.pinned ?? memory.pinned,
       metadata: patch.metadata ? { ...memory.metadata, ...patch.metadata } : memory.metadata,

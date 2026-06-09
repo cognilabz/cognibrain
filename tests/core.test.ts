@@ -4138,6 +4138,79 @@ describe("TypeScript memory core", () => {
     expect(service.currentTruthForMemory(memory)).toMatchObject({ selectedMemoryId: memory.id, state: "selected" });
   });
 
+  it("commits production memory update archive and delete through an async UnitOfWork before returning", async () => {
+    const service = new MemoryService();
+    const memory = service.add({
+      userId: "u1",
+      content: "Production mutable memory starts active.",
+      source: { kind: "human", confidence: 0.92 }
+    });
+    const calls: string[] = [];
+    Object.defineProperty(service, "productionAsyncRepository", {
+      value: {
+        executeUnitOfWork: async (operation: (uow: any) => Promise<unknown>) => {
+          calls.push("uow.begin");
+          const result = await operation({
+            memoryRepository: {
+              update: async (id: string, patch: any) => {
+                calls.push(`memory.update:${id}`);
+                return service.store.update(id, patch);
+              },
+              delete: async (id: string) => {
+                calls.push(`memory.delete:${id}`);
+                return service.store.delete(id);
+              }
+            },
+            claimRepository: {
+              register: async (claim: any) => {
+                calls.push(`claim.register:${claim.sourceMemoryId}`);
+                return claim;
+              }
+            },
+            truthRepository: {
+              decide: async (decision: any) => {
+                calls.push(`truth.decide:${decision.selectedMemoryId}`);
+                return decision;
+              }
+            },
+            conflictRepository: {
+              save: async (conflict: any) => {
+                calls.push(`conflict.save:${conflict.id}`);
+                return conflict;
+              }
+            }
+          });
+          calls.push("uow.commit");
+          return result;
+        }
+      }
+    });
+
+    const updated = await service.updateAsync(memory.id, { content: "Production mutable memory was updated." });
+    const archived = await service.archiveAsync(memory.id);
+    const deleted = await service.deleteAsync(memory.id);
+
+    expect(updated.content).toBe("Production mutable memory was updated.");
+    expect(archived.beliefState).toBe("archived");
+    expect(deleted).toBe(true);
+    expect(calls).toEqual([
+      "uow.begin",
+      `memory.update:${memory.id}`,
+      `claim.register:${memory.id}`,
+      `truth.decide:${memory.id}`,
+      "uow.commit",
+      "uow.begin",
+      `memory.update:${memory.id}`,
+      `claim.register:${memory.id}`,
+      `truth.decide:${memory.id}`,
+      "uow.commit",
+      "uow.begin",
+      `memory.delete:${memory.id}`,
+      "uow.commit"
+    ]);
+    expect(() => service.get(memory.id)).toThrow();
+  });
+
   it("surfaces production Postgres flush failures through an explicit awaitable barrier", async () => {
     const service = new MemoryService();
     Object.defineProperty(service, "productionAsyncRepository", {
@@ -4171,6 +4244,15 @@ describe("TypeScript memory core", () => {
     expect(routeSource).toContain("url.pathname === \"/dream/jobs\"");
     expect(routeSource).toContain("defaultService.startDreamJob");
     expect(routeSource).toContain("{ queueOnly: true }");
+  });
+
+  it("keeps HTTP memory mutation routes on async production-aware service methods", () => {
+    const routeSource = readFileSync(join(process.cwd(), "src/api/server/routes/memoryRoutes.ts"), "utf8");
+    expect(routeSource).toContain("await defaultService.recordHarnessActionAsync");
+    expect(routeSource).toContain("await defaultService.recordCodeCorrectionAsync");
+    expect(routeSource).toContain("await defaultService.updateAsync");
+    expect(routeSource).toContain("await defaultService.archiveAsync");
+    expect(routeSource).toContain("await defaultService.deleteAsync");
   });
 
   it("exposes production Postgres domain repositories for row-backed projections", () => {

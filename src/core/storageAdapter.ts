@@ -5,7 +5,7 @@ export interface UnitOfWork {
   readonly id?: string;
 }
 
-export type MemoryPatch = Partial<MemoryInput> & { trust?: number; importance?: number };
+export type MemoryPatch = Partial<MemoryInput> & { trust?: number; importance?: number; archivedAt?: Date | string };
 
 export interface MemoryFilter {
   userId?: string;

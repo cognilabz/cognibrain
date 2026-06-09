@@ -73,6 +73,28 @@ export function recordCodeCorrection(service: any, input: {
     return finalMemory;
   }
 
+export async function recordCodeCorrectionAsync(service: any, input: {
+    userId: string;
+    agentId?: string;
+    sessionId?: string;
+    appId?: string;
+    orgId?: string;
+    projectId?: string;
+    content: string;
+    previousMemoryId?: string;
+    previousWrongAction?: string;
+    correctAction?: string;
+    kind?: EngineeringMemoryKind;
+    codebase?: CodebaseScope;
+    source?: MemoryInput["source"];
+    timestamp?: Date | string;
+    evidenceIds?: string[];
+  }): Promise<Memory> {
+    const memory = service.recordCodeCorrection(input);
+    if (typeof service.waitForProductionAsyncFlush === "function") await service.waitForProductionAsyncFlush();
+    return memory;
+  }
+
 export function derivedCorrectionMemories(service: any, input: {
     userId: string;
     agentId?: string;

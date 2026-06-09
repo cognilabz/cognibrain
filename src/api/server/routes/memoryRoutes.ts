@@ -86,12 +86,12 @@ export async function handleMemoryRoutes(context: RouteContext): Promise<boolean
   }
 
   if (method === "POST" && url.pathname === "/actions") {
-    send(response, 201, serialize(defaultService.recordHarnessAction(harnessActionSchema.parse(await json(request)))));
+    send(response, 201, serialize(await defaultService.recordHarnessActionAsync(harnessActionSchema.parse(await json(request)))));
     return true;
   }
 
   if (method === "POST" && url.pathname === "/code/corrections") {
-    send(response, 201, serialize(defaultService.recordCodeCorrection(codeCorrectionSchema.parse(await json(request)))));
+    send(response, 201, serialize(await defaultService.recordCodeCorrectionAsync(codeCorrectionSchema.parse(await json(request)))));
     return true;
   }
 
@@ -140,7 +140,7 @@ export async function handleMemoryRoutes(context: RouteContext): Promise<boolean
       return true;
     }
     if (method === "PATCH") {
-      send(response, 200, serialize(defaultService.update(parts[1], memoryPatchSchema.parse(await json(request)))));
+      send(response, 200, serialize(await defaultService.updateAsync(parts[1], memoryPatchSchema.parse(await json(request)))));
       return true;
     }
     if (method === "POST" && parts[2] === "consent") {
@@ -161,11 +161,11 @@ export async function handleMemoryRoutes(context: RouteContext): Promise<boolean
       return true;
     }
     if (method === "POST" && parts[2] === "archive") {
-      send(response, 202, serialize(defaultService.archive(parts[1])));
+      send(response, 202, serialize(await defaultService.archiveAsync(parts[1])));
       return true;
     }
     if (method === "DELETE") {
-      send(response, defaultService.delete(parts[1]) ? 204 : 404, null);
+      send(response, await defaultService.deleteAsync(parts[1]) ? 204 : 404, null);
       return true;
     }
   }

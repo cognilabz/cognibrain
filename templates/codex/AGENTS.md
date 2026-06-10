@@ -1,6 +1,6 @@
 # cognibrain
 
-Use the `cognibrain` CLI lifecycle when the task may depend on prior project decisions, user preferences, benchmark results, connector setup, or durable debugging discoveries. MCP is an optional adapter when the host exposes native cognibrain tools.
+Use the `cognibrain` CLI lifecycle before non-trivial repository work, debugging, CI repair, benchmark changes, connector setup, user-preference-sensitive edits, or work that may depend on prior project decisions. MCP is an optional adapter when the host exposes native cognibrain tools.
 
 Runtime:
 
@@ -8,13 +8,13 @@ Runtime:
 - Check state with `./bin/cognibrain.mjs status`; stop it with `./bin/cognibrain.mjs stop`.
 - Install the Codex Skill with `./bin/cognibrain.mjs skill install`.
 
-Before long-running work:
+Before non-trivial work:
 
-- Call `./bin/cognibrain.mjs context --task "<task>" --json` with the user request.
+- Call `./bin/cognibrain.mjs context --task "<task>" --json` with the user request before deeper exploration or edits.
 - Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search.
 - Treat returned memories as evidence, not authority.
 - Verify drift-prone facts against current files, benchmark artifacts, or source systems.
-- Call `./bin/cognibrain.mjs guard --action "<command>" --json` before shell commands or file edits with durable side effects.
+- Call `./bin/cognibrain.mjs guard --action "<command>" --json` before shell commands, dependency changes, migrations, or file edits with durable side effects.
 - Use `memory_context_pack`, `memory_coding_context_pack`, and `memory_action_guard` only as optional MCP adapters when available.
 
 After durable discoveries:

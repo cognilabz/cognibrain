@@ -1,17 +1,17 @@
 ---
-description: Use cognibrain for durable project and user memory.
+description: Use cognibrain before non-trivial repo work for durable project and user memory.
 globs:
   - "**/*"
 alwaysApply: true
 ---
 
-Before long-running coding tasks, query cognibrain through the CLI lifecycle: `./bin/cognibrain.mjs context --task "<task>" --json`. Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search.
+Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks, query cognibrain through the CLI lifecycle: `./bin/cognibrain.mjs context --task "<task>" --json`. Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search.
 
 Start the local runtime with `./bin/cognibrain.mjs start` when API or dashboard access is needed. Inspect it with `./bin/cognibrain.mjs status`.
 
 Use returned memories as source-backed hints. Verify current code, tests, and benchmark artifacts before acting on stale or drift-prone facts.
 
-Before shell commands or file edits with durable side effects, call `./bin/cognibrain.mjs guard --action "<command>" --json`.
+Before shell commands, dependency changes, migrations, or file edits with durable side effects, call `./bin/cognibrain.mjs guard --action "<command>" --json`.
 
 After durable discoveries, user corrections, connector decisions, or benchmark results, record them with `./bin/cognibrain.mjs memory add "<fact>"`. Finish non-trivial patches with `./bin/cognibrain.mjs patch-evidence --task "<task>" --json`.
 

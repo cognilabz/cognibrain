@@ -152,8 +152,22 @@ function writeCodexConfig() {
     writeFileSync(configPath, `${current.trimEnd()}${block}`);
     console.log(`Wrote Codex MCP config: ${configPath}`);
   }
+  if (!rawArgs.includes("--no-skill")) writeCodexSkill();
   writeTemplateFile(join(launchCwd, "AGENTS.md"), "templates/codex/AGENTS.md");
   writeHarnessPackageManifest();
+}
+
+function writeCodexSkill() {
+  const targetPath = join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills", "cognibrain", "SKILL.md");
+  const content = renderTemplate("templates/codex/cognibrain-skill/SKILL.md");
+  const normalized = content.endsWith("\n") ? content : `${content}\n`;
+  mkdirSync(dirname(targetPath), { recursive: true });
+  if (existsSync(targetPath) && readFileSync(targetPath, "utf8") === normalized) {
+    console.log(`Codex skill already current: ${targetPath}`);
+    return;
+  }
+  writeFileSync(targetPath, normalized);
+  console.log(`Installed Codex skill: ${targetPath}`);
 }
 
 function writeClaudeConfig() {
@@ -275,10 +289,13 @@ function writeDevinStyleConfig() {
 }
 
 function writeTemplateFile(targetPath, templatePath) {
-  const content = readFileSync(join(root, templatePath), "utf8")
+  writeTextFile(targetPath, renderTemplate(templatePath));
+}
+
+function renderTemplate(templatePath) {
+  return readFileSync(join(root, templatePath), "utf8")
     .replaceAll("/ABSOLUTE/PATH/TO/cognibrain", root)
     .replaceAll("__COGNIBRAIN_ROOT__", root);
-  writeTextFile(targetPath, content);
 }
 
 function writeTextFile(targetPath, content) {
@@ -344,7 +361,7 @@ applyTo: "**/*"
 
 Use the local cognibrain runtime for durable project memory. Start it with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} start\`.
 
-Before multi-step coding or debugging, use the daemon-backed CLI lifecycle: \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} context --task "<task>" --json\`. Use delivered context first: if the returned context or evidence pack already answers the question, act from that evidence and avoid rediscovering it with another search. Before shell commands or file edits with durable side effects, run \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} guard --action "<command>" --json\`. If this host exposes cognibrain MCP tools, they are optional native adapters for the same lifecycle contract.
+Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks, use the daemon-backed CLI lifecycle: \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} context --task "<task>" --json\`. Use delivered context first: if the returned context or evidence pack already answers the question, act from that evidence and avoid rediscovering it with another search. Before shell commands, dependency changes, migrations, or file edits with durable side effects, run \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} guard --action "<command>" --json\`. If this host exposes cognibrain MCP tools, they are optional native adapters for the same lifecycle contract.
 
 After durable discoveries, record source-backed facts with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory add "<fact>"\`. Finish non-trivial patches with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} patch-evidence --task "<task>" --json\`.
 

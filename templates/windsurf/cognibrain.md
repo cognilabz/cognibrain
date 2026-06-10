@@ -1,6 +1,6 @@
 # cognibrain memory policy
 
-Use the local cognibrain CLI lifecycle before multi-step edits, risky tool calls, or repeated debugging loops.
+Use the local cognibrain CLI lifecycle before non-trivial repository work, multi-step edits, risky tool calls, CI repair, benchmark changes, connector setup, user-preference-sensitive edits, or repeated debugging loops.
 
 - Query project memory with `cognibrain context --task "<task>" --json` before changing files with repo-specific rules.
 - Respect `cognibrain guard --action "<command>" --json` warnings for forbidden commands and generated files.

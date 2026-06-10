@@ -1,8 +1,8 @@
 # Cognibrain Memory Contract
 
-Use the cognibrain CLI lifecycle as the default memory access path. The generated `.vscode/mcp.json` server named `cognibrain` is an optional native adapter for hosts that benefit from MCP tool discovery.
+Use the cognibrain CLI lifecycle as the default memory access path before non-trivial repository work. The generated `.vscode/mcp.json` server named `cognibrain` is an optional native adapter for hosts that benefit from MCP tool discovery.
 
-Before multi-step coding or debugging:
+Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks:
 
 - Call `./bin/cognibrain.mjs context --task "<task>" --json`.
 - Call `./bin/cognibrain.mjs guard --action "<command>" --json` before shell commands, dependency changes, migrations, destructive actions, or file edits with durable side effects.

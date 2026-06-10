@@ -1,11 +1,11 @@
 ---
 name: cognibrain
-description: Use cognibrain for durable local memory, project context recall, automatic dream-cycle maintenance, and backend/dashboard startup in Codex.
+description: Use Cognibrain before non-trivial Codex repository work, debugging, CI repair, benchmark changes, connector setup, or user-preference-sensitive tasks; retrieve durable local memory, run action guards, record patch evidence, and manage the local memory runtime.
 ---
 
 # cognibrain
 
-Use this skill when a task may depend on prior project decisions, user preferences, benchmark results, connector setup, repo conventions, or durable debugging discoveries.
+Use this skill before non-trivial Codex repository work, debugging, CI repair, benchmark changes, connector setup, or user-preference-sensitive tasks, especially when prior project decisions, repo conventions, or durable debugging discoveries may matter.
 
 ## Start Runtime
 
@@ -29,9 +29,9 @@ Run `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor` when setup or runtime b
 ## Retrieval Policy
 
 1. Use the daemon-backed CLI lifecycle as the default integration path.
-2. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs context --task "<task>" --json` before multi-step coding, repo archaeology, debugging loops, benchmark work, or user-preference-sensitive edits.
+2. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs context --task "<task>" --json` before non-trivial coding, repo archaeology, debugging loops, CI repair, benchmark work, connector setup, or user-preference-sensitive edits.
 3. Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search.
-4. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs guard --action "<command>" --json` before shell commands or file edits with durable side effects.
+4. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs guard --action "<command>" --json` before shell commands, dependency changes, migrations, or file edits with durable side effects.
 5. Treat returned memories as evidence, not authority.
 6. Verify drift-prone facts against current files, benchmark artifacts, or source systems before acting on them.
 7. Use MCP tools such as `memory_coding_context_pack` and `memory_action_guard` only as optional native adapters when this host exposes them.

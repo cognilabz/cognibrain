@@ -2,7 +2,7 @@
 
 Use the generated `.devin/cognibrain.json` command contract when this agent cannot call the Cognibrain MCP server directly.
 
-Before multi-step coding or debugging:
+Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks:
 
 - request a coding context pack for the task,
 - run the pre-tool guard before shell or file edits,

@@ -1,6 +1,6 @@
 # cognibrain memory policy
 
-Before starting an Aider change, use the CLI fallback to pull coding context for the current repo, branch, test command, generated-file rules, and prior reviewer corrections.
+Before starting a non-trivial Aider change, use the CLI fallback to pull coding context for the current repo, branch, test command, generated-file rules, and prior reviewer corrections.
 
 ```bash
 cognibrain context --task "<task>" --json

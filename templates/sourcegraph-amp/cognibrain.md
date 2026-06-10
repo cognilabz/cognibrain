@@ -1,6 +1,6 @@
 # cognibrain memory policy
 
-Use cognibrain as the evidence handoff for Amp-style external agent work.
+Use cognibrain as the evidence handoff for Amp-style external agent work before non-trivial repository work, debugging, CI repair, benchmark changes, connector setup, or user-preference-sensitive edits.
 
 - Pull a context pack before changing code; use the coding-specific context path when the host exposes it.
 - Run an action guard before shell commands or file edits with durable side effects when the integration supports it.

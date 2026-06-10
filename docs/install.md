@@ -172,6 +172,33 @@ npx cognibrain config doctor
 npx cognibrain connections doctor
 ```
 
+## Ten-Minute Proof Smoke
+
+For a new adopter who wants to see the engineering-memory loop before reading
+the rest of the docs:
+
+```bash
+npx cognibrain context --task "prepare a safe release patch" --json
+npx cognibrain guard --action "npm test" --json
+npx cognibrain outcome --command "npm test" --exit-code 0 --json
+npx cognibrain patch-evidence --task "safe release patch" --json
+```
+
+For a checkout that needs repo-level proof:
+
+```bash
+npm test
+npm run build
+npm run internal -- audit:truth
+npm run internal -- audit:plan-gaps
+npm run internal -- audit:latest-analysis
+npm run internal -- proof:plan
+```
+
+These commands prove the local engineering loop and claim boundary. They do
+not replace `release:check`, live connector certification, a judged
+real-world benchmark run or CI.
+
 For package/release maintainers:
 
 ```bash

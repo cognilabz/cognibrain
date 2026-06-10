@@ -23,7 +23,7 @@
 <rect width="1180" height="1976" fill="#f6f8fb"/>
 <text class="title" x="36" y="46">Benchmark Results</text>
 <text class="subtitle" x="36" y="72">Fresh local run, percent scale. Diagnostic rows are not quality or market proof unless LLM/harness claim status says so.</text>
-<text class="subtitle" x="36" y="94">Generated 2026-06-05 UTC; public datasets 18:25Z-11:41Z, arena 13:15Z, cognicode 13:10Z</text>
+<text class="subtitle" x="36" y="94">Generated 2026-06-09 UTC; public datasets 18:25Z-11:41Z, arena 10:42Z, cognicode 10:39Z</text>
 <rect class="panel" x="36" y="128" width="1108" height="486" rx="10"/>
 <text class="section-title" x="60" y="162">Public Benchmark Datasets</text>
 <text class="section-note" x="60" y="184">Cognibrain compared with the strongest local baseline; each row carries proof and claim status.</text>

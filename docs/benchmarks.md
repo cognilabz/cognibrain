@@ -5,29 +5,54 @@ snapshot, not a how-to guide.
 
 ![Benchmark result charts](assets/benchmark-results.svg)
 
+## Market Readiness Summary
+
+The current artifacts support a professional engineering-memory claim:
+Cognibrain has strong local diagnostics for coding-agent context, guard and
+patch-evidence workflows, and the repo has explicit proof gates that block
+overstated market claims.
+
+What is currently strong:
+
+- Product truth audit: 69/69 checks passed, 0 open code-truth gaps.
+- Plan closure: 16/16 plan-gap checks, 10/10 latest-analysis checks and 10/10
+  full-plan proof checks.
+- CogniCodeBench: 1,000 scenarios, 100.0% full-system diagnostic score and
+  96.0% integrity score.
+- Real-world black-box harness: coverage, raw-output retention and telemetry
+  are ready for judged runs.
+
+What is not yet claimable:
+
+- No overall "best memory solution on the market" claim.
+- No public leaderboard claim until original competitor systems are judged on
+  the same frozen protocol.
+- No BEAM quality claim: BEAM artifacts are useful diagnostics, but their pass
+  gates are currently false and `qualityClaimAllowed=false`.
+
 ## Artifact Snapshot
 
 | Artifact | Generated | Result |
 | --- | --- | --- |
-| `artifacts/nextgen-benchmarks.json` | 2026-06-02T17:45:24.701Z | Diagnostic pass; local lifecycle fixture checks are not quality or market proof |
-| `artifacts/cognicodebench/run.json` | 2026-06-01T08:58:41.688Z | Passed |
-| `artifacts/arena/run.json` | 2026-06-01T09:01:21.781Z | Passed |
-| `artifacts/arena/native-competitors.json` | 2026-06-01T08:53:30.159Z | Passed |
-| `artifacts/answer-generation.json` | 2026-06-02T17:51:29.806Z | Diagnostic pass unless generated with a successful external LLM/harness judge; deterministic coverage is not answer-quality proof |
-| `artifacts/leaderboard.json` | 2026-06-01T09:01:23.630Z | Passed |
-| `artifacts/benchmark-hardening.json` | 2026-06-01T09:01:30.207Z | Passed |
-| `artifacts/external-hard-summary.json` | 2026-06-01T10:07:13.482Z | Diagnostic pass; `claimAllowed=false` until all child rows carry LLM/harness or comparable public-benchmark proof |
+| `artifacts/nextgen-benchmarks.json` | 2026-06-05T17:00:26.697Z | Diagnostic pass; local lifecycle fixture checks are not quality or market proof |
+| `artifacts/cognicodebench/run.json` | 2026-06-09T10:39:45.075Z | Passed |
+| `artifacts/arena/run.json` | 2026-06-09T10:42:05.746Z | Passed |
+| `artifacts/arena/native-competitors.json` | 2026-06-01T08:53:30.159Z | Recorded; native smoke evidence is still bounded by proof level |
+| `artifacts/answer-generation.json` | 2026-06-05T17:03:23.002Z | Diagnostic pass unless generated with a successful external LLM/harness judge; deterministic coverage is not answer-quality proof |
+| `artifacts/leaderboard.json` | 2026-06-09T10:42:29.634Z | Diagnostic publication; local deterministic entries are not quality or market proof |
+| `artifacts/benchmark-hardening.json` | 2026-06-09T10:42:28.349Z | Passed |
+| `artifacts/external-hard-summary.json` | 2026-06-02T17:35:55.221Z | Diagnostic pass; `claimAllowed=false` until all child rows carry LLM/harness or comparable public-benchmark proof |
 | `artifacts/original-public-benchmarks.json` | 2026-06-02T09:05:43.612Z | Partial: upstream LongMemEval BM25 and Basic Memory full benchmark marker suite passed; Mem0 exact upstream is blocked by stale dependency ref |
-| `artifacts/realworld-benchmark-protocol.json` | 2026-06-02T19:52:45.270Z | Protocol ready; 0 current artifacts are fair market-wide real-world leaderboard evidence |
-| `artifacts/realworld-blackbox.json` | 2026-06-02T19:52:45.117Z | Neutral harness ready with 16-query bucket coverage; quality not scored because the LLM/harness judge and external competitor commands are blocked |
-| `artifacts/realworld-blackbox-openai-intelligence.json` | 2026-06-02T12:47:28.928Z | Controlled blocked-judge rerun; raw outputs retained, strict judge-contract validation active, external raw-output and finite metric contract validation active, safe delivery boundary active, and secret-safe provenance recorded; no current quality score is reportable |
+| `artifacts/realworld-benchmark-protocol.json` | 2026-06-09T10:37:25.334Z | Protocol ready; current artifacts are classified, but 0 are fair market-wide leaderboard evidence |
+| `artifacts/realworld-blackbox.json` | 2026-06-09T10:37:19.743Z | Neutral harness ready with coverage gates, raw outputs and telemetry; quality not scored because the LLM/harness judge and external competitor commands are blocked |
+| `artifacts/realworld-blackbox-openai-intelligence.json` | 2026-06-05T17:03:20.930Z | Controlled blocked-judge rerun; raw outputs retained, strict judge-contract validation active, and no current quality score is reportable |
 | `artifacts/realworld-blackbox-openai-intelligence-success.json` | not generated | Last-successful judged smoke slot; only updated by scoreable LLM/harness runs |
 | `artifacts/external-basic-memory.json` | 2026-06-01T12:37:07Z | Adapter diagnostic, not an original benchmark |
 | `artifacts/locomo-report.json` | 2026-06-02T18:25:38.418Z | Diagnostic pass; local evidence-id recall is not quality or market proof |
 | `artifacts/longmemeval-report.json` | 2026-06-02T18:30:16.433Z | Diagnostic pass; local session-id recall is not quality or market proof |
-| `artifacts/beam-report.json` | 2026-06-02T17:57:14.565Z | Diagnostic pass; local BEAM rubric-support scoring is not quality or market proof |
-| `artifacts/beam-500k-report.json` | 2026-06-02T18:03:23.443Z | Diagnostic pass; local BEAM rubric-support scoring is not quality or market proof |
-| `artifacts/beam-1m-report.json` | 2026-06-02T18:13:40.653Z | Diagnostic pass; local BEAM rubric-support scoring is not quality or market proof |
+| `artifacts/beam-report.json` | 2026-06-05T11:21:22.180Z | Diagnostic signal; pass gate false; local BEAM rubric-support scoring is not quality or market proof |
+| `artifacts/beam-500k-report.json` | 2026-06-05T11:28:47.320Z | Diagnostic signal; pass gate false; local BEAM rubric-support scoring is not quality or market proof |
+| `artifacts/beam-1m-report.json` | 2026-06-05T11:41:15.784Z | Diagnostic signal; pass gate false; local BEAM rubric-support scoring is not quality or market proof |
 
 ## Public Benchmark Dataset Stress
 
@@ -35,13 +60,13 @@ These rows are Cognibrain runs against public-style datasets and local
 baselines. They are useful regression evidence, but they are not original
 product runs for other memory systems and are not a fair market leaderboard.
 
-| Dataset | Metric | Proof | Claim | Cognibrain | Strongest local baseline |
-| --- | --- | --- | --- | ---: | ---: |
-| LoCoMo | Evidence recall@K | `local-diagnostic` | Blocked | 57.9% (890/1536) | Keyword only 43.4% |
-| LongMemEval-S | Answer-session recall@K | `local-diagnostic` | Blocked | 99.8% (499/500) | Keyword only 99.0% |
-| BEAM 100K | Retrieval nugget score@K | `local-diagnostic` | Blocked | 45.3% (181/400) | Keyword only 27.8% |
-| BEAM 500K | Retrieval nugget score@K | `local-diagnostic` | Blocked | 44.0% (308/700) | Keyword only 22.4% |
-| BEAM 1M | Retrieval nugget score@K | `local-diagnostic` | Blocked | 50.3% (352/700) | Keyword only 27.6% |
+| Dataset | Metric | Proof | Claim | Cognibrain | Strongest local baseline | Status |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| LoCoMo | Evidence recall@K | `local-diagnostic` | Blocked | 57.9% (890/1536) | Keyword only 43.4% | Diagnostic pass |
+| LongMemEval-S | Answer-session recall@K | `local-diagnostic` | Blocked | 99.8% (499/500) | Keyword only 99.0% | Diagnostic pass |
+| BEAM 100K | Retrieval nugget score@K | `beam-rubric-support-diagnostic` | Blocked | 46.0% (184/400) | Keyword only 28.2% | Diagnostic signal; pass gate false |
+| BEAM 500K | Retrieval nugget score@K | `beam-rubric-support-diagnostic` | Blocked | 43.4% (304/700) | Keyword only 22.6% | Diagnostic signal; pass gate false |
+| BEAM 1M | Retrieval nugget score@K | `beam-rubric-support-diagnostic` | Blocked | 51.3% (359/700) | Keyword only 27.6% | Diagnostic signal; pass gate false |
 
 ## Benchmark Integrity
 
@@ -57,8 +82,8 @@ product runs for other memory systems and are not a fair market leaderboard.
 
 | Split | Weakest categories | Improvement signal |
 | --- | --- | --- |
-| 100K | Abstention 0.0%, instruction following 10.0%, temporal reasoning 20.0% | Add unsupported-question gating, stronger instruction-evidence scoring, and temporal normalization. |
-| 500K | Abstention 0.0%, temporal reasoning 18.6%, knowledge update 24.3% | Reduce plausible-but-unsupported retrieval and improve fresh fact/version evidence. |
+| 100K | Abstention 0.0%, instruction following 12.5%, temporal reasoning 20.0% | Add unsupported-question gating, stronger instruction-evidence scoring, and temporal normalization. |
+| 500K | Abstention 0.0%, temporal reasoning 17.1%, knowledge update 22.9% | Reduce plausible-but-unsupported retrieval and improve fresh fact/version evidence. |
 | 1M | Abstention 0.0%, temporal reasoning 21.4%, knowledge update 24.3% | Treat abstention and temporal/freshness retrieval as the next benchmark-driven workstream. |
 
 ## Claim Boundaries
@@ -264,7 +289,7 @@ LLM/harness judge validates the full report.
 | Keyword only | 22.8% | 75.0% |
 | Graph only | 18.9% | 85.0% |
 | Temporal only | 3.3% | 95.0% |
-| Procedure only | 39.4% | 90.0% |
+| Procedure only | 36.6% | 90.0% |
 | Cognibrain without temporal | 87.8% | 0.0% |
 | Cognibrain without corrections | 15.5% | 90.0% |
 
@@ -277,14 +302,14 @@ is retained as diagnostic evidence but is not parsed into success scores.
 
 | System | Proof level | Claim status | Mode | Scenarios | Score |
 | --- | --- | --- | --- | ---: | ---: |
-| Cognibrain | `same-run-full` | Local product proof only; not market-wide | `full-local` | 300 | 97.5% |
-| LangMem | `same-run-native` | Judge required for quality claim | `native-command` | 300 | 66.7% |
+| Cognibrain | `same-run-full` | Local product proof only; not market-wide | `full-local` | 300 | 100.0% |
 | Graphiti/Zep | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 66.7% |
 | Zep | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 66.7% |
 | GBrain | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 66.7% |
 | Cognee | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 60.0% |
 | Basic Memory | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 60.0% |
 | Mem0 | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 15.0% |
+| LangMem | `same-run-native` | Judge required for quality claim | `native-command` | 300 | 0.0% |
 
 ## Native Competitor Smoke
 

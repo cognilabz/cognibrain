@@ -60,6 +60,11 @@ const checks = [
     has(files.readme, "Stop fixing the same agent mistake twice"),
     has(files.readme, "npm i @cognilabz/cognibrain"),
     has(files.readme, "## Public Surface"),
+    has(files.readme, "## Current Proof Snapshot"),
+    has(files.readme, "Product truth audit"),
+    has(files.readme, "CogniCodeBench"),
+    has(files.readme, "Real-world black-box harness"),
+    has(files.readme, "## Market Position"),
     has(files.readme, "Use MCP for MCP-native agents"),
     has(files.readme, "Use SDK/HTTP for product integrations and custom runtimes"),
     has(files.readme, "## What Cognibrain Is"),
@@ -111,6 +116,11 @@ const checks = [
     has(files.evidence, "artifacts/cognicodebench/run.json"),
     has(files.evidence, "artifacts/arena/run.json"),
     has(files.evidence, "Memory OS comparison follow-up"),
+    has(files.evidence, "Market readiness"),
+    has(files.docsHome, "## Market Readiness"),
+    has(files.benchmarks, "Market Readiness Summary"),
+    has(files.benchmarks, "Diagnostic signal; pass gate false"),
+    has(files.benchmarks, "No overall \"best memory solution on the market\" claim"),
     has(files.evidence, "Deferred: optional Qdrant retrieval backend")
   ]),
   check("legacy plan-era docs are gone", [

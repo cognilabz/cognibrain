@@ -38,6 +38,29 @@ The current implementation is best understood as six cooperating layers:
 | Feedback loop | `memory feedback-injection` records whether delivered memories were accepted or rejected. |
 | Proof | Release audits and benchmark artifacts keep diagnostic results separate from quality or market claims. |
 
+## Market Readiness
+
+The current repo is professionally strongest as engineering memory for coding
+agents: context before work, guard before risky actions, patch evidence after
+work, and audits that keep claims tied to code.
+
+Current checked proof:
+
+- Product truth audit: 69/69 checks passed, 0 open code-truth gaps.
+- Plan closure: 16/16 plan-gap checks, 10/10 latest-analysis checks and 10/10
+  full-plan proof checks.
+- CogniCodeBench: 1,000 engineering-memory scenarios, 100.0% full-system
+  diagnostic score and 96.0% integrity score.
+- Public dataset diagnostics: LoCoMo 57.9%, LongMemEval-S 99.8% and BEAM 1M
+  51.3%, each bounded as local diagnostic evidence.
+- Real-world black-box harness: manifest coverage, raw outputs and telemetry
+  are ready, but quality scoring and market leaderboard claims remain blocked
+  until an LLM/harness judge and original competitor commands are configured.
+
+This is enough to show a serious proof culture. It is not enough for a blanket
+"best on market" claim; [Benchmark results](benchmarks.md) and the
+[Evidence register](evidence.md) list the exact blockers.
+
 ## Honest Boundaries
 
 - Local benchmark diagnostics are not market proof unless the relevant

@@ -62,6 +62,21 @@ Cognibrain is a local/self-hosted memory layer for engineering agents. It is not
 
 The important design choice: injected memory is useful only when it is usable. Cognibrain keeps review-only, low-confidence, stale, conflicted or unsafe memories visible in diagnostics, but blocks them from the context body until the relevant claim/evidence gate says they are safe enough to inject.
 
+## Current Proof Snapshot
+
+The checked artifacts currently support a strong engineering-agent story, not a blanket "best memory product on the market" claim. The useful headline is narrower and more defensible: Cognibrain is built to stop coding agents from repeating known mistakes, and the repo carries concrete proof for that loop.
+
+| Surface | Current checked result | Claim boundary |
+| --- | --- | --- |
+| Product truth audit | 69/69 checks passed, 0 open code-truth gaps. | Repo claims match current code/artifacts; live tenant proof remains separate. |
+| Plan proof | 16/16 plan-gap checks, 10/10 latest-analysis checks, 10/10 full-plan proof checks. | Current implementation plan is closed by local audits. |
+| CogniCodeBench | 1,000 engineering-memory scenarios, 100.0% full-system diagnostic score, 96.0% integrity score, strongest local ablation 87.8%. | Local diagnostic only; quality and market claims require an external LLM/harness judge. |
+| Public dataset stress | LoCoMo 57.9% vs keyword 43.4%, LongMemEval-S 99.8% vs keyword 99.0%, BEAM 1M 51.3% vs keyword 27.6%. | Retrieval diagnostics, not answer-quality or market leaderboard proof. |
+| Real-world black-box harness | Coverage gate ready, raw outputs retained, latency/cost/resource telemetry recorded, Basic Memory and LangMem original-command outputs captured. | Judge blocked; no fair market leaderboard claim yet. |
+| Operator memory | Source-aware Dream scores 94.4% against a 44.6% best local baseline. | Local diagnostic only; native/cloud competitor and independent proof gates remain blocked. |
+
+See [docs/benchmarks.md](docs/benchmarks.md) and [docs/evidence.md](docs/evidence.md) for the detailed proof register and claim blockers.
+
 ## Plain-English Model
 
 Think of Cognibrain as a small engineering memory service that runs beside a coding agent:
@@ -252,6 +267,20 @@ Many memory tools stop at storage plus search. Cognibrain is built around engine
 - It uses action guards before commands or edits, not only recall after the fact.
 - It records patch evidence so later sessions can connect decisions to changed files and verification commands.
 - It exposes compact text/JSON surfaces first, so agents, humans and CI can all use the same lifecycle.
+
+## Market Position
+
+The agent-memory market includes managed memory APIs, temporal graph-memory systems, stateful-agent runtimes, local note-style memory and general RAG stacks. Cognibrain's evidence-backed position today is deliberately more specific: it is an engineering memory operating layer for coding agents that need context retrieval, action guards, truth gates, patch evidence and CI-facing proof.
+
+That is a real differentiator for software teams, but the repo should not claim universal market leadership until the blocked proof gates are satisfied:
+
+- a frozen neutral protocol with at least two judged original competitor systems,
+- an LLM/harness judge that scores retained raw outputs instead of self-reported checks,
+- public immutable artifact hashes and independent replication,
+- production-certified connector claims are blocked without live signed tenant proof,
+- preregistered latency and cost budgets for any public leaderboard.
+
+Until then, Cognibrain can professionally claim strong local engineering-memory diagnostics and unusually strict proof boundaries. It cannot honestly claim to be the overall best memory solution across every market segment.
 
 ## Honest Boundaries
 

@@ -225,12 +225,19 @@ function installConnector(service: MemoryService, id: string, name: string, kind
 
 function verifyHarnessPackages(): { passed: boolean; harnesses: string[] } {
   const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-"));
+  const codexHome = join(dir, ".codex");
+  const hermesHome = join(dir, ".hermes-home");
   try {
-    const result = spawnSync(process.execPath, [join(process.cwd(), "bin", "cognibrain.mjs"), "setup", "--all-harnesses", "--no-start", "--no-doctor", "--no-skill"], { cwd: dir, encoding: "utf8", maxBuffer: 5 * 1024 * 1024 });
+    const result = spawnSync(process.execPath, [join(process.cwd(), "bin", "cognibrain.mjs"), "setup", "--all-harnesses", "--no-start", "--no-doctor", "--no-skill"], {
+      cwd: dir,
+      env: { ...process.env, CODEX_HOME: codexHome, HERMES_HOME: hermesHome },
+      encoding: "utf8",
+      maxBuffer: 5 * 1024 * 1024
+    });
     if (result.status !== 0) return { passed: false, harnesses: [] };
     const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8")) as { harnesses?: Record<string, unknown> };
     const harnesses = Object.keys(manifest.harnesses ?? {});
-    return { passed: ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp"].every((name) => harnesses.includes(name)), harnesses };
+    return { passed: ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "hermes", "sourcegraph-amp", "devin-style"].every((name) => harnesses.includes(name)), harnesses };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

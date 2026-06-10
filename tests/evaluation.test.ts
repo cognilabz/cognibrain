@@ -546,12 +546,13 @@ describe("self verification benchmark loop", () => {
       markdown: join(dir, "harness-maturity.md")
     });
     expect(report.passed).toBe(true);
-    expect(report.summary.total).toBeGreaterThanOrEqual(16);
-    expect(report.summary.generated).toBeGreaterThanOrEqual(16);
+    expect(report.summary.total).toBeGreaterThanOrEqual(17);
+    expect(report.summary.generated).toBeGreaterThanOrEqual(17);
     expect(report.summary.cliGoldenFixtureCommands).toBe(report.summary.cliMcpParityCommands);
     expect(report.rows.find((row) => row.harness === "windsurf")?.maturity.configGenerated).toBe(true);
     expect(report.rows.find((row) => row.harness === "continue")?.maturity.configGenerated).toBe(true);
     expect(report.rows.find((row) => row.harness === "continue")?.maturity.mcp).toBe(false);
+    expect(report.rows.find((row) => row.harness === "hermes")?.maturity.mcp).toBe(true);
     expect(report.rows.find((row) => row.harness === "devin-style")?.maturity.configGenerated).toBe(true);
     expect(report.goldenPaths.every((path) => path.passed)).toBe(true);
     expect(readFileSync(join(dir, "harness-maturity.md"), "utf8")).toContain("Harness Maturity Matrix");

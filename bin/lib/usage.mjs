@@ -13,7 +13,7 @@ Usage:
       Guided self-hosted install that writes setup state, native connector configs, harness config, starts the API, and runs doctor
   cognibrain setup [--profile local|team|production|benchmark] [--yes]
       Starts the same guided wizard; legacy flags below still work for scripted installs
-  cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--windsurf] [--continue] [--aider] [--roo-cline] [--goose] [--sourcegraph-amp] [--devin-style] [--all-harnesses]
+  cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--windsurf] [--continue] [--aider] [--roo-cline] [--goose] [--hermes] [--sourcegraph-amp] [--devin-style] [--all-harnesses]
       Scripted install path for CI and package smoke tests
   cognibrain doctor [--publish] [--fix] [--no-start]
       Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
@@ -47,7 +47,7 @@ Usage:
       Configure native vendor drivers, adapters, or SDK-backed sources from one connection surface
   cognibrain config list|show|paths|doctor
       Inspect setup state, harness packages, connector configs, adapter configs, and skill paths
-  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|sourcegraph-amp|devin-style> [--refresh]
+  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style> [--refresh]
       Write MCP config for supported harnesses; use --refresh to replace existing cognibrain-owned instruction files
   cognibrain connector list|show <provider>|doctor [provider]|remove <provider>
       Inspect and maintain source-system connector configs
@@ -160,8 +160,8 @@ export function configUsage(exitCode) {
   cognibrain config show [--json]
   cognibrain config paths [--json]
   cognibrain config doctor [--json]
-  cognibrain config write <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|sourcegraph-amp|devin-style> [--refresh]
-  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|sourcegraph-amp|devin-style> [--refresh]`);
+  cognibrain config write <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style> [--refresh]
+  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style> [--refresh]`);
   process.exit(exitCode);
 }
 

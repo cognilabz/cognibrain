@@ -37,6 +37,8 @@ const aliases = new Map([
   ["cline", "roo-cline"],
   ["roo-cline", "roo-cline"],
   ["goose", "goose"],
+  ["hermes", "hermes"],
+  ["hermes-agent", "hermes"],
   ["sourcegraph-amp", "sourcegraph-amp"],
   ["amp", "sourcegraph-amp"],
   ["devin", "devin-style"],
@@ -109,7 +111,7 @@ function usage(exitCode) {
   console.log(`cognibrain-connect
 
 Usage:
-  npx cognibrain-connect <codex|claude-code|cursor|github-copilot|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|sourcegraph-amp|devin-style|all> [--runtime-root <path>] [--no-start] [--no-doctor] [--refresh]
+  npx cognibrain-connect <codex|claude-code|cursor|github-copilot|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style|all> [--runtime-root <path>] [--no-start] [--no-doctor] [--refresh]
 
 Examples:
   npx cognibrain-connect claude-code

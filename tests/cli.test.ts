@@ -1438,10 +1438,11 @@ describe("cognibrain CLI", () => {
   it("generates reviewable harness packages for all supported connector targets", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-"));
     const codexHome = join(dir, ".codex");
+    const hermesHome = join(dir, ".hermes-home");
     try {
       execFileSync(process.execPath, [cli, "setup", "--all-harnesses", "--no-start", "--no-doctor"], {
         cwd: dir,
-        env: { ...process.env, CODEX_HOME: codexHome, MEMORY_AUTO_DREAM: "false" },
+        env: { ...process.env, CODEX_HOME: codexHome, HERMES_HOME: hermesHome, MEMORY_AUTO_DREAM: "false" },
         encoding: "utf8"
       });
 
@@ -1471,6 +1472,8 @@ describe("cognibrain CLI", () => {
         join(dir, ".clinerules", "cognibrain.md"),
         join(dir, ".goose", "config.yaml"),
         join(dir, ".goose", "cognibrain.md"),
+        join(hermesHome, "config.yaml"),
+        join(dir, "HERMES.md"),
         join(dir, ".amp", "cognibrain.md"),
         join(dir, ".devin", "cognibrain.json"),
         join(dir, ".devin", "cognibrain.md"),
@@ -1500,13 +1503,21 @@ describe("cognibrain CLI", () => {
       expect(readFileSync(join(dir, ".aider", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "aider", "cognibrain.md"), "utf8"));
       expect(readFileSync(join(dir, ".clinerules", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "roo-cline", "cognibrain.md"), "utf8"));
       expect(readFileSync(join(dir, ".goose", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "goose", "cognibrain.md"), "utf8"));
+      const hermesInstructions = readFileSync(join(dir, "HERMES.md"), "utf8");
+      expect(hermesInstructions).toContain(root);
+      expect(hermesInstructions).toContain("context --task");
+      expect(hermesInstructions).toContain("guard --action");
+      expect(hermesInstructions).toContain("patch-evidence --task");
+      expect(readFileSync(join(hermesHome, "config.yaml"), "utf8")).toContain("mcp_servers:");
+      expect(readFileSync(join(hermesHome, "config.yaml"), "utf8")).toContain("cognibrain:");
+      expect(readFileSync(join(hermesHome, "config.yaml"), "utf8")).toContain("lightweightMcpServer.mjs");
       expect(readFileSync(join(dir, ".amp", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "sourcegraph-amp", "cognibrain.md"), "utf8"));
       expect(readFileSync(join(dir, ".devin", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "devin-style", "cognibrain.md"), "utf8"));
       const claude = readFileSync(join(dir, ".claude", "settings.json"), "utf8");
       expect(claude).toContain(root);
       expect(claude).not.toContain("/ABSOLUTE/PATH/TO/cognibrain");
       const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8"));
-      expect(Object.keys(manifest.harnesses)).toEqual(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp", "devin-style"]);
+      expect(Object.keys(manifest.harnesses)).toEqual(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "hermes", "sourcegraph-amp", "devin-style"]);
       expect(manifest.harnesses.copilot.feedback).toContain("accepted_change");
       expect(manifest.harnesses.langgraph.feedback).toContain("tool outcome telemetry");
       expect(manifest.harnesses.crewai.feedback).toContain("tool outcome telemetry");
@@ -1515,6 +1526,7 @@ describe("cognibrain CLI", () => {
       expect(manifest.harnesses.opencode.mcpConfig).toBeUndefined();
       expect(manifest.harnesses.continue.mcpConfig).toBeUndefined();
       expect(manifest.harnesses["roo-cline"].feedback).toContain("correction capture");
+      expect(manifest.harnesses.hermes.protocol).toBe("mcp-plus-project-context");
       const vscodeMcp = JSON.parse(readFileSync(join(dir, ".vscode", "mcp.json"), "utf8"));
       expect(vscodeMcp.servers.cognibrain.args.join(" ")).toContain("lightweightMcpServer.mjs");
       const vscodeSettings = JSON.parse(readFileSync(join(dir, ".vscode", "settings.json"), "utf8"));
@@ -1630,6 +1642,49 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 
+  it("merges the Hermes MCP server into an existing Hermes config", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-hermes-config-"));
+    const hermesHome = join(dir, ".hermes-home");
+    try {
+      mkdirSync(hermesHome, { recursive: true });
+      writeFileSync(join(hermesHome, "config.yaml"), [
+        "model: openai/gpt-5",
+        "agents:",
+        "  cognibrain:",
+        "    mode: \"observe\"",
+        "mcp_servers:",
+        "  github:",
+        "    command: \"npx\"",
+        "models:",
+        "  default: openai/gpt-5",
+        ""
+      ].join("\n"));
+
+      execFileSync(process.execPath, [cli, "config", "hermes"], {
+        cwd: dir,
+        env: { ...process.env, HERMES_HOME: hermesHome, MEMORY_AUTO_DREAM: "false" },
+        encoding: "utf8"
+      });
+      execFileSync(process.execPath, [cli, "config", "hermes"], {
+        cwd: dir,
+        env: { ...process.env, HERMES_HOME: hermesHome, MEMORY_AUTO_DREAM: "false" },
+        encoding: "utf8"
+      });
+
+      const config = readFileSync(join(hermesHome, "config.yaml"), "utf8");
+      expect(config).toContain("model: openai/gpt-5");
+      expect(config).toContain("agents:");
+      expect(config).toContain("github:");
+      expect(config).toContain("cognibrain:");
+      expect(config).toContain("models:");
+      const mcpSection = config.slice(config.indexOf("mcp_servers:"), config.indexOf("models:"));
+      expect((mcpSection.match(/^\s{2}cognibrain:/gm) ?? []).length).toBe(1);
+      expect(readFileSync(join(dir, "HERMES.md"), "utf8")).toContain("context --task");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
   it("offers an npx-style connector installer for individual harnesses", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-connect-"));
     const codexHome = join(dir, ".codex");
@@ -1652,13 +1707,14 @@ describe("cognibrain CLI", () => {
   }, slowCliTimeout);
 
   it("offers package-style installers for OpenCode, OpenClaw, LangGraph, CrewAI, and common coding harnesses", () => {
-    for (const target of ["opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp", "devin-style"]) {
+    for (const target of ["opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "hermes", "sourcegraph-amp", "devin-style"]) {
       const dir = mkdtempSync(join(tmpdir(), `cognibrain-connect-${target}-`));
       const codexHome = join(dir, ".codex");
+      const hermesHome = join(dir, ".hermes-home");
       try {
         const output = execFileSync(process.execPath, [connectCli, target, "--no-start", "--no-doctor"], {
           cwd: dir,
-          env: { ...process.env, CODEX_HOME: codexHome, MEMORY_AUTO_DREAM: "false" },
+          env: { ...process.env, CODEX_HOME: codexHome, HERMES_HOME: hermesHome, MEMORY_AUTO_DREAM: "false" },
           encoding: "utf8"
         });
 

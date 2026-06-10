@@ -119,8 +119,11 @@ Supported harness targets:
 | Aider | `cognibrain config aider` | `.aider.conf.yml`, `.aider/cognibrain.md` |
 | Roo Code / Cline | `cognibrain config roo-cline` | `.roo/mcp.json`, `.clinerules/cognibrain.md` |
 | Goose | `cognibrain config goose` | `.goose/config.yaml`, `.goose/cognibrain.md` |
+| Hermes Agent | `cognibrain config hermes` | `$HERMES_HOME/config.yaml`, `HERMES.md` |
 | Sourcegraph Amp | `cognibrain config sourcegraph-amp` | `.amp/cognibrain.md` |
 | Devin-style agents | `cognibrain config devin-style` | `.devin/cognibrain.json`, `.devin/cognibrain.md` |
+
+Hermes uses a global `$HERMES_HOME/config.yaml` MCP section plus repo-local project context. `cognibrain config hermes` merges a `mcp_servers.cognibrain` entry into the Hermes config and writes `HERMES.md` in the current project. When `HERMES_HOME` is unset, Cognibrain uses `~/.hermes`.
 
 Generate or refresh specific harness files:
 

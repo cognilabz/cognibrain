@@ -93,6 +93,7 @@ const catalog: HarnessCatalogRow[] = [
   row("aider", "Aider", [".aider.conf.yml"], [".aider/cognibrain.md"], false, ["Aider uses file-based instructions plus CLI feedback commands rather than MCP-native hooks."]),
   row("roo-cline", "Roo Code / Cline", [".roo/mcp.json"], [".clinerules/cognibrain.md"], true),
   row("goose", "Goose", [".goose/config.yaml"], [".goose/cognibrain.md"], true),
+  row("hermes", "Hermes Agent", ["$HERMES_HOME/config.yaml"], ["HERMES.md"], true),
   row("sourcegraph-amp", "Sourcegraph Amp", [".amp/cognibrain.md"], [".amp/cognibrain.md"], false, ["Instruction handoff is generated; a native pre-tool hook is not claimed."]),
   row("devin-style", "Devin-style external agent mode", [".devin/cognibrain.json"], [".devin/cognibrain.md"], false, ["Generic external-agent contract is generated; a vendor-native Devin hook is not claimed."])
 ];
@@ -125,7 +126,7 @@ export function generateHarnessMaturity(options: { out?: string; markdown?: stri
       correctionCaptureTargets: rows.filter((item) => item.maturity.correctionCapture).length,
       evidenceTrailTargets: rows.filter((item) => item.maturity.patchEvidenceTrail).length
     },
-    passed: rows.length >= 16 && rows.filter((item) => item.maturity.configGenerated).length >= 16 && cliLifecycleProtocolReady() && lifecycleCliParityCommandCount() >= 10 && cliGoldenFixtureCommands >= lifecycleCliParityCommandCount() && publicHarnessSdkReady() && goldenPaths.every((item) => item.passed)
+    passed: rows.length >= 17 && rows.filter((item) => item.maturity.configGenerated).length >= 17 && cliLifecycleProtocolReady() && lifecycleCliParityCommandCount() >= 10 && cliGoldenFixtureCommands >= lifecycleCliParityCommandCount() && publicHarnessSdkReady() && goldenPaths.every((item) => item.passed)
   };
   if (options.out) writeJson(options.out, report);
   if (options.markdown) writeText(options.markdown, renderMarkdown(report));
@@ -191,10 +192,11 @@ function maturityRow(
 function verifyHarnessInstall(): { dir: string; manifestPath: string; manifest: { harnesses?: Record<string, unknown> } | null; files: Set<string> } {
   const dir = mkdtempSync(join(tmpdir(), "cognibrain-harness-maturity-"));
   const codexHome = join(dir, ".codex");
+  const hermesHome = join(dir, ".hermes-home");
   try {
     const result = spawnSync(process.execPath, [join(process.cwd(), "bin", "cognibrain.mjs"), "setup", "--all-harnesses", "--no-start", "--no-doctor"], {
       cwd: dir,
-      env: { ...process.env, CODEX_HOME: codexHome, MEMORY_AUTO_DREAM: "false" },
+      env: { ...process.env, CODEX_HOME: codexHome, HERMES_HOME: hermesHome, MEMORY_AUTO_DREAM: "false" },
       encoding: "utf8",
       maxBuffer: 8 * 1024 * 1024
     });
@@ -207,6 +209,8 @@ function verifyHarnessInstall(): { dir: string; manifestPath: string; manifest: 
     for (const item of catalog.flatMap((entry) => [...entry.configPaths, ...entry.rulesPaths])) {
       if (item.startsWith("$CODEX_HOME")) {
         if (existsSync(item.replace("$CODEX_HOME", codexHome))) files.add(item);
+      } else if (item.startsWith("$HERMES_HOME")) {
+        if (existsSync(item.replace("$HERMES_HOME", hermesHome))) files.add(item);
       } else if (existsSync(join(dir, item))) {
         files.add(item);
       }

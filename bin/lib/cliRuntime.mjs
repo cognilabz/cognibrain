@@ -197,6 +197,7 @@ async function setup(setupArgs) {
     if (flags.has("--aider")) writeHarnessConfig("aider");
     if (flags.has("--roo-cline")) writeHarnessConfig("roo-cline");
     if (flags.has("--goose")) writeHarnessConfig("goose");
+    if (flags.has("--hermes")) writeHarnessConfig("hermes");
     if (flags.has("--sourcegraph-amp")) writeHarnessConfig("sourcegraph-amp");
     if (flags.has("--devin-style")) writeHarnessConfig("devin-style");
   }
@@ -820,7 +821,7 @@ function inferDeploymentMode(url) {
 
 function shouldRouteSetupToWizard(setupArgs) {
   const flags = new Set(setupArgs);
-  const hasLegacySetupFlag = ["--self-hosted", "--codex", "--claude", "--copilot", "--cursor", "--vscode", "--opencode", "--openclaw", "--langgraph", "--crewai", "--windsurf", "--continue", "--aider", "--roo-cline", "--goose", "--sourcegraph-amp", "--devin-style", "--all-harnesses"].some((flag) => flags.has(flag));
+  const hasLegacySetupFlag = ["--self-hosted", "--codex", "--claude", "--copilot", "--cursor", "--vscode", "--opencode", "--openclaw", "--langgraph", "--crewai", "--windsurf", "--continue", "--aider", "--roo-cline", "--goose", "--hermes", "--sourcegraph-amp", "--devin-style", "--all-harnesses"].some((flag) => flags.has(flag));
   return !hasLegacySetupFlag && (setupArgs.length === 0 || flags.has("--yes") || setupArgs.includes("--profile") || canPrompt(setupArgs));
 }
 
@@ -942,11 +943,10 @@ function yesNo(value) {
 
 function setupFlagsForHarnesses(harnesses) {
   if (harnesses.includes("all")) return ["--all-harnesses"];
-  const supported = new Set(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp", "devin-style"]);
+  const supported = new Set(harnessTargets());
   const selected = harnesses.filter((harness) => supported.has(harness));
   return selected.length ? selected.map((harness) => `--${harness}`) : ["--codex", "--cursor"];
 }
-
 function nextStepsForProfile(profileName, connectors) {
   const steps = ["Run cognibrain", "Run cognibrain doctor --fix", "Run npm run demo:first-win"];
   if (connectors.length) steps.splice(1, 0, `Configure connector env: ${connectors.join(", ")}`);
@@ -978,7 +978,7 @@ function profileDefinition(name) {
       label: "self-hosted team workspace",
       mode: "self_hosted",
       setupFlags: ["--all-harnesses"],
-      harnesses: ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp", "devin-style"],
+      harnesses: harnessTargets(),
       storage: "local-json-or-postgres",
       auth: "reverse-proxy-or-oidc",
       goalChoice: "3",
@@ -1057,7 +1057,7 @@ function writeSetupState(profile, metadata = {}) {
 }
 
 function harnessTargets() {
-  return ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "sourcegraph-amp", "devin-style"];
+  return ["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "hermes", "sourcegraph-amp", "devin-style"];
 }
 
 function codexSkillPath() {

@@ -75,6 +75,7 @@ function writeHarnessConfig(target) {
       writeAiderConfig();
       writeRooClineConfig();
       writeGooseConfig();
+      writeHermesConfig();
       writeSourcegraphAmpConfig();
       writeDevinStyleConfig();
       writeHarnessPackageManifest();
@@ -121,6 +122,9 @@ function writeHarnessConfig(target) {
     case "goose":
       writeGooseConfig();
       break;
+    case "hermes":
+      writeHermesConfig();
+      break;
     case "sourcegraph-amp":
       writeSourcegraphAmpConfig();
       break;
@@ -128,7 +132,7 @@ function writeHarnessConfig(target) {
       writeDevinStyleConfig();
       break;
     default:
-      console.error("Usage: cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|sourcegraph-amp|devin-style>");
+      console.error("Usage: cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style>");
       process.exit(1);
   }
 }
@@ -277,6 +281,25 @@ function writeGooseConfig() {
   writeHarnessPackageManifest();
 }
 
+function writeHermesConfig() {
+  writeHermesMcpConfig(join(process.env.HERMES_HOME ?? join(homedir(), ".hermes"), "config.yaml"));
+  writeTemplateFile(join(launchCwd, "HERMES.md"), "templates/hermes/HERMES.md");
+  writeHarnessPackageManifest();
+}
+
+function writeHermesMcpConfig(configPath) {
+  mkdirSync(dirname(configPath), { recursive: true });
+  const current = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
+  const hasCognibrain = hasYamlMapEntry(current, "mcp_servers", "cognibrain");
+  if (hasCognibrain && !shouldRefreshHarnessFiles()) {
+    console.log(`Hermes MCP config already present: ${configPath}`);
+    return;
+  }
+  const updated = upsertYamlTopLevelMapEntry(current, "mcp_servers", "cognibrain", generatedHermesMcpServerEntry());
+  writeFileSync(configPath, updated);
+  console.log(`${hasCognibrain ? "Refreshed" : "Wrote"} Hermes MCP config: ${configPath}`);
+}
+
 function writeSourcegraphAmpConfig() {
   writeTemplateFile(join(launchCwd, ".amp", "cognibrain.md"), "templates/sourcegraph-amp/cognibrain.md");
   writeHarnessPackageManifest();
@@ -295,7 +318,8 @@ function writeTemplateFile(targetPath, templatePath) {
 function renderTemplate(templatePath) {
   return readFileSync(join(root, templatePath), "utf8")
     .replaceAll("/ABSOLUTE/PATH/TO/cognibrain", root)
-    .replaceAll("__COGNIBRAIN_ROOT__", root);
+    .replaceAll("__COGNIBRAIN_ROOT__", root)
+    .replaceAll("__COGNIBRAIN_RUNTIME_ROOT__", launchCwd);
 }
 
 function writeTextFile(targetPath, content) {
@@ -390,6 +414,58 @@ function generatedGooseConfig() {
       - ${JSON.stringify(launchCwd)}
       - "mcp"
 `;
+}
+
+function generatedHermesMcpServerEntry() {
+  return `  cognibrain:
+    command: ${yamlString(process.execPath)}
+    args:
+      - ${yamlString(join(root, "bin", "lib", "lightweightMcpServer.mjs"))}
+    env:
+      COGNIBRAIN_RUNTIME_ROOT: ${yamlString(launchCwd)}`;
+}
+
+function upsertYamlTopLevelMapEntry(content, topKey, entryKey, entryBlock) {
+  const trimmed = content.trimEnd();
+  const lines = trimmed ? trimmed.split(/\r?\n/) : [];
+  const topIndex = lines.findIndex((line) => line.startsWith(`${topKey}:`));
+  if (topIndex < 0) {
+    return `${trimmed}${trimmed ? "\n\n" : ""}${topKey}:\n${entryBlock}\n`;
+  }
+
+  if (lines[topIndex] !== `${topKey}:`) lines[topIndex] = `${topKey}:`;
+  const sectionEnd = findNextTopLevelYamlKey(lines, topIndex + 1);
+  const entryPattern = new RegExp(`^\\s{2}${entryKey}:\\s*(#.*)?$`);
+  const entryStart = lines.findIndex((line, index) => index > topIndex && index < sectionEnd && entryPattern.test(line));
+  if (entryStart < 0) {
+    return [...lines.slice(0, sectionEnd), ...entryBlock.split("\n"), ...lines.slice(sectionEnd)].join("\n") + "\n";
+  }
+
+  const entryEnd = findNextYamlMapEntry(lines, entryStart + 1, sectionEnd);
+  return [...lines.slice(0, entryStart), ...entryBlock.split("\n"), ...lines.slice(entryEnd)].join("\n") + "\n";
+}
+
+function hasYamlMapEntry(content, topKey, entryKey) {
+  const lines = content.trimEnd() ? content.trimEnd().split(/\r?\n/) : [];
+  const topIndex = lines.findIndex((line) => line.startsWith(`${topKey}:`));
+  if (topIndex < 0) return false;
+  const sectionEnd = findNextTopLevelYamlKey(lines, topIndex + 1);
+  const entryPattern = new RegExp(`^\\s{2}${entryKey}:\\s*(#.*)?$`);
+  return lines.some((line, index) => index > topIndex && index < sectionEnd && entryPattern.test(line));
+}
+
+function findNextTopLevelYamlKey(lines, start) {
+  for (let index = start; index < lines.length; index += 1) {
+    if (/^[A-Za-z0-9_-]+:\s*(#.*)?$/.test(lines[index])) return index;
+  }
+  return lines.length;
+}
+
+function findNextYamlMapEntry(lines, start, sectionEnd) {
+  for (let index = start; index < sectionEnd; index += 1) {
+    if (/^\s{2}[A-Za-z0-9_-]+:\s*(#.*)?$/.test(lines[index])) return index;
+  }
+  return sectionEnd;
 }
 
 function generatedExternalAgentContract(target) {
@@ -492,6 +568,12 @@ function writeHarnessPackageManifest() {
         instructions: join(launchCwd, ".goose", "cognibrain.md"),
         feedback: ["cognibrain context", "cognibrain outcome", "tool outcome telemetry"]
       },
+      hermes: {
+        config: join(process.env.HERMES_HOME ?? join(homedir(), ".hermes"), "config.yaml"),
+        instructions: join(launchCwd, "HERMES.md"),
+        protocol: "mcp-plus-project-context",
+        feedback: ["cognibrain MCP tools", "Hermes project context", "patch evidence handoff"]
+      },
       "sourcegraph-amp": {
         instructions: join(launchCwd, ".amp", "cognibrain.md"),
         feedback: ["context recall instructions", "evidence trail handoff"]
@@ -525,6 +607,7 @@ function harnessTemplateHealth() {
     "templates/aider/cognibrain.md",
     "templates/roo-cline/cognibrain.md",
     "templates/goose/cognibrain.md",
+    "templates/hermes/HERMES.md",
     "templates/sourcegraph-amp/cognibrain.md",
     "templates/devin-style/cognibrain.md"
   ];
@@ -557,13 +640,15 @@ function harnessGeneratedHealth() {
     join(launchCwd, ".clinerules", "cognibrain.md"),
     join(launchCwd, ".goose", "config.yaml"),
     join(launchCwd, ".goose", "cognibrain.md"),
+    join(process.env.HERMES_HOME ?? join(homedir(), ".hermes"), "config.yaml"),
+    join(launchCwd, "HERMES.md"),
     join(launchCwd, ".amp", "cognibrain.md"),
     join(launchCwd, ".devin", "cognibrain.json"),
     join(launchCwd, ".devin", "cognibrain.md"),
     join(launchCwd, ".cognibrain-harness-package.json")
   ];
   const missing = expected.filter((path) => !existsSync(path));
-  return { ok: missing.length === 0, detail: missing.length ? `run cognibrain setup --all-harnesses; missing ${missing.map((path) => path.replace(`${launchCwd}/`, "")).join(", ")}` : "Codex, Claude, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph, CrewAI, Windsurf, Continue, Aider, Roo/Cline, Goose, Sourcegraph Amp and Devin-style configs present" };
+  return { ok: missing.length === 0, detail: missing.length ? `run cognibrain setup --all-harnesses; missing ${missing.map((path) => path.replace(`${launchCwd}/`, "")).join(", ")}` : "Codex, Claude, Copilot, Cursor, VS Code, OpenCode, OpenClaw, LangGraph, CrewAI, Windsurf, Continue, Aider, Roo/Cline, Goose, Hermes, Sourcegraph Amp and Devin-style configs present" };
 }
 
 function connectorProofHealth() {
@@ -600,6 +685,10 @@ function stdioServerConfig() {
 }
 
 function tomlString(value) {
+  return JSON.stringify(value);
+}
+
+function yamlString(value) {
   return JSON.stringify(value);
 }
 

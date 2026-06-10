@@ -45,7 +45,7 @@ npx cognibrain init --yes
 npx cognibrain status
 ```
 
-`init` defaults to the `solo-dev` profile. It writes local setup state, Codex/Cursor harness files, local JSON storage, local-only auth, a GitHub connector stub and a SQLite storage adapter stub. The default command shows a stable operator CLI snapshot with runtime state, memory health, connections and next actions. It is intentionally text-first, so it works in small panes, CI logs and remote shells.
+`init` defaults to the `solo-dev` profile. It writes local setup state, Codex/Cursor harness files, the Codex skill, local JSON storage, local-only auth, a GitHub connector stub and a SQLite storage adapter stub. The default command shows a stable operator CLI snapshot with runtime state, memory health, connections and next actions. It is intentionally text-first, so it works in small panes, CI logs and remote shells.
 
 ## What Cognibrain Is
 

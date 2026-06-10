@@ -91,15 +91,36 @@ npx cognibrain dashboard
 
 ## Harness Configuration
 
-Harness configuration means the files that teach a coding agent how to call Cognibrain before work, before risky actions, and after durable discoveries. The generated files prefer the CLI lifecycle. MCP config is written only for hosts that can use an MCP stdio adapter.
+Harness configuration means the files that teach a coding agent how to call Cognibrain before non-trivial work, before risky actions, and after durable discoveries. The generated files prefer the CLI lifecycle. MCP config is written only for hosts that can use an MCP stdio adapter.
 
 The default `solo-dev` init writes:
 
 | Target | Files |
 | --- | --- |
-| Codex | `$CODEX_HOME/config.toml`, `AGENTS.md` |
+| Codex | `$CODEX_HOME/config.toml`, `$CODEX_HOME/skills/cognibrain/SKILL.md`, `AGENTS.md` |
 | Cursor | `.cursor/mcp.json`, `.cursor/rules/open-memory.mdc` |
 | Package manifest | `.cognibrain-harness-package.json` |
+
+Supported harness targets:
+
+| Target | Generate with | Files |
+| --- | --- | --- |
+| Codex | `cognibrain config codex` | `$CODEX_HOME/config.toml`, `$CODEX_HOME/skills/cognibrain/SKILL.md`, `AGENTS.md` |
+| Claude Code | `cognibrain config claude` | `.mcp.json`, `.claude/settings.json` |
+| GitHub Copilot | `cognibrain config copilot` | `.github/copilot-instructions.md`, `.github/instructions/cognibrain.instructions.md` |
+| Cursor | `cognibrain config cursor` | `.cursor/mcp.json`, `.cursor/rules/open-memory.mdc` |
+| VS Code MCP | `cognibrain config vscode` | `.vscode/mcp.json`, `.vscode/settings.json`, `.vscode/cognibrain.instructions.md` |
+| OpenCode | `cognibrain config opencode` | `.opencode/cognibrain.md` |
+| OpenClaw | `cognibrain config openclaw` | `.openclaw/cognibrain.md` |
+| LangGraph | `cognibrain config langgraph` | `langgraph.cognibrain.json`, `langgraph-cognibrain.ts` |
+| CrewAI | `cognibrain config crewai` | `crewai.cognibrain.json`, `crewai_cognibrain.py` |
+| Windsurf | `cognibrain config windsurf` | `.windsurf/rules/cognibrain.md` |
+| Continue | `cognibrain config continue` | `.continue/rules/cognibrain.md` |
+| Aider | `cognibrain config aider` | `.aider.conf.yml`, `.aider/cognibrain.md` |
+| Roo Code / Cline | `cognibrain config roo-cline` | `.roo/mcp.json`, `.clinerules/cognibrain.md` |
+| Goose | `cognibrain config goose` | `.goose/config.yaml`, `.goose/cognibrain.md` |
+| Sourcegraph Amp | `cognibrain config sourcegraph-amp` | `.amp/cognibrain.md` |
+| Devin-style agents | `cognibrain config devin-style` | `.devin/cognibrain.json`, `.devin/cognibrain.md` |
 
 Generate or refresh specific harness files:
 
@@ -109,6 +130,8 @@ npx cognibrain config cursor
 npx cognibrain config all
 npx cognibrain config doctor
 ```
+
+`config codex`, `setup --codex` and the default `init --yes` path install the Codex skill and write the repo-level `AGENTS.md` instructions automatically. Pass `--no-skill` only when you intentionally want Codex MCP/config files without installing `$CODEX_HOME/skills/cognibrain/SKILL.md`. Use `--refresh` to replace existing Cognibrain-owned instruction files instead of writing `.cognibrain` review sidecars.
 
 Scripted setup still supports legacy harness flags:
 

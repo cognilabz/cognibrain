@@ -8,8 +8,8 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
   const outputDir = options.outputDir ?? "artifacts/public/evidence-table";
   const report = JSON.parse(readFileSync(inputPath, "utf8")) as RealityReport;
   const verifiedManifestHash = report.manifestLock.sha256;
-  if (report.manifestHash !== verifiedManifestHash) {
-    throw new Error("Reality report manifestHash does not match manifestLock.sha256; refusing to publish.");
+  if (!isRealityProofHash(report.manifestHash) || !isRealityProofHash(verifiedManifestHash) || report.manifestHash !== verifiedManifestHash) {
+    throw new Error("Reality report manifestHash must be a SHA-256 hash matching manifestLock.sha256; refusing to publish.");
   }
   const verifiedClaimGate = realityClaimGate({
     lock: report.manifestLock,

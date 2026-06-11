@@ -168,12 +168,36 @@ describe("EMRP Reality Bench", () => {
       writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 
       expect(() => publishRealityEvidenceTable({ inputPath: reportPath, outputDir: publicDir })).toThrow(
-        "Reality report manifestHash does not match manifestLock.sha256"
+        "Reality report manifestHash must be a SHA-256 hash matching manifestLock.sha256"
       );
       expect(existsSync(join(publicDir, "index.json"))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("rejects malformed manifest hashes even when provenance repeats them", () => {
+    const fakeLock: RealityManifestLock = { ...manifestLock, sha256: "manifest-sha256" };
+    const systems = [
+      publishableRealitySystem("cognibrain", "Cognibrain", {}, fakeLock.sha256),
+      publishableRealitySystem("mem0", "Mem0", {}, fakeLock.sha256),
+      publishableRealitySystem("langmem", "LangMem", {}, fakeLock.sha256)
+    ];
+    const malformedManifestGate = realityClaimGate({
+      lock: fakeLock,
+      systems,
+      publicArtifactHash,
+      independentReplicationHash,
+      sameJudge: true,
+      sameJudgeProof: sameJudgeTraceId,
+      sameBudgets: true,
+      sameBudgetsProof
+    });
+
+    expect(malformedManifestGate.gates.manifestFrozenBeforeRun).toBe(false);
+    expect(malformedManifestGate.qualityClaimAllowed).toBe(false);
+    expect(malformedManifestGate.marketClaimAllowed).toBe(false);
+    expect(malformedManifestGate.leaderboardAllowed).toBe(false);
   });
 
   it("publishes validated market-proof hashes in Reality artifacts", () => {
@@ -252,13 +276,14 @@ const manifestLock: RealityManifestLock = {
     abstention: 0,
     "public-memory-qa": 0
   },
-  sha256: "manifest-sha256"
+  sha256: "e".repeat(64)
 };
 
 function publishableRealitySystem(
   system: string,
   displayName: string,
-  overrides: Partial<Pick<RealitySystemResult, "blockingReasons" | "errors">> = {}
+  overrides: Partial<Pick<RealitySystemResult, "blockingReasons" | "errors">> = {},
+  manifestSha256 = manifestLock.sha256
 ): RealitySystemResult {
   return {
     system,
@@ -270,8 +295,8 @@ function publishableRealitySystem(
       rawOutputsFromOriginalCommand: true,
       sharedJudgeTrace: true,
       deterministicScaffold: false,
-      manifestSha256: manifestLock.sha256,
-      inputStreamSha256: manifestLock.sha256
+      manifestSha256,
+      inputStreamSha256: manifestSha256
     },
     leaderboardEligible: true,
     qualityClaimAllowed: true,

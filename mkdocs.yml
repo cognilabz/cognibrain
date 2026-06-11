@@ -1,0 +1,147 @@
+site_name: Cognibrain
+site_url: https://cognibrain.cognilabz.com
+site_description: Self-hosted engineering memory for coding agents
+site_author: Cognilabz
+repo_url: https://github.com/cognilabz/cognibrain
+repo_name: cognilabz/cognibrain
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2024–2026 Cognilabz
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  logo: assets/cognilabz-logo.png
+  favicon: assets/cognilabz-logo.png
+  palette:
+    - scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+    - announce.dismiss
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - social
+  - minify:
+      minify_html: true
+  - git-revision-date-localized:
+      enable_creation_date: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra:
+  version:
+    provider: mike
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/cognilabz/cognibrain
+    - icon: fontawesome/brands/npm
+      link: https://www.npmjs.com/package/@cognilabz/cognibrain
+  generator: false
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - getting-started/index.md
+      - Overview: getting-started/overview.md
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+  - Guides:
+      - guides/index.md
+      - CLI Usage: guides/cli-usage.md
+      - MCP Integration: guides/mcp-integration.md
+      - Harness Lifecycle: guides/harness-lifecycle.md
+      - Connectors: guides/connectors.md
+      - Memory Management: guides/memory-management.md
+      - Dream Cycles: guides/dream-cycles.md
+  - Reference:
+      - reference/index.md
+      - CLI Commands: reference/cli-commands.md
+      - SDK (TypeScript): reference/sdk-typescript.md
+      - SDK (Python): reference/sdk-python.md
+      - HTTP API: reference/http-api.md
+      - MCP Tools: reference/mcp-tools.md
+      - Configuration: reference/configuration.md
+  - Concepts:
+      - concepts/index.md
+      - Architecture: concepts/architecture.md
+      - Domain Glossary: concepts/glossary.md
+      - Storage & Persistence: concepts/storage.md
+      - Benchmarks: benchmarks.md
+  - Operations:
+      - operations/index.md
+      - Self-Hosting: operations/self-hosting.md
+      - Docker Deployment: operations/docker.md
+      - Monitoring & Health: operations/monitoring.md
+      - Security: operations/security.md
+  - Contributing:
+      - contributing/index.md
+      - Development Setup: contributing/development-setup.md
+      - Architecture Decisions: contributing/adrs.md
+      - Connector SDK: contributing/connector-sdk.md
+      - Testing: contributing/testing.md

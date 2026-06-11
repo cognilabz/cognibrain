@@ -59,12 +59,25 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.publish-freshness.outputs.current == 'true'
         run: node scripts/release/sync-npm-package-version.mjs --github-output "$GITHUB_OUTPUT"
       - name: Publish npm package
+        id: publish-package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.publish-freshness.outputs.current == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           PACKAGE_NAME="${{ steps.sync-version.outputs.package_name }}"
           NEXT_VERSION="${{ steps.sync-version.outputs.publish_version }}"
+
+          echo "published=false" >> "$GITHUB_OUTPUT"
+          git fetch origin "$GITHUB_REF_NAME"
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$GITHUB_REF_NAME")" ]; then
+            echo "skipped_stale=true" >> "$GITHUB_OUTPUT"
+            echo "This workflow run became stale before npm publish; skipping npm publish and package-version sync."
+            exit 0
+          fi
+
+          mark_published() {
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          }
 
           echo "Publishing $PACKAGE_NAME@$NEXT_VERSION to npm."
           if [ -z "$NODE_AUTH_TOKEN" ]; then
@@ -74,32 +87,42 @@ jobs:
           set -o pipefail
           publish_log="$(mktemp)"
           if npm publish --access public 2>&1 | tee "$publish_log"; then
+            mark_published
             exit 0
           fi
           publish_status="${PIPESTATUS[0]}"
 
           if npm view "$PACKAGE_NAME@$NEXT_VERSION" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
             echo "$PACKAGE_NAME@$NEXT_VERSION is already available on npm; treating publish as complete."
+            mark_published
             exit 0
           fi
 
           if grep -Eq "TLOG_CREATE_ENTRY_ERROR|rekor\.sigstore\.dev" "$publish_log"; then
             echo "npm provenance transparency-log creation failed transiently; retrying publish without provenance."
             if npm publish --access public --provenance=false; then
+              mark_published
               exit 0
             fi
             if npm view "$PACKAGE_NAME@$NEXT_VERSION" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
               echo "$PACKAGE_NAME@$NEXT_VERSION is already available on npm after fallback; treating publish as complete."
+              mark_published
               exit 0
             fi
           fi
 
           exit "$publish_status"
       - name: Commit synced package version
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.publish-freshness.outputs.current == 'true' && steps.sync-version.outputs.updated == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.publish-package.outputs.published == 'true' && steps.sync-version.outputs.updated == 'true'
         run: |
           if git diff --quiet -- package.json package-lock.json; then
             echo "Package files already match the published version."
+            exit 0
+          fi
+
+          git fetch origin "$GITHUB_REF_NAME"
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$GITHUB_REF_NAME")" ]; then
+            echo "This workflow run became stale before package-version sync commit; skipping bot commit."
             exit 0
           fi
 

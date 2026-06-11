@@ -23,7 +23,10 @@ export function runRealityBenchmark(options: {
     systems,
     publicArtifactHash: process.env.MEMORY_REALITY_PUBLIC_ARTIFACT_HASH,
     independentReplicationHash: process.env.MEMORY_REALITY_INDEPENDENT_REPLICATION_HASH,
-    sameJudge: Boolean(process.env.MEMORY_REALITY_JUDGE_COMMAND)
+    sameJudge: Boolean(process.env.MEMORY_REALITY_JUDGE_COMMAND),
+    sameJudgeProof: null,
+    sameBudgets: true,
+    sameBudgetsProof: "default-preregistered-budgets"
   });
   const report: RealityReport = {
     schemaVersion: "1.0",

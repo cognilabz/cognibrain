@@ -16,14 +16,16 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
     systems: report.systems,
     publicArtifactHash: report.claimEvidence?.publicArtifactHash ?? null,
     independentReplicationHash: report.claimEvidence?.independentReplicationHash ?? null,
-    sameJudge: Boolean(report.claimEvidence?.sameJudgeTraceId),
-    sameBudgets: Boolean(report.claimEvidence?.sameBudgetsProof)
+    sameJudge: isRealityProofHash(report.claimEvidence?.sameJudgeTraceId),
+    sameJudgeProof: report.claimEvidence?.sameJudgeTraceId ?? null,
+    sameBudgets: isRealityProofHash(report.claimEvidence?.sameBudgetsProof),
+    sameBudgetsProof: report.claimEvidence?.sameBudgetsProof ?? null
   });
   const validatedClaimEvidence = {
     publicArtifactHash: isRealityProofHash(report.claimEvidence?.publicArtifactHash) ? report.claimEvidence?.publicArtifactHash ?? null : null,
     independentReplicationHash: isRealityProofHash(report.claimEvidence?.independentReplicationHash) ? report.claimEvidence?.independentReplicationHash ?? null : null,
-    sameJudgeTraceId: report.claimEvidence?.sameJudgeTraceId ?? null,
-    sameBudgetsProof: report.claimEvidence?.sameBudgetsProof ?? null
+    sameJudgeTraceId: isRealityProofHash(report.claimEvidence?.sameJudgeTraceId) ? report.claimEvidence?.sameJudgeTraceId ?? null : null,
+    sameBudgetsProof: isRealityProofHash(report.claimEvidence?.sameBudgetsProof) ? report.claimEvidence?.sameBudgetsProof ?? null : null
   };
   const publication = {
     evidenceTablePath: report.publication.evidenceTablePath,
@@ -88,6 +90,10 @@ Manifest hash: \`${artifact.manifestHash}\`
 Public artifact hash: ${artifact.claimEvidence.publicArtifactHash ? `\`${artifact.claimEvidence.publicArtifactHash}\`` : "not validated"}
 
 Independent replication hash: ${artifact.claimEvidence.independentReplicationHash ? `\`${artifact.claimEvidence.independentReplicationHash}\`` : "not validated"}
+
+Same judge proof: ${artifact.claimEvidence.sameJudgeTraceId ? `\`${artifact.claimEvidence.sameJudgeTraceId}\`` : "not validated"}
+
+Same budgets proof: ${artifact.claimEvidence.sameBudgetsProof ? `\`${artifact.claimEvidence.sameBudgetsProof}\`` : "not validated"}
 
 Market claim allowed: ${artifact.claimGate.marketClaimAllowed ? "yes" : "no"}
 

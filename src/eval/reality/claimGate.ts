@@ -9,7 +9,9 @@ export function realityClaimGate(input: {
   publicArtifactHash?: string | null;
   independentReplicationHash?: string | null;
   sameJudge?: boolean;
+  sameJudgeProof?: string | null;
   sameBudgets?: boolean;
+  sameBudgetsProof?: string | null;
 }): RealityClaimGate {
   const eligibleOriginalSystems = input.systems.filter((system) => originalKinds.includes(system.adapterKind) && system.rawOutputsPath && system.scorerTracePath);
   const majorCompetitors = eligibleOriginalSystems.filter((system) => system.system !== "cognibrain");
@@ -20,8 +22,8 @@ export function realityClaimGate(input: {
     allSystemsUseOriginalImplementation: input.systems.length > 0 && input.systems.every((system) => system.adapterKind === "local-baseline" || originalKinds.includes(system.adapterKind) || system.adapterKind === "credential-blocked"),
     noProfileAdapters: input.systems.every((system) => system.adapterKind !== "profile-model-forbidden"),
     sameInputStream: eligibleOriginalSystems.length > 0 && eligibleOriginalSystems.every((system) => hasSameInputStreamProof(system, input.lock.sha256)),
-    sameBudgets: input.sameBudgets === true,
-    sameJudge: input.sameJudge ?? false,
+    sameBudgets: input.sameBudgets === true && isRealityProofHash(input.sameBudgetsProof),
+    sameJudge: input.sameJudge === true && isRealityProofHash(input.sameJudgeProof),
     originalCompetitorCommandProofRecorded: commandProofCompetitors.length >= 2,
     rawOutputsFromOriginalCommands: commandProofCompetitors.length >= 2 && commandProofCompetitors.every(hasOriginalCommandRawOutputProof),
     sharedJudgeTracesRecorded: commandProofCompetitors.length >= 2 && eligibleOriginalSystems.every(hasSharedJudgeTraceProof),

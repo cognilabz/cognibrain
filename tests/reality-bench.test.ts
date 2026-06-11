@@ -72,7 +72,8 @@ describe("EMRP Reality Bench", () => {
       systems,
       publicArtifactHash: publicArtifactHash,
       independentReplicationHash: independentReplicationHash,
-      sameJudge: true
+      sameJudge: true,
+      sameJudgeProof: sameJudgeTraceId
     });
     const provenBudgetGate = realityClaimGate({
       lock: manifestLock,
@@ -80,7 +81,9 @@ describe("EMRP Reality Bench", () => {
       publicArtifactHash: publicArtifactHash,
       independentReplicationHash: independentReplicationHash,
       sameJudge: true,
-      sameBudgets: true
+      sameJudgeProof: sameJudgeTraceId,
+      sameBudgets: true,
+      sameBudgetsProof: sameBudgetsProof
     });
 
     expect(missingBudgetGate.gates.sameBudgets).toBe(false);
@@ -104,7 +107,9 @@ describe("EMRP Reality Bench", () => {
       publicArtifactHash: "artifact-sha256",
       independentReplicationHash: "replication-sha256",
       sameJudge: true,
-      sameBudgets: true
+      sameJudgeProof: sameJudgeTraceId,
+      sameBudgets: true,
+      sameBudgetsProof: sameBudgetsProof
     });
 
     expect(invalidProofGate.gates.publicArtifactHashPresent).toBe(false);
@@ -114,6 +119,30 @@ describe("EMRP Reality Bench", () => {
       "A public immutable artifact hash is required.",
       "An independent replication hash is required."
     ]));
+  });
+
+  it("requires judge and budget proof ids to be SHA-256 shaped before claims can open", () => {
+    const systems = [
+      publishableRealitySystem("cognibrain", "Cognibrain"),
+      publishableRealitySystem("mem0", "Mem0"),
+      publishableRealitySystem("langmem", "LangMem")
+    ];
+    const invalidOperationalProofGate = realityClaimGate({
+      lock: manifestLock,
+      systems,
+      publicArtifactHash,
+      independentReplicationHash,
+      sameJudge: true,
+      sameJudgeProof: "judge-trace-sha256",
+      sameBudgets: true,
+      sameBudgetsProof: "budget-proof-sha256"
+    });
+
+    expect(invalidOperationalProofGate.gates.sameJudge).toBe(false);
+    expect(invalidOperationalProofGate.gates.sameBudgets).toBe(false);
+    expect(invalidOperationalProofGate.qualityClaimAllowed).toBe(false);
+    expect(invalidOperationalProofGate.marketClaimAllowed).toBe(false);
+    expect(invalidOperationalProofGate.leaderboardAllowed).toBe(false);
   });
 
   it("rejects publishable rows that still carry blockers or errors", () => {
@@ -163,8 +192,8 @@ describe("EMRP Reality Bench", () => {
         claimEvidence: {
           publicArtifactHash,
           independentReplicationHash,
-          sameJudgeTraceId: "judge-trace-sha256",
-          sameBudgetsProof: "budget-proof-sha256"
+          sameJudgeTraceId,
+          sameBudgetsProof
         },
         claimGate: realityClaimGate({
           lock: manifestLock,
@@ -172,7 +201,9 @@ describe("EMRP Reality Bench", () => {
           publicArtifactHash,
           independentReplicationHash,
           sameJudge: true,
-          sameBudgets: true
+          sameJudgeProof: sameJudgeTraceId,
+          sameBudgets: true,
+          sameBudgetsProof
         }),
         publication: {
           evidenceTablePath: join(publicDir, "index.json"),
@@ -188,8 +219,12 @@ describe("EMRP Reality Bench", () => {
 
       expect(artifact.claimEvidence.publicArtifactHash).toBe(publicArtifactHash);
       expect(artifact.claimEvidence.independentReplicationHash).toBe(independentReplicationHash);
+      expect(artifact.claimEvidence.sameJudgeTraceId).toBe(sameJudgeTraceId);
+      expect(artifact.claimEvidence.sameBudgetsProof).toBe(sameBudgetsProof);
       expect(markdown).toContain(`Public artifact hash: \`${publicArtifactHash}\``);
       expect(markdown).toContain(`Independent replication hash: \`${independentReplicationHash}\``);
+      expect(markdown).toContain(`Same judge proof: \`${sameJudgeTraceId}\``);
+      expect(markdown).toContain(`Same budgets proof: \`${sameBudgetsProof}\``);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -198,6 +233,8 @@ describe("EMRP Reality Bench", () => {
 
 const publicArtifactHash = `sha256:${"a".repeat(64)}`;
 const independentReplicationHash = "b".repeat(64);
+const sameJudgeTraceId = "c".repeat(64);
+const sameBudgetsProof = `sha256:${"d".repeat(64)}`;
 
 const manifestLock: RealityManifestLock = {
   schemaVersion: "1.0",

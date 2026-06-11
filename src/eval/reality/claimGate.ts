@@ -12,6 +12,7 @@ export function realityClaimGate(input: {
   const eligibleOriginalSystems = input.systems.filter((system) => originalKinds.includes(system.adapterKind) && system.rawOutputsPath && system.scorerTracePath);
   const majorCompetitors = eligibleOriginalSystems.filter((system) => system.system !== "cognibrain");
   const commandProofCompetitors = majorCompetitors.filter(hasOriginalCommandProof);
+  const cognibrainEligibleSystems = eligibleOriginalSystems.filter((system) => system.system === "cognibrain" && isRealityClaimPublishableSystem(system));
   const gates = {
     manifestFrozenBeforeRun: Boolean(input.lock.frozenAt && input.lock.sha256),
     allSystemsUseOriginalImplementation: input.systems.length > 0 && input.systems.every((system) => system.adapterKind === "local-baseline" || originalKinds.includes(system.adapterKind) || system.adapterKind === "credential-blocked"),
@@ -23,6 +24,7 @@ export function realityClaimGate(input: {
     rawOutputsFromOriginalCommands: commandProofCompetitors.length >= 2 && commandProofCompetitors.every(hasOriginalCommandRawOutputProof),
     sharedJudgeTracesRecorded: commandProofCompetitors.length >= 2 && eligibleOriginalSystems.every(hasSharedJudgeTraceProof),
     noDeterministicScaffoldOutputs: eligibleOriginalSystems.length > 0 && eligibleOriginalSystems.every((system) => !hasDeterministicScaffoldBlocker(system)),
+    cognibrainEligibleSystemPresent: cognibrainEligibleSystems.length === 1,
     rawOutputsRetained: eligibleOriginalSystems.every((system) => Boolean(system.rawOutputsPath)),
     costLatencyRecorded: eligibleOriginalSystems.every((system) => system.metrics.estimatedCostUsd !== null && system.metrics.p95LatencyMs !== null),
     atLeastTwoMajorCompetitorsEligible: commandProofCompetitors.length >= 2,
@@ -40,6 +42,7 @@ export function realityClaimGate(input: {
     rawOutputsFromOriginalCommands: "Raw outputs must come from recorded original competitor commands, not deterministic scaffold output.",
     sharedJudgeTracesRecorded: "Shared LLM/harness judge traces must be recorded for every scoreable original system.",
     noDeterministicScaffoldOutputs: "Deterministic scaffold outputs cannot open quality, market, or leaderboard claims.",
+    cognibrainEligibleSystemPresent: "Cognibrain must have one eligible non-scaffold same-manifest row before market or leaderboard claims.",
     rawOutputsRetained: "Raw outputs must be retained for every eligible system.",
     costLatencyRecorded: "Cost and latency must be recorded for every eligible system.",
     atLeastTwoMajorCompetitorsEligible: "At least two major original competitor systems must be eligible.",
@@ -80,4 +83,16 @@ function hasOriginalCommandRawOutputProof(system: RealitySystemResult) {
 function hasDeterministicScaffoldBlocker(system: RealitySystemResult) {
   return system.provenance?.deterministicScaffold !== false
     || system.blockingReasons.some((reason) => /deterministic scaffold/i.test(reason));
+}
+
+export function isRealityClaimPublishableSystem(system: RealitySystemResult) {
+  return originalKinds.includes(system.adapterKind)
+    && Boolean(system.rawOutputsPath)
+    && Boolean(system.scorerTracePath)
+    && hasOriginalCommandProof(system)
+    && hasOriginalCommandRawOutputProof(system)
+    && hasSharedJudgeTraceProof(system)
+    && !hasDeterministicScaffoldBlocker(system)
+    && system.metrics.estimatedCostUsd !== null
+    && system.metrics.p95LatencyMs !== null;
 }

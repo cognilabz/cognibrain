@@ -110,6 +110,7 @@ export interface RealityClaimGate {
     rawOutputsFromOriginalCommands: boolean;
     sharedJudgeTracesRecorded: boolean;
     noDeterministicScaffoldOutputs: boolean;
+    cognibrainEligibleSystemPresent: boolean;
     rawOutputsRetained: boolean;
     costLatencyRecorded: boolean;
     atLeastTwoMajorCompetitorsEligible: boolean;

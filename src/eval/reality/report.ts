@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { realityClaimGate } from "./claimGate";
+import { isRealityClaimPublishableSystem, realityClaimGate } from "./claimGate";
 import type { RealityReport } from "./types";
 
 export function publishRealityEvidenceTable(options: { inputPath?: string; outputDir?: string } = {}) {
@@ -28,18 +28,21 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
     manifestHash: report.manifestHash,
     claimGate: verifiedClaimGate,
     publication,
-    systems: report.systems.map((system) => ({
-      system: system.system,
-      displayName: system.displayName,
-      adapterKind: system.adapterKind,
-      score: system.metrics.score,
-      rawOutputsPath: system.rawOutputsPath,
-      scorerTracePath: system.scorerTracePath,
-      qualityClaimAllowed: verifiedClaimGate.qualityClaimAllowed && system.qualityClaimAllowed,
-      marketClaimAllowed: verifiedClaimGate.marketClaimAllowed && system.marketClaimAllowed,
-      leaderboardEligible: verifiedClaimGate.leaderboardAllowed && system.leaderboardEligible,
-      blockingReasons: system.blockingReasons
-    }))
+    systems: report.systems.map((system) => {
+      const rowClaimPublishable = isRealityClaimPublishableSystem(system);
+      return {
+        system: system.system,
+        displayName: system.displayName,
+        adapterKind: system.adapterKind,
+        score: system.metrics.score,
+        rawOutputsPath: system.rawOutputsPath,
+        scorerTracePath: system.scorerTracePath,
+        qualityClaimAllowed: verifiedClaimGate.qualityClaimAllowed && rowClaimPublishable && system.qualityClaimAllowed,
+        marketClaimAllowed: verifiedClaimGate.marketClaimAllowed && rowClaimPublishable && system.marketClaimAllowed,
+        leaderboardEligible: verifiedClaimGate.leaderboardAllowed && rowClaimPublishable && system.leaderboardEligible,
+        blockingReasons: system.blockingReasons
+      };
+    })
   };
   writeFileSync(join(outputDir, "index.json"), `${JSON.stringify(artifact, null, 2)}\n`);
   writeFileSync(join(outputDir, "index.md"), renderEvidenceMarkdown(artifact));

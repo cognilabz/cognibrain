@@ -35,6 +35,7 @@ checks.push(check("reality claim gate requires original commands and shared judg
     && source.includes("rawOutputsFromOriginalCommands")
     && source.includes("sharedJudgeTracesRecorded")
     && source.includes("noDeterministicScaffoldOutputs")
+    && source.includes("cognibrainEligibleSystemPresent")
     && source.includes("system.provenance?.originalCommandExecuted === true")
     && source.includes("system.provenance?.rawOutputsFromOriginalCommand === true")
     && source.includes("system.provenance?.sharedJudgeTrace === true")
@@ -42,6 +43,7 @@ checks.push(check("reality claim gate requires original commands and shared judg
     && source.includes("Deterministic scaffold outputs cannot open quality, market, or leaderboard claims.")
     && types.includes("originalCommandExecuted: boolean")
     && types.includes("sharedJudgeTrace: boolean")
+    && types.includes("cognibrainEligibleSystemPresent: boolean")
     && report.includes("const verifiedClaimGate = realityClaimGate")
     && report.includes("report.claimEvidence?.publicArtifactHash")
     && report.includes("report.claimEvidence?.sameJudgeTraceId")
@@ -49,12 +51,24 @@ checks.push(check("reality claim gate requires original commands and shared judg
 }));
 checks.push(check("reality publish clamps row claim flags to the revalidated gate", () => {
   const report = readFileSync("src/eval/reality/report.ts", "utf8");
-  return report.includes("qualityClaimAllowed: verifiedClaimGate.qualityClaimAllowed && system.qualityClaimAllowed")
-    && report.includes("marketClaimAllowed: verifiedClaimGate.marketClaimAllowed && system.marketClaimAllowed")
-    && report.includes("leaderboardEligible: verifiedClaimGate.leaderboardAllowed && system.leaderboardEligible")
+  return report.includes("const rowClaimPublishable = isRealityClaimPublishableSystem(system)")
+    && report.includes("qualityClaimAllowed: verifiedClaimGate.qualityClaimAllowed && rowClaimPublishable && system.qualityClaimAllowed")
+    && report.includes("marketClaimAllowed: verifiedClaimGate.marketClaimAllowed && rowClaimPublishable && system.marketClaimAllowed")
+    && report.includes("leaderboardEligible: verifiedClaimGate.leaderboardAllowed && rowClaimPublishable && system.leaderboardEligible")
     && !report.includes("qualityClaimAllowed: system.qualityClaimAllowed")
     && !report.includes("marketClaimAllowed: system.marketClaimAllowed")
     && !report.includes("leaderboardEligible: system.leaderboardEligible");
+}));
+checks.push(check("reality claim publication requires per-row provenance eligibility", () => {
+  const source = readFileSync("src/eval/reality/claimGate.ts", "utf8");
+  return source.includes("export function isRealityClaimPublishableSystem")
+    && source.includes("originalKinds.includes(system.adapterKind)")
+    && source.includes("hasOriginalCommandProof(system)")
+    && source.includes("hasOriginalCommandRawOutputProof(system)")
+    && source.includes("hasSharedJudgeTraceProof(system)")
+    && source.includes("!hasDeterministicScaffoldBlocker(system)")
+    && source.includes("system.metrics.estimatedCostUsd !== null")
+    && source.includes("system.metrics.p95LatencyMs !== null");
 }));
 checks.push(check("docs-visible benchmark page preserves public-results boundary", () => {
   const docs = readFileSync("docs/benchmarks.md", "utf8");

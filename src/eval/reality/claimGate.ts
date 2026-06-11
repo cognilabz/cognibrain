@@ -53,7 +53,12 @@ export function realityClaimGate(input: {
     .filter(([, passed]) => !passed)
     .map(([key]) => blockerMessages[key as keyof typeof gates]);
   const marketClaimAllowed = blockers.length === 0;
-  const qualityClaimAllowed = gates.sameJudge
+  const qualityClaimAllowed = gates.manifestFrozenBeforeRun
+    && gates.allSystemsUseOriginalImplementation
+    && gates.noProfileAdapters
+    && gates.sameInputStream
+    && gates.sameBudgets
+    && gates.sameJudge
     && gates.cognibrainEligibleSystemPresent
     && gates.rawOutputsRetained
     && gates.costLatencyRecorded

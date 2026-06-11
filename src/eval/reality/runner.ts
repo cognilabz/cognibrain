@@ -33,6 +33,12 @@ export function runRealityBenchmark(options: {
     manifestLock: lock,
     taskCount: tasks.length,
     systems,
+    claimEvidence: {
+      publicArtifactHash: process.env.MEMORY_REALITY_PUBLIC_ARTIFACT_HASH ?? null,
+      independentReplicationHash: process.env.MEMORY_REALITY_INDEPENDENT_REPLICATION_HASH ?? null,
+      sameJudgeTraceId: null,
+      sameBudgetsProof: "default-preregistered-budgets"
+    },
     claimGate,
     publication: {
       evidenceTablePath: "artifacts/public/evidence-table/index.json",

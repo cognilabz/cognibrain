@@ -127,6 +127,12 @@ export interface RealityReport {
   manifestLock: RealityManifestLock;
   taskCount: number;
   systems: RealitySystemResult[];
+  claimEvidence?: {
+    publicArtifactHash: string | null;
+    independentReplicationHash: string | null;
+    sameJudgeTraceId: string | null;
+    sameBudgetsProof: string | null;
+  };
   claimGate: RealityClaimGate;
   publication: {
     evidenceTablePath: string;

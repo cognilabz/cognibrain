@@ -36,12 +36,15 @@ checks.push(check("reality claim gate requires original commands and shared judg
     && source.includes("sharedJudgeTracesRecorded")
     && source.includes("noDeterministicScaffoldOutputs")
     && source.includes("system.provenance?.originalCommandExecuted === true")
+    && source.includes("system.provenance?.rawOutputsFromOriginalCommand === true")
     && source.includes("system.provenance?.sharedJudgeTrace === true")
     && source.includes("system.provenance?.deterministicScaffold !== false")
     && source.includes("Deterministic scaffold outputs cannot open quality, market, or leaderboard claims.")
     && types.includes("originalCommandExecuted: boolean")
     && types.includes("sharedJudgeTrace: boolean")
     && report.includes("const verifiedClaimGate = realityClaimGate")
+    && report.includes("report.claimEvidence?.publicArtifactHash")
+    && report.includes("report.claimEvidence?.sameJudgeTraceId")
     && report.includes("if (verifiedClaimGate.leaderboardAllowed)");
 }));
 checks.push(check("docs-visible benchmark page preserves public-results boundary", () => {

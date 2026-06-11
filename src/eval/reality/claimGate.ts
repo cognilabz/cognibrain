@@ -20,7 +20,7 @@ export function realityClaimGate(input: {
     sameBudgets: input.sameBudgets ?? true,
     sameJudge: input.sameJudge ?? false,
     originalCompetitorCommandProofRecorded: commandProofCompetitors.length >= 2,
-    rawOutputsFromOriginalCommands: commandProofCompetitors.length >= 2 && commandProofCompetitors.every((system) => Boolean(system.rawOutputsPath)),
+    rawOutputsFromOriginalCommands: commandProofCompetitors.length >= 2 && commandProofCompetitors.every(hasOriginalCommandRawOutputProof),
     sharedJudgeTracesRecorded: commandProofCompetitors.length >= 2 && eligibleOriginalSystems.every(hasSharedJudgeTraceProof),
     noDeterministicScaffoldOutputs: eligibleOriginalSystems.length > 0 && eligibleOriginalSystems.every((system) => !hasDeterministicScaffoldBlocker(system)),
     rawOutputsRetained: eligibleOriginalSystems.every((system) => Boolean(system.rawOutputsPath)),
@@ -71,6 +71,10 @@ function hasOriginalCommandProof(system: RealitySystemResult) {
 
 function hasSharedJudgeTraceProof(system: RealitySystemResult) {
   return Boolean(system.scorerTracePath) && system.provenance?.sharedJudgeTrace === true;
+}
+
+function hasOriginalCommandRawOutputProof(system: RealitySystemResult) {
+  return Boolean(system.rawOutputsPath) && system.provenance?.rawOutputsFromOriginalCommand === true;
 }
 
 function hasDeterministicScaffoldBlocker(system: RealitySystemResult) {

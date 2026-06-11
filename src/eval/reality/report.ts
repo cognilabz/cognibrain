@@ -10,10 +10,10 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
   const verifiedClaimGate = realityClaimGate({
     lock: report.manifestLock,
     systems: report.systems,
-    publicArtifactHash: report.claimGate.gates.publicArtifactHashPresent ? "recorded-public-artifact-hash" : null,
-    independentReplicationHash: report.claimGate.gates.independentReplicationHashPresent ? "recorded-independent-replication-hash" : null,
-    sameJudge: report.claimGate.gates.sameJudge,
-    sameBudgets: report.claimGate.gates.sameBudgets
+    publicArtifactHash: report.claimEvidence?.publicArtifactHash ?? null,
+    independentReplicationHash: report.claimEvidence?.independentReplicationHash ?? null,
+    sameJudge: Boolean(report.claimEvidence?.sameJudgeTraceId),
+    sameBudgets: Boolean(report.claimEvidence?.sameBudgetsProof)
   });
   const publication = {
     evidenceTablePath: report.publication.evidenceTablePath,

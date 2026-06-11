@@ -94,10 +94,19 @@ checks.push(check("agent instruction templates require live review recheck befor
     "bin/lib/harnessRuntime.mjs"
   ];
   return required.every((path) => {
-    const content = read(path);
-    return content.includes("NO_CHANGES") && content.includes("recheck") && content.includes("code-review coworker");
+    const content = read(path).toLowerCase();
+    return content.includes("no_changes")
+      && content.includes("recheck")
+      && content.includes("code-review coworker")
+      && content.includes("unless the user explicitly asks for another branch or no publish")
+      && content.includes("record the review result and recheck result");
   });
-}, { stopCondition: "NO_CHANGES recheck", generatedSource: "bin/lib/harnessRuntime.mjs generatedCopilotScopedInstructions" }));
+}, {
+  stopCondition: "NO_CHANGES recheck",
+  branchOverride: "unless the user explicitly asks for another branch or no publish",
+  evidenceTrail: "record the review result and recheck result",
+  generatedSource: "bin/lib/harnessRuntime.mjs generatedCopilotScopedInstructions"
+}));
 
 for (const item of checks) console.log(`${item.passed ? "ok" : "FAIL"} ${item.name}`);
 writeReport(checks);

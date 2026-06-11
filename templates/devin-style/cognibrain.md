@@ -18,6 +18,6 @@ After tool use:
 - capture reviewer or user corrections as durable code corrections,
 - finish with a patch evidence trail that cites the memories used.
 
-For code or agent-behavior changes intended to land, verify locally, commit, push to `main`, ask the live ChatGPT/code-review coworker to review the pushed commit or diff, implement actionable feedback, re-verify, re-push, and repeat. Do not stop on the first `NO_CHANGES`/approval; ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases, and stop only when that recheck also finds no actionable improvements.
+For code or agent-behavior changes intended to land, complete local verification, commit, and push to `main` unless the user explicitly asks for another branch or no publish. After each push, ask the live ChatGPT/code-review coworker to review the pushed commit or diff. Implement actionable feedback, verify, commit, push, and repeat. Do not stop on the first `NO_CHANGES`/approval; ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases. Stop only after that recheck also returns no actionable improvements, then record the review result and recheck result.
 
 Do not claim parity, connector support or benchmark superiority unless a current artifact proves it.

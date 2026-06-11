@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -101,6 +101,26 @@ describe("EMRP Reality Bench", () => {
 
     expect(isRealityClaimPublishableSystem(clean, manifestLock.sha256)).toBe(true);
     expect(isRealityClaimPublishableSystem(staleBlocked, manifestLock.sha256)).toBe(false);
+  });
+
+  it("refuses to publish reports with mismatched manifest hashes", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-reality-mismatch-"));
+    try {
+      const reportPath = join(dir, "report.json");
+      const markdownPath = join(dir, "report.md");
+      const evidenceDir = join(dir, "evidence");
+      const publicDir = join(dir, "public");
+      const report = runRealityBenchmark({ outPath: reportPath, markdownPath, evidenceDir, systems: ["cognibrain", "keyword"] });
+      report.manifestHash = "stale-report-manifest-hash";
+      writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+
+      expect(() => publishRealityEvidenceTable({ inputPath: reportPath, outputDir: publicDir })).toThrow(
+        "Reality report manifestHash does not match manifestLock.sha256"
+      );
+      expect(existsSync(join(publicDir, "index.json"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

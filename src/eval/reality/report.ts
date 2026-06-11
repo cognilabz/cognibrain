@@ -7,6 +7,10 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
   const inputPath = options.inputPath ?? "artifacts/reality/emrp-v1-report.json";
   const outputDir = options.outputDir ?? "artifacts/public/evidence-table";
   const report = JSON.parse(readFileSync(inputPath, "utf8")) as RealityReport;
+  const verifiedManifestHash = report.manifestLock.sha256;
+  if (report.manifestHash !== verifiedManifestHash) {
+    throw new Error("Reality report manifestHash does not match manifestLock.sha256; refusing to publish.");
+  }
   const verifiedClaimGate = realityClaimGate({
     lock: report.manifestLock,
     systems: report.systems,
@@ -25,11 +29,11 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
     schemaVersion: "1.0",
     protocol: report.protocol,
     publishedAt: new Date().toISOString(),
-    manifestHash: report.manifestHash,
+    manifestHash: verifiedManifestHash,
     claimGate: verifiedClaimGate,
     publication,
     systems: report.systems.map((system) => {
-      const rowClaimPublishable = isRealityClaimPublishableSystem(system, report.manifestHash);
+      const rowClaimPublishable = isRealityClaimPublishableSystem(system, verifiedManifestHash);
       const blockingReasons = rowClaimPublishable
         ? system.blockingReasons
         : [...system.blockingReasons, "Row failed revalidated per-system provenance/eligibility gates."];

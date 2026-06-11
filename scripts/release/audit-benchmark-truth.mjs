@@ -58,13 +58,17 @@ checks.push(check("reality claim gate requires original commands and shared judg
     && types.includes("inputStreamSha256: string | null")
     && types.includes("cognibrainEligibleSystemPresent: boolean")
     && report.includes("const verifiedClaimGate = realityClaimGate")
+    && report.includes("const verifiedManifestHash = report.manifestLock.sha256")
+    && report.includes("report.manifestHash !== verifiedManifestHash")
+    && report.includes("isRealityClaimPublishableSystem(system, verifiedManifestHash)")
+    && !report.includes("isRealityClaimPublishableSystem(system, report.manifestHash)")
     && report.includes("report.claimEvidence?.publicArtifactHash")
     && report.includes("report.claimEvidence?.sameJudgeTraceId")
     && report.includes("if (verifiedClaimGate.leaderboardAllowed)");
 }));
 checks.push(check("reality publish clamps row claim flags to the revalidated gate", () => {
   const report = readFileSync("src/eval/reality/report.ts", "utf8");
-  return report.includes("const rowClaimPublishable = isRealityClaimPublishableSystem(system, report.manifestHash)")
+  return report.includes("const rowClaimPublishable = isRealityClaimPublishableSystem(system, verifiedManifestHash)")
     && report.includes("Row failed revalidated per-system provenance/eligibility gates.")
     && report.includes("qualityClaimAllowed: verifiedClaimGate.qualityClaimAllowed && rowClaimPublishable && system.qualityClaimAllowed")
     && report.includes("marketClaimAllowed: verifiedClaimGate.marketClaimAllowed && rowClaimPublishable && system.marketClaimAllowed")

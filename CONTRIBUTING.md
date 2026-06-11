@@ -57,13 +57,14 @@ For agent-operated changes that are intended to land:
 
 - Verify locally before committing. If verification fails, stop and report the failed command plus a capped log tail unless the user explicitly asks for a failing checkpoint.
 - Default to `main` only for low-risk, fully verified work. Use a branch or PR for migrations, auth/security changes, destructive data operations, large refactors, dependency upgrades, release automation, or work that cannot be fully verified locally.
-- Never force-push, rewrite published `main`, or rebase shared history unless the user explicitly requests that exact operation.
+- Never force-push or rewrite published `main`. For non-main branches, history rewrites require explicit user approval and must be called out as destructive.
 - Before commit, confirm only intended files are staged, avoid generated artifacts/caches/logs unless required, and inspect staged changes for secrets, credentials, private keys, `.env` data, customer data, and accidental local artifacts.
-- Before push, record the commit SHA, changed files, verification commands, known risks, and CI status when available. After push, confirm the worktree is clean and fix any CI failures before treating the loop as complete.
+- Before pushing to `main`, fetch and confirm the local branch is based on current `origin/main`; after any rebase or merge, rerun verification before pushing.
+- Before push, record the commit SHA, changed files, verification commands, known risks, and CI status as `not observed`, `pending`, `passed`, or `failed`. After push, confirm the worktree is clean and fix any CI failures before treating the loop as complete.
 - Ask the live review coworker to review the pushed commit or diff after each push, including the commit SHA, changed-files summary, verification results, CI status, and known risks.
 - Implement actionable correctness, safety, and regression feedback, then verify, commit, push, and repeat. Defer preference-only scope expansion only with an explicit reason and ask the recheck to validate that deferral.
 - Do not treat AI review as sufficient for security-sensitive, privacy-sensitive, licensing, payment, deployment, production-data, or release-critical changes; require explicit human approval before completion.
-- Do not stop on the first approval. Ask one final recheck for the final commit SHA focused on missed improvements, stop-event mistakes, regressions, uncovered edge cases, and unsafe deferred feedback.
+- Do not stop on the first approval. Ask one final recheck for the final commit SHA focused on missed improvements, stop-event mistakes, regressions, uncovered edge cases, and unsafe deferred feedback. Stop only after that final SHA-specific recheck returns no actionable improvements.
 
 ## Pull Request Checklist
 

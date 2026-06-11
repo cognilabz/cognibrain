@@ -15,6 +15,8 @@ Use returned memories as source-backed hints. Verify current code, tests, and be
 
 Before shell commands, dependency changes, migrations, or file edits with durable side effects, call `./bin/cognibrain.mjs guard --action "<command>" --json`.
 
+For code or agent-behavior changes that are intended to land, complete local verification, commit, and push to `main` unless the user explicitly asks for another branch or no publish. After each push, ask the live ChatGPT/code-review coworker to review the pushed commit or diff. Implement actionable feedback, verify, commit, push, and repeat. Do not stop on the first `NO_CHANGES`/approval; ask for an explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases. Stop only after that recheck also returns no actionable improvements, then record both review results.
+
 After durable discoveries, user corrections, connector decisions, or benchmark results, record them with `./bin/cognibrain.mjs memory add "<fact>"`. Finish non-trivial patches with `./bin/cognibrain.mjs patch-evidence --task "<task>" --json`.
 
 MCP tools such as `memory_coding_context_pack`, `memory_action_guard`, `memory_add`, and `memory_patch_evidence` are optional native adapters for Cursor hosts that expose them. Use `memory_maintenance_status` to check automatic dream state. Run `memory_dream` after major sessions, imports, handoff, or when contradictory memories appear.

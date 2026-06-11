@@ -58,6 +58,18 @@ Additional memory search:
 node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs memory search "<task or question>"
 ```
 
+## Post-Push Live Review Policy
+
+For code or agent-behavior changes that are intended to land, complete local verification, commit, and push to `main` unless the user explicitly asks for another branch or no publish.
+
+After each push, ask the live ChatGPT/code-review coworker to review the pushed commit or diff. Treat that review as an external reviewer, not as proof by itself.
+
+Implement actionable feedback, verify locally, commit, push again, and repeat the live review cycle.
+
+Do not stop on the first `NO_CHANGES`/approval. Ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases.
+
+Stop only after the recheck also returns no actionable improvements. Record the review result and recheck result in the final report or patch evidence.
+
 ## Write Policy
 
 Store only durable, useful facts:

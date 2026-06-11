@@ -1976,6 +1976,56 @@ describe("TypeScript memory core", () => {
     expect(service.getEvidencePack(pack.id).id).toBe(pack.id);
   });
 
+  it("persists coding context delivery receipts with delivered memory details", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-context-delivery-"));
+    try {
+      const path = join(dir, "memory.json");
+      const service = new MemoryService({ persistence: new JsonFilePersistenceAdapter(path), autoDream: { enabled: false } });
+      const correction = service.recordCodeCorrection({
+        userId: "u1",
+        agentId: "codex",
+        appId: "codex",
+        projectId: "memory",
+        content: "Before editing Cognibrain context delivery, verify the audit receipt records delivered memory ids.",
+        kind: "procedure",
+        correctAction: "inspect audit receipt",
+        codebase: { repo: "memory", harness: "codex" }
+      });
+
+      const pack = service.codingContextPack({
+        userId: "u1",
+        agentId: "codex",
+        appId: "codex",
+        projectId: "memory",
+        query: "Codex context delivery audit receipt",
+        codebaseScope: { repo: "memory", harness: "codex" },
+        limit: 5
+      });
+
+      const persisted = JSON.parse(readFileSync(path, "utf8"));
+      const receipt = persisted.auditEvents.find((event: { metadata?: Record<string, unknown> }) =>
+        event.metadata?.resource === "coding-context-pack" && event.metadata?.contextPackId === pack.id
+      );
+      expect(receipt).toBeDefined();
+      expect(receipt.metadata.deliveryEvent).toBe("context.delivered");
+      expect(receipt.metadata.recipient).toBe("codex");
+      expect(receipt.metadata.deliveredMemoryIds).toContain(correction.id);
+      expect(receipt.metadata.deliveredEvidence).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          memoryId: correction.id,
+          kind: "procedure",
+          section: "procedures_before_action",
+          contentPreview: expect.stringContaining("audit receipt records delivered memory ids")
+        })
+      ]));
+      expect(receipt.metadata.memories).toBe((receipt.metadata.deliveredEvidence as unknown[]).length);
+      expect(receipt.journalType).toBe("context_pack.created");
+      expect(receipt.hash).toBeTruthy();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("persists evidence packs by context pack id", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-evidence-"));
     try {

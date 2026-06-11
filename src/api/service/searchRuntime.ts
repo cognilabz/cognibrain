@@ -417,7 +417,44 @@ export function codingContextPack(service: any, options: SearchOptions & { token
       evidencePackId: evidence.id
     });
     service.codingContextPacks.set(pack.id, pack);
-    service.recordAudit("search.run", { userId: options.userId, metadata: { resource: "coding-context-pack", contextPackId: pack.id, query: options.query, sections: pack.sections.length, memories: pack.sections.reduce((sum, section) => sum + section.evidence.length, 0) } });
+    const deliveredEvidence = pack.sections.flatMap((section) =>
+      section.evidence.map((item) => ({
+        section: section.id,
+        sectionTitle: section.title,
+        memoryId: item.memoryId,
+        kind: item.kind,
+        delivery: item.delivery,
+        unsafeToInject: item.unsafeToInject,
+        stale: item.stale,
+        score: roundMetric(item.score),
+        trust: roundMetric(item.trust),
+        sourceKind: item.source.kind,
+        contentPreview: preview(item.content)
+      }))
+    );
+    service.recordAudit("search.run", {
+      userId: options.userId,
+      journalType: "context_pack.created",
+      metadata: {
+        resource: "coding-context-pack",
+        deliveryEvent: "context.delivered",
+        recipient: options.appId ?? options.agentId ?? "coding-agent",
+        agentId: options.agentId,
+        sessionId: options.sessionId,
+        appId: options.appId,
+        projectId: options.projectId,
+        contextPackId: pack.id,
+        evidencePackId: pack.evidencePackId,
+        query: options.query,
+        sections: pack.sections.length,
+        memories: deliveredEvidence.length,
+        injectableMemories: deliveredEvidence.filter((item) => item.delivery !== "review_required" && !item.unsafeToInject).length,
+        reviewRequiredMemories: deliveredEvidence.filter((item) => item.delivery === "review_required" || item.unsafeToInject).length,
+        contextPreview: preview(pack.context, 1200),
+        deliveredMemoryIds: deliveredEvidence.map((item) => item.memoryId),
+        deliveredEvidence
+      }
+    });
     service.persist();
     return pack;
   }
@@ -426,6 +463,10 @@ export function getCodingContextPack(service: any, id: string): CodingContextPac
     const pack = service.codingContextPacks.get(id);
     if (!pack) throw new Error(`Coding context pack not found: ${id}`);
     return pack;
+  }
+
+function preview(value: string | undefined, max = 500): string {
+    return (value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
   }
 
 export function federatedSearch(service: any, options: SearchOptions & { brainIds: string[] }): FederatedSearchReport {

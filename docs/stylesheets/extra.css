@@ -1,26 +1,142 @@
+/* Cognilabz brand palette — blue → violet, light grid aesthetic.
+   Mirrors cognilabz.dev brand tokens. */
+
 :root {
-  --md-primary-fg-color: #009688;
-  --md-primary-fg-color--light: #4db6ac;
-  --md-primary-fg-color--dark: #00796b;
-  --md-accent-fg-color: #009688;
+  --cl-brand-blue: oklch(60% 0.22 252);
+  --cl-brand-violet: oklch(55% 0.24 292);
+  --cl-brand-cyan: oklch(70% 0.15 220);
+  --cl-ink: oklch(18% 0.03 282);
+  --cl-ink-soft: oklch(34% 0.035 280);
+  --cl-muted: oklch(52% 0.026 282);
+  --cl-line: oklch(86% 0.02 282);
+  --cl-bg: oklch(96.5% 0.01 285);
+  --cl-bg-warm: oklch(94% 0.016 86);
+  --cl-paper: oklch(98.2% 0.007 285);
+
+  --md-text-font-family: "Aptos", "Segoe UI", system-ui, -apple-system,
+    BlinkMacSystemFont, sans-serif;
+  --md-code-font-family: "Cascadia Code", "JetBrains Mono", "SFMono-Regular",
+    Consolas, "Liberation Mono", monospace;
 }
 
+/* Light scheme */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--cl-brand-blue);
+  --md-primary-fg-color--light: oklch(70% 0.16 255);
+  --md-primary-fg-color--dark: oklch(50% 0.2 258);
+  --md-primary-bg-color: oklch(98% 0.006 285);
+  --md-primary-bg-color--light: oklch(96% 0.008 285);
+
+  --md-accent-fg-color: var(--cl-brand-violet);
+  --md-accent-fg-color--transparent: oklch(55% 0.24 292 / 0.1);
+
+  --md-default-fg-color: var(--cl-ink);
+  --md-typeset-color: var(--cl-ink);
+  --md-typeset-a-color: var(--cl-brand-blue);
+}
+
+/* Dark scheme */
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #4db6ac;
-  --md-primary-fg-color--light: #80cbc4;
-  --md-primary-fg-color--dark: #00897b;
-  --md-accent-fg-color: #4db6ac;
+  --md-primary-fg-color: oklch(70% 0.16 255);
+  --md-primary-fg-color--light: oklch(78% 0.13 258);
+  --md-primary-fg-color--dark: oklch(58% 0.2 255);
+  --md-accent-fg-color: oklch(72% 0.18 292);
+  --md-accent-fg-color--transparent: oklch(72% 0.18 292 / 0.1);
+  --md-typeset-a-color: oklch(74% 0.14 255);
+  --md-hue: 282;
 }
 
+/* Light-mode page background: subtle brand gradient + grid, matching cognilabz.dev */
+[data-md-color-scheme="default"] body {
+  background:
+    radial-gradient(circle at 12% 0%, oklch(94% 0.035 255 / 0.6), transparent 40rem),
+    linear-gradient(135deg, var(--cl-bg), var(--cl-bg-warm) 72%, oklch(93% 0.028 296));
+}
+
+[data-md-color-scheme="default"] .md-main {
+  position: relative;
+}
+
+[data-md-color-scheme="default"] .md-main::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.28;
+  background-image:
+    linear-gradient(var(--cl-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cl-line) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+}
+
+/* Header: blue->violet gradient, matching the cognilabz brand mark */
 .md-header {
-  font-weight: 500;
+  background: linear-gradient(135deg, var(--cl-brand-blue), var(--cl-brand-violet));
+  color: oklch(98% 0.006 285);
+  box-shadow: 0 4px 24px oklch(24% 0.08 285 / 0.18);
 }
 
+.md-tabs {
+  background: transparent;
+}
+
+/* Typography weights to echo the cognilabz site */
 .md-typeset h1 {
+  font-weight: 820;
+  letter-spacing: -0.02em;
+  color: var(--cl-ink);
+}
+
+.md-typeset h2 {
+  font-weight: 760;
+  letter-spacing: -0.015em;
+}
+
+.md-typeset h3 {
   font-weight: 700;
 }
 
+[data-md-color-scheme="default"] .md-typeset h2 {
+  color: var(--cl-ink);
+}
+
+/* Rounded surfaces */
 .md-typeset .admonition,
 .md-typeset details {
-  border-radius: 0.4rem;
+  border-radius: 12px;
+}
+
+.md-typeset pre > code {
+  border-radius: 10px;
+}
+
+/* Cards (grid cards) get a brand-tinted hover */
+.md-typeset .grid.cards > :is(ul, ol) > li,
+.md-typeset .grid > .card {
+  border-radius: 14px;
+  transition: border-color 180ms cubic-bezier(0.25, 1, 0.5, 1),
+    box-shadow 180ms cubic-bezier(0.25, 1, 0.5, 1),
+    transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.md-typeset .grid.cards > :is(ul, ol) > li:hover {
+  border-color: var(--cl-brand-blue);
+  box-shadow: 0 14px 34px oklch(24% 0.04 282 / 0.12);
+  transform: translateY(-2px);
+}
+
+/* Buttons / primary CTAs */
+.md-typeset .md-button--primary {
+  background: linear-gradient(135deg, var(--cl-brand-blue), var(--cl-brand-violet));
+  border-color: transparent;
+  color: oklch(98% 0.006 285);
+}
+
+/* Focus ring consistent with cognilabz.dev */
+.md-typeset a:focus-visible,
+.md-nav__link:focus-visible {
+  outline: 3px solid oklch(73% 0.18 262 / 0.6);
+  outline-offset: 3px;
 }

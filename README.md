@@ -4,9 +4,9 @@
 
 Stop fixing the same agent mistake twice. Cognibrain stores durable engineering context — repo rules, reviewer corrections, failed commands, connector events, and patch evidence — then returns compact context before the next agent action.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![npm](https://img.shields.io/npm/v/@cognilabz/cognibrain)](https://www.npmjs.com/package/@cognilabz/cognibrain)
-[![Docs](https://img.shields.io/badge/docs-cognibrain.cognilabz.com-teal)](https://cognibrain.cognilabz.com)
+[![Docs](https://img.shields.io/badge/docs-cognibrain.cognilabz.com-5b5bd6)](https://cognibrain.cognilabz.com)
 
 ## Quick Start
 
@@ -38,12 +38,12 @@ npx cognibrain status
 
 **📖 [cognibrain.cognilabz.com](https://cognibrain.cognilabz.com)**
 
-- [Getting Started](https://cognibrain.cognilabz.com/getting-started/quickstart/)
-- [CLI Reference](https://cognibrain.cognilabz.com/reference/cli-commands/)
-- [MCP Integration](https://cognibrain.cognilabz.com/guides/mcp-integration/)
-- [TypeScript SDK](https://cognibrain.cognilabz.com/reference/sdk-typescript/)
-- [Python SDK](https://cognibrain.cognilabz.com/reference/sdk-python/)
-- [Self-Hosting](https://cognibrain.cognilabz.com/operations/self-hosting/)
+- [Getting Started](https://cognibrain.cognilabz.com/latest/getting-started/quickstart/)
+- [CLI Reference](https://cognibrain.cognilabz.com/latest/reference/cli-commands/)
+- [MCP Integration](https://cognibrain.cognilabz.com/latest/guides/mcp-integration/)
+- [TypeScript SDK](https://cognibrain.cognilabz.com/latest/reference/sdk-typescript/)
+- [Python SDK](https://cognibrain.cognilabz.com/latest/reference/sdk-python/)
+- [Self-Hosting](https://cognibrain.cognilabz.com/latest/operations/self-hosting/)
 
 ## Contributing
 
@@ -54,7 +54,7 @@ npm install
 npm run verify
 ```
 
-See [Contributing Guide](https://cognibrain.cognilabz.com/contributing/development-setup/) for details.
+See [Contributing Guide](https://cognibrain.cognilabz.com/latest/contributing/development-setup/) for details.
 
 ## License
 

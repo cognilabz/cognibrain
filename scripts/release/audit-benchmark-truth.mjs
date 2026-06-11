@@ -47,6 +47,15 @@ checks.push(check("reality claim gate requires original commands and shared judg
     && report.includes("report.claimEvidence?.sameJudgeTraceId")
     && report.includes("if (verifiedClaimGate.leaderboardAllowed)");
 }));
+checks.push(check("reality publish clamps row claim flags to the revalidated gate", () => {
+  const report = readFileSync("src/eval/reality/report.ts", "utf8");
+  return report.includes("qualityClaimAllowed: verifiedClaimGate.qualityClaimAllowed && system.qualityClaimAllowed")
+    && report.includes("marketClaimAllowed: verifiedClaimGate.marketClaimAllowed && system.marketClaimAllowed")
+    && report.includes("leaderboardEligible: verifiedClaimGate.leaderboardAllowed && system.leaderboardEligible")
+    && !report.includes("qualityClaimAllowed: system.qualityClaimAllowed")
+    && !report.includes("marketClaimAllowed: system.marketClaimAllowed")
+    && !report.includes("leaderboardEligible: system.leaderboardEligible");
+}));
 checks.push(check("docs-visible benchmark page preserves public-results boundary", () => {
   const docs = readFileSync("docs/benchmarks.md", "utf8");
   return docs.includes("Public-results boundary:")

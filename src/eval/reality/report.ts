@@ -35,9 +35,9 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
       score: system.metrics.score,
       rawOutputsPath: system.rawOutputsPath,
       scorerTracePath: system.scorerTracePath,
-      qualityClaimAllowed: system.qualityClaimAllowed,
-      marketClaimAllowed: system.marketClaimAllowed,
-      leaderboardEligible: system.leaderboardEligible,
+      qualityClaimAllowed: verifiedClaimGate.qualityClaimAllowed && system.qualityClaimAllowed,
+      marketClaimAllowed: verifiedClaimGate.marketClaimAllowed && system.marketClaimAllowed,
+      leaderboardEligible: verifiedClaimGate.leaderboardAllowed && system.leaderboardEligible,
       blockingReasons: system.blockingReasons
     }))
   };

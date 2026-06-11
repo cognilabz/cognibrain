@@ -1,0 +1,52 @@
+import type { RealityAdapterKind, RealityClaimGate, RealityManifestLock, RealitySystemResult } from "./types";
+
+const originalKinds: RealityAdapterKind[] = ["official-api", "official-sdk", "official-cli"];
+
+export function realityClaimGate(input: {
+  lock: RealityManifestLock;
+  systems: RealitySystemResult[];
+  publicArtifactHash?: string | null;
+  independentReplicationHash?: string | null;
+  sameJudge?: boolean;
+  sameBudgets?: boolean;
+}): RealityClaimGate {
+  const eligibleOriginalSystems = input.systems.filter((system) => originalKinds.includes(system.adapterKind) && system.rawOutputsPath && system.scorerTracePath);
+  const majorCompetitors = eligibleOriginalSystems.filter((system) => system.system !== "cognibrain");
+  const gates = {
+    manifestFrozenBeforeRun: Boolean(input.lock.frozenAt && input.lock.sha256),
+    allSystemsUseOriginalImplementation: input.systems.length > 0 && input.systems.every((system) => system.adapterKind === "local-baseline" || originalKinds.includes(system.adapterKind) || system.adapterKind === "credential-blocked"),
+    noProfileAdapters: input.systems.every((system) => system.adapterKind !== "profile-model-forbidden"),
+    sameInputStream: true,
+    sameBudgets: input.sameBudgets ?? true,
+    sameJudge: input.sameJudge ?? false,
+    rawOutputsRetained: eligibleOriginalSystems.every((system) => Boolean(system.rawOutputsPath)),
+    costLatencyRecorded: eligibleOriginalSystems.every((system) => system.metrics.estimatedCostUsd !== null && system.metrics.p95LatencyMs !== null),
+    atLeastTwoMajorCompetitorsEligible: majorCompetitors.length >= 2,
+    publicArtifactHashPresent: Boolean(input.publicArtifactHash),
+    independentReplicationHashPresent: Boolean(input.independentReplicationHash)
+  };
+  const blockerMessages: Record<keyof typeof gates, string> = {
+    manifestFrozenBeforeRun: "Manifest must be frozen and hash-locked before the run.",
+    allSystemsUseOriginalImplementation: "Market claims require original API, SDK, or CLI implementations for compared systems.",
+    noProfileAdapters: "Capability-profile adapters are forbidden for public comparison claims.",
+    sameInputStream: "All systems must use the same input stream.",
+    sameBudgets: "All systems must use the same preregistered budgets.",
+    sameJudge: "All scoreable systems require the same LLM/harness judge.",
+    rawOutputsRetained: "Raw outputs must be retained for every eligible system.",
+    costLatencyRecorded: "Cost and latency must be recorded for every eligible system.",
+    atLeastTwoMajorCompetitorsEligible: "At least two major original competitor systems must be eligible.",
+    publicArtifactHashPresent: "A public immutable artifact hash is required.",
+    independentReplicationHashPresent: "An independent replication hash is required."
+  };
+  const blockers = Object.entries(gates)
+    .filter(([, passed]) => !passed)
+    .map(([key]) => blockerMessages[key as keyof typeof gates]);
+  const marketClaimAllowed = blockers.length === 0;
+  return {
+    marketClaimAllowed,
+    qualityClaimAllowed: gates.sameJudge && gates.rawOutputsRetained && gates.costLatencyRecorded,
+    leaderboardAllowed: marketClaimAllowed,
+    gates,
+    blockers
+  };
+}

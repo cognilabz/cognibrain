@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0",
+  "protocol": "emrp-v1",
+  "manifestPath": "benchmarks/reality/manifests/emrp-v1.jsonl",
+  "frozenAt": "2026-06-11T00:00:00.000Z",
+  "taskCount": 60,
+  "taskBuckets": {
+    "repeat-mistake": 8,
+    "stale-update": 8,
+    "forbidden-action": 8,
+    "patch-evidence": 8,
+    "source-citation": 7,
+    "privacy-deletion": 7,
+    "abstention": 7,
+    "public-memory-qa": 7
+  },
+  "sha256": "c9451205adc9f93a2d98634d2ab22fbce76ebe812ecb7ec8217d18936a2d1a9b"
+}

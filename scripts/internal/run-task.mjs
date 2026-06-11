@@ -24,6 +24,12 @@ const tasks = {
   "benchmark:realworld:competitors": cmd("node", ["scripts/benchmark/benchmark-realworld-native-competitors.mjs"]),
   "benchmark:realworld:openai-judge": cmd("node", ["scripts/benchmark/realworld-openai-judge.mjs"]),
   "benchmark:realworld:openai-intelligence": cmd("node", ["scripts/benchmark/openai-memory-intelligence.mjs"]),
+  "benchmark:reality:freeze": cmd("npx", ["tsx", "src/eval/reality/cli.ts", "freeze"]),
+  "benchmark:reality:run": cmd("npx", ["tsx", "src/eval/reality/cli.ts", "run"]),
+  "benchmark:reality:judge": cmd("npx", ["tsx", "src/eval/reality/cli.ts", "judge"]),
+  "benchmark:reality:publish": seq("benchmark:reality:run", ["npx", "tsx", "src/eval/reality/cli.ts", "publish"]),
+  "benchmark:reality:competitors": cmd("npx", ["tsx", "src/eval/reality/cli.ts", "competitors"]),
+  "benchmark:reality:verify": cmd("npx", ["tsx", "src/eval/reality/cli.ts", "verify"]),
   "benchmark:nextgen": cmd("npx", ["tsx", "src/eval/nextgenBenchmarks.ts", "--out", "artifacts/nextgen-benchmarks.json"]),
   "benchmark:cognicode:generate": cmd("npx", ["tsx", "src/eval/cognicodeBench.ts", "--generate-only", "--count", "1000", "--difficulty", "hard", "--noise-ratio", "0.5", "--sessions", "12", "--repos", "100", "--stale-ratio", "0.25", "--connector-mix", "github,jira,confluence,notion,slack", "--scenarios-out", "artifacts/cognicodebench/scenarios.json", "--out", "artifacts/cognicodebench/generate-report.json"]),
   "benchmark:cognicode": cmd("npx", ["tsx", "src/eval/cognicodeBench.ts", "--count", "1000", "--difficulty", "hard", "--noise-ratio", "0.5", "--sessions", "12", "--repos", "100", "--stale-ratio", "0.25", "--connector-mix", "github,jira,confluence,notion,slack", "--scenarios-out", "artifacts/cognicodebench/scenarios.json", "--out", "artifacts/cognicodebench/run.json"]),
@@ -67,6 +73,7 @@ const tasks = {
   "certify:production": cmd("node", ["scripts/release/certify-production.mjs"]),
   "audit:structure": cmd("node", ["scripts/release/audit-structure.mjs"]),
   "audit:docs": cmd("node", ["scripts/release/audit-docs.mjs"]),
+  "audit:benchmark-truth": cmd("node", ["scripts/release/audit-benchmark-truth.mjs"]),
   "audit:truth": cmd("node", ["scripts/release/audit-product-truth.mjs"]),
   "audit:latest-analysis": cmd("node", ["scripts/release/audit-latest-analysis.mjs"]),
   "audit:plan-gaps": cmd("npx", ["tsx", "src/eval/planGaps.ts", "--out", "artifacts/plan-gaps-audit.json", "--markdown", "artifacts/docs/plan-gaps.md"]),
@@ -74,7 +81,7 @@ const tasks = {
   "release:contract": cmd("npx", ["tsx", "src/eval/releaseContract.ts", "--out", "artifacts/release-contract-audit.json"]),
   "doctor:publish": cmd("node", ["bin/cognibrain.mjs", "doctor", "--publish"]),
   "pack:smoke": cmd("node", ["scripts/release/pack-smoke.mjs"]),
-  "verify:nextgen": seq("test", "eval", "eval:nextgen", "benchmark:nextgen", "benchmark:cognicode", "benchmark:arena", "benchmark:realworld:blackbox", "benchmark:realworld:competitors", "benchmark:realworld:protocol", "benchmark:release", "demo:first-win", ["node", "scripts/internal/run-task.mjs", "benchmark:answer-generation", "--reports", "artifacts/nextgen-benchmarks.json,artifacts/cognicodebench/run.json"], "leaderboard", "verify:compatibility", "harness:maturity", "operator:maturity", "benchmark:hardening", "verify:status", "audit:structure", "audit:docs", "release:contract", ["node", "scripts/benchmark/operator-memory-native-competitors.mjs", "--skip-install", "--out", "artifacts/operator-memory-native-competitors.json", "--markdown", "artifacts/docs/operator-memory-native-competitors.md"], "audit:truth", "audit:plan-gaps", "audit:latest-analysis", "proof:plan", "build"),
+  "verify:nextgen": seq("test", "eval", "eval:nextgen", "benchmark:nextgen", "benchmark:cognicode", "benchmark:arena", "benchmark:realworld:blackbox", "benchmark:realworld:competitors", "benchmark:realworld:protocol", "benchmark:reality:verify", "benchmark:reality:run", "benchmark:reality:publish", "audit:benchmark-truth", "benchmark:release", "demo:first-win", ["node", "scripts/internal/run-task.mjs", "benchmark:answer-generation", "--reports", "artifacts/nextgen-benchmarks.json,artifacts/cognicodebench/run.json"], "leaderboard", "verify:compatibility", "harness:maturity", "operator:maturity", "benchmark:hardening", "verify:status", "audit:structure", "audit:docs", "release:contract", ["node", "scripts/benchmark/operator-memory-native-competitors.mjs", "--skip-install", "--out", "artifacts/operator-memory-native-competitors.json", "--markdown", "artifacts/docs/operator-memory-native-competitors.md"], "audit:truth", "audit:plan-gaps", "audit:latest-analysis", "proof:plan", "build"),
   "verify:selfhosted": seq("verify:nextgen", "verify:postgres", "verify:selfhosted:claims", "doctor:publish", ["npm", "pack", "--dry-run"], "pack:smoke", ["python3", "-m", "unittest", "discover", "-s", "sdk/python/tests"])
 };
 

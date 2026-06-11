@@ -7,6 +7,20 @@ only diagnostic, and which claim gates still need external evidence.
 
 ![Benchmark result charts](assets/benchmark-results.svg)
 
+## Reality Bench / EMRP v1
+
+Reality Bench is the Engineering Memory Reality Protocol v1 (`emrp-v1`). It is
+the flagship protocol for repeated-mistake prevention, stale-rule suppression,
+forbidden-action blocking, patch evidence, source-cited recall, deletion/privacy
+boundaries, abstention, and public memory QA. Its public output is
+`artifacts/public/evidence-table/` until the strict market gate passes.
+
+The gate requires a frozen manifest, retained raw outputs, the same input
+stream, the same budgets, the same judge, Cognibrain plus at least two original
+competitor implementations, public artifact hash, and independent replication
+hash. Capability-profile adapters are explicitly blocked from public comparison
+claims.
+
 ## How To Read This Page
 
 Benchmark rows in this repo are deliberately strict. A high local score means

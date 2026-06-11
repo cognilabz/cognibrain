@@ -14,6 +14,13 @@ generated artifacts, audits or CI.
 Use this page as the map. The README explains the product story; these docs
 explain how to install, integrate, operate and verify it.
 
+If you are trying to judge the repo quickly, use this reading path:
+
+1. Read the root README through "What This Repo Represents" and "Plain-English Mental Model."
+2. Run the install fast path in [Install and setup](install.md).
+3. Use [Usage and reference](reference.md) for the daily `context -> guard -> work -> outcome -> patch-evidence` loop.
+4. Use [Benchmark results](benchmarks.md) only after you understand the product loop; it explains what is proven and what remains blocked.
+
 | Reader | Best first page | Why |
 | --- | --- | --- |
 | New user | [Install and setup](install.md) | Get a local agent memory loop running quickly. |
@@ -44,6 +51,8 @@ Cognibrain is easiest to understand as a before, during and after loop:
 | After a command | `outcome` | Preserve what actually happened while the result is fresh. |
 | After a patch | `patch-evidence` | Connect changed files, verification commands and memory ids to the work. |
 | After context delivery | `memory feedback-injection` | Teach retrieval whether a delivered memory helped or hurt. |
+
+In plain language: Cognibrain is the place where an agent checks "what did we already learn here?" before acting, "is this action known to be risky?" before touching code, and "what proof did this patch leave behind?" after the work is done.
 
 ## Product Snapshot
 
@@ -83,9 +92,9 @@ Current checked proof:
   are ready, but quality scoring and market leaderboard claims remain blocked
   until an LLM/harness judge and original competitor commands are configured.
 
-This is enough to show a serious proof culture. It is not enough for a blanket
-"best on market" claim; [Benchmark results](benchmarks.md) and the
-[Evidence register](evidence.md) list the exact blockers.
+This is enough to show a serious proof culture and a clear product identity.
+It is not enough for a blanket "best on market" claim; [Benchmark results](benchmarks.md)
+and the [Evidence register](evidence.md) list the exact blockers.
 
 ## Honest Boundaries
 

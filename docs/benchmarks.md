@@ -13,6 +13,13 @@ Benchmark rows in this repo are deliberately strict. A high local score means
 "this implementation passed this checked diagnostic." It does not automatically
 mean "best product on the market" or "quality proven against every competitor."
 
+The practical reading order is:
+
+1. Read [Market Readiness Summary](#market-readiness-summary) for the human headline.
+2. Read [What You Can Safely Say](#what-you-can-safely-say) before using any result in public copy.
+3. Use [Reproduce The Main Proof Surface](#reproduce-the-main-proof-surface) when you need fresh local evidence.
+4. Use [Artifact Snapshot](#artifact-snapshot) and the detailed sections when you need exact generated-file provenance.
+
 | Label | Plain meaning | Allowed claim |
 | --- | --- | --- |
 | `local-diagnostic` | The repo ran a deterministic or local harness successfully. | Useful regression evidence for Cognibrain itself. |
@@ -26,6 +33,40 @@ The short interpretation: Cognibrain has strong engineering-memory diagnostics
 and unusually explicit proof boundaries. Independent market leadership remains
 blocked until judged original competitor runs, public hashes and replication
 exist.
+
+## What You Can Safely Say
+
+Use this page to keep public language tight:
+
+| Safe statement | Why it is safe | Stronger statement to avoid |
+| --- | --- | --- |
+| Cognibrain has strong local diagnostics for coding-agent memory workflows. | Product truth, plan, CogniCodeBench, Arena and public dataset stress artifacts are checked in the current proof surface. | Cognibrain is the best memory product overall. |
+| The benchmark pages separate diagnostic evidence from market proof. | Rows carry proof labels such as `local-diagnostic`, `claimAllowed=false`, `qualityClaimAllowed` and `marketClaimAllowed`. | Every high score is a market claim. |
+| The real-world harness is ready to retain raw outputs and telemetry. | The frozen protocol, raw-output capture and latency/cost fields exist. | The real-world harness already proves quality leadership. |
+| Public dataset rows show retrieval stress signals. | LoCoMo, LongMemEval-S and BEAM rows compare against local baselines. | Public dataset rows prove answer quality or competitor superiority. |
+
+The useful product story is: Cognibrain is built to stop coding agents from repeating known engineering mistakes, and this repo carries local proof for that loop. The blocked story is: Cognibrain has not yet published a fair, independently replicated market leaderboard against original competitor systems.
+
+## Reproduce The Main Proof Surface
+
+For a normal maintainer check, start here:
+
+```bash
+npm test
+npm run build
+npm run release:check
+```
+
+For proof-specific refreshes:
+
+```bash
+npm run internal -- audit:truth
+npm run internal -- audit:plan-gaps
+npm run internal -- audit:latest-analysis
+npm run internal -- proof:plan
+```
+
+For benchmark artifacts, use the specific commands in the maintainer refresh map below. Generated outputs belong under `artifacts/`; review them as evidence, but do not turn them into broader claims unless their claim gates allow it.
 
 ## Benchmark Families
 
@@ -61,6 +102,10 @@ Cognibrain has strong local diagnostics for coding-agent context, guard and
 patch-evidence workflows, and the repo has explicit proof gates that block
 overstated market claims.
 
+In one sentence: the repo currently proves a serious local engineering-memory
+system with strong regression diagnostics, while deliberately blocking
+unearned market-leadership claims.
+
 What is currently strong:
 
 - Product truth audit: 69/69 checks passed, 0 open code-truth gaps.
@@ -78,6 +123,10 @@ What is not yet claimable:
   the same frozen protocol.
 - No BEAM quality claim: BEAM artifacts are useful diagnostics, but their pass
   gates are currently false and `qualityClaimAllowed=false`.
+
+Use the detailed sections below as the evidence register behind those three
+sentences. They are intentionally more precise than marketing copy because each
+row needs to preserve its proof boundary.
 
 ## Artifact Snapshot
 

@@ -2,7 +2,7 @@
 
 Self-hosted engineering memory for coding agents.
 
-Your agent should not rediscover the same repo rules, failed commands, reviewer corrections and release constraints every session. Cognibrain stores durable engineering context, retrieves the compact parts that matter before the next action, warns before known bad actions, and records patch evidence after the work is done.
+Your agent should not rediscover the same repo rules, failed commands, reviewer corrections and release constraints every session. Cognibrain stores durable engineering context, retrieves the few facts that matter before the next action, warns before known bad actions, and records patch evidence after the work is done.
 
 The practical promise is simple: Stop fixing the same agent mistake twice.
 
@@ -12,7 +12,7 @@ If you are new here, read the repo in this order:
 
 | You want to... | Start with |
 | --- | --- |
-| Understand the product in two minutes | [The Short Version](#the-short-version) |
+| Understand the product in two minutes | [The Short Version](#the-short-version) and [What This Repo Represents](#what-this-repo-represents) |
 | Install it for a local coding agent | [Quick Start](#quick-start) and [docs/install.md](docs/install.md) |
 | Wire it into an agent or app | [Public Surface](#public-surface), [docs/reference.md](docs/reference.md) and [docs/integrations.md](docs/integrations.md) |
 | Judge whether the claims are real | [Current Proof Snapshot](#current-proof-snapshot), [docs/benchmarks.md](docs/benchmarks.md) and [docs/evidence.md](docs/evidence.md) |
@@ -61,6 +61,19 @@ npx cognibrain status
 
 `init` defaults to the `solo-dev` profile. It writes local setup state, Codex/Cursor harness files, the Codex skill, local JSON storage, local-only auth, a GitHub connector stub and a SQLite storage adapter stub. The default command shows a stable operator CLI snapshot with runtime state, memory health, connections and next actions. It is intentionally text-first, so it works in small panes, CI logs and remote shells.
 
+## What This Repo Represents
+
+This repository is meant to be read as a complete engineering-memory system, not only as a package README. A new reader should be able to answer four questions quickly:
+
+| Question | Short answer | Where to verify |
+| --- | --- | --- |
+| What is the product? | A local/self-hosted memory layer that helps coding agents reuse verified engineering context. | [What Cognibrain Is](#what-cognibrain-is) |
+| How does an agent use it? | Ask for `context`, run `guard`, do the work, record `outcome` and `patch-evidence`. | [Daily Lifecycle](#daily-lifecycle), [docs/reference.md](docs/reference.md) |
+| What is actually proven? | Strong local engineering-memory diagnostics and claim-boundary discipline. | [Current Proof Snapshot](#current-proof-snapshot), [docs/benchmarks.md](docs/benchmarks.md) |
+| What is not proven yet? | A universal market-leader claim, live tenant certification and fair judged competitor leaderboard. | [Market Position](#market-position), [docs/evidence.md](docs/evidence.md) |
+
+The repo should therefore feel honest and useful at the same time: the product story explains why Cognibrain exists, while the proof pages show exactly which claims are supported by current code, tests, generated artifacts, audits and CI.
+
 ## What Cognibrain Is
 
 Cognibrain is a local/self-hosted memory layer for engineering agents. It is not just a vector store and not just a prompt file. The current repo implements a few cooperating surfaces:
@@ -91,7 +104,9 @@ The checked artifacts currently support a strong engineering-agent story, not a 
 
 See [docs/benchmarks.md](docs/benchmarks.md) and [docs/evidence.md](docs/evidence.md) for the detailed proof register and claim blockers.
 
-## Plain-English Model
+## Plain-English Mental Model
+
+Plain-English means "explained in simple language." It does not mean a separate English-language AI model. The model is the mental picture a reader can keep in their head while using the repo.
 
 Think of Cognibrain as a small engineering memory service that runs beside a coding agent:
 

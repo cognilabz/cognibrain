@@ -25,7 +25,17 @@ checks.push(check("reality docs avoid positive market-superiority phrases", () =
     "docs/benchmarks.md",
     "docs/assets/benchmark-results.svg"
   ].map((path) => readFileSync(path, "utf8")).join("\n").toLowerCase();
-  return !/\b(beats|outperforms|sota|market-leading)\b/.test(docs);
+  return unboundedMarketLanguageLines(docs).length === 0;
+}));
+checks.push(check("reality claim gate requires original commands and shared judge traces", () => {
+  const source = readFileSync("src/eval/reality/claimGate.ts", "utf8");
+  return source.includes("originalCompetitorCommandProofRecorded")
+    && source.includes("rawOutputsFromOriginalCommands")
+    && source.includes("sharedJudgeTracesRecorded")
+    && source.includes("noDeterministicScaffoldOutputs")
+    && source.includes("original-command-executed")
+    && source.includes("shared-judge-trace")
+    && source.includes("Deterministic scaffold outputs cannot open quality, market, or leaderboard claims.");
 }));
 checks.push(check("docs-visible benchmark page preserves public-results boundary", () => {
   const docs = readFileSync("docs/benchmarks.md", "utf8");
@@ -49,11 +59,30 @@ checks.push(check("docs-visible arena rows are demoted from competitor compariso
 checks.push(check("docs-visible benchmark chart labels diagnostics as not market proof", () => {
   const svg = readFileSync("docs/assets/benchmark-results.svg", "utf8");
   return svg.includes("Benchmark Diagnostics (Not Market Proof)")
-    && svg.includes("not quality, competitor, or market-leadership proof");
+    && svg.includes("not quality, competitor, or market-leadership proof")
+    && svg.includes("diagnostic only · claim blocked");
 }));
 checks.push(check("reality evidence table renders blockers before diagnostic scores", () => {
   const report = readFileSync("src/eval/reality/report.ts", "utf8");
-  return report.includes("| System | Adapter | First blocker | Quality claim | Market claim | Diagnostic score |");
+  const runner = readFileSync("src/eval/reality/runner.ts", "utf8");
+  return report.includes("| System | Adapter | First blocker | Quality claim | Market claim | Diagnostic score |")
+    && runner.includes("| System | Adapter | First blocker | Quality claim | Market claim | Diagnostic score |");
+}));
+checks.push(check("docs-visible benchmark tables carry adjacent proof and claim status", () => {
+  const docs = readFileSync("docs/benchmarks.md", "utf8");
+  return docs.includes("| Metric | Diagnostic result | Proof | Claim status |")
+    && docs.includes("| Baseline | Diagnostic score | Repeated mistake rate | Proof | Claim status |")
+    && docs.includes("| System | Proof level | Claim status | Mode | Scenarios | Diagnostic score |")
+    && docs.includes("| System | Proof level | Claim status | Mode | Scenarios | Diagnostic score | Repeated mistake rate |")
+    && !docs.includes("| Baseline | Score |")
+    && !docs.includes("| System | Proof level | Claim status | Mode | Scenarios | Score |");
+}));
+checks.push(check("native competitor rows are not scored while judge is missing", () => {
+  const docs = readFileSync("docs/benchmarks.md", "utf8");
+  return docs.includes("| Mem0 | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |")
+    && docs.includes("| LangMem | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |")
+    && docs.includes("| GBrain | `same-run-cli` | Judge required; claim blocked | `cli-command` | 30 | not scored | not scored |")
+    && docs.includes("| Basic Memory | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |");
 }));
 
 for (const item of checks) console.log(`${item.passed ? "ok" : "FAIL"} ${item.name}`);
@@ -76,4 +105,11 @@ function check(name, predicate) {
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function unboundedMarketLanguageLines(text) {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => /\b(beats|outperforms|sota|market-leading|winner|best|leaderboard|score)\b/i.test(line))
+    .filter((line) => !/\b(no|not|never|blocked|diagnostic|boundary|claim|eligible|eligibility|artifact|protocol|evidence|classifier|proof|question|replaced|until|unless)\b/i.test(line));
 }

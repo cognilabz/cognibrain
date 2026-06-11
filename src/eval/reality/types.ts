@@ -100,6 +100,10 @@ export interface RealityClaimGate {
     sameInputStream: boolean;
     sameBudgets: boolean;
     sameJudge: boolean;
+    originalCompetitorCommandProofRecorded: boolean;
+    rawOutputsFromOriginalCommands: boolean;
+    sharedJudgeTracesRecorded: boolean;
+    noDeterministicScaffoldOutputs: boolean;
     rawOutputsRetained: boolean;
     costLatencyRecorded: boolean;
     atLeastTwoMajorCompetitorsEligible: boolean;

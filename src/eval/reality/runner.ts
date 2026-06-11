@@ -122,7 +122,7 @@ function deterministicOutput(task: RealityTask, system: string, index: number): 
 }
 
 function renderRealityMarkdown(report: RealityReport) {
-  const rows = report.systems.map((system) => `| ${system.displayName} | ${system.adapterKind} | ${system.metrics.score ?? "blocked"} | ${system.qualityClaimAllowed ? "yes" : "no"} | ${system.marketClaimAllowed ? "yes" : "no"} | ${system.blockingReasons[0] ?? ""} |`).join("\n");
+  const rows = report.systems.map((system) => `| ${system.displayName} | ${system.adapterKind} | ${system.blockingReasons[0] ?? ""} | ${system.qualityClaimAllowed ? "yes" : "no"} | ${system.marketClaimAllowed ? "yes" : "no"} | ${system.metrics.score ?? "blocked"} |`).join("\n");
   return `# EMRP v1 Reality Bench
 
 Protocol: ${report.protocol}
@@ -139,8 +139,8 @@ ${report.claimGate.blockers.map((item) => `- ${item}`).join("\n")}
 
 ## Evidence Table
 
-| System | Adapter | Diagnostic score | Quality claim | Market claim | First blocker |
-|---|---:|---:|---:|---:|---|
+| System | Adapter | First blocker | Quality claim | Market claim | Diagnostic score |
+|---|---|---|---:|---:|---:|
 ${rows}
 `;
 }

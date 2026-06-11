@@ -34,9 +34,9 @@ claims.
 
 ## How To Read This Page
 
-Benchmark rows in this repo are deliberately strict. A high local score means
-"this implementation passed this checked diagnostic." It does not automatically
-mean "best product on the market" or "quality proven against every competitor."
+Benchmark rows in this repo are deliberately strict. A high local diagnostic score means
+"this implementation passed this checked diagnostic." It does not mean "best
+product on the market" or "quality proven against every competitor."
 
 The practical reading order is:
 
@@ -101,7 +101,7 @@ For benchmark artifacts, use the specific commands in the maintainer refresh map
 | CogniCodeBench | Can Cognibrain retrieve and use engineering memory across synthetic repo-like scenarios? | Whether it supports a neutral public-protocol comparison against external products. |
 | Public dataset stress | Does retrieval improve over local keyword baselines on LoCoMo, LongMemEval-S and BEAM-style tasks? | Whether answer quality or market leadership is proven. |
 | Real-world black-box harness | Can a frozen manifest, raw outputs, telemetry and competitor slots be captured fairly? | Quality scoring before the LLM/harness judge and original competitor commands are configured. |
-| Arena and operator-memory diagnostics | Do internal capability profiles, ablations and source-aware dream paths regress? | Production tenant certification or independent leaderboard ranking. |
+| Arena and operator-memory diagnostics | Do internal capability profiles, ablations and source-aware dream paths regress? | Production tenant certification or independent leaderboard ranking; claim blocked. |
 
 ## Maintainer Refresh Map
 
@@ -137,7 +137,7 @@ What is currently strong:
 - Plan closure: 16/16 plan-gap checks, 10/10 latest-analysis checks and 10/10
   full-plan proof checks.
 - CogniCodeBench: 1,000 scenarios, 100.0% full-system diagnostic score and
-  96.0% integrity score.
+  96.0% diagnostic integrity score; claim blocked for market use.
 - Real-world black-box harness: coverage, raw-output retention and telemetry
   are ready for judged runs.
 
@@ -299,7 +299,7 @@ This is the first neutral harness implementation. It uses a frozen
 blockers, latency percentiles and cost fields. The current manifest coverage
 gate requires at least 15 queries, at least 3 queries per task bucket, and at
 least 3 abstention/privacy/deletion queries before the smoke can be considered
-coverage-ready. Score, recall, abstention and leakage quality metrics stay
+coverage-ready. Diagnostic score, recall, abstention and leakage quality metrics stay
 `not scored` until `MEMORY_REALWORLD_JUDGE_COMMAND` points to a fixed
 LLM/harness judge. Structured evidence-id matches are
 diagnostics only; they are not quality scores and are not leaderboard proof.
@@ -377,18 +377,18 @@ values, and redacts diagnostic blocked reasons before writing them.
 
 ## CogniCodeBench
 
-| Metric | Result |
-| --- | ---: |
-| Scenarios | 1000 |
-| Correction carry-over | 100.0% |
-| Repeated mistake rate | 0.0% |
-| Procedure recall | 100.0% |
-| Patch correctness | 100.0% |
-| Evidence completeness | 100.0% |
-| Wrong-memory suppression | 100.0% |
-| Source-reference correctness | 100.0% |
-| Granular patch correctness | 100.0% |
-| Long-horizon recall | 100.0% |
+| Metric | Diagnostic result | Proof | Claim status |
+| --- | ---: | --- | --- |
+| Scenarios | 1000 | `local-diagnostic` | claim blocked |
+| Correction carry-over | 100.0% | `local-diagnostic` | claim blocked |
+| Repeated mistake rate | 0.0% | `local-diagnostic` | claim blocked |
+| Procedure recall | 100.0% | `local-diagnostic` | claim blocked |
+| Patch correctness | 100.0% | `local-diagnostic` | claim blocked |
+| Evidence completeness | 100.0% | `local-diagnostic` | claim blocked |
+| Wrong-memory suppression | 100.0% | `local-diagnostic` | claim blocked |
+| Source-reference correctness | 100.0% | `local-diagnostic` | claim blocked |
+| Granular patch correctness | 100.0% | `local-diagnostic` | claim blocked |
+| Long-horizon recall | 100.0% | `local-diagnostic` | claim blocked |
 
 Diagnostics: integrity 96.0%, overfit risk low. The current run reports no open
 CogniCodeBench design weaknesses: task-prompt leakage is low, patch evidence is
@@ -403,18 +403,18 @@ LLM/harness judge validates the full report.
 
 ## Baselines
 
-| Baseline | Score | Repeated mistake rate |
-| --- | ---: | ---: |
-| No memory | 0.0% | 100.0% |
-| Raw chat history | 0.0% | 100.0% |
-| Vector only | 1.7% | 100.0% |
-| Semantic only | 1.7% | 100.0% |
-| Keyword only | 22.8% | 75.0% |
-| Graph only | 18.9% | 85.0% |
-| Temporal only | 3.3% | 95.0% |
-| Procedure only | 36.6% | 90.0% |
-| Cognibrain without temporal | 87.8% | 0.0% |
-| Cognibrain without corrections | 15.5% | 90.0% |
+| Baseline | Diagnostic score | Repeated mistake rate | Proof | Claim status |
+| --- | ---: | ---: | --- | --- |
+| No memory | 0.0% | 100.0% | `local-diagnostic` | claim blocked |
+| Raw chat history | 0.0% | 100.0% | `local-diagnostic` | claim blocked |
+| Vector only | 1.7% | 100.0% | `local-diagnostic` | claim blocked |
+| Semantic only | 1.7% | 100.0% | `local-diagnostic` | claim blocked |
+| Keyword only | 22.8% | 75.0% | `local-diagnostic` | claim blocked |
+| Graph only | 18.9% | 85.0% | `local-diagnostic` | claim blocked |
+| Temporal only | 3.3% | 95.0% | `local-diagnostic` | claim blocked |
+| Procedure only | 36.6% | 90.0% | `local-diagnostic` | claim blocked |
+| Cognibrain without temporal | 87.8% | 0.0% | `local-diagnostic` | claim blocked |
+| Cognibrain without corrections | 15.5% | 90.0% | `local-diagnostic` | claim blocked |
 
 ## Arena
 
@@ -424,16 +424,16 @@ runs or competitor comparisons. Arena command runners must return structured
 JSON checks; raw text output is retained as diagnostic evidence but is not
 parsed into success scores.
 
-| System | Proof level | Claim status | Mode | Scenarios | Score |
-| --- | --- | --- | --- | ---: | ---: |
-| Cognibrain | `same-run-full` | Local product proof only; not market-wide | `full-local` | 300 | 100.0% |
-| Graphiti/Zep | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 66.7% |
-| Zep | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 66.7% |
-| GBrain | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 66.7% |
-| Cognee | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 60.0% |
-| Basic Memory | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 60.0% |
-| Mem0 | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 15.0% |
-| LangMem | `same-run-native` | Judge required for quality claim | `native-command` | 300 | 0.0% |
+| System | Proof level | Claim status | Mode | Scenarios | Diagnostic score |
+| --- | --- | --- | --- | ---: | --- |
+| Cognibrain | `same-run-full` | Local diagnostic only; claim blocked for market-wide use | `full-local` | 300 | 100.0% diagnostic |
+| Graphiti/Zep | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 66.7% diagnostic |
+| Zep | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 66.7% diagnostic |
+| GBrain | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 66.7% diagnostic |
+| Cognee | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 60.0% diagnostic |
+| Basic Memory | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 60.0% diagnostic |
+| Mem0 | `same-run-api-shape` | Diagnostic model; claim blocked | `api-shape` | 300 | 15.0% diagnostic |
+| LangMem | `same-run-native` | Judge required; claim blocked | `native-command` | 300 | not scored |
 
 ## Native Competitor Smoke
 
@@ -441,15 +441,15 @@ This smoke run checks native runner plumbing on Cognibrain-designed scenarios.
 It can expose setup and adapter weaknesses, but it is not a neutral
 cross-system result table.
 
-| System | Proof level | Claim status | Mode | Scenarios | Score | Repeated mistake rate |
-| --- | --- | --- | --- | ---: | ---: | ---: |
-| Cognibrain | `same-run-full` | Local product proof only; not market-wide | `full-local` | 30 | 96.7% | 0.0% |
-| Mem0 | `same-run-native` | Judge required for quality claim | `native-command` | 30 | 66.7% | 100.0% |
-| LangMem | `same-run-native` | Judge required for quality claim | `native-command` | 30 | 66.7% | 100.0% |
-| GBrain | `same-run-cli` | Judge required for quality claim | `cli-command` | 30 | 66.7% | 100.0% |
-| Basic Memory | `same-run-native` | Judge required for quality claim | `native-command` | 30 | 66.7% | 100.0% |
-| Graphiti/Zep | `credential-blocked` | No scoreable claim | `blocked-command` | 30 | 0.0% | 100.0% |
-| Cognee | `credential-blocked` | No scoreable claim | `blocked-command` | 30 | 0.0% | 100.0% |
+| System | Proof level | Claim status | Mode | Scenarios | Diagnostic score | Repeated mistake rate |
+| --- | --- | --- | --- | ---: | --- | --- |
+| Cognibrain | `same-run-full` | Local diagnostic only; claim blocked for market-wide use | `full-local` | 30 | 96.7% diagnostic | 0.0% diagnostic |
+| Mem0 | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |
+| LangMem | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |
+| GBrain | `same-run-cli` | Judge required; claim blocked | `cli-command` | 30 | not scored | not scored |
+| Basic Memory | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |
+| Graphiti/Zep | `credential-blocked` | No scoreable claim; claim blocked | `blocked-command` | 30 | not scored | not scored |
+| Cognee | `credential-blocked` | No scoreable claim; claim blocked | `blocked-command` | 30 | not scored | not scored |
 
 ## External Hard
 
@@ -458,13 +458,13 @@ the default snapshot. It is intended to expose weak margins, not to replace the
 standard artifact rows above. These are diagnostic retrieval stress rows, not
 quality or market claims.
 
-| Dataset | Metric | Cognibrain | Strongest baseline | Gap |
-| --- | --- | ---: | ---: | ---: |
-| LoCoMo | Evidence recall@1, no summaries | 35.7% | Keyword only 32.2% | +3.6% |
-| LongMemEval-S | Answer-session recall@1 | 75.4% | Keyword only 74.2% | +1.2% |
-| BEAM 100K | Retrieval nugget score@5 | 26.8% | Keyword only 12.0% | +14.8% |
-| BEAM 500K | Retrieval nugget score@5 | 22.1% | Keyword only 4.7% | +17.4% |
-| BEAM 1M | Retrieval nugget score@5 | 25.6% | Keyword only 10.0% | +15.6% |
+| Dataset | Metric | Cognibrain diagnostic | Strongest baseline diagnostic | Gap | Proof | Claim status |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| LoCoMo | Evidence recall@1, no summaries | 35.7% | Keyword only 32.2% | +3.6% | `local-diagnostic` | claim blocked |
+| LongMemEval-S | Answer-session recall@1 | 75.4% | Keyword only 74.2% | +1.2% | `local-diagnostic` | claim blocked |
+| BEAM 100K | Retrieval nugget score@5 | 26.8% | Keyword only 12.0% | +14.8% | `local-diagnostic` | claim blocked |
+| BEAM 500K | Retrieval nugget score@5 | 22.1% | Keyword only 4.7% | +17.4% | `local-diagnostic` | claim blocked |
+| BEAM 1M | Retrieval nugget score@5 | 25.6% | Keyword only 10.0% | +15.6% | `local-diagnostic` | claim blocked |
 
 ## Original Public Benchmarks
 
@@ -502,13 +502,13 @@ This is a local adapter diagnostic, not an original public benchmark. It uses
 `basic-memory==0.21.5` through Markdown files, Basic Memory full-text
 reindexing, and MCP `search_notes`.
 
-| Dataset | Metric | Basic Memory | Cognibrain same sample | Delta |
-| --- | --- | ---: | ---: | ---: |
-| LoCoMo | Evidence recall@1, session notes | 6.1% | 35.8% | -29.7% |
-| LongMemEval-S | Answer-session recall@1, session notes | 1.0% | 75.0% | -74.0% |
-| BEAM 100K | Retrieval nugget score@5, message notes | 41.0% | 26.8% | +14.2% |
-| BEAM 500K | Retrieval nugget score@5, message notes | 34.4% | 22.1% | +12.3% |
-| BEAM 1M | Retrieval nugget score@5, message notes | 39.3% | 25.6% | +13.7% |
+| Dataset | Metric | Basic Memory diagnostic | Cognibrain same-sample diagnostic | Delta | Proof | Claim status |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| LoCoMo | Evidence recall@1, session notes | 6.1% | 35.8% | -29.7% | `custom-adapter-diagnostic` | claim blocked |
+| LongMemEval-S | Answer-session recall@1, session notes | 1.0% | 75.0% | -74.0% | `custom-adapter-diagnostic` | claim blocked |
+| BEAM 100K | Retrieval nugget score@5, message notes | 41.0% | 26.8% | +14.2% | `custom-adapter-diagnostic` | claim blocked |
+| BEAM 500K | Retrieval nugget score@5, message notes | 34.4% | 22.1% | +12.3% | `custom-adapter-diagnostic` | claim blocked |
+| BEAM 1M | Retrieval nugget score@5, message notes | 39.3% | 25.6% | +13.7% | `custom-adapter-diagnostic` | claim blocked |
 
 ## Hardening
 

@@ -1,6 +1,8 @@
 import type { RealityAdapterKind, RealityClaimGate, RealityManifestLock, RealitySystemResult } from "./types";
 
 const originalKinds: RealityAdapterKind[] = ["official-api", "official-sdk", "official-cli"];
+const originalCommandProofToken = "original-command-executed";
+const sharedJudgeTraceToken = "shared-judge-trace";
 
 export function realityClaimGate(input: {
   lock: RealityManifestLock;
@@ -12,6 +14,7 @@ export function realityClaimGate(input: {
 }): RealityClaimGate {
   const eligibleOriginalSystems = input.systems.filter((system) => originalKinds.includes(system.adapterKind) && system.rawOutputsPath && system.scorerTracePath);
   const majorCompetitors = eligibleOriginalSystems.filter((system) => system.system !== "cognibrain");
+  const commandProofCompetitors = majorCompetitors.filter(hasOriginalCommandProof);
   const gates = {
     manifestFrozenBeforeRun: Boolean(input.lock.frozenAt && input.lock.sha256),
     allSystemsUseOriginalImplementation: input.systems.length > 0 && input.systems.every((system) => system.adapterKind === "local-baseline" || originalKinds.includes(system.adapterKind) || system.adapterKind === "credential-blocked"),
@@ -19,9 +22,13 @@ export function realityClaimGate(input: {
     sameInputStream: true,
     sameBudgets: input.sameBudgets ?? true,
     sameJudge: input.sameJudge ?? false,
+    originalCompetitorCommandProofRecorded: commandProofCompetitors.length >= 2,
+    rawOutputsFromOriginalCommands: commandProofCompetitors.length >= 2 && commandProofCompetitors.every((system) => Boolean(system.rawOutputsPath)),
+    sharedJudgeTracesRecorded: commandProofCompetitors.length >= 2 && eligibleOriginalSystems.every(hasSharedJudgeTraceProof),
+    noDeterministicScaffoldOutputs: eligibleOriginalSystems.length > 0 && eligibleOriginalSystems.every((system) => !hasDeterministicScaffoldBlocker(system)),
     rawOutputsRetained: eligibleOriginalSystems.every((system) => Boolean(system.rawOutputsPath)),
     costLatencyRecorded: eligibleOriginalSystems.every((system) => system.metrics.estimatedCostUsd !== null && system.metrics.p95LatencyMs !== null),
-    atLeastTwoMajorCompetitorsEligible: majorCompetitors.length >= 2,
+    atLeastTwoMajorCompetitorsEligible: commandProofCompetitors.length >= 2,
     publicArtifactHashPresent: Boolean(input.publicArtifactHash),
     independentReplicationHashPresent: Boolean(input.independentReplicationHash)
   };
@@ -32,6 +39,10 @@ export function realityClaimGate(input: {
     sameInputStream: "All systems must use the same input stream.",
     sameBudgets: "All systems must use the same preregistered budgets.",
     sameJudge: "All scoreable systems require the same LLM/harness judge.",
+    originalCompetitorCommandProofRecorded: "At least two major original competitor command executions must be recorded.",
+    rawOutputsFromOriginalCommands: "Raw outputs must come from recorded original competitor commands, not deterministic scaffold output.",
+    sharedJudgeTracesRecorded: "Shared LLM/harness judge traces must be recorded for every scoreable original system.",
+    noDeterministicScaffoldOutputs: "Deterministic scaffold outputs cannot open quality, market, or leaderboard claims.",
     rawOutputsRetained: "Raw outputs must be retained for every eligible system.",
     costLatencyRecorded: "Cost and latency must be recorded for every eligible system.",
     atLeastTwoMajorCompetitorsEligible: "At least two major original competitor systems must be eligible.",
@@ -42,11 +53,32 @@ export function realityClaimGate(input: {
     .filter(([, passed]) => !passed)
     .map(([key]) => blockerMessages[key as keyof typeof gates]);
   const marketClaimAllowed = blockers.length === 0;
+  const qualityClaimAllowed = gates.sameJudge
+    && gates.rawOutputsRetained
+    && gates.costLatencyRecorded
+    && gates.rawOutputsFromOriginalCommands
+    && gates.sharedJudgeTracesRecorded
+    && gates.noDeterministicScaffoldOutputs;
   return {
     marketClaimAllowed,
-    qualityClaimAllowed: gates.sameJudge && gates.rawOutputsRetained && gates.costLatencyRecorded,
+    qualityClaimAllowed,
     leaderboardAllowed: marketClaimAllowed,
     gates,
     blockers
   };
+}
+
+function hasOriginalCommandProof(system: RealitySystemResult) {
+  return system.adapterSource.includes(originalCommandProofToken)
+    || /\boriginal command executed\b/i.test(system.adapterSource);
+}
+
+function hasSharedJudgeTraceProof(system: RealitySystemResult) {
+  return Boolean(system.scorerTracePath)
+    && (system.adapterSource.includes(sharedJudgeTraceToken) || /\bshared judge trace\b/i.test(system.adapterSource));
+}
+
+function hasDeterministicScaffoldBlocker(system: RealitySystemResult) {
+  return system.blockingReasons.some((reason) => /deterministic scaffold/i.test(reason))
+    || /deterministic scaffold/i.test(system.adapterSource);
 }

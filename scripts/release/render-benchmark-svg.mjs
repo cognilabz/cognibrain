@@ -149,10 +149,10 @@ function publicClaimDetail(report) {
 }
 
 function arenaProofDetail(proofLevel) {
-  if (proofLevel === "same-run-full") return "local full · not market proof";
+  if (proofLevel === "same-run-full") return "local diagnostic only · claim blocked · not market proof";
   if (proofLevel === "credential-blocked") return "blocked · no scoreable claim";
   if (proofLevel === "same-run-api-shape") return "api-shape diagnostic · claim blocked";
-  if (proofLevel === "same-run-native" || proofLevel === "same-run-cloud-api" || proofLevel === "same-run-cli") return `${proofLevel} · judge required`;
+  if (proofLevel === "same-run-native" || proofLevel === "same-run-cloud-api" || proofLevel === "same-run-cli") return `${proofLevel} · judge required · claim blocked`;
   return `${proofLevel ?? "unknown"} · claim blocked`;
 }
 
@@ -165,7 +165,7 @@ function cognicodeWeaknessRows() {
   return (artifacts.cognicode?.diagnostics?.weaknesses ?? []).slice(0, 3).map((weakness) => ({
     label: `CogniCode ${weakness.area}`,
     value: severityScore[weakness.severity] ?? 0.5,
-    detail: `${weakness.severity} severity`,
+    detail: `${weakness.severity} severity · diagnostic only · claim blocked`,
     kind: "blocked"
   }));
 }
@@ -174,7 +174,7 @@ function beamWeaknessRows(label, report) {
   return (report?.ours?.weaknesses ?? []).slice(0, 2).map((weakness) => ({
     label: `${label} ${formatLabel(weakness.category)}`,
     value: Number(weakness.accuracy ?? 0),
-    detail: `gap ${(Number(weakness.gapToBestCategory ?? 0) * 100).toFixed(1)}pp`,
+    detail: `gap ${(Number(weakness.gapToBestCategory ?? 0) * 100).toFixed(1)}pp · diagnostic only · claim blocked`,
     kind: "blocked"
   }));
 }
@@ -234,7 +234,7 @@ function renderSvg(sections) {
     y: y + 26,
     width: width - margin * 2,
     title: "Benchmark Integrity And Weaknesses",
-    note: "Lower bars identify overfit risk or weak categories that should drive the next improvement loop.",
+    note: "Each bar is diagnostic only with claim blocked unless a row explicitly says otherwise.",
     axis,
     rows: sections.diagnosticRows,
     rowRenderer: renderSingleBarRow
@@ -245,7 +245,7 @@ function renderSvg(sections) {
     y: y + 26,
     width: width - margin * 2,
     title: "Arena Internal Diagnostics",
-    note: "Synthetic Cognibrain scenario stream; profile/API-shape rows are not competitor comparisons.",
+    note: "Synthetic scenario diagnostics only; profile/API-shape rows are not competitor comparisons.",
     axis,
     rows: sections.arenaRows,
     rowRenderer: renderSingleBarRow

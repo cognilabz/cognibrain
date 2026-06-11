@@ -98,11 +98,14 @@ checks.push(check("agent instruction templates require live review recheck befor
     return content.includes("no_changes")
       && content.includes("recheck")
       && content.includes("code-review coworker")
+      && (content.includes("implement actionable feedback") || content.includes("implement actionable review feedback"))
+      && (content.includes("push, and repeat") || content.includes("push again, and repeat"))
       && content.includes("unless the user explicitly asks for another branch or no publish")
       && content.includes("record the review result and recheck result");
   });
 }, {
   stopCondition: "NO_CHANGES recheck",
+  feedbackLoop: "implement actionable feedback, verify, commit, push, and repeat",
   branchOverride: "unless the user explicitly asks for another branch or no publish",
   evidenceTrail: "record the review result and recheck result",
   generatedSource: "bin/lib/harnessRuntime.mjs generatedCopilotScopedInstructions"

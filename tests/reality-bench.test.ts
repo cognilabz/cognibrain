@@ -200,6 +200,75 @@ describe("EMRP Reality Bench", () => {
     expect(malformedManifestGate.leaderboardAllowed).toBe(false);
   });
 
+  it("rejects malformed or future frozen manifest timestamps", () => {
+    const systems = [
+      publishableRealitySystem("cognibrain", "Cognibrain"),
+      publishableRealitySystem("mem0", "Mem0"),
+      publishableRealitySystem("langmem", "LangMem")
+    ];
+    const malformedFrozenGate = realityClaimGate({
+      lock: { ...manifestLock, frozenAt: "not-a-timestamp" },
+      systems,
+      publicArtifactHash,
+      independentReplicationHash,
+      sameJudge: true,
+      sameJudgeProof: sameJudgeTraceId,
+      sameBudgets: true,
+      sameBudgetsProof
+    });
+
+    expect(malformedFrozenGate.gates.manifestFrozenBeforeRun).toBe(false);
+    expect(malformedFrozenGate.qualityClaimAllowed).toBe(false);
+    expect(malformedFrozenGate.marketClaimAllowed).toBe(false);
+    expect(malformedFrozenGate.leaderboardAllowed).toBe(false);
+  });
+
+  it("refuses to publish reports frozen after generation time", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-reality-future-freeze-"));
+    try {
+      const reportPath = join(dir, "report.json");
+      const publicDir = join(dir, "public");
+      const report = {
+        schemaVersion: "1.0",
+        protocol: "emrp-v1",
+        generatedAt: "2026-06-11T00:00:00.000Z",
+        manifestHash: manifestLock.sha256,
+        manifestLock: { ...manifestLock, frozenAt: "2026-06-12T00:00:00.000Z" },
+        taskCount: manifestLock.taskCount,
+        systems: [publishableRealitySystem("cognibrain", "Cognibrain")],
+        claimEvidence: {
+          publicArtifactHash,
+          independentReplicationHash,
+          sameJudgeTraceId,
+          sameBudgetsProof
+        },
+        claimGate: realityClaimGate({
+          lock: { ...manifestLock, frozenAt: "2026-06-12T00:00:00.000Z" },
+          systems: [publishableRealitySystem("cognibrain", "Cognibrain")],
+          publicArtifactHash,
+          independentReplicationHash,
+          sameJudge: true,
+          sameJudgeProof: sameJudgeTraceId,
+          sameBudgets: true,
+          sameBudgetsProof
+        }),
+        publication: {
+          evidenceTablePath: join(publicDir, "index.json"),
+          leaderboardPath: null,
+          status: "evidence-table-only"
+        }
+      } satisfies RealityReport;
+      writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+
+      expect(() => publishRealityEvidenceTable({ inputPath: reportPath, outputDir: publicDir })).toThrow(
+        "Reality report manifestLock.frozenAt must be an ISO timestamp at or before generatedAt"
+      );
+      expect(existsSync(join(publicDir, "index.json"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("publishes validated market-proof hashes in Reality artifacts", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-reality-proof-hashes-"));
     try {

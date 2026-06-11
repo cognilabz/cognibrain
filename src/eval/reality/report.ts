@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { isRealityClaimPublishableSystem, isRealityProofHash, realityClaimGate } from "./claimGate";
+import { isRealityClaimPublishableSystem, isRealityIsoTimestamp, isRealityProofHash, realityClaimGate } from "./claimGate";
 import type { RealityReport } from "./types";
 
 export function publishRealityEvidenceTable(options: { inputPath?: string; outputDir?: string } = {}) {
@@ -10,6 +10,9 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
   const verifiedManifestHash = report.manifestLock.sha256;
   if (!isRealityProofHash(report.manifestHash) || !isRealityProofHash(verifiedManifestHash) || report.manifestHash !== verifiedManifestHash) {
     throw new Error("Reality report manifestHash must be a SHA-256 hash matching manifestLock.sha256; refusing to publish.");
+  }
+  if (!isRealityIsoTimestamp(report.generatedAt) || !isRealityIsoTimestamp(report.manifestLock.frozenAt) || Date.parse(report.manifestLock.frozenAt) > Date.parse(report.generatedAt)) {
+    throw new Error("Reality report manifestLock.frozenAt must be an ISO timestamp at or before generatedAt; refusing to publish.");
   }
   const verifiedClaimGate = realityClaimGate({
     lock: report.manifestLock,

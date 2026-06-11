@@ -18,7 +18,7 @@ export function realityClaimGate(input: {
   const commandProofCompetitors = majorCompetitors.filter((system) => isRealityClaimPublishableSystem(system, input.lock.sha256));
   const cognibrainEligibleSystems = eligibleOriginalSystems.filter((system) => system.system === "cognibrain" && isRealityClaimPublishableSystem(system, input.lock.sha256));
   const gates = {
-    manifestFrozenBeforeRun: Boolean(input.lock.frozenAt) && isRealityProofHash(input.lock.sha256),
+    manifestFrozenBeforeRun: isRealityIsoTimestamp(input.lock.frozenAt) && isRealityProofHash(input.lock.sha256),
     allSystemsUseOriginalImplementation: input.systems.length > 0 && input.systems.every((system) => system.adapterKind === "local-baseline" || originalKinds.includes(system.adapterKind) || system.adapterKind === "credential-blocked"),
     noProfileAdapters: input.systems.every((system) => system.adapterKind !== "profile-model-forbidden"),
     sameInputStream: eligibleOriginalSystems.length > 0 && eligibleOriginalSystems.every((system) => hasSameInputStreamProof(system, input.lock.sha256)),
@@ -80,6 +80,12 @@ export function realityClaimGate(input: {
 
 export function isRealityProofHash(value: string | null | undefined) {
   return typeof value === "string" && sha256HashPattern.test(value);
+}
+
+export function isRealityIsoTimestamp(value: string | null | undefined) {
+  if (typeof value !== "string") return false;
+  const time = Date.parse(value);
+  return Number.isFinite(time) && new Date(time).toISOString() === value;
 }
 
 function hasOriginalCommandProof(system: RealitySystemResult) {

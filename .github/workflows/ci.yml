@@ -43,12 +43,23 @@ jobs:
       - name: Update npm for trusted publishing
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm install -g npm@^11.10.0
+      - name: Check main freshness before publish
+        id: publish-freshness
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git fetch origin "$GITHUB_REF_NAME"
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$GITHUB_REF_NAME")" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "This workflow run is stale relative to origin/$GITHUB_REF_NAME; skipping npm publish and package-version sync."
+          fi
       - name: Sync package version with npm
         id: sync-version
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.publish-freshness.outputs.current == 'true'
         run: node scripts/release/sync-npm-package-version.mjs --github-output "$GITHUB_OUTPUT"
       - name: Publish npm package
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.publish-freshness.outputs.current == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -85,7 +96,7 @@ jobs:
 
           exit "$publish_status"
       - name: Commit synced package version
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.sync-version.outputs.updated == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.publish-freshness.outputs.current == 'true' && steps.sync-version.outputs.updated == 'true'
         run: |
           if git diff --quiet -- package.json package-lock.json; then
             echo "Package files already match the published version."

@@ -1,9 +1,58 @@
 # Benchmark Results
 
 This page records the current checked benchmark artifacts. It is a results
-snapshot, not a how-to guide.
+snapshot, not a marketing leaderboard and not a replacement for the underlying
+JSON artifacts. Read it as a guide to what the repo can prove today, what is
+only diagnostic, and which claim gates still need external evidence.
 
 ![Benchmark result charts](assets/benchmark-results.svg)
+
+## How To Read This Page
+
+Benchmark rows in this repo are deliberately strict. A high local score means
+"this implementation passed this checked diagnostic." It does not automatically
+mean "best product on the market" or "quality proven against every competitor."
+
+| Label | Plain meaning | Allowed claim |
+| --- | --- | --- |
+| `local-diagnostic` | The repo ran a deterministic or local harness successfully. | Useful regression evidence for Cognibrain itself. |
+| `diagnostic-public-benchmark-baseline` | Cognibrain was stressed on public-style data or local baselines. | Retrieval signal only; not a market comparison. |
+| `neutral-blackbox-smoke` | The harness can run a frozen manifest and preserve raw outputs. | Harness readiness; quality remains unscored without a judge. |
+| `claimAllowed=false` | The artifact intentionally blocks stronger claims. | Do not use it as market or quality proof. |
+| `qualityClaimAllowed=true` | A configured judge or equivalent proof gate accepted the result. | The specific quality claim described by that artifact. |
+| `marketClaimAllowed=true` | Same-protocol competitor proof and market gates passed. | A bounded market comparison for that exact protocol. |
+
+The short interpretation: Cognibrain has strong engineering-memory diagnostics
+and unusually explicit proof boundaries. Independent market leadership remains
+blocked until judged original competitor runs, public hashes and replication
+exist.
+
+## Benchmark Families
+
+| Family | What it answers | What it does not answer |
+| --- | --- | --- |
+| Product truth and plan audits | Do README/docs/status claims match current code and artifacts? | Whether customers have deployed the system successfully. |
+| CogniCodeBench | Can Cognibrain retrieve and use engineering memory across synthetic repo-like scenarios? | Whether it beats external products on a neutral public protocol. |
+| Public dataset stress | Does retrieval improve over local keyword baselines on LoCoMo, LongMemEval-S and BEAM-style tasks? | Whether answer quality or market leadership is proven. |
+| Real-world black-box harness | Can a frozen manifest, raw outputs, telemetry and competitor slots be captured fairly? | Quality scoring before the LLM/harness judge and original competitor commands are configured. |
+| Arena and operator-memory diagnostics | Do internal capability profiles, ablations and source-aware dream paths regress? | Production tenant certification or independent leaderboard ranking. |
+
+## Maintainer Refresh Map
+
+Use these commands when the checked result surface needs to be refreshed. They
+write generated outputs under `artifacts/`; those outputs are local review
+evidence and are not shipped as source documentation.
+
+| Need | Command |
+| --- | --- |
+| Documentation claim audit | `npm run internal -- audit:docs` |
+| Product truth audit | `npm run internal -- audit:truth` |
+| Plan and latest-analysis proof | `npm run internal -- audit:plan-gaps` and `npm run internal -- audit:latest-analysis` |
+| CogniCodeBench run | `npm run internal -- benchmark:cognicode` |
+| Arena run | `npm run internal -- benchmark:arena` |
+| Real-world black-box smoke | `npm run internal -- benchmark:realworld:blackbox` |
+| Benchmark chart | `npm run internal -- benchmark:svg` |
+| Release gate | `npm run release:check` |
 
 ## Market Readiness Summary
 

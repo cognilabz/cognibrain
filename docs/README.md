@@ -9,7 +9,21 @@ The docs are organized around the operator workflow, integration surfaces and
 checked result artifacts. Product claims should stay tied to source, tests,
 generated artifacts, audits or CI.
 
-## Read First
+## Start Here
+
+Use this page as the map. The README explains the product story; these docs
+explain how to install, integrate, operate and verify it.
+
+| Reader | Best first page | Why |
+| --- | --- | --- |
+| New user | [Install and setup](install.md) | Get a local agent memory loop running quickly. |
+| Coding-agent maintainer | [Usage and reference](reference.md) | Learn the context, guard, outcome and patch-evidence lifecycle. |
+| Platform or connector builder | [Connectors, SDKs and community adapters](integrations.md) | Choose MCP, CLI or SDK/HTTP and wire external systems safely. |
+| Operator | [Operations guide](operations.md) | Run the service, manage runtime state and keep generated evidence separate from source docs. |
+| Reviewer or buyer | [Benchmark results](benchmarks.md) and [Evidence register](evidence.md) | See what is proved, what is diagnostic and what remains claim-blocked. |
+| Release owner | [Runtime status](status.md) | Check implementation surfaces and evidence anchors before shipping. |
+
+## Core Pages
 
 - [Install and setup](install.md)
 - [Usage and reference](reference.md)
@@ -18,6 +32,18 @@ generated artifacts, audits or CI.
 - [Benchmark results](benchmarks.md)
 - [Runtime status](status.md)
 - [Evidence register](evidence.md)
+
+## Daily Mental Model
+
+Cognibrain is easiest to understand as a before, during and after loop:
+
+| Moment | Command family | What it protects |
+| --- | --- | --- |
+| Before work | `context`, `memories coding-context` | Pull only the repo rules, corrections and prior evidence that matter for this task. |
+| Before a risky action | `guard` | Surface known bad commands, destructive edits or release-policy mismatches before they happen. |
+| After a command | `outcome` | Preserve what actually happened while the result is fresh. |
+| After a patch | `patch-evidence` | Connect changed files, verification commands and memory ids to the work. |
+| After context delivery | `memory feedback-injection` | Teach retrieval whether a delivered memory helped or hurt. |
 
 ## Product Snapshot
 

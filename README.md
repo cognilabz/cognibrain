@@ -6,6 +6,20 @@ Your agent should not rediscover the same repo rules, failed commands, reviewer 
 
 The practical promise is simple: Stop fixing the same agent mistake twice.
 
+## Read This Repo
+
+If you are new here, read the repo in this order:
+
+| You want to... | Start with |
+| --- | --- |
+| Understand the product in two minutes | [The Short Version](#the-short-version) |
+| Install it for a local coding agent | [Quick Start](#quick-start) and [docs/install.md](docs/install.md) |
+| Wire it into an agent or app | [Public Surface](#public-surface), [docs/reference.md](docs/reference.md) and [docs/integrations.md](docs/integrations.md) |
+| Judge whether the claims are real | [Current Proof Snapshot](#current-proof-snapshot), [docs/benchmarks.md](docs/benchmarks.md) and [docs/evidence.md](docs/evidence.md) |
+| Operate it safely | [docs/operations.md](docs/operations.md) and [docs/status.md](docs/status.md) |
+
+The docs are intentionally evidence-first. Product copy explains what Cognibrain is for; claim boundaries point back to current code, tests, generated artifacts, audits and CI.
+
 ## The Short Version
 
 Cognibrain is a self-hosted memory operating layer for coding agents. It sits beside an agent, CLI, MCP host or HTTP integration and gives it four simple abilities:

@@ -80,7 +80,7 @@
 <text class="detail" x="479.5428571428571" y="548">Keyword Only 27.6%</text>
 <rect class="panel" x="36" y="640" width="1108" height="396" rx="10"/>
 <text class="section-title" x="60" y="674">Benchmark Integrity And Weaknesses</text>
-<text class="section-note" x="60" y="696">Lower bars identify overfit risk or weak categories that should drive the next improvement loop.</text>
+<text class="section-note" x="60" y="696">Each bar is diagnostic only with claim blocked unless a row explicitly says otherwise.</text>
 <line class="grid" x1="260" y1="714" x2="260" y2="1010"/>
 <text class="tick" x="250" y="706">0%</text>
 <line class="grid" x1="450" y1="714" x2="450" y2="1010"/>
@@ -98,38 +98,38 @@
 <circle class="marker" cx="265" cy="736" r="5"/>
 <text class="value" x="999.6" y="741">96.0%</text>
 <text class="label" x="60" y="779">BEAM 100K Abstention</text>
-<text class="detail" x="60" y="794">gap 100.0pp</text>
+<text class="detail" x="60" y="794">gap 100.0pp · diagnostic only · claim blocked</text>
 <rect class="bar-blocked" x="260" y="767" width="4" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="776" r="5"/>
 <text class="value" x="274" y="781">0.0%</text>
 <text class="label" x="60" y="819">BEAM 100K Instruction Following</text>
-<text class="detail" x="60" y="834">gap 87.5pp</text>
+<text class="detail" x="60" y="834">gap 87.5pp · diagnostic only · claim blocked</text>
 <rect class="bar-blocked" x="260" y="807" width="95" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="816" r="5"/>
 <text class="value" x="365" y="821">12.5%</text>
 <text class="label" x="60" y="859">BEAM 500K Abstention</text>
-<text class="detail" x="60" y="874">gap 90.0pp</text>
+<text class="detail" x="60" y="874">gap 90.0pp · diagnostic only · claim blocked</text>
 <rect class="bar-blocked" x="260" y="847" width="4" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="856" r="5"/>
 <text class="value" x="274" y="861">0.0%</text>
 <text class="label" x="60" y="899">BEAM 500K Temporal Reasoning</text>
-<text class="detail" x="60" y="914">gap 72.9pp</text>
+<text class="detail" x="60" y="914">gap 72.9pp · diagnostic only · claim blocked</text>
 <rect class="bar-blocked" x="260" y="887" width="130.28571428571428" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="896" r="5"/>
 <text class="value" x="400.2857142857143" y="901">17.1%</text>
 <text class="label" x="60" y="939">BEAM 1M Abstention</text>
-<text class="detail" x="60" y="954">gap 97.1pp</text>
+<text class="detail" x="60" y="954">gap 97.1pp · diagnostic only · claim blocked</text>
 <rect class="bar-blocked" x="260" y="927" width="4" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="936" r="5"/>
 <text class="value" x="274" y="941">0.0%</text>
 <text class="label" x="60" y="979">BEAM 1M Temporal Reasoning</text>
-<text class="detail" x="60" y="994">gap 75.7pp</text>
+<text class="detail" x="60" y="994">gap 75.7pp · diagnostic only · claim blocked</text>
 <rect class="bar-blocked" x="260" y="967" width="162.85714285714286" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="976" r="5"/>
 <text class="value" x="432.8571428571429" y="981">21.4%</text>
 <rect class="panel" x="36" y="1062" width="1108" height="436" rx="10"/>
 <text class="section-title" x="60" y="1096">Arena Internal Diagnostics</text>
-<text class="section-note" x="60" y="1118">Synthetic Cognibrain scenario stream; profile/API-shape rows are not competitor comparisons.</text>
+<text class="section-note" x="60" y="1118">Synthetic scenario diagnostics only; profile/API-shape rows are not competitor comparisons.</text>
 <line class="grid" x1="260" y1="1136" x2="260" y2="1472"/>
 <text class="tick" x="250" y="1128">0%</text>
 <line class="grid" x1="450" y1="1136" x2="450" y2="1472"/>
@@ -142,7 +142,7 @@
 <text class="tick" x="1010" y="1128">100%</text>
 <line class="axis" x1="260" y1="1472" x2="1020" y2="1472"/>
 <text class="label" x="60" y="1161">Cognibrain</text>
-<text class="detail" x="60" y="1176">local full · not market proof</text>
+<text class="detail" x="60" y="1176">local diagnostic only · claim blocked · not market proof</text>
 <rect class="bar-cognibrain" x="260" y="1149" width="760" height="18" rx="4"/>
 <text class="value" x="1030" y="1163">100.0%</text>
 <text class="label" x="60" y="1201">Graphiti/Zep</text>
@@ -176,7 +176,7 @@
 <circle class="marker" cx="265" cy="1398" r="5"/>
 <text class="value" x="384" y="1403">15.0%</text>
 <text class="label" x="60" y="1441">LangMem</text>
-<text class="detail" x="60" y="1456">same-run-native · judge required</text>
+<text class="detail" x="60" y="1456">same-run-native · judge required · claim blocked</text>
 <rect class="bar-blocked" x="260" y="1429" width="4" height="18" rx="4"/>
 <circle class="marker" cx="265" cy="1438" r="5"/>
 <text class="value" x="274" y="1443">0.0%</text>

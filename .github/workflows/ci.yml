@@ -11,10 +11,12 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   verify:
+    permissions:
+      contents: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,40 +36,17 @@ jobs:
       - name: Update npm for trusted publishing
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm install -g npm@^11.10.0
+      - name: Sync package version with npm
+        id: sync-version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: node scripts/release/sync-npm-package-version.mjs --github-output "$GITHUB_OUTPUT"
       - name: Publish npm package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          PACKAGE_NAME="$(node -p "require('./package.json').name")"
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          NPM_LATEST="$(npm dist-tag ls "$PACKAGE_NAME" --registry=https://registry.npmjs.org/ | awk '/^latest: / { print $2 }')"
-          export PACKAGE_VERSION NPM_LATEST
-
-          NEXT_VERSION="$(node -e '
-            const current = process.env.PACKAGE_VERSION;
-            const latest = process.env.NPM_LATEST || "0.0.0";
-            const parse = (value) => String(value || "0.0.0").split(/[+-]/)[0].split(".").map((part) => Number(part));
-            const compare = (a, b) => {
-              for (let i = 0; i < 3; i += 1) {
-                const delta = (a[i] || 0) - (b[i] || 0);
-                if (delta !== 0) return delta;
-              }
-              return 0;
-            };
-            const currentParts = parse(current);
-            const latestParts = parse(latest);
-            if (compare(currentParts, latestParts) > 0) {
-              console.log(current);
-            } else {
-              latestParts[2] = (latestParts[2] || 0) + 1;
-              console.log(latestParts.slice(0, 3).join("."));
-            }
-          ')"
-
-          if [ "$NEXT_VERSION" != "$PACKAGE_VERSION" ]; then
-            npm version "$NEXT_VERSION" --no-git-tag-version
-          fi
+          PACKAGE_NAME="${{ steps.sync-version.outputs.package_name }}"
+          NEXT_VERSION="${{ steps.sync-version.outputs.publish_version }}"
 
           echo "Publishing $PACKAGE_NAME@$NEXT_VERSION to npm."
           if [ -z "$NODE_AUTH_TOKEN" ]; then
@@ -98,6 +77,20 @@ jobs:
           fi
 
           exit "$publish_status"
+      - name: Commit synced package version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.sync-version.outputs.updated == 'true'
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "Package files already match the published version."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore: sync npm package version to ${{ steps.sync-version.outputs.publish_version }} [skip ci]"
+          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

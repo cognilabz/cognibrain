@@ -91,6 +91,7 @@ checks.push(check("agent instruction templates require live review recheck befor
     "templates/hermes/HERMES.md",
     "templates/sourcegraph-amp/cognibrain.md",
     "templates/devin-style/cognibrain.md",
+    "HERMES.md",
     "bin/lib/harnessRuntime.mjs"
   ];
   return required.every((path) => {

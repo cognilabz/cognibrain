@@ -1,6 +1,6 @@
 {
   "name": "@cognilabz/cognibrain",
-  "version": "0.1.65",
+  "version": "0.1.66",
   "private": false,
   "type": "module",
   "description": "Self-hosted engineering memory for coding agents with a stable operator CLI, connectors and benchmark proof.",

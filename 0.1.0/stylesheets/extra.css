@@ -1,0 +1,26 @@
+:root {
+  --md-primary-fg-color: #009688;
+  --md-primary-fg-color--light: #4db6ac;
+  --md-primary-fg-color--dark: #00796b;
+  --md-accent-fg-color: #009688;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #4db6ac;
+  --md-primary-fg-color--light: #80cbc4;
+  --md-primary-fg-color--dark: #00897b;
+  --md-accent-fg-color: #4db6ac;
+}
+
+.md-header {
+  font-weight: 500;
+}
+
+.md-typeset h1 {
+  font-weight: 700;
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 0.4rem;
+}

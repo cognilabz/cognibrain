@@ -1,19 +1,33 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { realityClaimGate } from "./claimGate";
 import type { RealityReport } from "./types";
 
 export function publishRealityEvidenceTable(options: { inputPath?: string; outputDir?: string } = {}) {
   const inputPath = options.inputPath ?? "artifacts/reality/emrp-v1-report.json";
   const outputDir = options.outputDir ?? "artifacts/public/evidence-table";
   const report = JSON.parse(readFileSync(inputPath, "utf8")) as RealityReport;
+  const verifiedClaimGate = realityClaimGate({
+    lock: report.manifestLock,
+    systems: report.systems,
+    publicArtifactHash: report.claimGate.gates.publicArtifactHashPresent ? "recorded-public-artifact-hash" : null,
+    independentReplicationHash: report.claimGate.gates.independentReplicationHashPresent ? "recorded-independent-replication-hash" : null,
+    sameJudge: report.claimGate.gates.sameJudge,
+    sameBudgets: report.claimGate.gates.sameBudgets
+  });
+  const publication = {
+    evidenceTablePath: report.publication.evidenceTablePath,
+    leaderboardPath: verifiedClaimGate.leaderboardAllowed ? "artifacts/public/leaderboard/reality.json" : null,
+    status: verifiedClaimGate.leaderboardAllowed ? "market-leaderboard-eligible" : "evidence-table-only"
+  } satisfies RealityReport["publication"];
   mkdirSync(outputDir, { recursive: true });
   const artifact = {
     schemaVersion: "1.0",
     protocol: report.protocol,
     publishedAt: new Date().toISOString(),
     manifestHash: report.manifestHash,
-    claimGate: report.claimGate,
-    publication: report.publication,
+    claimGate: verifiedClaimGate,
+    publication,
     systems: report.systems.map((system) => ({
       system: system.system,
       displayName: system.displayName,
@@ -29,11 +43,11 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
   };
   writeFileSync(join(outputDir, "index.json"), `${JSON.stringify(artifact, null, 2)}\n`);
   writeFileSync(join(outputDir, "index.md"), renderEvidenceMarkdown(artifact));
-  if (report.claimGate.leaderboardAllowed) {
+  if (verifiedClaimGate.leaderboardAllowed) {
     mkdirSync("artifacts/public/leaderboard", { recursive: true });
     writeFileSync("artifacts/public/leaderboard/reality.json", `${JSON.stringify(artifact, null, 2)}\n`);
   }
-  return { outputDir, systems: artifact.systems.length, marketClaimAllowed: report.claimGate.marketClaimAllowed };
+  return { outputDir, systems: artifact.systems.length, marketClaimAllowed: verifiedClaimGate.marketClaimAllowed };
 }
 
 function renderEvidenceMarkdown(artifact: {

@@ -66,6 +66,12 @@ function runAdapter(adapter: RealityAdapterContract, tasks: RealityTask[], evide
     displayName: adapter.displayName,
     adapterKind: contract.adapterKind,
     adapterSource: contract.adapterSource,
+    provenance: {
+      originalCommandExecuted: false,
+      rawOutputsFromOriginalCommand: false,
+      sharedJudgeTrace: false,
+      deterministicScaffold: true
+    },
     leaderboardEligible: false,
     qualityClaimAllowed: false,
     marketClaimAllowed: false,
@@ -88,6 +94,12 @@ function blockedResult(adapter: RealityAdapterContract, contract: ReturnType<typ
     displayName: adapter.displayName,
     adapterKind: contract.adapterKind,
     adapterSource: contract.adapterSource,
+    provenance: {
+      originalCommandExecuted: false,
+      rawOutputsFromOriginalCommand: false,
+      sharedJudgeTrace: false,
+      deterministicScaffold: false
+    },
     leaderboardEligible: false,
     qualityClaimAllowed: false,
     marketClaimAllowed: false,

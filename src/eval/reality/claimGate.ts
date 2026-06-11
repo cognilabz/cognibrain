@@ -1,9 +1,6 @@
 import type { RealityAdapterKind, RealityClaimGate, RealityManifestLock, RealitySystemResult } from "./types";
 
 const originalKinds: RealityAdapterKind[] = ["official-api", "official-sdk", "official-cli"];
-const originalCommandProofToken = "original-command-executed";
-const sharedJudgeTraceToken = "shared-judge-trace";
-
 export function realityClaimGate(input: {
   lock: RealityManifestLock;
   systems: RealitySystemResult[];
@@ -69,16 +66,14 @@ export function realityClaimGate(input: {
 }
 
 function hasOriginalCommandProof(system: RealitySystemResult) {
-  return system.adapterSource.includes(originalCommandProofToken)
-    || /\boriginal command executed\b/i.test(system.adapterSource);
+  return system.provenance?.originalCommandExecuted === true;
 }
 
 function hasSharedJudgeTraceProof(system: RealitySystemResult) {
-  return Boolean(system.scorerTracePath)
-    && (system.adapterSource.includes(sharedJudgeTraceToken) || /\bshared judge trace\b/i.test(system.adapterSource));
+  return Boolean(system.scorerTracePath) && system.provenance?.sharedJudgeTrace === true;
 }
 
 function hasDeterministicScaffoldBlocker(system: RealitySystemResult) {
-  return system.blockingReasons.some((reason) => /deterministic scaffold/i.test(reason))
-    || /deterministic scaffold/i.test(system.adapterSource);
+  return system.provenance?.deterministicScaffold !== false
+    || system.blockingReasons.some((reason) => /deterministic scaffold/i.test(reason));
 }

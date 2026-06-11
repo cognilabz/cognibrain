@@ -37,9 +37,10 @@ const diagnosticRows = [
 
 const arenaRows = [...(artifacts.arena?.leaderboard ?? [])].map((row) => ({
   label: row.system,
-  value: Number(row.score ?? 0),
+  value: isJudgeBlockedArenaRow(row.proofLevel) ? null : Number(row.score ?? 0),
   detail: arenaProofDetail(row.proofLevel),
-  kind: row.proofLevel === "same-run-full" ? "cognibrain" : "blocked"
+  kind: row.proofLevel === "same-run-full" ? "cognibrain" : "blocked",
+  notScored: isJudgeBlockedArenaRow(row.proofLevel)
 }));
 
 const ablationRows = [
@@ -150,10 +151,17 @@ function publicClaimDetail(report) {
 
 function arenaProofDetail(proofLevel) {
   if (proofLevel === "same-run-full") return "local diagnostic only · claim blocked · not market proof";
-  if (proofLevel === "credential-blocked") return "blocked · no scoreable claim";
+  if (proofLevel === "credential-blocked") return "not scored · blocked · no scoreable claim";
   if (proofLevel === "same-run-api-shape") return "api-shape diagnostic · claim blocked";
-  if (proofLevel === "same-run-native" || proofLevel === "same-run-cloud-api" || proofLevel === "same-run-cli") return `${proofLevel} · judge required · claim blocked`;
+  if (proofLevel === "same-run-native" || proofLevel === "same-run-cloud-api" || proofLevel === "same-run-cli") return `not scored · ${proofLevel} · judge required · claim blocked`;
   return `${proofLevel ?? "unknown"} · claim blocked`;
+}
+
+function isJudgeBlockedArenaRow(proofLevel) {
+  return proofLevel === "credential-blocked"
+    || proofLevel === "same-run-native"
+    || proofLevel === "same-run-cloud-api"
+    || proofLevel === "same-run-cli";
 }
 
 function baselineScore(name) {
@@ -309,6 +317,11 @@ function renderSingleBarRow(parts, row, axis, y) {
   const value = Number(row.value ?? 0);
   parts.push(`<text class="label" x="60" y="${y + 17}">${escapeText(row.label)}</text>`);
   parts.push(`<text class="detail" x="60" y="${y + 32}">${escapeText(row.detail ?? "")}</text>`);
+  if (row.notScored) {
+    parts.push(`<circle class="marker" cx="${axis.x + 5}" cy="${y + 14}" r="5"/>`);
+    parts.push(`<text class="value" x="${axis.x + 14}" y="${y + 19}">not scored</text>`);
+    return;
+  }
   parts.push(`<rect class="${cssClass}" x="${axis.x}" y="${y + 5}" width="${barWidth(axis, value)}" height="18" rx="4"/>`);
   if (row.kind === "blocked") parts.push(`<circle class="marker" cx="${axis.x + 5}" cy="${y + 14}" r="5"/>`);
   parts.push(`<text class="value" x="${axis.x + barWidth(axis, value) + 10}" y="${y + 19}">${percent(value)}</text>`);

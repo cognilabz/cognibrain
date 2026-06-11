@@ -475,16 +475,16 @@ Protocol classes: `exact-upstream` means original code, command and scoring;
 `dependency-stabilized` means original code and scoring with documented external
 dependency environment; adapter diagnostics are not counted as original scores.
 
-| System | Benchmark | Status | Evidence |
-| --- | --- | --- | --- |
-| LongMemEval official flat-bm25 baseline | LongMemEval official retrieval | Passed | 500 rows, 419 scored, recall_any@1 70.6%, recall_any@5 88.8%, recall_any@10 92.6% |
-| Basic Memory | Basic Memory full upstream benchmark marker suite | Passed | 20 tests, 1 skipped, 33 JSONL metric rows, cold index 13.48 notes/sec, hybrid p95 20.05 ms, postgres-openai paraphrase hybrid recall@5 87.5% |
-| Mem0 OSS, exact upstream | Mem0 memory-benchmarks Docker server | Blocked | Original `docker/mem0/requirements.txt` pins `mem0ai` to deleted git ref `feat/v3-pipeline`, so exact upstream build fails before benchmark execution. |
-| Mem0 OSS, repaired package pin | Mem0 memory-benchmarks LOCOMO official smoke | Failed | Repaired only the ignored upstream clone to `mem0@main`; official runner ingested 419/419 chunks, then `/search` returned 500 because current `mem0.search` rejects top-level `user_id` and expects `filters`. Result: 1 question, 0 retrieved memories, top_10/top_20 score 0.0. |
-| Mem0 Cloud | Mem0 memory-benchmarks LOCOMO/LongMemEval/BEAM | Blocked | `MEM0_API_KEY`, `MEM0_ORGANIZATION_ID`, and `MEM0_PROJECT_ID` missing |
-| Basic Memory | LOCOMO/LongMemEval/BEAM original suites | Not comparable as original-only | No official Basic Memory adapter exists in the cloned upstream runners |
-| LOCOMO original RAG/QA scripts | snap-research/locomo | Blocked | Original RAG path expects upstream embeddings/model assets |
-| BEAM original LIGHT/RAG/long-context scripts | mohammadtavakoli78/BEAM | Blocked | Qwen, reader, GPT, and LLM-judge configuration missing |
+| System | Benchmark | Status | Evidence | Proof | Claim status |
+| --- | --- | --- | --- | --- | --- |
+| LongMemEval official flat-bm25 baseline | LongMemEval official retrieval | Passed | 500 rows, 419 scored, recall_any@1 70.6%, recall_any@5 88.8%, recall_any@10 92.6% | `exact-upstream-single-system` | claim blocked; not cross-system market proof |
+| Basic Memory | Basic Memory full upstream benchmark marker suite | Passed | 20 tests, 1 skipped, 33 JSONL metric rows, cold index 13.48 notes/sec, hybrid p95 20.05 ms, postgres-openai paraphrase hybrid recall@5 87.5% | `exact-upstream-single-system` | claim blocked; not same-protocol market proof |
+| Mem0 OSS, exact upstream | Mem0 memory-benchmarks Docker server | Blocked | Original `docker/mem0/requirements.txt` pins `mem0ai` to deleted git ref `feat/v3-pipeline`, so exact upstream build fails before benchmark execution. | `blocked-upstream` | claim blocked |
+| Mem0 OSS, repaired package pin | Mem0 memory-benchmarks LOCOMO official smoke | Failed | Repaired only the ignored upstream clone to `mem0@main`; official runner ingested 419/419 chunks, then `/search` returned 500 because current `mem0.search` rejects top-level `user_id` and expects `filters`. Result: 1 question, 0 retrieved memories, top_10/top_20 score 0.0. | `repaired-upstream-diagnostic` | claim blocked |
+| Mem0 Cloud | Mem0 memory-benchmarks LOCOMO/LongMemEval/BEAM | Blocked | `MEM0_API_KEY`, `MEM0_ORGANIZATION_ID`, and `MEM0_PROJECT_ID` missing | `credential-blocked` | claim blocked |
+| Basic Memory | LOCOMO/LongMemEval/BEAM original suites | Not comparable as original-only | No official Basic Memory adapter exists in the cloned upstream runners | `not-comparable` | claim blocked |
+| LOCOMO original RAG/QA scripts | snap-research/locomo | Blocked | Original RAG path expects upstream embeddings/model assets | `blocked-upstream` | claim blocked |
+| BEAM original LIGHT/RAG/long-context scripts | mohammadtavakoli78/BEAM | Blocked | Qwen, reader, GPT, and LLM-judge configuration missing | `blocked-upstream` | claim blocked |
 
 ## Original Benchmark Learnings
 

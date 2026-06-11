@@ -29,13 +29,20 @@ checks.push(check("reality docs avoid positive market-superiority phrases", () =
 }));
 checks.push(check("reality claim gate requires original commands and shared judge traces", () => {
   const source = readFileSync("src/eval/reality/claimGate.ts", "utf8");
+  const types = readFileSync("src/eval/reality/types.ts", "utf8");
+  const report = readFileSync("src/eval/reality/report.ts", "utf8");
   return source.includes("originalCompetitorCommandProofRecorded")
     && source.includes("rawOutputsFromOriginalCommands")
     && source.includes("sharedJudgeTracesRecorded")
     && source.includes("noDeterministicScaffoldOutputs")
-    && source.includes("original-command-executed")
-    && source.includes("shared-judge-trace")
-    && source.includes("Deterministic scaffold outputs cannot open quality, market, or leaderboard claims.");
+    && source.includes("system.provenance?.originalCommandExecuted === true")
+    && source.includes("system.provenance?.sharedJudgeTrace === true")
+    && source.includes("system.provenance?.deterministicScaffold !== false")
+    && source.includes("Deterministic scaffold outputs cannot open quality, market, or leaderboard claims.")
+    && types.includes("originalCommandExecuted: boolean")
+    && types.includes("sharedJudgeTrace: boolean")
+    && report.includes("const verifiedClaimGate = realityClaimGate")
+    && report.includes("if (verifiedClaimGate.leaderboardAllowed)");
 }));
 checks.push(check("docs-visible benchmark page preserves public-results boundary", () => {
   const docs = readFileSync("docs/benchmarks.md", "utf8");
@@ -72,10 +79,18 @@ checks.push(check("docs-visible benchmark tables carry adjacent proof and claim 
   const docs = readFileSync("docs/benchmarks.md", "utf8");
   return docs.includes("| Metric | Diagnostic result | Proof | Claim status |")
     && docs.includes("| Baseline | Diagnostic score | Repeated mistake rate | Proof | Claim status |")
+    && docs.includes("| System | Benchmark | Status | Evidence | Proof | Claim status |")
     && docs.includes("| System | Proof level | Claim status | Mode | Scenarios | Diagnostic score |")
     && docs.includes("| System | Proof level | Claim status | Mode | Scenarios | Diagnostic score | Repeated mistake rate |")
     && !docs.includes("| Baseline | Score |")
     && !docs.includes("| System | Proof level | Claim status | Mode | Scenarios | Score |");
+}));
+checks.push(check("original public benchmark rows carry adjacent proof and claim status", () => {
+  const docs = readFileSync("docs/benchmarks.md", "utf8");
+  return docs.includes("| LongMemEval official flat-bm25 baseline | LongMemEval official retrieval | Passed |")
+    && docs.includes("`exact-upstream-single-system` | claim blocked; not cross-system market proof")
+    && docs.includes("| Basic Memory | Basic Memory full upstream benchmark marker suite | Passed |")
+    && docs.includes("`exact-upstream-single-system` | claim blocked; not same-protocol market proof");
 }));
 checks.push(check("native competitor rows are not scored while judge is missing", () => {
   const docs = readFileSync("docs/benchmarks.md", "utf8");
@@ -83,6 +98,15 @@ checks.push(check("native competitor rows are not scored while judge is missing"
     && docs.includes("| LangMem | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |")
     && docs.includes("| GBrain | `same-run-cli` | Judge required; claim blocked | `cli-command` | 30 | not scored | not scored |")
     && docs.includes("| Basic Memory | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |");
+}));
+checks.push(check("SVG judge-blocked native rows render as not scored", () => {
+  const source = readFileSync("scripts/release/render-benchmark-svg.mjs", "utf8");
+  const svg = readFileSync("docs/assets/benchmark-results.svg", "utf8");
+  return source.includes("isJudgeBlockedArenaRow")
+    && source.includes("notScored")
+    && svg.includes("not scored")
+    && svg.includes("same-run-native · judge required · claim blocked")
+    && !new RegExp("LangMem[\\s\\S]{0,320}>0\\.0%</text>").test(svg);
 }));
 
 for (const item of checks) console.log(`${item.passed ? "ok" : "FAIL"} ${item.name}`);

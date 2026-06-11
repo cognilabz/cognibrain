@@ -70,6 +70,12 @@ export interface RealitySystemResult {
   displayName: string;
   adapterKind: RealityAdapterKind;
   adapterSource: string;
+  provenance?: {
+    originalCommandExecuted: boolean;
+    rawOutputsFromOriginalCommand: boolean;
+    sharedJudgeTrace: boolean;
+    deterministicScaffold: boolean;
+  };
   leaderboardEligible: boolean;
   qualityClaimAllowed: boolean;
   marketClaimAllowed: boolean;

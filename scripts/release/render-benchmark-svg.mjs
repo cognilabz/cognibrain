@@ -191,8 +191,8 @@ function renderSvg(sections) {
   let y = 128;
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">`,
-    `<title id="title">Cognibrain benchmark results</title>`,
-    `<desc id="desc">Percent charts comparing current Cognibrain results with proof and claim boundaries for public benchmark diagnostics, Benchmark Arena systems, and CogniCodeBench artifacts.</desc>`,
+    `<title id="title">Cognibrain benchmark diagnostics, not market proof</title>`,
+    `<desc id="desc">Percent charts for docs-visible Cognibrain benchmark diagnostics. Blocked rows are not quality, competitor, market-leadership, or broad product proof.</desc>`,
     `<style>
       text { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #152033; }
       .title { font-size: 30px; font-weight: 760; }
@@ -213,8 +213,8 @@ function renderSvg(sections) {
       .marker { fill: #f59e0b; }
     </style>`,
     `<rect width="${width}" height="${height}" fill="#f6f8fb"/>`,
-    `<text class="title" x="${margin}" y="46">Benchmark Results</text>`,
-    `<text class="subtitle" x="${margin}" y="72">Fresh local run, percent scale. Diagnostic rows are not quality or market proof unless LLM/harness claim status says so.</text>`,
+    `<text class="title" x="${margin}" y="46">Benchmark Diagnostics (Not Market Proof)</text>`,
+    `<text class="subtitle" x="${margin}" y="72">Docs-visible percent charts. Gray/blocked rows are diagnostic evidence, not quality, competitor, or market-leadership proof.</text>`,
     `<text class="subtitle" x="${margin}" y="94">Generated ${escapeText(generatedAtSummary())}</text>`
   ];
 
@@ -244,8 +244,8 @@ function renderSvg(sections) {
     x: margin,
     y: y + 26,
     width: width - margin * 2,
-    title: "Benchmark Arena Systems",
-    note: "Synthetic Cognibrain scenario stream; API-shape and blocked rows are diagnostic, not market proof.",
+    title: "Arena Internal Diagnostics",
+    note: "Synthetic Cognibrain scenario stream; profile/API-shape rows are not competitor comparisons.",
     axis,
     rows: sections.arenaRows,
     rowRenderer: renderSingleBarRow

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1976" viewBox="0 0 1180 1976" role="img" aria-labelledby="title desc">
-<title id="title">Cognibrain benchmark results</title>
-<desc id="desc">Percent charts comparing current Cognibrain results with proof and claim boundaries for public benchmark diagnostics, Benchmark Arena systems, and CogniCodeBench artifacts.</desc>
+<title id="title">Cognibrain benchmark diagnostics, not market proof</title>
+<desc id="desc">Percent charts for docs-visible Cognibrain benchmark diagnostics. Blocked rows are not quality, competitor, market-leadership, or broad product proof.</desc>
 <style>
       text { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #152033; }
       .title { font-size: 30px; font-weight: 760; }
@@ -21,9 +21,9 @@
       .marker { fill: #f59e0b; }
     </style>
 <rect width="1180" height="1976" fill="#f6f8fb"/>
-<text class="title" x="36" y="46">Benchmark Results</text>
-<text class="subtitle" x="36" y="72">Fresh local run, percent scale. Diagnostic rows are not quality or market proof unless LLM/harness claim status says so.</text>
-<text class="subtitle" x="36" y="94">Generated 2026-06-09 UTC; public datasets 18:25Z-11:41Z, arena 10:42Z, cognicode 10:39Z</text>
+<text class="title" x="36" y="46">Benchmark Diagnostics (Not Market Proof)</text>
+<text class="subtitle" x="36" y="72">Docs-visible percent charts. Gray/blocked rows are diagnostic evidence, not quality, competitor, or market-leadership proof.</text>
+<text class="subtitle" x="36" y="94">Generated 2026-06-11 UTC; public datasets 18:25Z-11:41Z, arena 14:18Z, cognicode 14:16Z</text>
 <rect class="panel" x="36" y="128" width="1108" height="486" rx="10"/>
 <text class="section-title" x="60" y="162">Public Benchmark Datasets</text>
 <text class="section-note" x="60" y="184">Cognibrain compared with the strongest local baseline; each row carries proof and claim status.</text>
@@ -128,8 +128,8 @@
 <circle class="marker" cx="265" cy="976" r="5"/>
 <text class="value" x="432.8571428571429" y="981">21.4%</text>
 <rect class="panel" x="36" y="1062" width="1108" height="436" rx="10"/>
-<text class="section-title" x="60" y="1096">Benchmark Arena Systems</text>
-<text class="section-note" x="60" y="1118">Synthetic Cognibrain scenario stream; API-shape and blocked rows are diagnostic, not market proof.</text>
+<text class="section-title" x="60" y="1096">Arena Internal Diagnostics</text>
+<text class="section-note" x="60" y="1118">Synthetic Cognibrain scenario stream; profile/API-shape rows are not competitor comparisons.</text>
 <line class="grid" x1="260" y1="1136" x2="260" y2="1472"/>
 <text class="tick" x="250" y="1128">0%</text>
 <line class="grid" x1="450" y1="1136" x2="450" y2="1472"/>

@@ -5,6 +5,12 @@ snapshot, not a marketing leaderboard and not a replacement for the underlying
 JSON artifacts. Read it as a guide to what the repo can prove today, what is
 only diagnostic, and which claim gates still need external evidence.
 
+**Public-results boundary:** the chart and tables below are visible in the
+documentation, but they are diagnostic evidence unless a row explicitly says
+`qualityClaimAllowed=true` or `marketClaimAllowed=true`. Gray or blocked rows
+must not be used as competitor-proof, market-leadership proof, or broad product
+quality proof.
+
 ![Benchmark result charts](assets/benchmark-results.svg)
 
 ## Reality Bench / EMRP v1
@@ -14,6 +20,11 @@ the flagship protocol for repeated-mistake prevention, stale-rule suppression,
 forbidden-action blocking, patch evidence, source-cited recall, deletion/privacy
 boundaries, abstention, and public memory QA. Its public output is
 `artifacts/public/evidence-table/` until the strict market gate passes.
+
+Current checked EMRP status: the protocol, manifest, claim gates and evidence
+table publication path exist, but docs-visible Reality Bench results are not
+market proof unless the generated report contains original competitor command
+outputs, shared judge traces, retained raw outputs, and `marketClaimAllowed=true`.
 
 The gate requires a frozen manifest, retained raw outputs, the same input
 stream, the same budgets, the same judge, Cognibrain plus at least two original
@@ -87,7 +98,7 @@ For benchmark artifacts, use the specific commands in the maintainer refresh map
 | Family | What it answers | What it does not answer |
 | --- | --- | --- |
 | Product truth and plan audits | Do README/docs/status claims match current code and artifacts? | Whether customers have deployed the system successfully. |
-| CogniCodeBench | Can Cognibrain retrieve and use engineering memory across synthetic repo-like scenarios? | Whether it beats external products on a neutral public protocol. |
+| CogniCodeBench | Can Cognibrain retrieve and use engineering memory across synthetic repo-like scenarios? | Whether it supports a neutral public-protocol comparison against external products. |
 | Public dataset stress | Does retrieval improve over local keyword baselines on LoCoMo, LongMemEval-S and BEAM-style tasks? | Whether answer quality or market leadership is proven. |
 | Real-world black-box harness | Can a frozen manifest, raw outputs, telemetry and competitor slots be captured fairly? | Quality scoring before the LLM/harness judge and original competitor commands are configured. |
 | Arena and operator-memory diagnostics | Do internal capability profiles, ablations and source-aware dream paths regress? | Production tenant certification or independent leaderboard ranking. |
@@ -409,8 +420,9 @@ LLM/harness judge validates the full report.
 
 This is a Cognibrain lifecycle diagnostic, not a fair real-world leaderboard.
 Rows with `api-shape` proof levels are capability models, not original product
-runs. Arena command runners must return structured JSON checks; raw text output
-is retained as diagnostic evidence but is not parsed into success scores.
+runs or competitor comparisons. Arena command runners must return structured
+JSON checks; raw text output is retained as diagnostic evidence but is not
+parsed into success scores.
 
 | System | Proof level | Claim status | Mode | Scenarios | Score |
 | --- | --- | --- | --- | ---: | ---: |

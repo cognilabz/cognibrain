@@ -1907,7 +1907,7 @@ process.stdin.on("end", () => {
     });
     expect(result.status).toBe(0);
     const svg = readFileSync(outputPath, "utf8");
-    expect(svg).toContain("Diagnostic rows are not quality or market proof unless LLM/harness claim status says so");
+    expect(svg).toContain("Docs-visible percent charts. Gray/blocked rows are diagnostic evidence, not quality, competitor, or market-leadership proof.");
     expect(svg).toContain("Public Benchmark Datasets");
     expect(svg).toContain("claim blocked");
     expect(svg).toContain("diagnostic pass");

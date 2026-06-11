@@ -48,7 +48,7 @@ function renderEvidenceMarkdown(artifact: {
     blockingReasons: string[];
   }>;
 }) {
-  const rows = artifact.systems.map((system) => `| ${system.displayName} | ${system.adapterKind} | ${system.score ?? "blocked"} | ${system.qualityClaimAllowed ? "yes" : "no"} | ${system.marketClaimAllowed ? "yes" : "no"} | ${system.blockingReasons[0] ?? ""} |`).join("\n");
+  const rows = artifact.systems.map((system) => `| ${system.displayName} | ${system.adapterKind} | ${system.blockingReasons[0] ?? ""} | ${system.qualityClaimAllowed ? "yes" : "no"} | ${system.marketClaimAllowed ? "yes" : "no"} | ${system.score ?? "blocked"} |`).join("\n");
   return `# EMRP v1 Evidence Table
 
 Manifest hash: \`${artifact.manifestHash}\`
@@ -57,8 +57,8 @@ Market claim allowed: ${artifact.claimGate.marketClaimAllowed ? "yes" : "no"}
 
 ${artifact.claimGate.blockers.map((blocker) => `- ${blocker}`).join("\n")}
 
-| System | Adapter | Diagnostic score | Quality claim | Market claim | First blocker |
-|---|---:|---:|---:|---:|---|
+| System | Adapter | First blocker | Quality claim | Market claim | Diagnostic score |
+|---|---|---|---:|---:|---:|
 ${rows}
 `;
 }

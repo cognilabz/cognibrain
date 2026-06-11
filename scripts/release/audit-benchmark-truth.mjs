@@ -21,9 +21,39 @@ checks.push(check("reality docs avoid positive market-superiority phrases", () =
     "benchmarks/reality/README.md",
     "benchmarks/reality/rubrics/answer-quality-v1.md",
     "benchmarks/reality/rubrics/engineering-action-v1.md",
-    "benchmarks/reality/rubrics/privacy-boundary-v1.md"
+    "benchmarks/reality/rubrics/privacy-boundary-v1.md",
+    "docs/benchmarks.md",
+    "docs/assets/benchmark-results.svg"
   ].map((path) => readFileSync(path, "utf8")).join("\n").toLowerCase();
   return !/\b(beats|outperforms|sota|market-leading)\b/.test(docs);
+}));
+checks.push(check("docs-visible benchmark page preserves public-results boundary", () => {
+  const docs = readFileSync("docs/benchmarks.md", "utf8");
+  return docs.includes("Public-results boundary:")
+    && docs.includes("marketClaimAllowed=true")
+    && docs.includes("must not be used as competitor-proof");
+}));
+checks.push(check("docs-visible benchmark page states current EMRP market-proof blocker", () => {
+  const docs = readFileSync("docs/benchmarks.md", "utf8");
+  return docs.includes("Current checked EMRP status:")
+    && docs.includes("original competitor command")
+    && docs.includes("shared judge traces");
+}));
+checks.push(check("docs-visible arena rows are demoted from competitor comparisons", () => {
+  const docs = readFileSync("docs/benchmarks.md", "utf8");
+  const svg = readFileSync("docs/assets/benchmark-results.svg", "utf8");
+  return /not original product\s+runs or competitor comparisons/.test(docs)
+    && svg.includes("Arena Internal Diagnostics")
+    && svg.includes("not competitor comparisons");
+}));
+checks.push(check("docs-visible benchmark chart labels diagnostics as not market proof", () => {
+  const svg = readFileSync("docs/assets/benchmark-results.svg", "utf8");
+  return svg.includes("Benchmark Diagnostics (Not Market Proof)")
+    && svg.includes("not quality, competitor, or market-leadership proof");
+}));
+checks.push(check("reality evidence table renders blockers before diagnostic scores", () => {
+  const report = readFileSync("src/eval/reality/report.ts", "utf8");
+  return report.includes("| System | Adapter | First blocker | Quality claim | Market claim | Diagnostic score |");
 }));
 
 for (const item of checks) console.log(`${item.passed ? "ok" : "FAIL"} ${item.name}`);

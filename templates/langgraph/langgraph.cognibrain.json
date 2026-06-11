@@ -7,7 +7,9 @@
     "healthCommand": "node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor --publish"
   },
   "integration": {
-    "beforeNode": "fetch a cognibrain coding context pack for the graph state",
+    "beforeNode": "actively fetch a cognibrain coding context pack for the graph state before non-trivial work",
+    "contextParsing": "parse context, sections[].evidence[], excludedStaleRules, id and evidencePackId; sections[].evidence[] is still delivered memory when context is empty",
+    "reviewRequired": "treat review_required or unsafeToInject evidence as an automated review queue; verify against current code, tests, generated artifacts, CI or source systems before using it",
     "beforeTool": "check the planned tool action with /code/action-guard",
     "afterTool": "send tool outcome telemetry through /connectors/telemetry",
     "afterPatch": "write a patch evidence trail through /patch-evidence",

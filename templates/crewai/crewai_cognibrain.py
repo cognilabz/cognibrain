@@ -31,6 +31,29 @@ def cognibrain_coding_context_pack(
 cognibrain_context_pack = cognibrain_coding_context_pack
 
 
+def cognibrain_review_required_memories(pack: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for section in pack.get("sections") or []:
+        for evidence in section.get("evidence") or []:
+            enriched = {"section": section.get("id"), "sectionTitle": section.get("title"), **evidence}
+            if enriched.get("delivery") == "review_required" or enriched.get("unsafeToInject"):
+                items.append(enriched)
+    return items
+
+
+def cognibrain_usable_context(pack: dict[str, Any]) -> str:
+    context = str(pack.get("context") or "")
+    review_required = cognibrain_review_required_memories(pack)
+    if not context and review_required:
+        lines = [
+            "Cognibrain delivered review_required memories. Verify each memory against current code, tests, generated artifacts, CI, or source systems before using it."
+        ]
+        for item in review_required:
+            lines.append(f"- [{item.get('memoryId')}] {item.get('section')}: {item.get('content') or item.get('reason') or 'review required'}")
+        return "\n".join(lines)
+    return context
+
+
 def guard_crewai_action(
     user_id: str,
     action: str,

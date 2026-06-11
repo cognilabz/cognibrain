@@ -4,7 +4,9 @@ Use the cognibrain CLI lifecycle as the default memory access path before non-tr
 
 Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks:
 
-- Call `./bin/cognibrain.mjs context --task "<task>" --json`.
+- Actively call `./bin/cognibrain.mjs context --task "<task>" --app vscode --agent vscode --json`; do not wait for memories to appear in the prompt.
+- Parse returned context JSON, including `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`.
+- If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories. Treat `review_required` as VS Code's automated review queue: verify the memory against current code, tests, generated artifacts, CI, or source systems before using it.
 - Call `./bin/cognibrain.mjs guard --action "<command>" --json` before shell commands, dependency changes, migrations, destructive actions, or file edits with durable side effects.
 - Use `memory_coding_context_pack`, `memory_context_pack`, and `memory_action_guard` only as MCP adapters when the host exposes them.
 

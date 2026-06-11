@@ -1,6 +1,6 @@
 type CognibrainCodingContextPack = {
   context: string;
-  sections?: Array<{ id: string; title: string; evidence: Array<{ memoryId: string; reason?: string; trust?: number }> }>;
+  sections?: Array<{ id: string; title: string; evidence: Array<{ memoryId: string; reason?: string; trust?: number; delivery?: "injectable" | "review_required"; unsafeToInject?: boolean; content?: string }> }>;
   evidence?: Array<{ memoryId: string; reason: string; trust: number }>;
 };
 
@@ -30,6 +30,23 @@ export async function cognibrainCodingContextPack(input: {
 }
 
 export const cognibrainContextPack = cognibrainCodingContextPack;
+
+export function cognibrainReviewRequiredMemories(pack: CognibrainCodingContextPack) {
+  return (pack.sections ?? [])
+    .flatMap((section) => section.evidence.map((item) => ({ section: section.id, sectionTitle: section.title, ...item })))
+    .filter((item) => item.delivery === "review_required" || item.unsafeToInject);
+}
+
+export function cognibrainUsableContext(pack: CognibrainCodingContextPack): string {
+  const reviewRequired = cognibrainReviewRequiredMemories(pack);
+  if (!pack.context && reviewRequired.length) {
+    return [
+      "Cognibrain delivered review_required memories. Verify each memory against current code, tests, generated artifacts, CI, or source systems before using it.",
+      ...reviewRequired.map((item) => `- [${item.memoryId}] ${item.section}: ${item.content ?? item.reason ?? "review required"}`)
+    ].join("\n");
+  }
+  return pack.context;
+}
 
 export async function guardLangGraphAction(input: {
   apiUrl?: string;

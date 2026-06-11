@@ -25,12 +25,14 @@ The CLI is stable text output by default and supports JSON where automation need
 
 The useful loop is:
 
-1. Retrieve a context or coding-context pack before work.
-2. Use delivered context first; if the evidence pack already answers the question, avoid rediscovering the same fact with another search.
-3. Run an action guard before edits, destructive commands, release work or credential-sensitive operations.
-4. Record command outcomes while the result is still fresh.
-5. Record patch evidence with the task, files changed, commands run and memory ids used.
-6. Send injection feedback when a delivered memory was accepted or rejected.
+1. Actively retrieve a context or coding-context pack before work; do not wait for memory text to be passively injected into the prompt.
+2. Parse the full JSON response, including `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`.
+3. Treat `review_required` evidence as an automated review queue: verify each item against current code, tests, generated artifacts, CI, or source systems before using it. No operator/evidence-judge step is required for normal harness operation.
+4. Use delivered context first; if the evidence pack already answers the question, avoid rediscovering the same fact with another search.
+5. Run an action guard before edits, destructive commands, release work or credential-sensitive operations.
+6. Record command outcomes while the result is still fresh.
+7. Record patch evidence with the task, files changed, commands run and memory ids used.
+8. Send injection feedback when a delivered memory was accepted or rejected.
 
 ```bash
 cognibrain context --task "prepare release patch" --json
@@ -39,6 +41,11 @@ cognibrain outcome --command "npm test" --exit-code 0 --json
 cognibrain patch-evidence --task "release patch" --files package.json --commands "npm test" --json
 cognibrain memory feedback-injection "release proof" accepted mem_1,mem_2
 ```
+
+When `data.context` is empty but `data.sections[].evidence[]` contains items,
+Cognibrain still delivered memories. The harness should use those evidence rows
+for targeted automated verification instead of treating the response as "no
+memory."
 
 This feedback path is what lets Cognibrain measure whether retrieved memories
 were actually useful, rather than only measuring whether they matched a query.

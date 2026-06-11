@@ -5,7 +5,9 @@ globs:
 alwaysApply: true
 ---
 
-Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks, query cognibrain through the CLI lifecycle: `./bin/cognibrain.mjs context --task "<task>" --json`. Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search.
+Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks, actively query cognibrain through the CLI lifecycle: `./bin/cognibrain.mjs context --task "<task>" --app cursor --agent cursor --json`. Do not wait for memories to appear in the prompt. Use delivered context first: if the context or evidence pack already answers where to inspect, what command to avoid, or which prior decision matters, act from that evidence and avoid rediscovering the same fact with another search.
+
+Parse returned context JSON, including `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`. If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories. Treat `review_required` as Cursor's automated review queue: verify the memory against current code, tests, generated artifacts, CI, or source systems before using it.
 
 Start the local runtime with `./bin/cognibrain.mjs start` when API or dashboard access is needed. Inspect it with `./bin/cognibrain.mjs status`.
 

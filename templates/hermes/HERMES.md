@@ -2,7 +2,9 @@
 
 Use the local cognibrain runtime for durable project memory. Start it with `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs --runtime-root __COGNIBRAIN_RUNTIME_ROOT__ start` when the API is unavailable.
 
-Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks, call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs --runtime-root __COGNIBRAIN_RUNTIME_ROOT__ context --task "<task>" --json`. Use delivered context first: if the returned context or evidence pack already answers the question, act from that evidence and avoid rediscovering it with another search.
+Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks, actively call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs --runtime-root __COGNIBRAIN_RUNTIME_ROOT__ context --task "<task>" --app hermes --agent hermes --json`. Do not wait for memories to appear in the prompt. Use delivered context first: if the returned context or evidence pack already answers where to inspect, what command to avoid, or which prior decision matters, act from that evidence and avoid rediscovering it with another search.
+
+Parse returned context JSON, including `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`. If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories. Treat `review_required` as Hermes' automated review queue: verify the memory against current code, tests, generated artifacts, CI, or source systems before using it.
 
 Before shell commands, dependency changes, migrations, or file edits with durable side effects, call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs --runtime-root __COGNIBRAIN_RUNTIME_ROOT__ guard --action "<command>" --json`.
 

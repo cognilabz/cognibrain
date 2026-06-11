@@ -1516,6 +1516,43 @@ describe("cognibrain CLI", () => {
       const claude = readFileSync(join(dir, ".claude", "settings.json"), "utf8");
       expect(claude).toContain(root);
       expect(claude).not.toContain("/ABSOLUTE/PATH/TO/cognibrain");
+      expect(claude).toContain("--app");
+      expect(claude).toContain("--agent");
+      expect(claude).toContain("review_required");
+      const activeMemoryInstructionFiles = [
+        join(codexHome, "skills", "cognibrain", "SKILL.md"),
+        join(dir, "AGENTS.md"),
+        join(dir, ".github", "copilot-instructions.md"),
+        join(dir, ".github", "instructions", "cognibrain.instructions.md"),
+        join(dir, ".cursor", "rules", "open-memory.mdc"),
+        join(dir, ".vscode", "cognibrain.instructions.md"),
+        join(dir, ".opencode", "cognibrain.md"),
+        join(dir, ".openclaw", "cognibrain.md"),
+        join(dir, ".windsurf", "rules", "cognibrain.md"),
+        join(dir, ".continue", "rules", "cognibrain.md"),
+        join(dir, ".aider", "cognibrain.md"),
+        join(dir, ".clinerules", "cognibrain.md"),
+        join(dir, ".goose", "cognibrain.md"),
+        join(dir, "HERMES.md"),
+        join(dir, ".amp", "cognibrain.md"),
+        join(dir, ".devin", "cognibrain.md")
+      ];
+      for (const instructionFile of activeMemoryInstructionFiles) {
+        const text = readFileSync(instructionFile, "utf8");
+        expect(text, instructionFile).toContain("context --task");
+        expect(text, instructionFile).toContain("--app");
+        expect(text, instructionFile).toContain("--agent");
+        expect(text, instructionFile).toContain("data.context");
+        expect(text, instructionFile).toContain("data.sections[].evidence[]");
+        expect(text, instructionFile).toContain("review_required");
+        expect(text, instructionFile).toContain("automated review queue");
+      }
+      expect(readFileSync(join(dir, "langgraph.cognibrain.json"), "utf8")).toContain("reviewRequired");
+      expect(readFileSync(join(dir, "crewai.cognibrain.json"), "utf8")).toContain("reviewRequired");
+      expect(readFileSync(join(dir, "langgraph-cognibrain.ts"), "utf8")).toContain("cognibrainReviewRequiredMemories");
+      expect(readFileSync(join(dir, "crewai_cognibrain.py"), "utf8")).toContain("cognibrain_review_required_memories");
+      const devinContract = JSON.parse(readFileSync(join(dir, ".devin", "cognibrain.json"), "utf8"));
+      expect(devinContract.commands.contextPack).toContain("--app devin-style --agent devin-style");
       const manifest = JSON.parse(readFileSync(join(dir, ".cognibrain-harness-package.json"), "utf8"));
       expect(Object.keys(manifest.harnesses)).toEqual(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "hermes", "sourcegraph-amp", "devin-style"]);
       expect(manifest.harnesses.copilot.feedback).toContain("accepted_change");

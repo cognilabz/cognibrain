@@ -33,7 +33,7 @@ Run `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor` when setup or runtime b
 1. Use the daemon-backed CLI lifecycle as the default integration path.
 2. At the start of every non-trivial task, call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs context --task "<task>" --app codex --agent codex --json` before broad repo exploration or edits.
 3. Parse the returned JSON, not only the top-level `context` string. Read `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`.
-4. If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories. Do not treat this as "no memory"; use the evidence list as a review queue for what to verify in code/tests.
+4. If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories. Do not treat this as "no memory"; use the evidence list as an automated review queue for what to verify in code/tests.
 5. Use delivered context first: if the context or evidence pack already answers where to inspect, what command to avoid, or which prior decision matters, start from that evidence and avoid rediscovering the same fact with another search.
 6. Treat returned memories as evidence, not authority. Verify drift-prone or high-impact facts against current files, benchmark artifacts, source systems, tests, or generated artifacts before acting on them.
 7. When the task scope changes, an initial query returns no relevant memories, or a failure repeats, call `context` again with the sharper task wording.
@@ -42,7 +42,7 @@ Run `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor` when setup or runtime b
 
 ## Automated Review Policy
 
-`review_required` does not mean "ignore this memory" and it must not require a human or separate evidence judge for normal Codex work. In Codex, the automated review path is:
+`review_required` does not mean "ignore this memory" and it must not require a human or separate evidence judge for normal Codex work. In Codex, the automated review queue is:
 
 1. Read each `review_required` item from `data.sections[].evidence[]`.
 2. Use it to choose targeted files, commands, or checks to inspect.

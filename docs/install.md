@@ -93,6 +93,8 @@ npx cognibrain dashboard
 
 Harness configuration means the files that teach a coding agent how to call Cognibrain before non-trivial work, before risky actions, and after durable discoveries. The generated files prefer the CLI lifecycle. MCP config is written only for hosts that can use an MCP stdio adapter.
 
+All generated harness instructions describe the same active memory contract: call `cognibrain context --task "<task>" --app <host> --agent <host> --json`, parse the full response (`data.context`, `data.sections[].evidence[]`, stale-rule exclusions and pack ids), and treat `review_required` memories as an automated review queue. A harness should verify those memories against current code, tests, generated artifacts, CI or source systems before use; it should not wait for a human evidence judge in the normal flow and should not treat an empty `data.context` with non-empty evidence as "no memory."
+
 The default `solo-dev` init writes:
 
 | Target | Files |

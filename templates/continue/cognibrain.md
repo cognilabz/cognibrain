@@ -2,8 +2,9 @@
 
 Use cognibrain as the project memory source when Continue asks for repo context, prepares a code action, or handles non-trivial repository work, debugging, CI repair, benchmark changes, connector setup, or user-preference-sensitive edits.
 
-- Pull `cognibrain context --task "<task>" --json` before non-trivial exploration or applying edits.
-- Treat stale or contradicted memories as review-only until revalidated.
+- Pull `cognibrain context --task "<task>" --app continue --agent continue --json` before non-trivial exploration or applying edits.
+- Parse the returned JSON, including `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`; do not rely only on the top-level context string.
+- If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories. Treat `review_required` or stale entries as Continue's automated review queue: inspect current files, tests, generated artifacts, CI, or source systems before using them.
 - Run `cognibrain guard --action "<command>" --json` before shell commands or file edits with durable side effects.
 - Record accepted and rejected suggestions as feedback so repeated mistakes do not come back.
 - Finish non-trivial patches with `cognibrain patch-evidence --task "<task>" --json`.

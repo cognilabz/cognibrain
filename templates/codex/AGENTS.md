@@ -10,8 +10,10 @@ Runtime:
 
 Before non-trivial work:
 
-- Call `./bin/cognibrain.mjs context --task "<task>" --json` with the user request before deeper exploration or edits.
-- Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search.
+- Actively call `./bin/cognibrain.mjs context --task "<task>" --app codex --agent codex --json` with the user request before deeper exploration or edits. Do not wait for memories to appear in the prompt.
+- Parse the returned JSON, not only the top-level `context` string. Read `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`.
+- If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories. Do not treat this as "no memory"; use `review_required` evidence as an automated review queue for targeted code/test verification.
+- Use delivered context first: if the context or evidence pack already answers where to inspect, what command to avoid, or which prior decision matters, start from that evidence and avoid rediscovering the same fact with another search.
 - Treat returned memories as evidence, not authority.
 - Verify drift-prone facts against current files, benchmark artifacts, or source systems.
 - Call `./bin/cognibrain.mjs guard --action "<command>" --json` before shell commands, dependency changes, migrations, or file edits with durable side effects.

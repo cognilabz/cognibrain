@@ -1,11 +1,13 @@
 ---
 name: cognibrain
-description: Use Cognibrain before non-trivial Codex repository work, debugging, CI repair, benchmark changes, connector setup, or user-preference-sensitive tasks; retrieve durable local memory, run action guards, record patch evidence, and manage the local memory runtime.
+description: Actively query Cognibrain at the start of non-trivial Codex repository work, debugging, CI repair, benchmark changes, connector setup, or user-preference-sensitive tasks; read delivered memories from context packs, verify them against code/tests, run action guards, record patch evidence, and manage the local memory runtime.
 ---
 
 # cognibrain
 
 Use this skill before non-trivial Codex repository work, debugging, CI repair, benchmark changes, connector setup, or user-preference-sensitive tasks, especially when prior project decisions, repo conventions, or durable debugging discoveries may matter.
+
+This skill is an active memory pull, not a passive reminder. Codex must ask Cognibrain for context; do not wait for memories to appear in the prompt.
 
 ## Start Runtime
 
@@ -29,12 +31,26 @@ Run `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor` when setup or runtime b
 ## Retrieval Policy
 
 1. Use the daemon-backed CLI lifecycle as the default integration path.
-2. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs context --task "<task>" --json` before non-trivial coding, repo archaeology, debugging loops, CI repair, benchmark work, connector setup, or user-preference-sensitive edits.
-3. Use delivered context first: if the context or evidence pack already answers the question, act from that evidence and avoid rediscovering the same fact with another search.
-4. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs guard --action "<command>" --json` before shell commands, dependency changes, migrations, or file edits with durable side effects.
-5. Treat returned memories as evidence, not authority.
-6. Verify drift-prone facts against current files, benchmark artifacts, or source systems before acting on them.
-7. Use MCP tools such as `memory_coding_context_pack` and `memory_action_guard` only as optional native adapters when this host exposes them.
+2. At the start of every non-trivial task, call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs context --task "<task>" --app codex --agent codex --json` before broad repo exploration or edits.
+3. Parse the returned JSON, not only the top-level `context` string. Read `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`.
+4. If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories. Do not treat this as "no memory"; use the evidence list as a review queue for what to verify in code/tests.
+5. Use delivered context first: if the context or evidence pack already answers where to inspect, what command to avoid, or which prior decision matters, start from that evidence and avoid rediscovering the same fact with another search.
+6. Treat returned memories as evidence, not authority. Verify drift-prone or high-impact facts against current files, benchmark artifacts, source systems, tests, or generated artifacts before acting on them.
+7. When the task scope changes, an initial query returns no relevant memories, or a failure repeats, call `context` again with the sharper task wording.
+8. Call `node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs guard --action "<command>" --json` before shell commands, dependency changes, migrations, or file edits with durable side effects.
+9. Use MCP tools such as `memory_coding_context_pack` and `memory_action_guard` only as optional native adapters when this host exposes them.
+
+## Automated Review Policy
+
+`review_required` does not mean "ignore this memory" and it must not require a human or separate evidence judge for normal Codex work. In Codex, the automated review path is:
+
+1. Read each `review_required` item from `data.sections[].evidence[]`.
+2. Use it to choose targeted files, commands, or checks to inspect.
+3. Promote it mentally to usable task context only after current code, tests, CLI behavior, generated artifacts, CI, or source systems confirm it.
+4. If verification contradicts the memory, do not use it; record correction or patch evidence after the fix.
+5. If verification is impossible and the memory affects a high-impact action, fail closed for that action and say what could not be verified.
+
+When reporting work, mention the Cognibrain context pack id when it materially influenced the task. For debugging whether Codex received memory, inspect `.memory-harness.json` for an audit event with `metadata.deliveryEvent === "context.delivered"` and the matching `metadata.contextPackId`.
 
 Additional memory search:
 

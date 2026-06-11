@@ -29,7 +29,10 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
     claimGate: verifiedClaimGate,
     publication,
     systems: report.systems.map((system) => {
-      const rowClaimPublishable = isRealityClaimPublishableSystem(system);
+      const rowClaimPublishable = isRealityClaimPublishableSystem(system, report.manifestHash);
+      const blockingReasons = rowClaimPublishable
+        ? system.blockingReasons
+        : [...system.blockingReasons, "Row failed revalidated per-system provenance/eligibility gates."];
       return {
         system: system.system,
         displayName: system.displayName,
@@ -40,7 +43,7 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
         qualityClaimAllowed: verifiedClaimGate.qualityClaimAllowed && rowClaimPublishable && system.qualityClaimAllowed,
         marketClaimAllowed: verifiedClaimGate.marketClaimAllowed && rowClaimPublishable && system.marketClaimAllowed,
         leaderboardEligible: verifiedClaimGate.leaderboardAllowed && rowClaimPublishable && system.leaderboardEligible,
-        blockingReasons: system.blockingReasons
+        blockingReasons
       };
     })
   };

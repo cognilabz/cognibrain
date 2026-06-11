@@ -17,7 +17,7 @@ export function runRealityBenchmark(options: {
   const outPath = options.outPath ?? "artifacts/reality/emrp-v1-report.json";
   const evidenceDir = options.evidenceDir ?? "artifacts/reality/evidence";
   const { tasks, lock } = loadRealityManifest(options.manifestPath, options.lockPath);
-  const systems = configuredAdapters(options.systems).map((adapter) => runAdapter(adapter, tasks, evidenceDir));
+  const systems = configuredAdapters(options.systems).map((adapter) => runAdapter(adapter, tasks, evidenceDir, lock.sha256));
   const claimGate = realityClaimGate({
     lock,
     systems,
@@ -55,10 +55,10 @@ export function runRealityBenchmark(options: {
   return report;
 }
 
-function runAdapter(adapter: RealityAdapterContract, tasks: RealityTask[], evidenceDir: string): RealitySystemResult {
+function runAdapter(adapter: RealityAdapterContract, tasks: RealityTask[], evidenceDir: string, manifestSha256: string): RealitySystemResult {
   const contract = contractResult(adapter);
   if (contract.adapterKind === "credential-blocked" || contract.adapterKind === "profile-model-forbidden") {
-    return blockedResult(adapter, contract);
+    return blockedResult(adapter, contract, manifestSha256);
   }
   const outputs = tasks.map((task, index) => deterministicOutput(task, adapter.system, index));
   const scored = scoreRealityOutputs(tasks, outputs);
@@ -76,7 +76,9 @@ function runAdapter(adapter: RealityAdapterContract, tasks: RealityTask[], evide
       originalCommandExecuted: false,
       rawOutputsFromOriginalCommand: false,
       sharedJudgeTrace: false,
-      deterministicScaffold: true
+      deterministicScaffold: true,
+      manifestSha256,
+      inputStreamSha256: manifestSha256
     },
     leaderboardEligible: false,
     qualityClaimAllowed: false,
@@ -94,7 +96,7 @@ function runAdapter(adapter: RealityAdapterContract, tasks: RealityTask[], evide
   };
 }
 
-function blockedResult(adapter: RealityAdapterContract, contract: ReturnType<typeof contractResult>): RealitySystemResult {
+function blockedResult(adapter: RealityAdapterContract, contract: ReturnType<typeof contractResult>, manifestSha256: string): RealitySystemResult {
   return {
     system: adapter.system,
     displayName: adapter.displayName,
@@ -104,7 +106,9 @@ function blockedResult(adapter: RealityAdapterContract, contract: ReturnType<typ
       originalCommandExecuted: false,
       rawOutputsFromOriginalCommand: false,
       sharedJudgeTrace: false,
-      deterministicScaffold: false
+      deterministicScaffold: false,
+      manifestSha256,
+      inputStreamSha256: null
     },
     leaderboardEligible: false,
     qualityClaimAllowed: false,

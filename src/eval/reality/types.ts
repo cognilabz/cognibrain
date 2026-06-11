@@ -75,6 +75,8 @@ export interface RealitySystemResult {
     rawOutputsFromOriginalCommand: boolean;
     sharedJudgeTrace: boolean;
     deterministicScaffold: boolean;
+    manifestSha256: string | null;
+    inputStreamSha256: string | null;
   };
   leaderboardEligible: boolean;
   qualityClaimAllowed: boolean;

@@ -12,7 +12,7 @@ export function realityClaimGate(input: {
   const eligibleOriginalSystems = input.systems.filter((system) => originalKinds.includes(system.adapterKind) && system.rawOutputsPath && system.scorerTracePath);
   const majorCompetitors = eligibleOriginalSystems.filter((system) => system.system !== "cognibrain");
   const commandProofCompetitors = majorCompetitors.filter(hasOriginalCommandProof);
-  const cognibrainEligibleSystems = eligibleOriginalSystems.filter((system) => system.system === "cognibrain" && isRealityClaimPublishableSystem(system));
+  const cognibrainEligibleSystems = eligibleOriginalSystems.filter((system) => system.system === "cognibrain" && isRealityClaimPublishableSystem(system, input.lock.sha256));
   const gates = {
     manifestFrozenBeforeRun: Boolean(input.lock.frozenAt && input.lock.sha256),
     allSystemsUseOriginalImplementation: input.systems.length > 0 && input.systems.every((system) => system.adapterKind === "local-baseline" || originalKinds.includes(system.adapterKind) || system.adapterKind === "credential-blocked"),
@@ -54,6 +54,7 @@ export function realityClaimGate(input: {
     .map(([key]) => blockerMessages[key as keyof typeof gates]);
   const marketClaimAllowed = blockers.length === 0;
   const qualityClaimAllowed = gates.sameJudge
+    && gates.cognibrainEligibleSystemPresent
     && gates.rawOutputsRetained
     && gates.costLatencyRecorded
     && gates.rawOutputsFromOriginalCommands
@@ -85,8 +86,12 @@ function hasDeterministicScaffoldBlocker(system: RealitySystemResult) {
     || system.blockingReasons.some((reason) => /deterministic scaffold/i.test(reason));
 }
 
-export function isRealityClaimPublishableSystem(system: RealitySystemResult) {
+export function isRealityClaimPublishableSystem(system: RealitySystemResult, expectedManifestSha256?: string) {
+  const sameManifest = expectedManifestSha256
+    ? system.provenance?.manifestSha256 === expectedManifestSha256 && system.provenance?.inputStreamSha256 === expectedManifestSha256
+    : Boolean(system.provenance?.manifestSha256 && system.provenance?.inputStreamSha256);
   return originalKinds.includes(system.adapterKind)
+    && sameManifest
     && Boolean(system.rawOutputsPath)
     && Boolean(system.scorerTracePath)
     && hasOriginalCommandProof(system)

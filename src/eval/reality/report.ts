@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { isRealityClaimPublishableSystem, realityClaimGate } from "./claimGate";
+import { isRealityClaimPublishableSystem, isRealityProofHash, realityClaimGate } from "./claimGate";
 import type { RealityReport } from "./types";
 
 export function publishRealityEvidenceTable(options: { inputPath?: string; outputDir?: string } = {}) {
@@ -19,6 +19,12 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
     sameJudge: Boolean(report.claimEvidence?.sameJudgeTraceId),
     sameBudgets: Boolean(report.claimEvidence?.sameBudgetsProof)
   });
+  const validatedClaimEvidence = {
+    publicArtifactHash: isRealityProofHash(report.claimEvidence?.publicArtifactHash) ? report.claimEvidence?.publicArtifactHash ?? null : null,
+    independentReplicationHash: isRealityProofHash(report.claimEvidence?.independentReplicationHash) ? report.claimEvidence?.independentReplicationHash ?? null : null,
+    sameJudgeTraceId: report.claimEvidence?.sameJudgeTraceId ?? null,
+    sameBudgetsProof: report.claimEvidence?.sameBudgetsProof ?? null
+  };
   const publication = {
     evidenceTablePath: report.publication.evidenceTablePath,
     leaderboardPath: verifiedClaimGate.leaderboardAllowed ? "artifacts/public/leaderboard/reality.json" : null,
@@ -30,6 +36,7 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
     protocol: report.protocol,
     publishedAt: new Date().toISOString(),
     manifestHash: verifiedManifestHash,
+    claimEvidence: validatedClaimEvidence,
     claimGate: verifiedClaimGate,
     publication,
     systems: report.systems.map((system) => {
@@ -62,6 +69,7 @@ export function publishRealityEvidenceTable(options: { inputPath?: string; outpu
 
 function renderEvidenceMarkdown(artifact: {
   manifestHash: string;
+  claimEvidence: NonNullable<RealityReport["claimEvidence"]>;
   claimGate: RealityReport["claimGate"];
   systems: Array<{
     displayName: string;
@@ -76,6 +84,10 @@ function renderEvidenceMarkdown(artifact: {
   return `# EMRP v1 Evidence Table
 
 Manifest hash: \`${artifact.manifestHash}\`
+
+Public artifact hash: ${artifact.claimEvidence.publicArtifactHash ? `\`${artifact.claimEvidence.publicArtifactHash}\`` : "not validated"}
+
+Independent replication hash: ${artifact.claimEvidence.independentReplicationHash ? `\`${artifact.claimEvidence.independentReplicationHash}\`` : "not validated"}
 
 Market claim allowed: ${artifact.claimGate.marketClaimAllowed ? "yes" : "no"}
 

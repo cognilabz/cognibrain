@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -6,7 +6,7 @@ import { isRealityClaimPublishableSystem, realityClaimGate } from "../src/eval/r
 import { freezeRealityManifest, loadRealityManifest } from "../src/eval/reality/manifest";
 import { publishRealityEvidenceTable } from "../src/eval/reality/report";
 import { runRealityBenchmark } from "../src/eval/reality/runner";
-import type { RealityManifestLock, RealitySystemResult } from "../src/eval/reality/types";
+import type { RealityManifestLock, RealityReport, RealitySystemResult } from "../src/eval/reality/types";
 
 describe("EMRP Reality Bench", () => {
   it("freezes and verifies a hash-locked manifest", () => {
@@ -70,15 +70,15 @@ describe("EMRP Reality Bench", () => {
     const missingBudgetGate = realityClaimGate({
       lock: manifestLock,
       systems,
-      publicArtifactHash: "artifact-sha256",
-      independentReplicationHash: "replication-sha256",
+      publicArtifactHash: publicArtifactHash,
+      independentReplicationHash: independentReplicationHash,
       sameJudge: true
     });
     const provenBudgetGate = realityClaimGate({
       lock: manifestLock,
       systems,
-      publicArtifactHash: "artifact-sha256",
-      independentReplicationHash: "replication-sha256",
+      publicArtifactHash: publicArtifactHash,
+      independentReplicationHash: independentReplicationHash,
       sameJudge: true,
       sameBudgets: true
     });
@@ -90,6 +90,30 @@ describe("EMRP Reality Bench", () => {
     expect(provenBudgetGate.gates.sameBudgets).toBe(true);
     expect(provenBudgetGate.marketClaimAllowed).toBe(true);
     expect(provenBudgetGate.qualityClaimAllowed).toBe(true);
+  });
+
+  it("requires proof hashes to be SHA-256 shaped before market claims can open", () => {
+    const systems = [
+      publishableRealitySystem("cognibrain", "Cognibrain"),
+      publishableRealitySystem("mem0", "Mem0"),
+      publishableRealitySystem("langmem", "LangMem")
+    ];
+    const invalidProofGate = realityClaimGate({
+      lock: manifestLock,
+      systems,
+      publicArtifactHash: "artifact-sha256",
+      independentReplicationHash: "replication-sha256",
+      sameJudge: true,
+      sameBudgets: true
+    });
+
+    expect(invalidProofGate.gates.publicArtifactHashPresent).toBe(false);
+    expect(invalidProofGate.gates.independentReplicationHashPresent).toBe(false);
+    expect(invalidProofGate.marketClaimAllowed).toBe(false);
+    expect(invalidProofGate.blockers).toEqual(expect.arrayContaining([
+      "A public immutable artifact hash is required.",
+      "An independent replication hash is required."
+    ]));
   });
 
   it("rejects publishable rows that still carry blockers or errors", () => {
@@ -122,7 +146,58 @@ describe("EMRP Reality Bench", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("publishes validated market-proof hashes in Reality artifacts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-reality-proof-hashes-"));
+    try {
+      const reportPath = join(dir, "report.json");
+      const publicDir = join(dir, "public");
+      const report = {
+        schemaVersion: "1.0",
+        protocol: "emrp-v1",
+        generatedAt: "2026-06-11T00:00:00.000Z",
+        manifestHash: manifestLock.sha256,
+        manifestLock,
+        taskCount: manifestLock.taskCount,
+        systems: [publishableRealitySystem("cognibrain", "Cognibrain")],
+        claimEvidence: {
+          publicArtifactHash,
+          independentReplicationHash,
+          sameJudgeTraceId: "judge-trace-sha256",
+          sameBudgetsProof: "budget-proof-sha256"
+        },
+        claimGate: realityClaimGate({
+          lock: manifestLock,
+          systems: [publishableRealitySystem("cognibrain", "Cognibrain")],
+          publicArtifactHash,
+          independentReplicationHash,
+          sameJudge: true,
+          sameBudgets: true
+        }),
+        publication: {
+          evidenceTablePath: join(publicDir, "index.json"),
+          leaderboardPath: null,
+          status: "evidence-table-only"
+        }
+      } satisfies RealityReport;
+      writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+
+      publishRealityEvidenceTable({ inputPath: reportPath, outputDir: publicDir });
+      const artifact = JSON.parse(readFileSync(join(publicDir, "index.json"), "utf8"));
+      const markdown = readFileSync(join(publicDir, "index.md"), "utf8");
+
+      expect(artifact.claimEvidence.publicArtifactHash).toBe(publicArtifactHash);
+      expect(artifact.claimEvidence.independentReplicationHash).toBe(independentReplicationHash);
+      expect(markdown).toContain(`Public artifact hash: \`${publicArtifactHash}\``);
+      expect(markdown).toContain(`Independent replication hash: \`${independentReplicationHash}\``);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
+
+const publicArtifactHash = `sha256:${"a".repeat(64)}`;
+const independentReplicationHash = "b".repeat(64);
 
 const manifestLock: RealityManifestLock = {
   schemaVersion: "1.0",

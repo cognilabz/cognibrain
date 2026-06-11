@@ -1,6 +1,8 @@
 import type { RealityAdapterKind, RealityClaimGate, RealityManifestLock, RealitySystemResult } from "./types";
 
 const originalKinds: RealityAdapterKind[] = ["official-api", "official-sdk", "official-cli"];
+const sha256HashPattern = /^(sha256:)?[a-f0-9]{64}$/i;
+
 export function realityClaimGate(input: {
   lock: RealityManifestLock;
   systems: RealitySystemResult[];
@@ -28,8 +30,8 @@ export function realityClaimGate(input: {
     rawOutputsRetained: eligibleOriginalSystems.every((system) => Boolean(system.rawOutputsPath)),
     costLatencyRecorded: eligibleOriginalSystems.every((system) => system.metrics.estimatedCostUsd !== null && system.metrics.p95LatencyMs !== null),
     atLeastTwoMajorCompetitorsEligible: commandProofCompetitors.length >= 2,
-    publicArtifactHashPresent: Boolean(input.publicArtifactHash),
-    independentReplicationHashPresent: Boolean(input.independentReplicationHash)
+    publicArtifactHashPresent: isRealityProofHash(input.publicArtifactHash),
+    independentReplicationHashPresent: isRealityProofHash(input.independentReplicationHash)
   };
   const blockerMessages: Record<keyof typeof gates, string> = {
     manifestFrozenBeforeRun: "Manifest must be frozen and hash-locked before the run.",
@@ -72,6 +74,10 @@ export function realityClaimGate(input: {
     gates,
     blockers
   };
+}
+
+export function isRealityProofHash(value: string | null | undefined) {
+  return typeof value === "string" && sha256HashPattern.test(value);
 }
 
 function hasOriginalCommandProof(system: RealitySystemResult) {

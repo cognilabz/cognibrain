@@ -2,6 +2,8 @@
 
 Cognibrain provides optional Docker packaging for containerized deployments. Docker is not required — it's an alternative to native service installation.
 
+Docker is optional. The CLI is the required control plane for setup, status, verification, and service management; Docker only packages the same runtime for container platforms.
+
 ## Quick Start
 
 ```bash

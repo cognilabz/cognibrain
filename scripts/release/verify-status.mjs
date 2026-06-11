@@ -11,54 +11,48 @@ const packageFiles = Array.isArray(packageJson.files) ? packageJson.files : [];
 
 const files = {
   readme: read("README.md"),
-  docsHome: read("docs/README.md"),
-  evidence: read("docs/evidence.md"),
-  status: read("docs/status.md"),
+  docsHome: read("docs/index.md"),
+  quickstart: read("docs/getting-started/quickstart.md"),
+  install: read("docs/getting-started/installation.md"),
+  connectors: read("docs/guides/connectors.md"),
+  mcp: read("docs/guides/mcp-integration.md"),
   benchmarks: read("docs/benchmarks.md"),
-  reference: read("docs/reference.md"),
-  integrations: read("docs/integrations.md"),
-  operations: read("docs/operations.md"),
+  operations: read("docs/operations/index.md"),
+  security: read("docs/operations/security.md"),
+  reference: read("docs/reference/index.md"),
+  cliReference: read("docs/reference/cli-commands.md"),
   package: read("package.json"),
   internalRunner: read("scripts/internal/run-task.mjs")
 };
 
 const checks = [
   check("canonical docs exist", [
-    exists("docs/install.md"),
-    exists("docs/benchmarks.md"),
-    exists("docs/integrations.md"),
-    exists("docs/status.md"),
-    exists("docs/operations.md"),
-    exists("docs/reference.md"),
-    exists("docs/evidence.md"),
-    has(files.docsHome, "Documentation Standard")
+    exists("docs/index.md"),
+    exists("docs/getting-started/quickstart.md"),
+    exists("docs/getting-started/installation.md"),
+    exists("docs/guides/connectors.md"),
+    exists("docs/guides/mcp-integration.md"),
+    exists("docs/operations/security.md"),
+    exists("docs/reference/cli-commands.md"),
+    has(files.docsHome, "Self-hosted engineering memory for coding agents")
   ]),
-  check("evidence register is present", [
-    has(files.evidence, "| Area | Evidence anchor | Notes |"),
-    countEvidenceRows(files.evidence) >= 8,
-    has(files.evidence, "CogniCodeBench"),
-    has(files.evidence, "Arena"),
-    has(files.status, "Runtime Status"),
-    has(files.evidence, "Storage boundary"),
-    has(files.evidence, "not a product narrative"),
-    has(files.readme, "docs/evidence.md"),
-    has(files.readme, "docs/status.md")
-  ]),
-  check("public docs are bounded by evidence", [
+  check("public docs expose the operator path", [
     has(files.readme, "Self-hosted engineering memory for coding agents"),
     has(files.readme, "Stop fixing the same agent mistake twice"),
-    has(files.readme, "Benchmark results are documented from the checked artifacts"),
-    has(files.evidence, "not a product narrative"),
+    has(files.quickstart, "npx cognibrain"),
+    has(files.install, "npm"),
+    has(files.cliReference, "cognibrain"),
+    has(files.mcp, "Model Context Protocol"),
+    has(files.connectors, "First-Party Connectors"),
+    has(files.operations, "Self-Hosting")
+  ]),
+  check("proof and claim boundaries remain visible", [
     has(files.benchmarks, "This page records the current checked benchmark artifacts"),
-    has(files.benchmarks, "same-run-api-shape"),
-    has(files.benchmarks, "credential-blocked"),
-    has(files.status, "Runtime Status"),
-    has(files.status, "MemoryRepository paths for SQLite and Postgres"),
-    has(files.status, "JWT/OIDC verifier"),
-    has(files.status, "route-level RBAC"),
-    has(files.status, "Generated artifacts are local review outputs"),
-    has(files.integrations, "MCP first for agents"),
-    has(files.reference, "For MCP-native agents, use MCP")
+    has(files.benchmarks, "claimAllowed=false"),
+    has(files.benchmarks, "No overall \"best memory solution on the market\" claim"),
+    has(files.connectors, "Credential-blocked"),
+    has(files.connectors, "Tenant-verified"),
+    has(files.security, "Never run without auth in production")
   ]),
   check("generated outputs stay internal", [
     packageFiles.every((path) => !path.startsWith("artifacts/")),
@@ -83,10 +77,6 @@ console.log(`status verification passed: ${checks.length}/${checks.length} check
 function check(name, assertions) {
   const failed = assertions.map((value, index) => ({ value, index })).filter((item) => !item.value).map((item) => `assertion ${item.index + 1}`);
   return { name, passed: failed.length === 0, failed };
-}
-
-function countEvidenceRows(content) {
-  return content.split(/\r?\n/).filter((line) => /^\| [A-Za-z]/.test(line)).length;
 }
 
 function writeReport(items) {

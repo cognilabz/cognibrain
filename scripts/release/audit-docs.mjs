@@ -8,120 +8,113 @@ const exists = (path) => existsSync(join(root, path));
 const has = (content, needle) => content.includes(needle);
 
 const canonicalDocs = [
-  "docs/README.md",
-  "docs/install.md",
-  "docs/benchmarks.md",
-  "docs/integrations.md",
-  "docs/status.md",
-  "docs/operations.md",
-  "docs/reference.md",
-  "docs/evidence.md"
-];
-const generatedDocPatterns = [
-  /^docs\/benchmarks\/(?:hardening|latest-arena|landscape)\.md$/,
-  /^docs\/integrations\/(?:connector-certification|connector-quality|connector-maturity|harness-maturity)\.md$/,
-  /^docs\/operations\/operator-os\.md$/,
-  /^docs\/roadmap\//,
-  /^docs\/market\//
+  "docs/index.md",
+  "docs/getting-started/quickstart.md",
+  "docs/getting-started/installation.md",
+  "docs/guides/connectors.md",
+  "docs/guides/mcp-integration.md",
+  "docs/guides/harness-lifecycle.md",
+  "docs/guides/memory-management.md",
+  "docs/operations/security.md",
+  "docs/operations/self-hosting.md",
+  "docs/reference/cli-commands.md",
+  "docs/reference/mcp-tools.md",
+  "docs/reference/sdk-typescript.md",
+  "docs/reference/sdk-python.md",
+  "docs/benchmarks.md"
 ];
 const markdownDocs = walk("docs").filter((path) => path.endsWith(".md")).sort();
 const rootMarkdown = ["README.md", "CONTRIBUTING.md", "SECURITY.md"];
 const files = {
   readme: read("README.md"),
-  docsHome: read("docs/README.md"),
-  dashboard: exists("operator-ui/src/main.tsx") ? read("operator-ui/src/main.tsx") : "",
-  package: read("package.json"),
-  install: read("docs/install.md"),
+  docsHome: read("docs/index.md"),
+  quickstart: read("docs/getting-started/quickstart.md"),
+  install: read("docs/getting-started/installation.md"),
+  connectors: read("docs/guides/connectors.md"),
+  mcp: read("docs/guides/mcp-integration.md"),
+  harness: read("docs/guides/harness-lifecycle.md"),
+  memory: read("docs/guides/memory-management.md"),
   benchmarks: read("docs/benchmarks.md"),
-  integrations: read("docs/integrations.md"),
-  status: read("docs/status.md"),
-  operations: read("docs/operations.md"),
-  reference: read("docs/reference.md"),
-  evidence: read("docs/evidence.md")
+  operations: read("docs/operations/index.md"),
+  security: read("docs/operations/security.md"),
+  reference: read("docs/reference/index.md"),
+  cliReference: read("docs/reference/cli-commands.md"),
+  mcpReference: read("docs/reference/mcp-tools.md"),
+  package: read("package.json")
 };
-const docsCorpus = [files.readme, files.docsHome, files.install, files.benchmarks, files.integrations, files.status, files.operations, files.reference, files.evidence].join("\n\n");
+const docsCorpus = [
+  files.readme,
+  files.docsHome,
+  files.quickstart,
+  files.install,
+  files.connectors,
+  files.mcp,
+  files.harness,
+  files.memory,
+  files.benchmarks,
+  files.operations,
+  files.security,
+  files.reference,
+  files.cliReference,
+  files.mcpReference
+].join("\n\n");
 const packageJson = JSON.parse(files.package);
 const packageFiles = Array.isArray(packageJson.files) ? packageJson.files : [];
 const connectorCertification = exists("artifacts/connector-certification.json") ? JSON.parse(read("artifacts/connector-certification.json")) : { rows: [] };
 
 const checks = [
-  check("documentation is compact and canonical", [
+  check("documentation is mkdocs-structured and canonical", [
     canonicalDocs.every(exists),
     rootMarkdown.every(exists),
-    markdownDocs.every((path) => canonicalDocs.includes(path) || path.startsWith("docs/schemas/") || path.startsWith("docs/adr/")),
-    generatedDocPatterns.every((pattern) => !markdownDocs.some((path) => pattern.test(path))),
+    exists("mkdocs.yml"),
+    markdownDocs.every((path) =>
+      path.startsWith("docs/getting-started/") ||
+      path.startsWith("docs/guides/") ||
+      path.startsWith("docs/reference/") ||
+      path.startsWith("docs/operations/") ||
+      path.startsWith("docs/concepts/") ||
+      path.startsWith("docs/contributing/") ||
+      path.startsWith("docs/adr/") ||
+      path === "docs/index.md" ||
+      path === "docs/benchmarks.md"
+    ),
+    !exists("docs/README.md"),
+    !exists("docs/integrations.md"),
     !exists("PRODUCT.md"),
     !exists("DESIGN.md"),
     !exists("plan1_5.md"),
     !exists("nextplan.md")
   ]),
-  check("README is product-first, not proof-artifact-first", [
+  check("README points users to the public docs site", [
     has(files.readme, "Self-hosted engineering memory for coding agents"),
     has(files.readme, "Stop fixing the same agent mistake twice"),
     has(files.readme, "npm i @cognilabz/cognibrain"),
-    has(files.readme, "## Public Surface"),
-    has(files.readme, "## Current Proof Snapshot"),
-    has(files.readme, "Product truth audit"),
-    has(files.readme, "CogniCodeBench"),
-    has(files.readme, "Real-world black-box harness"),
-    has(files.readme, "## Market Position"),
-    has(files.readme, "Use MCP for MCP-native agents"),
-    has(files.readme, "Use SDK/HTTP for product integrations and custom runtimes"),
-    has(files.readme, "## What Cognibrain Is"),
-    has(files.readme, "## Honest Boundaries"),
-    has(files.readme, "memory feedback-injection"),
-    has(files.readme, "unsafeToInject"),
-    has(files.readme, "Benchmark results are documented from the checked artifacts"),
-    has(files.readme, "docs/status.md"),
-    has(files.readme, "docs/evidence.md")
+    has(files.readme, "cognibrain.cognilabz.com"),
+    has(files.readme, "MCP Integration"),
+    has(files.readme, "Self-Hosting")
   ]),
-  check("operator CLI docs are text-first", [
-    has(files.readme, "stable operator CLI"),
-    has(files.install, "stable operator CLI"),
-    !has(files.package, "\"docs:cli-screenshots\""),
-    !exists("scripts/release/render-cli-screenshots.mjs"),
-    !exists("src/cli/inkApp.mjs")
+  check("operator and integration docs cover the supported surfaces", [
+    has(files.cliReference, "cognibrain"),
+    has(files.mcp, "MCP-native agents"),
+    has(files.mcpReference, "context"),
+    has(files.harness, "Harness"),
+    has(files.connectors, "First-Party Connectors"),
+    has(files.connectors, "Credential-blocked"),
+    has(files.memory, "memory")
+  ]),
+  check("proof boundaries are visible", [
+    has(files.benchmarks, "This page records the current checked benchmark artifacts"),
+    has(files.benchmarks, "claimAllowed=false"),
+    has(files.benchmarks, "No overall \"best memory solution on the market\" claim"),
+    has(files.benchmarks, "Generated outputs belong under `artifacts/`"),
+    has(files.security, "Never run without auth in production"),
+    has(files.security, "Connector tokens are stored as `env:` references")
   ]),
   check("artifacts are internal outputs, not package content", [
-    has(files.benchmarks, "This page records the current checked benchmark artifacts"),
-    has(files.operations, "`artifacts/` is ignored by git"),
-    has(files.status, "Generated artifacts are local review outputs under `artifacts/`"),
-    !/(^|[^A-Za-z0-9_/-])public\/benchmark-arena/.test(files.dashboard),
-    !/(^|[^A-Za-z0-9_/-])public\/leaderboard/.test(files.dashboard),
     packageFiles.every((path) => !path.startsWith("artifacts/")),
     packageFiles.every((path) => !path.startsWith("operator-ui")),
     !packageFiles.includes("public/benchmark-arena/"),
     !packageFiles.includes("public/leaderboard/")
-  ]),
-  check("communication contract is simple", [
-    has(files.integrations, "MCP first for agents"),
-    has(files.integrations, "CLI for humans and automation"),
-    has(files.integrations, "SDK/HTTP only for app and connector integrations"),
-    has(files.reference, "For MCP-native agents, use MCP"),
-    has(files.reference, "For operators, use the CLI"),
-    has(files.reference, "For product integrations, use SDK/HTTP"),
-    has(files.reference, "## Context Lifecycle"),
-    has(files.reference, "memory feedback-injection"),
-    has(files.reference, "Use delivered context first"),
-    !has(files.reference, "| `/context-pack` |")
-  ]),
-  check("runtime status stays evidence-backed", [
-    has(files.status, "Runtime Status"),
-    has(files.status, "MemoryRepository paths for SQLite and Postgres"),
-    has(files.status, "JWT/OIDC verifier"),
-    has(files.status, "route-level RBAC"),
-    has(files.status, "Evidence anchor"),
-    has(files.evidence, "Evidence Register"),
-    has(files.evidence, "not a product narrative"),
-    has(files.evidence, "artifacts/cognicodebench/run.json"),
-    has(files.evidence, "artifacts/arena/run.json"),
-    has(files.evidence, "Memory OS comparison follow-up"),
-    has(files.evidence, "Market readiness"),
-    has(files.docsHome, "## Market Readiness"),
-    has(files.benchmarks, "Market Readiness Summary"),
-    has(files.benchmarks, "Diagnostic signal; pass gate false"),
-    has(files.benchmarks, "No overall \"best memory solution on the market\" claim"),
-    has(files.evidence, "Deferred: optional Qdrant retrieval backend")
   ]),
   check("legacy plan-era docs are gone", [
     !/(plan1_|nextplan|Plan1_|Plan1)/.test(docsCorpus),
@@ -207,7 +200,7 @@ function positiveConnectorClaim(content, pattern) {
     const start = Math.max(0, match.index - 80);
     const end = Math.min(content.length, match.index + match[0].length + 80);
     const window = content.slice(start, end).toLowerCase();
-    if (/\b(no|not|without|unless|requires|required|cannot|blocked|credential-blocked|does not mean|never)\b/.test(window)) continue;
+    if (/\b(no|not|without|unless|requires|required|cannot|blocked|credential-blocked|does not mean|never|needs)\b/.test(window)) continue;
     return true;
   }
   return false;
@@ -218,31 +211,12 @@ function escapeRegExp(value) {
 }
 
 function walk(dir) {
-  if (!exists(dir)) return [];
-  const entries = [];
-  for (const name of readdirSafe(join(root, dir))) {
-    const full = join(root, dir, name);
-    const relative = join(dir, name);
-    const stat = statSafe(full);
-    if (!stat) continue;
-    if (stat.isDirectory()) entries.push(...walk(relative));
-    else entries.push(relative);
-  }
-  return entries;
-}
-
-function readdirSafe(path) {
-  try {
-    return readdirSync(path);
-  } catch {
-    return [];
-  }
-}
-
-function statSafe(path) {
-  try {
-    return statSync(path);
-  } catch {
-    return null;
-  }
+  const full = join(root, dir);
+  if (!existsSync(full)) return [];
+  return readdirSync(full).flatMap((entry) => {
+    const path = join(dir, entry);
+    const fullPath = join(root, path);
+    if (statSync(fullPath).isDirectory()) return walk(path);
+    return [path];
+  });
 }

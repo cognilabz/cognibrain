@@ -2,6 +2,8 @@
 
 The harness lifecycle is a JSON-first shell integration that any agent, git hook, or CI runner can call. It provides the same memory capabilities as MCP but through standard shell commands.
 
+Use MCP for MCP-native agents. Use the cognibrain harness or top-level lifecycle CLI for shell-capable agents, git hooks, and CI. Use SDK/HTTP for product integrations and custom runtimes.
+
 ## Overview
 
 The harness defines a simple lifecycle loop:

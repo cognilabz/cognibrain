@@ -49,6 +49,8 @@ The `solo-dev` profile disables auth by default. This is **only** safe for local
 
 ## Authorization
 
+The API includes an optional JWT/OIDC verifier, API-key auth, actor scopes, and route-level RBAC for protected routes. In strict policy mode, unmatched policy checks default to deny, and deployment reviews should verify which target database is backing the runtime before enabling production traffic.
+
 ### Policy Mode
 
 ```bash

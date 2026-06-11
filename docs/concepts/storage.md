@@ -2,6 +2,8 @@
 
 Cognibrain supports multiple storage backends, from zero-config local files to production-grade PostgreSQL.
 
+For production-style deployments, Cognibrain uses DB-primary MemoryRepository paths for SQLite and Postgres. Runtime writes go to the target database through row-backed repository operations; local JSON snapshots are backup, migration, or solo-dev artifacts rather than the primary write path.
+
 ## Storage Backends
 
 ### Local JSON

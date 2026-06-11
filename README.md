@@ -45,6 +45,21 @@ npx cognibrain status
 - [Python SDK](https://cognibrain.cognilabz.com/latest/reference/sdk-python/)
 - [Self-Hosting](https://cognibrain.cognilabz.com/latest/operations/self-hosting/)
 
+## Repository Map
+
+| Path | Purpose |
+|------|---------|
+| `bin/` | Installable CLI entrypoints and shared runtime helpers |
+| `src/` | Core memory engine, API server, connectors, and evaluators |
+| `sdk/typescript/` | TypeScript SDK and connector helpers |
+| `sdk/python/` | Python client package |
+| `scripts/` | Internal verification, benchmark, release, and demo commands |
+| `fixtures/` | Test and benchmark fixtures |
+| `templates/` | Generated agent and harness configuration templates |
+| `docker/` | Optional container packaging |
+| `deploy/` | Optional deployment manifests |
+| `data/benchmarks/` | Benchmark source data and frozen inputs |
+
 ## Contributing
 
 ```bash

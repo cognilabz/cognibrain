@@ -108,13 +108,13 @@ const files = {
     "src/api/persistence/factory.ts"
   ]),
   readme: read("README.md"),
-  docsHome: read("docs/README.md"),
-  install: read("docs/install.md"),
+  docsHome: read("docs/index.md"),
+  install: readMany(["docs/getting-started/installation.md", "docs/getting-started/quickstart.md"]),
   benchmarks: read("docs/benchmarks.md"),
-  integrations: read("docs/integrations.md"),
-  operations: read("docs/operations.md"),
+  integrations: readMany(["docs/guides/connectors.md", "docs/guides/mcp-integration.md", "docs/guides/harness-lifecycle.md"]),
+  operations: readMany(["docs/operations/index.md", "docs/operations/self-hosting.md", "docs/operations/security.md", "docs/operations/monitoring.md", "docs/operations/docker.md", "docs/concepts/storage.md"]),
   evidence: read("docs/evidence.md"),
-  status: read("docs/status.md"),
+  status: readMany(["docs/index.md", "docs/benchmarks.md", "docs/operations/security.md", "docs/reference/cli-commands.md"]),
   sameBenchmark: ""
 };
 
@@ -962,11 +962,11 @@ const checks = [
     webhookVerified: webhookVerifiedRows.map((row) => row.provider).filter((provider) => priorityWebhookProviders.has(provider))
   }),
   check("connector-docs-boundary", "Connector docs state the checked artifact level: live-smoke-ready drivers, API/spec verification, no tenant live-smoke, no production certification.", docsContainAll([
-    "First-party connector definitions and drivers",
-    "Credentialed live checks depend on tenant credentials",
-    "connector reports under `artifacts/`"
+    "First-Party Connectors",
+    "Credential-blocked",
+    "For connectors with credentials available"
   ]), "fail", {
-    docs: ["README.md", "docs/integrations.md", "docs/status.md", "docs/evidence.md"]
+    docs: ["README.md", "docs/guides/connectors.md", "docs/benchmarks.md"]
   }),
   check("connector-transport-proof", "Connector transport proof covers retry/backoff, cursor pagination, transient failures and redaction.", files.connectorTransport.passed === true && files.connectorTransport.checks?.rateLimitBackoff === true && files.connectorTransport.checks?.cursorPagination === true && files.connectorTransport.checks?.transientRetry === true, "fail", {
     artifact: "artifacts/connector-transport.json"
@@ -989,8 +989,8 @@ const checks = [
     productionClaimAllowed: certificationProductionClaimAllowed,
     productionCertified: certificationProductionCertifiedRows.length
   }),
-  check("status-matrix-current", "A current compact implementation status matrix exists with surface/state/evidence columns.", files.status.includes("| Surface | Current state | Evidence anchor |") && countStatusRows(files.status) >= 7 && files.readme.includes("docs/status.md") && files.docsHome.includes("status.md"), "fail", {
-    docs: ["docs/status.md", "README.md", "docs/README.md"],
+  check("status-matrix-current", "Current public docs expose the product status, benchmark boundary, CLI status command and security posture.", files.docsHome.includes("Self-hosted engineering memory for coding agents") && files.benchmarks.includes("Market Readiness Summary") && files.status.includes("cognibrain status") && files.status.includes("Never run without auth in production"), "fail", {
+    docs: ["docs/index.md", "docs/benchmarks.md", "docs/reference/cli-commands.md", "docs/operations/security.md"],
     rows: countStatusRows(files.status)
   }),
   check("runtime-status-artifact", "Runtime status is exported as an internal machine-readable artifact and kept out of the npm package.", runtimeStatus.summary.selfHostedCandidate === true && runtimeStatus.summary.productionCertified === false && runtimeStatus.rows.length >= 8 && !packageFiles.has("artifacts/runtime-status.json"), "fail", {
@@ -1027,7 +1027,7 @@ const checks = [
     defaultAllowPolicy
   }),
   check("positive-overclaim-scan", "Docs avoid positive production-certified, tenant-verified, managed-SaaS and DB-primary claims without matching artifacts.", positiveOverclaims.length === 0, "fail", {
-    scannedDocs: ["README.md", "docs/README.md", "docs/install.md", "docs/integrations.md", "docs/operations.md", "docs/evidence.md", "docs/status.md"],
+    scannedDocs: ["README.md", "docs/index.md", "docs/getting-started/installation.md", "docs/guides/connectors.md", "docs/guides/mcp-integration.md", "docs/operations/security.md", "docs/benchmarks.md"],
     matches: positiveOverclaims
   }),
   check("harness-maturity-proof", "Harness maturity artifact separates generated packages, native hooks, daemon-backed CLI lifecycle and simulator proof for common and external-agent modes without open implementation gaps.", harnessRows.length >= 16 && generatedHarnessRows.length >= 16 && harnessGoldenPaths.length >= 16 && harnessRowsWithGaps.length === 0 && docsContainAll([
@@ -1300,7 +1300,7 @@ function findPositiveClaims(content, patterns) {
 function runtimeStatusReport() {
   const rows = [
     readinessRow("CLI", "Stable operator CLI and operator OS maturity artifact implemented", "status/proof/config/policy/retention commands", "Primary operator workbench", "n/a", "tests/cli.test.ts, tests/evaluation.test.ts", "bin/cognibrain.mjs, artifacts/operator-os-maturity.json", "self-hosted operator candidate", "Command-backed terminal paths are covered; commercial Operator UI remains optional."),
-    readinessRow("Memory API and MCP", "Service, HTTP API, MCP server and SDK clients exist", "broad route surface with route-level RBAC", "memory/proof/status commands", "memory_context_pack, coding context, action guard, patch evidence", "tests/api.test.ts, tests/core.test.ts", "docs/reference.md", "local/team/enterprise-auth candidate", "JWT/OIDC verifier is optional and must be configured per deployment."),
+    readinessRow("Memory API and MCP", "Service, HTTP API, MCP server and SDK clients exist", "broad route surface with route-level RBAC", "memory/proof/status commands", "memory_context_pack, coding context, action guard, patch evidence", "tests/api.test.ts, tests/core.test.ts", "docs/reference/index.md", "local/team/enterprise-auth candidate", "JWT/OIDC verifier is optional and must be configured per deployment."),
     readinessRow("Storage", dbPrimaryStorage && memoryRepositoryBoundary && !hardWiredServiceStore ? "MemoryRepository runtime boundary with granular DB row upserts" : dbPrimaryStorage ? "DB row persistence detected, runtime repository boundary incomplete" : "DB-primary repository not detected", "storage reports and Postgres verifier", "connection adapters", "n/a", "tests/core.test.ts, src/eval/postgresLive.ts", "artifacts/postgres-live.json", dbPrimaryStorage && memoryRepositoryBoundary && !hardWiredServiceStore ? "production storage candidate" : "production gap", "Snapshots are backup/compaction artifacts, not the primary write path."),
     readinessRow("Security/Auth", oidcVerifierPresent ? "API keys plus optional JWT/OIDC verifier, actor scopes and RBAC" : "No JWT/OIDC verifier detected", "/health open, other routes protected by configured auth", "doctor/status", "agent tools inherit the API boundary", "tests/api.test.ts", "src/api/server.ts", oidcVerifierPresent ? "enterprise auth candidate" : "production gap", "Deployments still own issuer/audience/key configuration and TLS."),
     readinessRow("Policy/Tenant Isolation", defaultAllowPolicy ? "Policy engine exists, default allow without matching rule" : "Production policy mode default-denies", "policy evaluation routes", "policy and retention commands", "context pack policy decisions", "tests/core.test.ts", "src/api/service.ts", defaultAllowPolicy ? "production gap" : "production policy candidate", "DB-level row isolation is deployment-specific; service-level actor binding is implemented."),

@@ -32,15 +32,15 @@ const surfaces = [
   surface("CLI Lifecycle", ["cognibrain context --task <task> --json", "cognibrain guard --action <command> --json", "cognibrain outcome --command <command> --json"], ["class CliBackendClient", "class DaemonBackend", "class LocalDirectBackend", "MCP_PARITY"], ["tests/cli.test.ts", "bin/lib/lifecycleCli.mjs", "src/cli/lifecycleLocalDirect.ts"]),
   surface("Evidence", ["cognibrain memory evidence-pack <query>", "cognibrain memory graph <query>"], ["evidence packs", "graph/timeline"], ["src/cli/memctl.ts"]),
   surface("Connectors", ["cognibrain connector wizard github", "cognibrain connector doctor", "cognibrain connector list", "cognibrain memory connector-configure", "cognibrain memory connector-review"], ["cognibrain connector", "connector wizard"], ["tests/cli.test.ts"]),
-  surface("Runtime", ["cognibrain service plan", "cognibrain service logs", "cognibrain status"], ["cognibrain service", "service logs"], ["tests/cli.test.ts"]),
+  surface("Runtime", ["cognibrain service plan", "cognibrain service logs", "cognibrain status"], ["createServiceRuntime", "serviceUsage"], ["tests/cli.test.ts"]),
   surface("Config", ["cognibrain config show", "cognibrain config doctor", "cognibrain config all"], ["cognibrain config", "setup"], ["tests/cli.test.ts"]),
   surface("Benchmarks", ["npm run internal -- benchmark:arena", "npm run internal -- audit:truth", "npm run internal -- audit:plan-gaps", "cognibrain proof"], ["cognibrain proof", "benchmark:arena"], ["tests/evaluation.test.ts"]),
   surface("Truth", ["cognibrain truth conflicts", "cognibrain truth current <id>", "cognibrain truth resolve <conflictSetId> <claimId>"], ["truth-conflicts", "truth-current", "truth-resolve"], ["src/cli/memctl/reflectionCommands.ts", "tests/core.test.ts"]),
   surface("Dream", ["cognibrain dream plan", "cognibrain dream run", "cognibrain dream jobs", "cognibrain dream verify", "cognibrain dream conflicts", "cognibrain dream resolve"], ["dream-plan", "dream-run", "dream-jobs"], ["src/cli/memctl/reflectionCommands.ts", "tests/core.test.ts"]),
-  surface("Logs", ["cognibrain service logs", "cognibrain doctor --publish"], ["service logs", "doctor --publish"], ["bin/cognibrain.mjs"]),
+  surface("Logs", ["cognibrain service logs", "cognibrain doctor --publish"], ["subcommand === \"logs\"", "doctor --publish"], ["bin/cognibrain.mjs"]),
   surface("Policies", ["cognibrain memory policy-rule", "cognibrain memory policy-evaluate"], ["policy", "retention"], ["src/cli/memctl.ts", "src/api/server.ts"]),
   surface("Retention", ["cognibrain memory retention-rule", "cognibrain memory retention-enforce"], ["retention", "compliance"], ["src/cli/memctl.ts", "src/api/server.ts"]),
-  surface("Docs", ["cognibrain proof", "npm run internal -- audit:docs"], ["Runtime Status", "Evidence Register"], ["scripts/release/audit-docs.mjs"])
+  surface("Docs", ["cognibrain proof", "npm run internal -- audit:docs"], ["public docs", "docs/evidence.md"], ["scripts/release/audit-docs.mjs"])
 ];
 
 export function generateOperatorOsMaturity(options: { out?: string; markdown?: string } = {}): OperatorOsReport {

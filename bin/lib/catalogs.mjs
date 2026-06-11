@@ -4,7 +4,7 @@ export function connectorDefinitions() {
       connectorId: "official-github",
       requiredEnv: ["MEMORY_GITHUB_REPO", "MEMORY_GITHUB_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "repo", label: "GitHub repo owner/name", env: "MEMORY_GITHUB_REPO", default: process.env.MEMORY_GITHUB_REPO ?? "cognilabz/cognibrain" },
@@ -16,7 +16,7 @@ export function connectorDefinitions() {
       connectorId: "official-slack",
       requiredEnv: ["MEMORY_SLACK_TOKEN", "MEMORY_SLACK_CHANNEL_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "channelId", label: "Slack channel id", env: "MEMORY_SLACK_CHANNEL_ID", default: process.env.MEMORY_SLACK_CHANNEL_ID ?? "C123" },
@@ -28,7 +28,7 @@ export function connectorDefinitions() {
       connectorId: "official-discord",
       requiredEnv: ["MEMORY_DISCORD_BOT_TOKEN", "MEMORY_DISCORD_CHANNEL_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "channelId", label: "Discord channel id", env: "MEMORY_DISCORD_CHANNEL_ID", default: process.env.MEMORY_DISCORD_CHANNEL_ID ?? "D123" },
@@ -40,7 +40,7 @@ export function connectorDefinitions() {
       connectorId: "official-jira",
       requiredEnv: ["MEMORY_JIRA_BASE_URL", "MEMORY_JIRA_EMAIL", "MEMORY_JIRA_API_TOKEN", "MEMORY_JIRA_PROJECT"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "baseUrl", label: "Jira base URL", env: "MEMORY_JIRA_BASE_URL", default: process.env.MEMORY_JIRA_BASE_URL ?? "https://example.atlassian.net" },
@@ -54,7 +54,7 @@ export function connectorDefinitions() {
       connectorId: "official-confluence",
       requiredEnv: ["MEMORY_CONFLUENCE_BASE_URL", "MEMORY_CONFLUENCE_EMAIL", "MEMORY_CONFLUENCE_API_TOKEN", "MEMORY_CONFLUENCE_SPACE"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "baseUrl", label: "Confluence base URL", env: "MEMORY_CONFLUENCE_BASE_URL", default: process.env.MEMORY_CONFLUENCE_BASE_URL ?? "https://example.atlassian.net" },
@@ -68,7 +68,7 @@ export function connectorDefinitions() {
       connectorId: "official-notion",
       requiredEnv: ["MEMORY_NOTION_TOKEN", "MEMORY_NOTION_DATABASE_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "databaseId", label: "Notion database id", env: "MEMORY_NOTION_DATABASE_ID", default: process.env.MEMORY_NOTION_DATABASE_ID ?? "notion_database_id" },
@@ -80,7 +80,7 @@ export function connectorDefinitions() {
       connectorId: "official-linear",
       requiredEnv: ["MEMORY_LINEAR_API_KEY", "MEMORY_LINEAR_TEAM_ID"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "teamId", label: "Linear team id", env: "MEMORY_LINEAR_TEAM_ID", default: process.env.MEMORY_LINEAR_TEAM_ID ?? "team_id" },
@@ -92,7 +92,7 @@ export function connectorDefinitions() {
       connectorId: "official-gitlab",
       requiredEnv: ["MEMORY_GITLAB_PROJECT", "MEMORY_GITLAB_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "project", label: "GitLab project path", env: "MEMORY_GITLAB_PROJECT", default: "group/project" },
@@ -104,7 +104,7 @@ export function connectorDefinitions() {
       connectorId: "official-azure-devops",
       requiredEnv: ["MEMORY_AZURE_DEVOPS_ORG", "MEMORY_AZURE_DEVOPS_PROJECT", "MEMORY_AZURE_DEVOPS_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "organization", label: "Azure DevOps org", env: "MEMORY_AZURE_DEVOPS_ORG", default: "organization" },
@@ -117,7 +117,7 @@ export function connectorDefinitions() {
       connectorId: "official-microsoft-teams",
       requiredEnv: ["MEMORY_TEAMS_TEAM_ID", "MEMORY_TEAMS_CHANNEL_ID", "MEMORY_TEAMS_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "teamId", label: "Microsoft Teams team id", env: "MEMORY_TEAMS_TEAM_ID", default: "team_id" },
@@ -130,7 +130,7 @@ export function connectorDefinitions() {
       connectorId: "official-gmail",
       requiredEnv: ["MEMORY_GMAIL_ACCOUNT", "MEMORY_GOOGLE_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "account", label: "Gmail account", env: "MEMORY_GMAIL_ACCOUNT", default: "engineering@example.com" },
@@ -142,7 +142,7 @@ export function connectorDefinitions() {
       connectorId: "official-google-drive",
       requiredEnv: ["MEMORY_GOOGLE_DRIVE_ROOT", "MEMORY_GOOGLE_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "root", label: "Drive folder/root id", env: "MEMORY_GOOGLE_DRIVE_ROOT", default: "drive_root_id" },
@@ -154,7 +154,7 @@ export function connectorDefinitions() {
       connectorId: "official-google-calendar",
       requiredEnv: ["MEMORY_GOOGLE_CALENDAR_ID", "MEMORY_GOOGLE_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "calendarId", label: "Calendar id", env: "MEMORY_GOOGLE_CALENDAR_ID", default: "primary" },
@@ -166,7 +166,7 @@ export function connectorDefinitions() {
       connectorId: "official-asana",
       requiredEnv: ["MEMORY_ASANA_WORKSPACE", "MEMORY_ASANA_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "workspace", label: "Asana workspace", env: "MEMORY_ASANA_WORKSPACE", default: "workspace_gid" },
@@ -179,7 +179,7 @@ export function connectorDefinitions() {
       connectorId: "official-clickup",
       requiredEnv: ["MEMORY_CLICKUP_LIST_ID", "MEMORY_CLICKUP_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "listId", label: "ClickUp list id", env: "MEMORY_CLICKUP_LIST_ID", default: "list_id" },
@@ -191,7 +191,7 @@ export function connectorDefinitions() {
       connectorId: "official-sentry",
       requiredEnv: ["MEMORY_SENTRY_ORG", "MEMORY_SENTRY_PROJECT", "MEMORY_SENTRY_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "organization", label: "Sentry organization", env: "MEMORY_SENTRY_ORG", default: "organization" },
@@ -204,7 +204,7 @@ export function connectorDefinitions() {
       connectorId: "official-datadog",
       requiredEnv: ["MEMORY_DATADOG_SITE", "MEMORY_DATADOG_API_KEY", "MEMORY_DATADOG_APP_KEY"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "site", label: "Datadog site", env: "MEMORY_DATADOG_SITE", default: "datadoghq.com" },
@@ -217,7 +217,7 @@ export function connectorDefinitions() {
       connectorId: "official-pagerduty",
       requiredEnv: ["MEMORY_PAGERDUTY_ACCOUNT", "MEMORY_PAGERDUTY_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "account", label: "PagerDuty account/subdomain", env: "MEMORY_PAGERDUTY_ACCOUNT", default: "team" },
@@ -230,7 +230,7 @@ export function connectorDefinitions() {
       connectorId: "official-posthog",
       requiredEnv: ["MEMORY_POSTHOG_PROJECT", "MEMORY_POSTHOG_TOKEN"],
       verification: "npm run verify:vendor-connectors",
-      docs: "docs/integrations.md#native-connectors",
+      docs: "docs/guides/connectors.md#first-party-connectors",
       status: "vendor-driver",
       fields: [
         { name: "project", label: "PostHog project id", env: "MEMORY_POSTHOG_PROJECT", default: "project_id" },

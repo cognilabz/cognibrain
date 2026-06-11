@@ -207,7 +207,8 @@ export function generateConnectorMaturity(options: ConnectorMaturityOptions = {}
       row.maturity.liveSmokeSupport &&
       (row.maturity.webhook || !webhookSupportedProviders.has(row.provider)) &&
       publicConnectorSdkReady() &&
-      row.gaps.includes("production-certified proof not claimed")
+      row.gaps.includes("production-certified proof not claimed") &&
+      row.gaps.every(isBoundedConnectorGap)
     )
   };
   if (options.out) {
@@ -242,7 +243,7 @@ function maturityRow(
   const hasWrite = calls.some((call) => ["POST", "PATCH", "PUT"].includes(String(call.method ?? "").toUpperCase()));
   const hasRead = calls.some((call) => ["GET", "POST"].includes(String(call.method ?? "").toUpperCase()));
   const endpointPurpose = (purpose: string) => Boolean(apiSpec?.endpoints?.some((endpoint) => endpoint.purpose === purpose && endpoint.matched));
-  const docsPath = item.docs.split("#")[0];
+  const docsPath = item.docs.split("#")[0].replace(/^\/+/, "");
   const maturity = {
     listed: true,
     manifest: Boolean(item.connectorId),
@@ -296,6 +297,11 @@ function maturityRow(
     },
     gaps
   };
+}
+
+function isBoundedConnectorGap(gap: string): boolean {
+  return gap === "tenant live-smoke not run in checked artifact" ||
+    gap === "production-certified proof not claimed";
 }
 
 function connectorProofLevel(maturity: MaturityRow["maturity"]): ConnectorProofLevel {

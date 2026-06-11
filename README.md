@@ -58,7 +58,7 @@ npx cognibrain status
 | `templates/` | Generated agent and harness configuration templates |
 | `docker/` | Optional container packaging |
 | `deploy/` | Optional deployment manifests |
-| `data/benchmarks/` | Benchmark source data and frozen inputs |
+| `data/benchmarks/` | Local benchmark source data; large/licensed JSON inputs are ignored and supplied explicitly |
 
 ## Contributing
 

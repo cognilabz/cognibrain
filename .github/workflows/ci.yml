@@ -1,5 +1,8 @@
 name: CI
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches: [main]
@@ -19,8 +22,8 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -28,7 +31,7 @@ jobs:
       - run: npm ci
       - run: npm run verify:ci
       - run: npm run internal -- leaderboard:publish
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
           node-version: 24
@@ -91,7 +94,7 @@ jobs:
           git commit -m "chore: sync npm package version to ${{ steps.sync-version.outputs.publish_version }} [skip ci]"
           git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push origin "HEAD:$GITHUB_REF_NAME"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: synthetic-evaluation-report
@@ -115,14 +118,14 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
       - run: npm ci
       - run: npm run internal -- benchmark:certified
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: certified-benchmark-artifacts

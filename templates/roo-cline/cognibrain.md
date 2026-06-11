@@ -9,3 +9,4 @@ Use the cognibrain CLI lifecycle before non-trivial tool use and after tool resu
 - Capture user corrections, review comments, and failing test outcomes with `cognibrain correction` and `cognibrain outcome`.
 - Keep `cognibrain patch-evidence --task "<task>" --json` trails for changes that touch source files, tests, connectors, or benchmark artifacts.
 - Use MCP tools only as optional adapters for the same lifecycle.
+- For code or agent-behavior changes intended to land, verify locally, commit, push to `main`, ask the live ChatGPT/code-review coworker to review the pushed commit or diff, implement actionable feedback, re-verify, re-push, and repeat. Do not stop on the first `NO_CHANGES`/approval; ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases, and stop only when that recheck also finds no actionable improvements.

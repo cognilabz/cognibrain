@@ -19,6 +19,14 @@ Before non-trivial work:
 - Call `./bin/cognibrain.mjs guard --action "<command>" --json` before shell commands, dependency changes, migrations, or file edits with durable side effects.
 - Use `memory_context_pack`, `memory_coding_context_pack`, and `memory_action_guard` only as optional MCP adapters when available.
 
+Post-push live review loop:
+
+- For code or agent-behavior changes that are intended to land, complete the normal local verification, commit, and push to `main` unless the user explicitly asks for another branch or no publish.
+- After each push, ask the live ChatGPT/code-review coworker to review the pushed commit or diff. Treat that review as an external reviewer, not as proof by itself.
+- Implement actionable review feedback, verify locally, commit, push again, and repeat the live review cycle.
+- Do not stop on the first `NO_CHANGES`/approval. Ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases.
+- Stop only after the recheck also returns no actionable improvements. Record the review result and recheck result in the final report or patch evidence.
+
 After durable discoveries:
 
 - Call `./bin/cognibrain.mjs memory add "<fact>"` for user corrections, validated benchmark results, connector decisions, setup commands, and project conventions.

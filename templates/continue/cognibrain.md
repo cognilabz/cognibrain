@@ -9,3 +9,4 @@ Use cognibrain as the project memory source when Continue asks for repo context,
 - Record accepted and rejected suggestions as feedback so repeated mistakes do not come back.
 - Finish non-trivial patches with `cognibrain patch-evidence --task "<task>" --json`.
 - Cite connector-backed decisions from GitHub, Jira, Confluence, Notion, Slack, or Linear when they affect code.
+- For code or agent-behavior changes intended to land, verify locally, commit, push to `main`, ask the live ChatGPT/code-review coworker to review the pushed commit or diff, implement actionable feedback, re-verify, re-push, and repeat. Do not stop on the first `NO_CHANGES`/approval; ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases, and stop only when that recheck also finds no actionable improvements.

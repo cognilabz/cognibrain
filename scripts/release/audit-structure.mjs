@@ -74,6 +74,31 @@ checks.push(check("tracked source files stay reviewable", () => {
   return large.length === 0;
 }, { legacyLargeFiles: ["bin/cognibrain.mjs", "src/api/service.ts", "tests/core.test.ts"] }));
 
+checks.push(check("agent instruction templates require live review recheck before stopping", () => {
+  const required = [
+    "templates/codex/AGENTS.md",
+    "templates/codex/cognibrain-skill/SKILL.md",
+    "templates/copilot/copilot-instructions.md",
+    "templates/cursor/open-memory.mdc",
+    "templates/vscode/cognibrain.instructions.md",
+    "templates/opencode/cognibrain.md",
+    "templates/openclaw/cognibrain.md",
+    "templates/windsurf/cognibrain.md",
+    "templates/continue/cognibrain.md",
+    "templates/aider/cognibrain.md",
+    "templates/roo-cline/cognibrain.md",
+    "templates/goose/cognibrain.md",
+    "templates/hermes/HERMES.md",
+    "templates/sourcegraph-amp/cognibrain.md",
+    "templates/devin-style/cognibrain.md",
+    "bin/lib/harnessRuntime.mjs"
+  ];
+  return required.every((path) => {
+    const content = read(path);
+    return content.includes("NO_CHANGES") && content.includes("recheck") && content.includes("code-review coworker");
+  });
+}, { stopCondition: "NO_CHANGES recheck", generatedSource: "bin/lib/harnessRuntime.mjs generatedCopilotScopedInstructions" }));
+
 for (const item of checks) console.log(`${item.passed ? "ok" : "FAIL"} ${item.name}`);
 writeReport(checks);
 if (checks.some((item) => !item.passed)) process.exit(1);

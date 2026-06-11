@@ -19,3 +19,5 @@ MEMORY_HARNESS_ID=openclaw ./bin/cognibrain.mjs memory connector-telemetry offic
 
 Keep private memories private unless an explicit shared-memory review approves promotion.
 Finish non-trivial patches with `./bin/cognibrain.mjs patch-evidence --task "<task>" --json`.
+
+For code or agent-behavior changes intended to land, verify locally, commit, push to `main`, ask the live ChatGPT/code-review coworker to review the pushed commit or diff, implement actionable feedback, re-verify, re-push, and repeat. Do not stop on the first `NO_CHANGES`/approval; ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases, and stop only when that recheck also finds no actionable improvements.

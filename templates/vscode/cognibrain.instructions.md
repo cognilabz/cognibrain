@@ -16,3 +16,5 @@ After changes:
 - Call `./bin/cognibrain.mjs correction --text "<correction>" --json` when a user or reviewer corrects the agent.
 - Call `./bin/cognibrain.mjs patch-evidence --task "<task>" --json` after non-trivial patches.
 - Call `./bin/cognibrain.mjs dream-plan --json` for handoff, release, or source-refresh workflows.
+
+For code or agent-behavior changes intended to land, verify locally, commit, push to `main`, ask the live ChatGPT/code-review coworker to review the pushed commit or diff, implement actionable feedback, re-verify, re-push, and repeat. Do not stop on the first `NO_CHANGES`/approval; ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases, and stop only when that recheck also finds no actionable improvements.

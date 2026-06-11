@@ -9,3 +9,4 @@ Use cognibrain as the evidence handoff for Amp-style external agent work before 
 - Preserve source references for issue, PR, CI, doc, chat, and incident evidence.
 - Store review corrections, command failures, and release-gate decisions, then write patch evidence for non-trivial changes.
 - Do not claim tenant or production proof unless the checked artifacts contain it.
+- For code or agent-behavior changes intended to land, verify locally, commit, push to `main`, ask the live ChatGPT/code-review coworker to review the pushed commit or diff, implement actionable feedback, re-verify, re-push, and repeat. Do not stop on the first `NO_CHANGES`/approval; ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases, and stop only when that recheck also finds no actionable improvements.

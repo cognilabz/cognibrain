@@ -11,13 +11,13 @@ export function realityClaimGate(input: {
 }): RealityClaimGate {
   const eligibleOriginalSystems = input.systems.filter((system) => originalKinds.includes(system.adapterKind) && system.rawOutputsPath && system.scorerTracePath);
   const majorCompetitors = eligibleOriginalSystems.filter((system) => system.system !== "cognibrain");
-  const commandProofCompetitors = majorCompetitors.filter(hasOriginalCommandProof);
+  const commandProofCompetitors = majorCompetitors.filter((system) => isRealityClaimPublishableSystem(system, input.lock.sha256));
   const cognibrainEligibleSystems = eligibleOriginalSystems.filter((system) => system.system === "cognibrain" && isRealityClaimPublishableSystem(system, input.lock.sha256));
   const gates = {
     manifestFrozenBeforeRun: Boolean(input.lock.frozenAt && input.lock.sha256),
     allSystemsUseOriginalImplementation: input.systems.length > 0 && input.systems.every((system) => system.adapterKind === "local-baseline" || originalKinds.includes(system.adapterKind) || system.adapterKind === "credential-blocked"),
     noProfileAdapters: input.systems.every((system) => system.adapterKind !== "profile-model-forbidden"),
-    sameInputStream: true,
+    sameInputStream: eligibleOriginalSystems.length > 0 && eligibleOriginalSystems.every((system) => hasSameInputStreamProof(system, input.lock.sha256)),
     sameBudgets: input.sameBudgets ?? true,
     sameJudge: input.sameJudge ?? false,
     originalCompetitorCommandProofRecorded: commandProofCompetitors.length >= 2,
@@ -79,6 +79,10 @@ function hasSharedJudgeTraceProof(system: RealitySystemResult) {
 
 function hasOriginalCommandRawOutputProof(system: RealitySystemResult) {
   return Boolean(system.rawOutputsPath) && system.provenance?.rawOutputsFromOriginalCommand === true;
+}
+
+function hasSameInputStreamProof(system: RealitySystemResult, expectedManifestSha256: string) {
+  return system.provenance?.inputStreamSha256 === expectedManifestSha256;
 }
 
 function hasDeterministicScaffoldBlocker(system: RealitySystemResult) {

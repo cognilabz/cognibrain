@@ -18,7 +18,7 @@ export function realityClaimGate(input: {
     allSystemsUseOriginalImplementation: input.systems.length > 0 && input.systems.every((system) => system.adapterKind === "local-baseline" || originalKinds.includes(system.adapterKind) || system.adapterKind === "credential-blocked"),
     noProfileAdapters: input.systems.every((system) => system.adapterKind !== "profile-model-forbidden"),
     sameInputStream: eligibleOriginalSystems.length > 0 && eligibleOriginalSystems.every((system) => hasSameInputStreamProof(system, input.lock.sha256)),
-    sameBudgets: input.sameBudgets ?? true,
+    sameBudgets: input.sameBudgets === true,
     sameJudge: input.sameJudge ?? false,
     originalCompetitorCommandProofRecorded: commandProofCompetitors.length >= 2,
     rawOutputsFromOriginalCommands: commandProofCompetitors.length >= 2 && commandProofCompetitors.every(hasOriginalCommandRawOutputProof),
@@ -107,6 +107,8 @@ export function isRealityClaimPublishableSystem(system: RealitySystemResult, exp
     && hasOriginalCommandRawOutputProof(system)
     && hasSharedJudgeTraceProof(system)
     && !hasDeterministicScaffoldBlocker(system)
+    && system.blockingReasons.length === 0
+    && system.errors.length === 0
     && system.metrics.estimatedCostUsd !== null
     && system.metrics.p95LatencyMs !== null;
 }

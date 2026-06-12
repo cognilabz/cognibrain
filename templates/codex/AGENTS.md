@@ -2,6 +2,13 @@
 
 Use the `cognibrain` CLI lifecycle before non-trivial repository work, debugging, CI repair, benchmark changes, connector setup, user-preference-sensitive edits, or work that may depend on prior project decisions. MCP is an optional adapter when the host exposes native cognibrain tools.
 
+Always-on memory rule:
+
+- This rule is required even when the Codex skill was not selected. Treat Cognibrain context as the first operational step for non-trivial repo work, not as optional skill advice.
+- If you have not run `./bin/cognibrain.mjs context --task "<task>" --app codex --agent codex --json` in this turn, run it before deeper file exploration, implementation, review, or durable side effects.
+- Do not wait for the user to mention memory, Cognibrain, or a skill. Missing the context pull is a process failure that should be corrected immediately and called out.
+- Do not claim memory was used unless a context id, evidence pack, readback, or patch-evidence id was actually observed.
+
 Runtime:
 
 - Start the local API with `./bin/cognibrain.mjs start`; add `--dashboard` only when a browser dashboard is needed.

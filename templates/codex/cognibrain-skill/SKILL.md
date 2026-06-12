@@ -1,6 +1,6 @@
 ---
 name: cognibrain
-description: Actively query Cognibrain at the start of non-trivial Codex repository work, debugging, CI repair, benchmark changes, connector setup, or user-preference-sensitive tasks; read delivered memories from context packs, verify them against code/tests, run action guards, record patch evidence, and manage the local memory runtime.
+description: Mandatory for non-trivial Codex repository work before reading or editing code: actively query Cognibrain context, parse delivered memories and evidence packs, verify them against code/tests, run action guards before durable side effects, record patch evidence, and manage the local memory runtime. Use without waiting for the user to mention memory or this skill.
 ---
 
 # cognibrain
@@ -8,6 +8,12 @@ description: Actively query Cognibrain at the start of non-trivial Codex reposit
 Use this skill before non-trivial Codex repository work, debugging, CI repair, benchmark changes, connector setup, or user-preference-sensitive tasks, especially when prior project decisions, repo conventions, or durable debugging discoveries may matter.
 
 This skill is an active memory pull, not a passive reminder. Codex must ask Cognibrain for context; do not wait for memories to appear in the prompt.
+
+## Mandatory Trigger
+
+For Codex, selecting this skill is mandatory for non-trivial repository work. If the task involves code changes, debugging, CI, benchmarks, connectors, repo review, commits, user preferences, or prior project decisions, stop before deeper exploration and run the retrieval policy below.
+
+Do not wait for the user to say "memory", "Cognibrain", or "use the skill". If the first context call was missed, run it as soon as the miss is noticed and state that the process was corrected.
 
 ## Start Runtime
 

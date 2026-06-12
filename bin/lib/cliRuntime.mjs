@@ -178,7 +178,7 @@ async function setup(setupArgs) {
   }
   const flags = new Set(setupArgs);
   const selfHosted = flags.has("--self-hosted");
-  if (!flags.has("--no-skill")) runNodeChecked("scripts/runtime/install-codex-skill.mjs", []);
+  if (!flags.has("--no-skill") && !flags.has("--no-global-skill")) runNodeChecked("scripts/runtime/install-codex-skill.mjs", []);
 
   if (flags.has("--all-harnesses") || selfHosted) {
     writeHarnessConfig("all");
@@ -549,6 +549,7 @@ async function init(initArgs) {
   const setupArgs = new Set(profile.setupFlags);
   if (initArgs.includes("--no-start")) setupArgs.add("--no-start");
   if (initArgs.includes("--no-skill")) setupArgs.add("--no-skill");
+  if (initArgs.includes("--no-global-skill")) setupArgs.add("--no-global-skill");
   if (initArgs.includes("--no-doctor")) setupArgs.add("--no-doctor");
   if (initArgs.includes("--all-harnesses")) setupArgs.add("--all-harnesses");
   if (initArgs.includes("--dashboard")) setupArgs.add("--dashboard");

@@ -361,11 +361,16 @@ cognibrain connections doctor
 
 ### `cognibrain config codex`
 
-Generate/refresh Codex harness files.
+Generate/refresh Codex harness files. By default this writes both the user-level
+Codex skill and the repo-owned Codex contract: `AGENTS.md` plus
+`.agents/skills/cognibrain/SKILL.md`.
 
 ```bash
 cognibrain config codex
 ```
+
+Use `--no-global-skill` to skip writing under `~/.codex`, or `--no-skill` to
+skip both global and repo-local Codex skills.
 
 ### `cognibrain config cursor`
 
@@ -377,11 +382,20 @@ cognibrain config cursor
 
 ### `cognibrain config all`
 
-Generate/refresh all harness files.
+Generate/refresh all harness files and update the repo-owned harness manifest.
 
 ```bash
 cognibrain config all
 ```
+
+Audit the repo-owned contract without writing files:
+
+```bash
+cognibrain config all --check
+```
+
+`--check` reports drift and warnings without failing by default. Add `--strict`
+when a CI job should fail on drift.
 
 ### `cognibrain config doctor`
 

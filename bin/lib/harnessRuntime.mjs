@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 export const HEAVY_GENERATED_EXCLUDE_PATTERNS = Object.freeze([
   "**/.cognibrain/**",
@@ -58,7 +60,15 @@ export const VS_CODE_LOW_RESOURCE_SETTINGS = Object.freeze({
 });
 
 export function createHarnessRuntime({ root, launchCwd, rawArgs, readJson, writeJson }) {
+const COGNIBRAIN_BLOCK_START = "<!-- cognibrain:start -->";
+const COGNIBRAIN_BLOCK_END = "<!-- cognibrain:end -->";
+const CODEX_REPO_SKILL_RELATIVE_PATH = ".agents/skills/cognibrain/SKILL.md";
+
 function writeHarnessConfig(target) {
+  if (rawArgs.includes("--check")) {
+    checkHarnessConfig(target);
+    return;
+  }
   switch (target) {
     case "all":
       writeCodexConfig();
@@ -156,14 +166,21 @@ function writeCodexConfig() {
     writeFileSync(configPath, `${current.trimEnd()}${block}`);
     console.log(`Wrote Codex MCP config: ${configPath}`);
   }
-  if (!rawArgs.includes("--no-skill")) writeCodexSkill();
-  writeTemplateFile(join(launchCwd, "AGENTS.md"), "templates/codex/AGENTS.md");
+  if (!rawArgs.includes("--no-skill")) {
+    if (!rawArgs.includes("--no-global-skill")) writeCodexSkill();
+    writeCodexRepoSkill();
+  }
+  writeCodexPolicyFile();
   writeHarnessPackageManifest();
+  printRepoOwnedHarnessSummary();
 }
 
 function writeCodexSkill() {
   const targetPath = join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills", "cognibrain", "SKILL.md");
-  const content = renderTemplate("templates/codex/cognibrain-skill/SKILL.md");
+  const content = renderTemplate("templates/codex/cognibrain-skill/SKILL.md", {
+    command: localCognibrainCommand(),
+    installScope: "user-level fallback"
+  });
   const normalized = content.endsWith("\n") ? content : `${content}\n`;
   mkdirSync(dirname(targetPath), { recursive: true });
   if (existsSync(targetPath) && readFileSync(targetPath, "utf8") === normalized) {
@@ -172,6 +189,23 @@ function writeCodexSkill() {
   }
   writeFileSync(targetPath, normalized);
   console.log(`Installed Codex skill: ${targetPath}`);
+}
+
+function writeCodexRepoSkill() {
+  const targetPath = join(launchCwd, CODEX_REPO_SKILL_RELATIVE_PATH);
+  const content = renderTemplate("templates/codex/cognibrain-skill/SKILL.md", {
+    command: portableCognibrainCommand(),
+    installScope: "repository contract"
+  });
+  writeManagedTextFile(targetPath, content, "Codex repo skill");
+}
+
+function writeCodexPolicyFile() {
+  const content = renderTemplate("templates/codex/AGENTS.md", {
+    command: portableCognibrainCommand(),
+    installScope: "repository contract"
+  });
+  writeAdvisoryTextBlock(join(launchCwd, "AGENTS.md"), content, "Codex AGENTS policy");
 }
 
 function writeClaudeConfig() {
@@ -315,15 +349,74 @@ function writeTemplateFile(targetPath, templatePath) {
   writeTextFile(targetPath, renderTemplate(templatePath));
 }
 
-function renderTemplate(templatePath) {
+function renderTemplate(templatePath, options = {}) {
+  const command = options.command ?? localCognibrainCommand();
+  const installScope = options.installScope ?? "local installation";
   return readFileSync(join(root, templatePath), "utf8")
     .replaceAll("/ABSOLUTE/PATH/TO/cognibrain", root)
     .replaceAll("__COGNIBRAIN_ROOT__", root)
-    .replaceAll("__COGNIBRAIN_RUNTIME_ROOT__", launchCwd);
+    .replaceAll("__COGNIBRAIN_RUNTIME_ROOT__", launchCwd)
+    .replaceAll("__COGNIBRAIN_COMMAND__", command)
+    .replaceAll("__COGNIBRAIN_INSTALL_SCOPE__", installScope);
+}
+
+function localCognibrainCommand() {
+  return `${process.execPath} ${join(root, "bin", "cognibrain.mjs")}`;
+}
+
+function portableCognibrainCommand() {
+  return "npx @cognilabz/cognibrain";
+}
+
+function writeManagedTextFile(targetPath, content, label) {
+  const normalized = normalizeText(content);
+  mkdirSync(dirname(targetPath), { recursive: true });
+  if (existsSync(targetPath) && readFileSync(targetPath, "utf8") === normalized) {
+    console.log(`${label} already current: ${targetPath}`);
+    return;
+  }
+  writeFileSync(targetPath, normalized);
+  console.log(`Wrote ${label}: ${targetPath}`);
+}
+
+function writeAdvisoryTextBlock(targetPath, content, label) {
+  const normalized = normalizeText(content);
+  if (!normalized.includes(COGNIBRAIN_BLOCK_START) || !normalized.includes(COGNIBRAIN_BLOCK_END)) {
+    throw new Error(`${label} template is missing Cognibrain block markers`);
+  }
+  if (!existsSync(targetPath)) {
+    mkdirSync(dirname(targetPath), { recursive: true });
+    writeFileSync(targetPath, normalized);
+    console.log(`Wrote ${label}: ${targetPath}`);
+    return;
+  }
+
+  const current = readFileSync(targetPath, "utf8");
+  if (current === normalized) {
+    console.log(`${label} already current: ${targetPath}`);
+    return;
+  }
+  const updated = current.includes(COGNIBRAIN_BLOCK_START) && current.includes(COGNIBRAIN_BLOCK_END)
+    ? replaceCognibrainBlock(current, normalized)
+    : `${current.trimEnd()}\n\n${normalized}`;
+  writeFileSync(targetPath, normalizeText(updated));
+  console.log(`${current.includes(COGNIBRAIN_BLOCK_START) ? "Refreshed" : "Appended"} ${label}: ${targetPath}`);
+}
+
+function replaceCognibrainBlock(current, replacement) {
+  const start = current.indexOf(COGNIBRAIN_BLOCK_START);
+  const end = current.indexOf(COGNIBRAIN_BLOCK_END, start);
+  if (start < 0 || end < 0) return `${current.trimEnd()}\n\n${replacement}`;
+  const afterEnd = end + COGNIBRAIN_BLOCK_END.length;
+  return `${current.slice(0, start).trimEnd()}\n\n${replacement.trimEnd()}\n\n${current.slice(afterEnd).trimStart()}`;
+}
+
+function normalizeText(content) {
+  return content.endsWith("\n") ? content : `${content}\n`;
 }
 
 function writeTextFile(targetPath, content) {
-  const normalized = content.endsWith("\n") ? content : `${content}\n`;
+  const normalized = normalizeText(content);
   if (existsSync(targetPath)) {
     const current = readFileSync(targetPath, "utf8");
     if (current === normalized) {
@@ -495,15 +588,18 @@ function generatedExternalAgentContract(target) {
 
 function writeHarnessPackageManifest() {
   const path = join(launchCwd, ".cognibrain-harness-package.json");
+  const repoOwned = repoOwnedHarnessReport();
   writeJson(path, {
     schemaVersion: "1.0",
     runtimeRoot: launchCwd,
     packageRoot: root,
+    repoOwned,
     harnesses: {
       codex: {
         mcpConfig: join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "config.toml"),
         policyFile: join(launchCwd, "AGENTS.md"),
         skill: join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills", "cognibrain", "SKILL.md"),
+        repoSkill: join(launchCwd, CODEX_REPO_SKILL_RELATIVE_PATH),
         feedback: ["cognibrain context", "cognibrain guard", "memory_add", "memory_maintenance_status", "memory_dream"]
       },
       claude: {
@@ -590,6 +686,166 @@ function writeHarnessPackageManifest() {
   console.log(`Wrote harness package manifest: ${path}`);
 }
 
+function checkHarnessConfig(target) {
+  if (!["all", "codex"].includes(target)) {
+    console.warn(`Repo-owned harness check is currently implemented for Codex; requested target: ${target}`);
+  }
+  const report = repoOwnedHarnessReport();
+  if (rawArgs.includes("--json")) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log("Repo-owned harness check:");
+    for (const file of report.files) {
+      const status = file.ok ? "ok" : "warn";
+      console.log(`- ${status}: ${file.path}${file.issues.length ? ` (${file.issues.join(", ")})` : ""}`);
+    }
+    if (report.warnings.length) {
+      console.log("Warnings:");
+      for (const warning of report.warnings) console.log(`- ${warning}`);
+    }
+  }
+  if (rawArgs.includes("--strict") && !report.ok) process.exit(1);
+}
+
+function printRepoOwnedHarnessSummary() {
+  const report = repoOwnedHarnessReport();
+  console.log("Repo-owned harness files:");
+  for (const file of report.files) console.log(`- ${file.path}`);
+  console.log("Commit these files to make Cognibrain discoverable without user reminders.");
+  for (const warning of report.warnings) console.warn(`Warning: ${warning}`);
+}
+
+function repoOwnedHarnessReport() {
+  const contracts = repoOwnedCodexContracts();
+  const git = gitState();
+  const files = contracts.map((contract) => contractStatus(contract, git));
+  const warnings = [];
+  if (!git.insideWorkTree) warnings.push("No Git repository was detected; repo-owned harness files cannot be committed yet.");
+  for (const file of files) {
+    if (file.ignoredAtCheck === true) warnings.push(`${file.path} is ignored by Git.`);
+    if (file.issues.includes("non-portable-command")) warnings.push(`${file.path} contains a local absolute Cognibrain command.`);
+  }
+  return {
+    schemaVersion: "1.0",
+    generatedByVersion: packageVersion(),
+    command: portableCognibrainCommand(),
+    git,
+    ok: files.every((file) => file.ok),
+    files,
+    warnings
+  };
+}
+
+function repoOwnedCodexContracts() {
+  const contracts = [
+    {
+      harness: "codex",
+      mode: "advisory",
+      path: join(launchCwd, "AGENTS.md"),
+      template: "templates/codex/AGENTS.md",
+      expected: normalizeText(renderTemplate("templates/codex/AGENTS.md", {
+        command: portableCognibrainCommand(),
+        installScope: "repository contract"
+      })),
+      hashScope: "managed-block"
+    }
+  ];
+  if (!rawArgs.includes("--no-skill")) {
+    contracts.push({
+      harness: "codex",
+      mode: "managed",
+      path: join(launchCwd, CODEX_REPO_SKILL_RELATIVE_PATH),
+      template: "templates/codex/cognibrain-skill/SKILL.md",
+      expected: normalizeText(renderTemplate("templates/codex/cognibrain-skill/SKILL.md", {
+        command: portableCognibrainCommand(),
+        installScope: "repository contract"
+      })),
+      hashScope: "whole-file"
+    });
+  }
+  return contracts;
+}
+
+function contractStatus(contract, git) {
+  const path = toRepoPath(contract.path);
+  const expectedHash = sha256(contract.hashScope === "managed-block" ? extractCognibrainBlock(contract.expected) ?? contract.expected : contract.expected);
+  const ignoredAtCheck = git.insideWorkTree ? isGitIgnored(path) : null;
+  if (!existsSync(contract.path)) {
+    return {
+      harness: contract.harness,
+      path,
+      mode: contract.mode,
+      template: contract.template,
+      hashScope: contract.hashScope,
+      exists: false,
+      ok: false,
+      expectedHash,
+      currentHash: null,
+      ignoredAtCheck,
+      issues: ["missing"]
+    };
+  }
+
+  const current = readFileSync(contract.path, "utf8");
+  const currentComparable = contract.hashScope === "managed-block" ? extractCognibrainBlock(current) : current;
+  const currentHash = currentComparable ? sha256(normalizeText(currentComparable)) : null;
+  const issues = [];
+  if (!currentComparable) issues.push("missing-managed-block");
+  if (currentHash !== expectedHash) issues.push("stale");
+  if (containsLocalCognibrainCommand(current)) issues.push("non-portable-command");
+  if (ignoredAtCheck === true) issues.push("git-ignored");
+  return {
+    harness: contract.harness,
+    path,
+    mode: contract.mode,
+    template: contract.template,
+    hashScope: contract.hashScope,
+    exists: true,
+    ok: issues.length === 0,
+    expectedHash,
+    currentHash,
+    ignoredAtCheck,
+    issues
+  };
+}
+
+function extractCognibrainBlock(content) {
+  const start = content.indexOf(COGNIBRAIN_BLOCK_START);
+  const end = content.indexOf(COGNIBRAIN_BLOCK_END, start);
+  if (start < 0 || end < 0) return null;
+  return content.slice(start, end + COGNIBRAIN_BLOCK_END.length);
+}
+
+function containsLocalCognibrainCommand(content) {
+  return content.includes(join(root, "bin", "cognibrain.mjs")) || content.includes("/ABSOLUTE/PATH/TO/cognibrain");
+}
+
+function sha256(content) {
+  return createHash("sha256").update(normalizeText(content)).digest("hex");
+}
+
+function packageVersion() {
+  return readJson(join(root, "package.json"), {})?.version ?? "unknown";
+}
+
+function gitState() {
+  const result = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: launchCwd, encoding: "utf8" });
+  return {
+    insideWorkTree: result.status === 0 && result.stdout.trim() === "true"
+  };
+}
+
+function isGitIgnored(repoPath) {
+  const result = spawnSync("git", ["check-ignore", "-q", "--", repoPath], { cwd: launchCwd, encoding: "utf8" });
+  if (result.status === 0) return true;
+  if (result.status === 1) return false;
+  return null;
+}
+
+function toRepoPath(path) {
+  return relative(launchCwd, path) || ".";
+}
+
 function harnessTemplateHealth() {
   const templates = [
     "templates/codex/AGENTS.md",
@@ -620,6 +876,7 @@ function harnessTemplateHealth() {
 function harnessGeneratedHealth() {
   const expected = [
     join(launchCwd, "AGENTS.md"),
+    join(launchCwd, CODEX_REPO_SKILL_RELATIVE_PATH),
     join(launchCwd, ".mcp.json"),
     join(launchCwd, ".claude", "settings.json"),
     join(launchCwd, ".github", "copilot-instructions.md"),

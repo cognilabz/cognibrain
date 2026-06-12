@@ -9,11 +9,11 @@ Usage:
   cognibrain tui|ui|home
       Alias for the same stable terminal surface; --json remains script-safe
   cognibrain [--runtime-root <path>] <command>
-  cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dashboard] [--no-start] [--no-doctor] [--no-skill]
+  cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dashboard] [--no-start] [--no-doctor] [--no-skill] [--no-global-skill]
       Guided self-hosted install that writes setup state, native connector configs, harness config, starts the API, and runs doctor
   cognibrain setup [--profile local|team|production|benchmark] [--yes]
       Starts the same guided wizard; legacy flags below still work for scripted installs
-  cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--windsurf] [--continue] [--aider] [--roo-cline] [--goose] [--hermes] [--sourcegraph-amp] [--devin-style] [--all-harnesses]
+  cognibrain setup [--self-hosted] [--codex] [--claude] [--copilot] [--cursor] [--vscode] [--opencode] [--openclaw] [--langgraph] [--crewai] [--windsurf] [--continue] [--aider] [--roo-cline] [--goose] [--hermes] [--sourcegraph-amp] [--devin-style] [--all-harnesses] [--no-skill] [--no-global-skill]
       Scripted install path for CI and package smoke tests
   cognibrain doctor [--publish] [--fix] [--no-start]
       Check and optionally fix local runtime, skill install, guided setup state, package readiness, and npm pack hygiene
@@ -47,8 +47,8 @@ Usage:
       Configure native vendor drivers, adapters, or SDK-backed sources from one connection surface
   cognibrain config list|show|paths|doctor
       Inspect setup state, harness packages, connector configs, adapter configs, and skill paths
-  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style> [--refresh]
-      Write MCP config for supported harnesses; use --refresh to replace existing cognibrain-owned instruction files
+  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style> [--refresh] [--check] [--strict] [--no-skill] [--no-global-skill]
+      Write MCP config for supported harnesses; use --check to audit repo-owned harness files without writing
   cognibrain connector list|show <provider>|doctor [provider]|remove <provider>
       Inspect and maintain source-system connector configs
   cognibrain connector add <provider> [--dry-run] [--set key=value]
@@ -90,7 +90,7 @@ Usage:
 }
 
 export function initUsage(exitCode) {
-  console.log(`Usage: cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dry-run] [--dashboard] [--no-start] [--no-doctor] [--no-skill] [--no-demo]`);
+  console.log(`Usage: cognibrain init [--profile solo-dev|team|enterprise|benchmark] [--yes] [--dry-run] [--dashboard] [--no-start] [--no-doctor] [--no-skill] [--no-global-skill] [--no-demo]`);
   process.exit(exitCode);
 }
 
@@ -160,8 +160,8 @@ export function configUsage(exitCode) {
   cognibrain config show [--json]
   cognibrain config paths [--json]
   cognibrain config doctor [--json]
-  cognibrain config write <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style> [--refresh]
-  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style> [--refresh]`);
+  cognibrain config write <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style> [--refresh] [--no-skill] [--no-global-skill]
+  cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style> [--refresh] [--check] [--strict] [--no-skill] [--no-global-skill]`);
   process.exit(exitCode);
 }
 

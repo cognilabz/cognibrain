@@ -5,7 +5,7 @@ description: Mandatory for non-trivial Codex repository work before reading or e
 
 # cognibrain
 
-Install scope: __COGNIBRAIN_INSTALL_SCOPE__.
+Install scope: repository contract.
 
 Use this skill before non-trivial Codex repository work, debugging, CI repair, benchmark changes, connector setup, or user-preference-sensitive tasks, especially when prior project decisions, repo conventions, or durable debugging discoveries may matter.
 
@@ -22,30 +22,30 @@ Do not wait for the user to say "memory", "Cognibrain", or "use the skill". If t
 Before long tasks, make sure the local memory runtime is available:
 
 ```bash
-__COGNIBRAIN_COMMAND__ start
+npx @cognilabz/cognibrain start
 ```
 
 Check or stop it with:
 
 ```bash
-__COGNIBRAIN_COMMAND__ status
-__COGNIBRAIN_COMMAND__ stop
+npx @cognilabz/cognibrain status
+npx @cognilabz/cognibrain stop
 ```
 
 The daemon starts the local HTTP API. Add `--dashboard` only when a browser dashboard is needed. It writes state and logs under the current project at `.cognibrain/`, or under `COGNIBRAIN_RUNTIME_ROOT` when that variable is set.
 
-Run `__COGNIBRAIN_COMMAND__ doctor` when setup or runtime behavior looks stale.
+Run `npx @cognilabz/cognibrain doctor` when setup or runtime behavior looks stale.
 
 ## Retrieval Policy
 
 1. Use the daemon-backed CLI lifecycle as the default integration path.
-2. At the start of every non-trivial task, call `__COGNIBRAIN_COMMAND__ context --task "<task>" --app codex --agent codex --json` before broad repo exploration or edits.
+2. At the start of every non-trivial task, call `npx @cognilabz/cognibrain context --task "<task>" --app codex --agent codex --json` before broad repo exploration or edits.
 3. Parse the returned JSON, not only the top-level `context` string. Read `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`.
 4. If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories. Do not treat this as "no memory"; use the evidence list as an automated review queue for what to verify in code/tests.
 5. Use delivered context first: if the context or evidence pack already answers where to inspect, what command to avoid, or which prior decision matters, start from that evidence and avoid rediscovering the same fact with another search.
 6. Treat returned memories as evidence, not authority. Verify drift-prone or high-impact facts against current files, benchmark artifacts, source systems, tests, or generated artifacts before acting on them.
 7. When the task scope changes, an initial query returns no relevant memories, or a failure repeats, call `context` again with the sharper task wording.
-8. Call `__COGNIBRAIN_COMMAND__ guard --action "<command>" --json` before shell commands, dependency changes, migrations, or file edits with durable side effects.
+8. Call `npx @cognilabz/cognibrain guard --action "<command>" --json` before shell commands, dependency changes, migrations, or file edits with durable side effects.
 9. Use MCP tools such as `memory_coding_context_pack` and `memory_action_guard` only as optional native adapters when this host exposes them.
 
 ## Automated Review Policy
@@ -63,7 +63,7 @@ When reporting work, mention the Cognibrain context pack id when it materially i
 Additional memory search:
 
 ```bash
-__COGNIBRAIN_COMMAND__ memory search "<task or question>"
+npx @cognilabz/cognibrain memory search "<task or question>"
 ```
 
 ## Post-Push Live Review Policy
@@ -91,12 +91,12 @@ Store only durable, useful facts:
 
 Use `memory_add` with provenance, confidence, tags, and metadata when possible. Never store secrets, credentials, private keys, raw sensitive transcripts, or one-off scratch observations.
 
-For non-trivial patches, call `__COGNIBRAIN_COMMAND__ patch-evidence --task "<task>" --json` with files changed, commands run, and the memory ids used. Use `memory_patch_evidence` only as an optional MCP adapter when available.
+For non-trivial patches, call `npx @cognilabz/cognibrain patch-evidence --task "<task>" --json` with files changed, commands run, and the memory ids used. Use `memory_patch_evidence` only as an optional MCP adapter when available.
 
 CLI fallback:
 
 ```bash
-__COGNIBRAIN_COMMAND__ memory add "<durable memory>"
+npx @cognilabz/cognibrain memory add "<durable memory>"
 ```
 
 ## Dream Policy
@@ -108,6 +108,6 @@ Use `memory_maintenance_status` to inspect counters. Call `memory_dream` after m
 CLI fallback:
 
 ```bash
-__COGNIBRAIN_COMMAND__ memory maintenance
-__COGNIBRAIN_COMMAND__ memory dream
+npx @cognilabz/cognibrain memory maintenance
+npx @cognilabz/cognibrain memory dream
 ```

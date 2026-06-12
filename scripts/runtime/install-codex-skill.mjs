@@ -15,7 +15,11 @@ const skillDir = join(codexHome, "skills", "cognibrain");
 const sourcePath = join(root, "templates", "codex", "cognibrain-skill", "SKILL.md");
 const targetPath = join(skillDir, "SKILL.md");
 const template = readFileSync(sourcePath, "utf8");
-const content = template.replaceAll("__COGNIBRAIN_ROOT__", root);
+const command = `${process.execPath} ${join(root, "bin", "cognibrain.mjs")}`;
+const content = template
+  .replaceAll("__COGNIBRAIN_ROOT__", root)
+  .replaceAll("__COGNIBRAIN_COMMAND__", command)
+  .replaceAll("__COGNIBRAIN_INSTALL_SCOPE__", "user-level fallback");
 
 mkdirSync(skillDir, { recursive: true });
 writeFileSync(targetPath, content);

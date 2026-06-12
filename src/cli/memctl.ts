@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
-import { createPersistenceFromEnv } from "../api/persistence";
 import { MemoryService } from "../api/service";
 import { handleConnectorCommand } from "./memctl/connectorCommands";
 import { handleReflectionCommands } from "./memctl/reflectionCommands";
@@ -13,7 +12,7 @@ import { fail } from "./memctl/env";
 const userId = process.env.MEMORY_USER_ID ?? process.env.USER ?? "local";
 const dbPath = resolve(process.env.MEMORY_DB_PATH ?? ".memory-harness.json");
 const service = new MemoryService({
-  persistence: createPersistenceFromEnv(dbPath),
+  persistencePath: dbPath,
   autoDream: {
     enabled: process.env.MEMORY_AUTO_DREAM !== "false",
     intervalHours: Number(process.env.MEMORY_DREAM_INTERVAL_HOURS ?? 6),

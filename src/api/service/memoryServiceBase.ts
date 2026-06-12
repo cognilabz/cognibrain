@@ -75,7 +75,7 @@ export class MemoryServiceBase {
     this.repository = options.repository ?? repositoryFromStorage(options.storage) ?? createRepositoryFromEnv(options.persistencePath ?? ".memory-harness.json") ?? new InMemoryMemoryRepository();
     this.store = memoryStoreForRepository(this.repository);
     this.storage = options.storage ?? new RepositoryBackedStorageAdapter(this.repository);
-    this.persistence = options.persistence ?? (options.persistencePath ? new JsonFilePersistenceAdapter(options.persistencePath) : undefined);
+    this.persistence = options.persistence ?? (options.persistencePath && this.repository instanceof InMemoryMemoryRepository ? new JsonFilePersistenceAdapter(options.persistencePath) : undefined);
     this.autoDream = {
       enabled: options.autoDream?.enabled ?? false,
       intervalHours: options.autoDream?.intervalHours ?? 6,

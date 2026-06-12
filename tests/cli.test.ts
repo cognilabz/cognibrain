@@ -243,6 +243,51 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 
+  it("persists memory add through the selected repository so inspect can read it in a later process", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-memory-readback-"));
+    try {
+      const env = {
+        ...process.env,
+        MEMORY_AUTO_DREAM: "false",
+        MEMORY_STORAGE_BACKEND: "sqlite",
+        MEMORY_DB_PATH: join(dir, "memory.json"),
+        MEMORY_USER_ID: "readback-user"
+      };
+      const created = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "memory",
+        "add",
+        "Repository readback sentinel.",
+        "--source-kind",
+        "tool",
+        "--source-confidence",
+        "0.91",
+        "--metadata-json",
+        "{\"readback\":\"sqlite\"}"
+      ], { cwd: dir, env, encoding: "utf8" }));
+
+      const inspected = JSON.parse(execFileSync(process.execPath, [
+        cli,
+        "--runtime-root",
+        dir,
+        "memory",
+        "inspect",
+        created.id
+      ], { cwd: dir, env, encoding: "utf8" }));
+
+      expect(inspected).toMatchObject({
+        id: created.id,
+        userId: "readback-user",
+        content: "Repository readback sentinel.",
+        metadata: { readback: "sqlite" }
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
   it("does not treat operator subcommand help flags as durable write targets", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-cli-operator-help-"));
     const repoHelpScaffold = join(root, ".cognibrain", "integrations", "help");

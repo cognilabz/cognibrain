@@ -103,10 +103,11 @@ const checks = [
     has(files.memory, "memory")
   ]),
   check("proof boundaries are visible", [
-    has(files.benchmarks, "This page records the current checked benchmark artifacts"),
-    has(files.benchmarks, "claimAllowed=false"),
-    has(files.benchmarks, "No overall \"best memory solution on the market\" claim"),
-    has(files.benchmarks, "Generated outputs belong under `artifacts/`"),
+    has(files.benchmarks, "# Benchmark Evidence"),
+    has(files.benchmarks, "_Current claim level: Local diagnostic evidence_"),
+    has(files.benchmarks, "_Market leaderboard: Not open_"),
+    has(files.benchmarks, "Each visible number above is backed by a generated timestamp and artifact path."),
+    has(files.benchmarks, "They remain available in `artifacts/` and generated benchmark reports"),
     has(files.security, "Never run without auth in production"),
     has(files.security, "Connector tokens are stored as `env:` references")
   ]),

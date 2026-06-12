@@ -43,7 +43,8 @@ npm install
 
 ## Profiles
 
-`init` supports multiple profiles for different deployment shapes:
+`init` is scoped to single-developer setup by default. Benchmark mode is a
+separate proof lab:
 
 === "Solo Developer"
 
@@ -52,22 +53,6 @@ npm install
     ```
 
     Local coding-agent memory on one machine. Codex/Cursor harness, local storage, no auth.
-
-=== "Team"
-
-    ```bash
-    npx cognibrain init --profile team --yes
-    ```
-
-    Shared team setup with all harness files, more connector stubs, Postgres/intelligence adapter stubs.
-
-=== "Enterprise"
-
-    ```bash
-    npx cognibrain init --profile enterprise --yes --no-start
-    ```
-
-    Enterprise pilot with Postgres, OIDC/SSO intent, service-oriented setup.
 
 === "Benchmark"
 
@@ -90,7 +75,6 @@ These defaults come from the current CLI implementation:
 | Connector stub | `github` | Writes non-secret GitHub connector config |
 | Adapter stub | `storage-sqlite` | Prepares a local SQLite storage adapter config |
 | Runtime root | Current project | Override with `--runtime-root` or `COGNIBRAIN_RUNTIME_ROOT` |
-| Dashboard | Off | Start only with `--dashboard` or `cognibrain dashboard` |
 
 ## Start and Stop
 

@@ -69,6 +69,7 @@
     "benchmark:reality:publish": "npm run internal -- benchmark:reality:publish",
     "benchmark:reality:competitors": "npm run internal -- benchmark:reality:competitors",
     "benchmark:reality:verify": "npm run internal -- benchmark:reality:verify",
+    "benchmark:summary": "npm run internal -- benchmark:summary",
     "verify": "npm run test && npm run internal -- eval && npm run build",
     "verify:ci": "npm run internal -- verify:nextgen",
     "verify:selfhosted": "npm run internal -- verify:selfhosted",

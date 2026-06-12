@@ -160,7 +160,6 @@ sqlite3 .cognibrain/cognibrain.db "PRAGMA integrity_check;"
 
 | Deployment Size | Memories | Storage | RAM | CPU |
 |----------------|----------|---------|-----|-----|
-| Solo developer | < 1,000 | Local JSON | 128 MB | Minimal |
-| Small team | 1,000–10,000 | SQLite/Postgres | 256 MB | 0.5 core |
-| Large team | 10,000–100,000 | PostgreSQL | 512 MB | 1 core |
-| Enterprise | 100,000+ | PostgreSQL (replicated) | 1 GB+ | 2+ cores |
+| Solo developer local | < 1,000 | Local JSON | 128 MB | Minimal |
+| Solo developer durable | 1,000–10,000 | SQLite/Postgres | 256 MB | 0.5 core |
+| Benchmark/proof lab | 10,000+ | PostgreSQL | 512 MB+ | 1+ core |

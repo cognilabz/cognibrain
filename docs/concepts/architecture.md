@@ -1,6 +1,6 @@
 # Architecture
 
-Cognibrain is designed as a local-first, self-hosted system with clear boundaries between its open-source core and optional commercial surface.
+Cognibrain is designed as a local-first, self-hosted system whose primary product surface is harness-native agent workflow backed by a text-first CLI.
 
 ## System Overview
 
@@ -42,10 +42,6 @@ graph TB
         More[16+ others]
     end
 
-    subgraph "Optional Commercial"
-        OpUI[Operator UI<br/>Next.js Dashboard]
-    end
-
     Codex --> MCP
     Cursor --> MCP
     Custom --> HarnessCLI
@@ -69,8 +65,6 @@ graph TB
     API --> Jira
     API --> Slack
     API --> More
-
-    OpUI --> API
 ```
 
 ## Component Boundaries
@@ -83,7 +77,7 @@ The integration layer adapts different client protocols to the unified HTTP API:
 |-----------|----------|-----------|
 | MCP Server | stdio (Model Context Protocol) | Codex, Cursor, MCP-native agents |
 | Harness CLI | Shell process + JSON stdout | Any shell-capable agent, git hooks, CI |
-| SDK/HTTP | REST over HTTP | Product integrations, dashboards, custom runtimes |
+| SDK/HTTP | REST over HTTP | Product integrations and custom runtimes |
 
 All three surfaces are stateless proxies — they translate requests into API calls and format responses for their protocol.
 
@@ -114,7 +108,7 @@ Runs asynchronously to maintain memory health:
 - Staleness detection
 - Contradiction identification
 - Summary consolidation
-- Operator review queue management
+- Harness and CLI review queue management
 
 ### Connector System
 

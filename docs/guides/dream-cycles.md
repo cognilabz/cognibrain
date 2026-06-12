@@ -54,7 +54,7 @@ Dream cycles can be configured to run:
 
 - After every N sessions
 - On a time schedule (daily, weekly)
-- On-demand via the CLI or Operator UI
+- On-demand via the CLI
 
 ## Operator Review
 
@@ -66,7 +66,8 @@ npx cognibrain memories approve <id>
 npx cognibrain memories archive <id>
 ```
 
-The Operator UI (commercial add-on) provides a visual review queue for this workflow.
+Harnesses may surface urgent review context inline, while the CLI remains the
+V1 surface for explicit inspection and repair.
 
 ## Staleness Detection
 

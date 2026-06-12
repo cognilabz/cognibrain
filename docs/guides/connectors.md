@@ -61,8 +61,8 @@ Not all connectors are at the same maturity level:
 | Level | Meaning |
 |-------|---------|
 | **Implementation-ready** | Code complete, unit tested |
-| **Credential-blocked** | Needs tenant credentials for live verification |
-| **Tenant-verified** | Tested against a real instance with credentials |
+| **Credential-blocked** | Needs external account credentials for live verification |
+| **Live-verified** | Tested against a real external service with credentials |
 
 Check maturity:
 

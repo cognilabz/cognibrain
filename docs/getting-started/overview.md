@@ -39,7 +39,7 @@ Cognibrain exposes four surfaces, each optimized for a different consumer:
 | **CLI** | Operators, CI/CD, shell scripts | Text + JSON stdout |
 | **Harness CLI** | Any shell-capable agent or git hook | JSON stdin/stdout |
 | **MCP** | MCP-native agents (Codex, Cursor) | Model Context Protocol |
-| **SDK/HTTP** | Product integrations, dashboards, custom runtimes | REST API / TypeScript / Python |
+| **SDK/HTTP** | Product integrations and custom runtimes | REST API / TypeScript / Python |
 
 All surfaces share the same underlying memory engine and can run against the same local daemon.
 
@@ -95,11 +95,10 @@ graph TB
 | **Action Guard** | A pre-action check that warns or blocks known-bad operations |
 | **Patch Evidence** | A record of files changed, commands run, and memories used during a task |
 
-## Open Source + Commercial
+## V1 Product Shape
 
-Cognibrain follows an **open core** model:
+Cognibrain V1 is **harness-native and CLI-backed**:
 
-- :white_check_mark: **MIT (open source)** — CLI, API, SDK, connectors, harness templates, MCP server, all documentation
-- :lock: **Commercial add-on** — Operator UI (browser-based dashboard for visual memory management)
-
-The commercial Operator UI is never required. Every feature is accessible through the CLI and API.
+- Agent-facing moments happen through harness context, guards, warnings, outcomes, and patch evidence
+- Developer-facing inspection, repair, audit, export, and proof happen through the text-first CLI
+- There is no Operator UI or dashboard in V1 product scope

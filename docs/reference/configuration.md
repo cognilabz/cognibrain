@@ -60,7 +60,7 @@ Runtime data is stored under the runtime root (default: `.cognibrain/`):
 
 ## Profiles
 
-Profiles pre-configure a set of defaults for common deployment shapes:
+Profiles pre-configure defaults for the single-developer workflow and proof labs:
 
 ### `solo-dev` (default)
 
@@ -70,29 +70,6 @@ auth: local-only
 harnesses: [codex, cursor]
 connectors: [github]
 adapters: [storage-sqlite]
-dashboard: off
-```
-
-### `team`
-
-```yaml
-storage: sqlite
-auth: api-key
-harnesses: [codex, cursor, vscode, neovim]
-connectors: [github, slack, jira]
-adapters: [storage-postgres, intelligence]
-dashboard: off
-```
-
-### `enterprise`
-
-```yaml
-storage: postgres
-auth: oidc
-harnesses: all
-connectors: [github, slack, jira, confluence, pagerduty]
-adapters: [storage-postgres, intelligence, audit]
-dashboard: optional
 ```
 
 ### `benchmark`
@@ -103,7 +80,6 @@ auth: local-only
 harnesses: all
 connectors: [github]
 adapters: [benchmark]
-dashboard: off
 ```
 
 ## Harness Configuration Files
@@ -173,7 +149,7 @@ For production deployments:
 export MEMORY_API_KEY="your-secure-key"
 export MEMORY_POLICY_MODE="production"
 
-# Recommended for team/enterprise
+# Optional for network-exposed or database-backed single-developer deployments
 export MEMORY_OIDC_ISSUER="https://auth.example.com"
 export MEMORY_OIDC_AUDIENCE="cognibrain"
 export MEMORY_POSTGRES_URL="postgresql://user:pass@host:5432/cognibrain"

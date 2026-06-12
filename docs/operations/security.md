@@ -8,7 +8,7 @@ Cognibrain supports multiple authentication methods:
 
 ### API Key
 
-The simplest auth method for local and team deployments:
+The simplest auth method for local and private single-developer deployments:
 
 ```bash
 export MEMORY_API_KEY="your-secure-random-key"
@@ -27,7 +27,7 @@ curl -H "X-API-Key: your-key" http://localhost:8787/api/memories
 
 ### JWT / OIDC
 
-For enterprise deployments with an existing identity provider:
+For network-exposed deployments with an existing identity provider:
 
 ```bash
 export MEMORY_OIDC_ISSUER="https://auth.example.com"
@@ -151,7 +151,7 @@ server {
 ### Connector Data
 
 - Connector tokens are stored as `env:` references, never as plaintext
-- The Operator UI reads connector configs in redacted form
+- CLI and API inspection paths expose connector configs in redacted form
 - Live smoke tests are opt-in and never run automatically
 
 ### Backup Security
@@ -166,7 +166,7 @@ server {
 # Authentication
 export MEMORY_API_KEY="$(openssl rand -hex 32)"
 
-# Or OIDC for enterprise
+# Or OIDC when an identity provider is required
 export MEMORY_OIDC_ISSUER="https://auth.company.com"
 export MEMORY_OIDC_AUDIENCE="cognibrain"
 

@@ -16,7 +16,7 @@ npx cognibrain init --yes  # Uses local-json by default
 
 - **Location**: `.cognibrain/memories.json`
 - **Best for**: Solo developers, quick experiments, local agent memory
-- **Limitations**: Single process only, no concurrent access, not suitable for teams
+- **Limitations**: Single process only, no concurrent writes, not suitable for remote daemon sharing
 
 ### SQLite
 
@@ -32,14 +32,14 @@ npx cognibrain connections add storage-sqlite
 
 ### PostgreSQL
 
-Full relational database for team and production deployments.
+Full relational database for production-style or high-volume single-developer deployments.
 
 ```bash
 npx cognibrain connections add storage-postgres --url-env MEMORY_POSTGRES_URL
 ```
 
 - **Connection**: Via `MEMORY_DB_URL` or `MEMORY_POSTGRES_URL`
-- **Best for**: Team deployments, production, multi-node access
+- **Best for**: Larger single-developer stores, production-style daemon deployments, external backup workflows
 - **Features**: Full ACID, concurrent access, backup/restore, replication
 
 ## Data Model

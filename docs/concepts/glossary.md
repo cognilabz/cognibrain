@@ -24,18 +24,18 @@ The human or service account responsible for inspecting, correcting, approving, 
 
 ---
 
-### Operator UI
+### Operator Experience
 
-The commercial, opt-in Next.js browser surface for managing memories, connectors, reports, dream cycles, and harness installation.
+The V1 workflow where the developer inspects, corrects, approves, and maintains Cognibrain memory through harness prompts, action guards, and CLI commands in the same work context.
 
 !!! warning "Avoid"
-    Don't use "OSS dashboard" or "public dashboard" — the Operator UI is separately licensed.
+    Don't use "Operator UI", "dashboard", or "browser control plane" for the V1 product surface.
 
 ---
 
 ### Operator CLI
 
-The open-source, text-first command surface for setup, status, memory work, connectors, proof, and automation.
+The text-first command surface for setup, status, memory work, connectors, proof, and automation.
 
 !!! warning "Avoid"
     Don't use "TUI" or "dashboard" when referring to the CLI.
@@ -141,7 +141,7 @@ The local HTTP API server process that serves all surfaces. Optional for simple 
 
 ### Profile
 
-A pre-configured set of defaults for a deployment shape (`solo-dev`, `team`, `enterprise`, `benchmark`).
+A pre-configured set of defaults for the single-developer workflow or benchmark proof lab (`solo-dev`, `benchmark`).
 
 ---
 

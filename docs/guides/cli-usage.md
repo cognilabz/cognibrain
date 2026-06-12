@@ -18,14 +18,13 @@ Initialize Cognibrain in a project:
 
 ```bash
 npx cognibrain init --yes                    # Solo-dev defaults
-npx cognibrain init --profile team --yes     # Team profile
-npx cognibrain init --profile enterprise --yes --no-start
+npx cognibrain init --benchmark --yes        # Proof lab
 ```
 
 | Flag | Effect |
 |------|--------|
 | `--yes` | Accept all defaults without prompting |
-| `--profile <name>` | Use a specific profile (`solo-dev`, `team`, `enterprise`, `benchmark`) |
+| `--profile <name>` | Use a specific profile (`solo-dev`, `benchmark`) |
 | `--no-start` | Don't start the daemon after init |
 | `--no-skill` | Skip Codex skill installation |
 | `--no-doctor` | Skip the doctor check |

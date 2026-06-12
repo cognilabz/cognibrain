@@ -1,5 +1,7 @@
 # Commercial Operator UI Boundary
 
+Status: superseded by ADR-0062.
+
 Cognibrain keeps the CLI, API, SDK, connectors, harness templates, and docs in
 the MIT-licensed open-source package, but the browser Operator UI is a
 separately licensed commercial add-on. This prevents the paid control-plane

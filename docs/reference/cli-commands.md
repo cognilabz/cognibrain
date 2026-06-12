@@ -28,12 +28,11 @@ cognibrain init [options]
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--yes` | — | Accept all defaults without prompting |
-| `--profile <name>` | `solo-dev` | Profile: `solo-dev`, `team`, `enterprise`, `benchmark` |
+| `--profile <name>` | `solo-dev` | Profile: `solo-dev`, `benchmark` |
 | `--no-start` | — | Don't start the daemon after init |
 | `--no-skill` | — | Skip Codex skill installation |
 | `--no-doctor` | — | Skip the doctor check |
 | `--runtime-root <path>` | `.` | Override the runtime root directory |
-| `--dashboard` | — | Start the Operator UI after init |
 | `--benchmark` | — | Shorthand for `--profile benchmark` |
 
 ### `cognibrain setup`
@@ -416,20 +415,6 @@ Show current evidence state.
 ```bash
 cognibrain proof [--json]
 ```
-
----
-
-## Operator UI
-
-### `cognibrain dashboard`
-
-Start the commercial Operator UI (requires license).
-
-```bash
-cognibrain dashboard
-```
-
----
 
 ## SDK Scaffolding
 

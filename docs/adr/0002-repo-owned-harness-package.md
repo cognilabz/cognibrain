@@ -16,8 +16,8 @@ instead of absolute local paths. The generated manifest remains the audit
 surface for paths, ownership mode, generation version, content hashes, ignored
 state, and check results.
 
-Files that Cognibrain owns fully are `managed`; files that may contain team
-rules are `advisory` and updated only through marked Cognibrain blocks. Existing
+Files that Cognibrain owns fully are `managed`; files that may contain
+project-local rules are `advisory` and updated only through marked Cognibrain blocks. Existing
 unmarked files are migrated by appending a marked block, never by blind
 overwrite. Install/update writes files and warnings, but does not stage, commit,
 prune, or edit project docs by default.

@@ -1,6 +1,8 @@
 # Self-Hosting
 
-Cognibrain is designed to run as a self-hosted service controlled entirely by the CLI. This guide covers persistent deployment on your own infrastructure.
+Cognibrain is designed to run as a self-hosted service controlled entirely by
+the CLI. This guide covers persistent single-developer deployment on your own
+machine or private infrastructure.
 
 ## Overview
 
@@ -10,7 +12,6 @@ A production Cognibrain deployment consists of:
 2. **A storage backend** — SQLite or PostgreSQL
 3. **A service manager** — keeps the daemon running across reboots
 4. **(Optional) Connectors** — configured integrations to external systems
-5. **(Optional) Operator UI** — commercial browser dashboard
 
 ## Quick Production Setup
 
@@ -18,8 +19,8 @@ A production Cognibrain deployment consists of:
 # Install
 npm i -g @cognilabz/cognibrain
 
-# Initialize with team or enterprise profile
-cognibrain init --profile team --yes
+# Initialize the single-developer profile
+cognibrain init --profile solo-dev --yes
 
 # Configure storage
 export MEMORY_POSTGRES_URL="postgresql://user:pass@localhost:5432/cognibrain"
@@ -91,19 +92,20 @@ cognibrain connections add storage-sqlite
 
 SQLite storage lives at `.cognibrain/cognibrain.db` by default.
 
-## Multi-Machine Deployment
+## Remote Single-Developer Deployment
 
-For teams sharing a Cognibrain instance:
+For one developer using Cognibrain from their workstation, agent shells, and
+private automation:
 
 ```mermaid
 graph TB
-    subgraph "Developer Machines"
-        D1[Dev 1 Agent]
-        D2[Dev 2 Agent]
+    subgraph "Developer Surfaces"
+        D1[Workstation Agent]
+        D2[Remote Shell]
         D3[CI Runner]
     end
 
-    subgraph "Cognibrain Server"
+    subgraph "Private Cognibrain Server"
         API[Cognibrain Daemon]
         PG[(PostgreSQL)]
     end
@@ -118,6 +120,7 @@ Requirements:
 
 - PostgreSQL storage backend
 - API key or OIDC authentication
+- One developer owns all connected agents and automation
 - Network access from developer machines to the Cognibrain host
 - TLS termination (reverse proxy recommended)
 

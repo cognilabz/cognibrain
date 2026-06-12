@@ -122,30 +122,52 @@ checks.push(check("reality claim publication requires per-row provenance eligibi
     && runner.includes("manifestSha256,")
     && runner.includes("inputStreamSha256: manifestSha256");
 }));
-checks.push(check("docs-visible benchmark page preserves public-results boundary", () => {
+checks.push(check("benchmark summary artifacts exist", () => {
+  return existsSync("artifacts/public/benchmark-summary.json")
+    && existsSync("artifacts/docs/benchmark-summary.md")
+    && existsSync("docs/assets/benchmark-summary.svg");
+}));
+checks.push(check("benchmark summary is generated from current claim gate state", () => {
+  const summary = readJson("artifacts/public/benchmark-summary.json");
+  const reality = readJson("artifacts/public/evidence-table/index.json");
+  return summary.schemaVersion === "1.0"
+    && summary.claimLevel === "local-diagnostic"
+    && summary.marketLeaderboardAllowed === false
+    && summary.marketGate.allowed === reality.claimGate.marketClaimAllowed
+    && summary.evidence.length <= 5
+    && summary.keyResults.length <= 7;
+}));
+checks.push(check("docs-visible benchmark page uses Benchmark Evidence structure", () => {
   const docs = readFileSync("docs/benchmarks.md", "utf8");
-  return docs.includes("Public-results boundary:")
-    && docs.includes("marketClaimAllowed=true")
-    && docs.includes("must not be used as competitor-proof");
+  return docs.startsWith("# Benchmark Evidence")
+    && docs.includes("## Current Verdict")
+    && docs.includes("## Evidence Matrix")
+    && docs.includes("## What The Numbers Mean")
+    && docs.includes("## Key Results")
+    && docs.includes("## Known Limits And Failures")
+    && docs.includes("## Reproduce / Artifacts")
+    && docs.includes("## Appendix")
+    && docs.includes("assets/benchmark-summary.svg");
 }));
 checks.push(check("docs-visible benchmark page states current EMRP market-proof blocker", () => {
   const docs = readFileSync("docs/benchmarks.md", "utf8");
-  return docs.includes("Current checked EMRP status:")
-    && docs.includes("original competitor command")
-    && docs.includes("shared judge traces");
+  return docs.includes("Market leaderboard: Not open")
+    && docs.includes("original competitor")
+    && docs.includes("shared judge");
 }));
-checks.push(check("docs-visible arena rows are demoted from competitor comparisons", () => {
+checks.push(check("docs-visible score tables do not contain blocked or unscored rows", () => {
   const docs = readFileSync("docs/benchmarks.md", "utf8");
-  const svg = readFileSync("docs/assets/benchmark-results.svg", "utf8");
-  return /not original product\s+runs or competitor comparisons/.test(docs)
-    && svg.includes("Arena Internal Diagnostics")
-    && svg.includes("not competitor comparisons");
+  const scoreSections = extractSections(docs, ["## Evidence Matrix", "## Key Results"]);
+  return !/\|\s*[^|\n]*(credential-blocked|missing:blocked|not scored)[^|\n]*\|/i.test(scoreSections);
 }));
-checks.push(check("docs-visible benchmark chart labels diagnostics as not market proof", () => {
-  const svg = readFileSync("docs/assets/benchmark-results.svg", "utf8");
-  return svg.includes("Benchmark Diagnostics (Not Market Proof)")
-    && svg.includes("not quality, competitor, or market-leadership proof")
-    && svg.includes("diagnostic only · claim blocked");
+checks.push(check("docs-visible market gate carries blocked state as requirements", () => {
+  const docs = readFileSync("docs/benchmarks.md", "utf8");
+  return docs.includes("## Market Gate Status")
+    && docs.includes("| Same judge traces | Missing |")
+    && docs.includes("| Original competitor command outputs | Missing |")
+    && docs.includes("| Public artifact hash | Missing |")
+    && docs.includes("| Independent replication hash | Missing |")
+    && docs.includes("| Market leaderboard | Closed |");
 }));
 checks.push(check("reality evidence table renders blockers before diagnostic scores", () => {
   const report = readFileSync("src/eval/reality/report.ts", "utf8");
@@ -153,38 +175,25 @@ checks.push(check("reality evidence table renders blockers before diagnostic sco
   return report.includes("| System | Adapter | First blocker | Quality claim | Market claim | Diagnostic score |")
     && runner.includes("| System | Adapter | First blocker | Quality claim | Market claim | Diagnostic score |");
 }));
-checks.push(check("docs-visible benchmark tables carry adjacent proof and claim status", () => {
+checks.push(check("docs-visible benchmark tables carry adjacent evidence and boundaries", () => {
   const docs = readFileSync("docs/benchmarks.md", "utf8");
-  return docs.includes("| Metric | Diagnostic result | Proof | Claim status |")
-    && docs.includes("| Baseline | Diagnostic score | Repeated mistake rate | Proof | Claim status |")
-    && docs.includes("| System | Benchmark | Status | Evidence | Proof | Claim status |")
-    && docs.includes("| System | Proof level | Claim status | Mode | Scenarios | Diagnostic score |")
-    && docs.includes("| System | Proof level | Claim status | Mode | Scenarios | Diagnostic score | Repeated mistake rate |")
+  return docs.includes("| Question | Best current evidence | Result | Claim status | Limitation |")
+    && docs.includes("| Result | Value | Evidence | Boundary |")
+    && docs.includes("Each visible number above is backed by a generated timestamp and artifact path.")
     && !docs.includes("| Baseline | Score |")
     && !docs.includes("| System | Proof level | Claim status | Mode | Scenarios | Score |");
 }));
-checks.push(check("original public benchmark rows carry adjacent proof and claim status", () => {
+checks.push(check("docs-visible competitor names stay out of score tables while gate is closed", () => {
   const docs = readFileSync("docs/benchmarks.md", "utf8");
-  return docs.includes("| LongMemEval official flat-bm25 baseline | LongMemEval official retrieval | Passed |")
-    && docs.includes("`exact-upstream-single-system` | claim blocked; not cross-system market proof")
-    && docs.includes("| Basic Memory | Basic Memory full upstream benchmark marker suite | Passed |")
-    && docs.includes("`exact-upstream-single-system` | claim blocked; not same-protocol market proof");
+  const scoreSections = extractSections(docs, ["## Evidence Matrix", "## Key Results"]);
+  return !/\b(Mem0|Zep|LangMem|Basic Memory|Graphiti|Cognee|GBrain)\b/.test(scoreSections)
+    && docs.includes("original competitor systems");
 }));
-checks.push(check("native competitor rows are not scored while judge is missing", () => {
-  const docs = readFileSync("docs/benchmarks.md", "utf8");
-  return docs.includes("| Mem0 | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |")
-    && docs.includes("| LangMem | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |")
-    && docs.includes("| GBrain | `same-run-cli` | Judge required; claim blocked | `cli-command` | 30 | not scored | not scored |")
-    && docs.includes("| Basic Memory | `same-run-native` | Judge required; claim blocked | `native-command` | 30 | not scored | not scored |");
-}));
-checks.push(check("SVG judge-blocked native rows render as not scored", () => {
-  const source = readFileSync("scripts/release/render-benchmark-svg.mjs", "utf8");
-  const svg = readFileSync("docs/assets/benchmark-results.svg", "utf8");
-  return source.includes("isJudgeBlockedArenaRow")
-    && source.includes("notScored")
-    && svg.includes("not scored")
-    && svg.includes("same-run-native · judge required · claim blocked")
-    && !new RegExp("LangMem[\\s\\S]{0,320}>0\\.0%</text>").test(svg);
+checks.push(check("summary SVG has no blocked competitor or not-scored bars", () => {
+  const svg = readFileSync("docs/assets/benchmark-summary.svg", "utf8");
+  return svg.includes("Benchmark Evidence")
+    && svg.includes("Closed market gates are not rendered as scores")
+    && !/not scored|credential-blocked|Mem0|Zep|LangMem|Basic Memory|Graphiti|Cognee|GBrain/i.test(svg);
 }));
 
 for (const item of checks) console.log(`${item.passed ? "ok" : "FAIL"} ${item.name}`);
@@ -207,6 +216,15 @@ function check(name, predicate) {
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function extractSections(text, headings) {
+  return headings.map((heading) => {
+    const start = text.indexOf(heading);
+    if (start < 0) return "";
+    const next = text.indexOf("\n## ", start + heading.length);
+    return text.slice(start, next < 0 ? text.length : next);
+  }).join("\n");
 }
 
 function unboundedMarketLanguageLines(text) {

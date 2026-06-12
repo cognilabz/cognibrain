@@ -6,18 +6,16 @@ Cognibrain records significant architectural decisions as ADRs (Architecture Dec
 
 ### ADR-0001: Commercial Operator UI Boundary
 
-**Status:** Accepted
+**Status:** Superseded by ADR-0062
 
-**Context:** Cognibrain has both an open-source runtime and a commercial operator experience. The boundary between what's MIT-licensed and what's commercially licensed needs to be clear and enforceable.
+**Context:** Cognibrain previously had both an open-source runtime and a commercial operator experience. The boundary between what's MIT-licensed and what's commercially licensed needed to be clear and enforceable.
 
-**Decision:** Keep the CLI, API, SDK, connectors, harness templates, and docs in the MIT-licensed open-source package. The browser Operator UI is a separately licensed commercial add-on.
+**Decision:** Superseded. V1 no longer includes an Operator UI as a product surface; operator work is harness-native and CLI-backed.
 
 **Consequences:**
 
-- The paid control-plane experience cannot be accidentally redistributed through the OSS npm package
-- Licensed checkouts can still run the Next.js UI against the same local runtime
-- All core functionality remains accessible via CLI and API without the commercial UI
-- The `operator-ui/` directory is excluded from the npm package via `.gitignore` and `package.json` files configuration
+- The previous commercial dashboard boundary is no longer current product scope
+- Future browser inspection tools require a new ADR before becoming product surface
 
 ---
 
@@ -77,4 +75,4 @@ The following principles guide architectural decisions:
 3. **Evidence-backed** — claims require artifact proof
 4. **Surface-agnostic** — the memory engine doesn't know which surface is calling it
 5. **Operator-in-the-loop** — automated processes surface items for human review
-6. **Open core** — core functionality is MIT; operator experience is commercial
+6. **Harness-native operator experience** — agent-facing work happens in harnesses; explicit inspection and repair happens through the CLI

@@ -33,12 +33,6 @@ This runs the full verification suite: linting, type checking, tests, and build.
 npm run dev
 ```
 
-### With Operator UI (commercial, requires license)
-
-```bash
-npm run dashboard
-```
-
 ### Using the CLI from Source
 
 ```bash
@@ -65,7 +59,6 @@ npm run dashboard
 | `templates/` | Harness and integration templates |
 | `docker/` | Optional Docker packaging |
 | `deploy/` | Optional deployment manifests |
-| `operator-ui/` | Commercial Operator UI (separately licensed) |
 | `tests/` | Test suites |
 | `docs/` | Documentation (this site) |
 

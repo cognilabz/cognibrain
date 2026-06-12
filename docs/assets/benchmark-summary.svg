@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="608" viewBox="0 0 1040 608" role="img" aria-labelledby="title desc">
+<title id="title">Benchmark evidence summary</title>
+<desc id="desc">Compact docs-visible diagnostic chart for Cognibrain benchmark evidence. Closed market gates are not rendered as scores.</desc>
+<style>
+      text { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #18212f; }
+      .title { font-size: 28px; font-weight: 760; }
+      .subtitle { font-size: 13px; fill: #5f6978; }
+      .label { font-size: 13px; font-weight: 660; }
+      .detail { font-size: 11px; fill: #687385; }
+      .tick { font-size: 11px; fill: #748094; }
+      .value { font-size: 12px; font-weight: 760; }
+      .grid { stroke: #dfe5ed; stroke-width: 1; }
+      .axis { stroke: #b8c2d0; stroke-width: 1; }
+      .panel { fill: #fbfcfe; stroke: #d9e0ea; stroke-width: 1; }
+      .bar-primary { fill: #087f8c; }
+      .bar-secondary { fill: #60748a; }
+      .bar-weakness { fill: #d6902f; }
+    </style>
+<rect width="1040" height="608" fill="#f5f7fb"/>
+<rect class="panel" x="28" y="26" width="984" height="556" rx="8"/>
+<text class="title" x="54" y="66">Benchmark Evidence</text>
+<text class="subtitle" x="54" y="92">Local diagnostic evidence; market leaderboard not open. Generated 2026-06-11T22:36:41.332Z UTC.</text>
+<text class="subtitle" x="54" y="114">Only scored diagnostics are charted. Closed gates are listed as requirements, not score bars.</text>
+<line class="grid" x1="354" y1="154" x2="354" y2="542"/>
+<text class="tick" x="344" y="144">0%</text>
+<line class="grid" x1="484" y1="154" x2="484" y2="542"/>
+<text class="tick" x="474" y="144">25%</text>
+<line class="grid" x1="614" y1="154" x2="614" y2="542"/>
+<text class="tick" x="604" y="144">50%</text>
+<line class="grid" x1="744" y1="154" x2="744" y2="542"/>
+<text class="tick" x="734" y="144">75%</text>
+<line class="grid" x1="874" y1="154" x2="874" y2="542"/>
+<text class="tick" x="864" y="144">100%</text>
+<line class="axis" x1="354" y1="542" x2="874" y2="542"/>
+<text class="label" x="54" y="168">CogniCodeBench full system</text>
+<text class="detail" x="54" y="186">Full local engineering-memory diagnostic</text>
+<rect class="bar-primary" x="354" y="154" width="520" height="18" rx="4"/>
+<text class="value" x="884" y="168">100.0%</text>
+<text class="label" x="54" y="226">Strongest ablation: Without Temporal</text>
+<text class="detail" x="54" y="244">Internal ablation diagnostic</text>
+<rect class="bar-secondary" x="354" y="212" width="456.56" height="18" rx="4"/>
+<text class="value" x="820.56" y="226">87.8%</text>
+<text class="label" x="54" y="284">Keyword baseline</text>
+<text class="detail" x="54" y="302">Internal baseline diagnostic</text>
+<rect class="bar-secondary" x="354" y="270" width="118.56" height="18" rx="4"/>
+<text class="value" x="482.56" y="284">22.8%</text>
+<text class="label" x="54" y="342">LoCoMo diagnostic delta</text>
+<text class="detail" x="54" y="360">Public-style retrieval diagnostic</text>
+<rect class="bar-secondary" x="354" y="328" width="75.49479166666667" height="18" rx="4"/>
+<text class="value" x="439.4947916666667" y="342">+14.5pp vs Keyword Only</text>
+<text class="label" x="54" y="400">LongMemEval-S diagnostic delta</text>
+<text class="detail" x="54" y="418">Public-style retrieval diagnostic</text>
+<rect class="bar-secondary" x="354" y="386" width="4.160000000000004" height="18" rx="4"/>
+<text class="value" x="368.16" y="400">+0.8pp vs Keyword Only</text>
+<text class="label" x="54" y="458">BEAM 1M diagnostic delta</text>
+<text class="detail" x="54" y="476">Public-style retrieval diagnostic</text>
+<rect class="bar-secondary" x="354" y="444" width="123.31428571428575" height="18" rx="4"/>
+<text class="value" x="487.31428571428575" y="458">+23.7pp vs Keyword Only</text>
+<text class="label" x="54" y="516">BEAM abstention</text>
+<text class="detail" x="54" y="534">Known weakness marker</text>
+<rect class="bar-weakness" x="354" y="502" width="3" height="18" rx="4"/>
+<text class="value" x="367" y="516">0.0%</text>
+</svg>

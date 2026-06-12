@@ -5,11 +5,11 @@ contract for memory use, while keeping user-level installation as a fallback.
 This prevents non-trivial agent work from depending on a user reminder or on a
 global Codex skill being selected.
 
-The default `config all` flow should write native, commit-ready harness files
-into the repository. The first implementation is Codex-first: keep `AGENTS.md`
-as the always-on policy surface and add `.agents/skills/cognibrain/SKILL.md` as
-the repo-local skill. Later harnesses should use their native discovery paths,
-not a hidden Cognibrain-only directory.
+The default `config all` flow writes native, commit-ready harness files into the
+repository for every supported harness. Codex keeps `AGENTS.md` as the
+always-on policy surface and adds `.agents/skills/cognibrain/SKILL.md` as the
+repo-local skill; other harnesses use their native discovery paths, not a hidden
+Cognibrain-only directory.
 
 Repository contracts use portable commands such as `npx @cognilabz/cognibrain`
 instead of absolute local paths. The generated manifest remains the audit
@@ -23,5 +23,5 @@ overwrite. Install/update writes files and warnings, but does not stage, commit,
 prune, or edit project docs by default.
 
 `config all --check` is an audit mode, not a default CI gate. It reports missing,
-stale, ignored, duplicated, or non-portable contract files and exits
-successfully unless a future explicit strict mode is requested.
+stale, ignored, or non-portable contract files across all supported repo-owned
+harness contracts and exits successfully unless `--strict` is requested.

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /ABSOLUTE/PATH/TO/cognibrain/bin/cognibrain.mjs start >/dev/null 2>&1; node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{let p=d;try{const j=JSON.parse(d);p=j.prompt||j.userPrompt||j.message||d}catch{};const r=require('child_process').spawnSync(process.execPath,['/ABSOLUTE/PATH/TO/cognibrain/bin/cognibrain.mjs','context','--task',p,'--app','claude','--agent','claude','--json'],{encoding:'utf8'});process.stdout.write(r.stdout);if(r.stderr)process.stderr.write(r.stderr);try{const o=JSON.parse(r.stdout);const e=o.data?.sections?.flatMap(s=>s.evidence||[])||[];const rr=e.filter(x=>x.delivery==='review_required'||x.unsafeToInject);if(rr.length)process.stderr.write(`\\n[cognibrain] ${rr.length} review_required memories delivered; verify against current code/tests/artifacts before use.\\n`)}catch{}process.exit(r.status||0)})\""
+            "command": "__COGNIBRAIN_COMMAND__ start >/dev/null 2>&1; node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{let p=d;try{const j=JSON.parse(d);p=j.prompt||j.userPrompt||j.message||d}catch{};const r=require('child_process').spawnSync('npx',['@cognilabz/cognibrain','context','--task',p,'--app','claude','--agent','claude','--json'],{encoding:'utf8'});process.stdout.write(r.stdout);if(r.stderr)process.stderr.write(r.stderr);try{const o=JSON.parse(r.stdout);const e=o.data?.sections?.flatMap(s=>s.evidence||[])||[];const rr=e.filter(x=>x.delivery==='review_required'||x.unsafeToInject);if(rr.length)process.stderr.write('\\\\n[cognibrain] '+rr.length+' review_required memories delivered; verify against current code/tests/artifacts before use.\\\\n')}catch{}process.exit(r.status||0)})\""
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /ABSOLUTE/PATH/TO/cognibrain/bin/cognibrain.mjs memory maintenance >&2"
+            "command": "__COGNIBRAIN_COMMAND__ memory maintenance >&2"
           }
         ]
       }

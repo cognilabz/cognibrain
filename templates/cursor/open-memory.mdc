@@ -5,18 +5,18 @@ globs:
 alwaysApply: true
 ---
 
-Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks, actively query cognibrain through the CLI lifecycle: `./bin/cognibrain.mjs context --task "<task>" --app cursor --agent cursor --json`. Do not wait for memories to appear in the prompt. Use delivered context first: if the context or evidence pack already answers where to inspect, what command to avoid, or which prior decision matters, act from that evidence and avoid rediscovering the same fact with another search.
+Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks, actively query cognibrain through the CLI lifecycle: `__COGNIBRAIN_COMMAND__ context --task "<task>" --app cursor --agent cursor --json`. Do not wait for memories to appear in the prompt. Use delivered context first: if the context or evidence pack already answers where to inspect, what command to avoid, or which prior decision matters, act from that evidence and avoid rediscovering the same fact with another search.
 
 Parse returned context JSON, including `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`. If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories. Treat `review_required` as Cursor's automated review queue: verify the memory against current code, tests, generated artifacts, CI, or source systems before using it.
 
-Start the local runtime with `./bin/cognibrain.mjs start` when API or dashboard access is needed. Inspect it with `./bin/cognibrain.mjs status`.
+Start the local runtime with `__COGNIBRAIN_COMMAND__ start` when API or dashboard access is needed. Inspect it with `__COGNIBRAIN_COMMAND__ status`.
 
 Use returned memories as source-backed hints. Verify current code, tests, and benchmark artifacts before acting on stale or drift-prone facts.
 
-Before shell commands, dependency changes, migrations, or file edits with durable side effects, call `./bin/cognibrain.mjs guard --action "<command>" --json`.
+Before shell commands, dependency changes, migrations, or file edits with durable side effects, call `__COGNIBRAIN_COMMAND__ guard --action "<command>" --json`.
 
 For code or agent-behavior changes that are intended to land, complete local verification, commit, and push to `main` unless the user explicitly asks for another branch or no publish. After each push, ask the live ChatGPT/code-review coworker to review the pushed commit or diff. Implement actionable feedback, verify, commit, push, and repeat. Do not stop on the first `NO_CHANGES`/approval; ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases. Stop only after that recheck also returns no actionable improvements, then record the review result and recheck result.
 
-After durable discoveries, user corrections, connector decisions, or benchmark results, record them with `./bin/cognibrain.mjs memory add "<fact>"`. Finish non-trivial patches with `./bin/cognibrain.mjs patch-evidence --task "<task>" --json`.
+After durable discoveries, user corrections, connector decisions, or benchmark results, record them with `__COGNIBRAIN_COMMAND__ memory add "<fact>"`. Finish non-trivial patches with `__COGNIBRAIN_COMMAND__ patch-evidence --task "<task>" --json`.
 
 MCP tools such as `memory_coding_context_pack`, `memory_action_guard`, `memory_add`, and `memory_patch_evidence` are optional native adapters for Cursor hosts that expose them. Use `memory_maintenance_status` to check automatic dream state. Run `memory_dream` after major sessions, imports, handoff, or when contradictory memories appear.

@@ -4,7 +4,7 @@ Use the generated `.devin/cognibrain.json` command contract when this agent cann
 
 Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks:
 
-- actively request a coding context pack with `cognibrain context --task "<task>" --app devin-style --agent devin-style --json`; do not wait for memories to appear in the prompt,
+- actively request a coding context pack with `__COGNIBRAIN_COMMAND__ context --task "<task>" --app devin-style --agent devin-style --json`; do not wait for memories to appear in the prompt,
 - parse the context pack JSON, including `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`,
 - if `data.context` is empty but `data.sections[].evidence[]` is non-empty, treat those delivered memories as available for automated verification rather than as "no memory",
 - treat `review_required` memories as the external agent's automated review queue: verify each one against current files, tests, generated artifacts, CI, or source systems before using it,

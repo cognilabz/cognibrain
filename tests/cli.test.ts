@@ -23,6 +23,15 @@ function valueAtPath(input: unknown, path: string) {
   }, input);
 }
 
+function expectPortableHarnessText(path: string) {
+  const text = readFileSync(path, "utf8");
+  expect(text, path).toContain("npx @cognilabz/cognibrain");
+  expect(text, path).not.toContain("__COGNIBRAIN_COMMAND__");
+  expect(text, path).not.toContain("./bin/cognibrain.mjs");
+  expect(text, path).not.toContain("/ABSOLUTE/PATH/TO/cognibrain");
+  return text;
+}
+
 describe("cognibrain CLI", () => {
   it("prints the one-command surface", () => {
     const output = execFileSync(process.execPath, [cli, "help"], { cwd: root, encoding: "utf8" });
@@ -1534,12 +1543,11 @@ describe("cognibrain CLI", () => {
       expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("Before non-trivial work");
       expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("npx @cognilabz/cognibrain context");
       expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("<!-- cognibrain:start -->");
-      expect(readFileSync(join(dir, ".cursor", "rules", "open-memory.mdc"), "utf8")).toBe(readFileSync(join(root, "templates", "cursor", "open-memory.mdc"), "utf8"));
-      expect(readFileSync(join(dir, ".cursor", "rules", "open-memory.mdc"), "utf8")).toContain("Before non-trivial coding");
-      expect(readFileSync(join(dir, ".github", "copilot-instructions.md"), "utf8")).toBe(readFileSync(join(root, "templates", "copilot", "copilot-instructions.md"), "utf8"));
+      expect(expectPortableHarnessText(join(dir, ".cursor", "rules", "open-memory.mdc"))).toContain("Before non-trivial coding");
+      expect(expectPortableHarnessText(join(dir, ".github", "copilot-instructions.md"))).toContain("<!-- cognibrain:start -->");
       expect(readFileSync(join(dir, ".github", "instructions", "cognibrain.instructions.md"), "utf8")).toContain("Before non-trivial coding");
-      expect(readFileSync(join(dir, ".opencode", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "opencode", "cognibrain.md"), "utf8"));
-      expect(readFileSync(join(dir, ".openclaw", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "openclaw", "cognibrain.md"), "utf8"));
+      expectPortableHarnessText(join(dir, ".opencode", "cognibrain.md"));
+      expectPortableHarnessText(join(dir, ".openclaw", "cognibrain.md"));
       expect(readFileSync(join(dir, "langgraph-cognibrain.ts"), "utf8")).toBe(readFileSync(join(root, "templates", "langgraph", "langgraph-cognibrain.ts"), "utf8"));
       expect(readFileSync(join(dir, "crewai_cognibrain.py"), "utf8")).toBe(readFileSync(join(root, "templates", "crewai", "crewai_cognibrain.py"), "utf8"));
       expect(readFileSync(join(dir, "langgraph-cognibrain.ts"), "utf8")).toContain("/coding-context-pack");
@@ -1548,23 +1556,25 @@ describe("cognibrain CLI", () => {
       expect(readFileSync(join(dir, "crewai_cognibrain.py"), "utf8")).toContain("/coding-context-pack");
       expect(readFileSync(join(dir, "crewai_cognibrain.py"), "utf8")).toContain("/code/action-guard");
       expect(readFileSync(join(dir, "crewai_cognibrain.py"), "utf8")).toContain("/patch-evidence");
-      expect(readFileSync(join(dir, ".windsurf", "rules", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "windsurf", "cognibrain.md"), "utf8"));
-      expect(readFileSync(join(dir, ".continue", "rules", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "continue", "cognibrain.md"), "utf8"));
-      expect(readFileSync(join(dir, ".aider", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "aider", "cognibrain.md"), "utf8"));
-      expect(readFileSync(join(dir, ".clinerules", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "roo-cline", "cognibrain.md"), "utf8"));
-      expect(readFileSync(join(dir, ".goose", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "goose", "cognibrain.md"), "utf8"));
+      expectPortableHarnessText(join(dir, ".windsurf", "rules", "cognibrain.md"));
+      expectPortableHarnessText(join(dir, ".continue", "rules", "cognibrain.md"));
+      expectPortableHarnessText(join(dir, ".aider", "cognibrain.md"));
+      expectPortableHarnessText(join(dir, ".clinerules", "cognibrain.md"));
+      expectPortableHarnessText(join(dir, ".goose", "cognibrain.md"));
       const hermesInstructions = readFileSync(join(dir, "HERMES.md"), "utf8");
-      expect(hermesInstructions).toContain(root);
+      expect(hermesInstructions).toContain("npx @cognilabz/cognibrain");
+      expect(hermesInstructions).not.toContain(root);
       expect(hermesInstructions).toContain("context --task");
       expect(hermesInstructions).toContain("guard --action");
       expect(hermesInstructions).toContain("patch-evidence --task");
       expect(readFileSync(join(hermesHome, "config.yaml"), "utf8")).toContain("mcp_servers:");
       expect(readFileSync(join(hermesHome, "config.yaml"), "utf8")).toContain("cognibrain:");
-      expect(readFileSync(join(hermesHome, "config.yaml"), "utf8")).toContain("lightweightMcpServer.mjs");
-      expect(readFileSync(join(dir, ".amp", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "sourcegraph-amp", "cognibrain.md"), "utf8"));
-      expect(readFileSync(join(dir, ".devin", "cognibrain.md"), "utf8")).toBe(readFileSync(join(root, "templates", "devin-style", "cognibrain.md"), "utf8"));
+      expect(readFileSync(join(hermesHome, "config.yaml"), "utf8")).toContain("@cognilabz/cognibrain");
+      expectPortableHarnessText(join(dir, ".amp", "cognibrain.md"));
+      expectPortableHarnessText(join(dir, ".devin", "cognibrain.md"));
       const claude = readFileSync(join(dir, ".claude", "settings.json"), "utf8");
-      expect(claude).toContain(root);
+      expect(claude).toContain("npx @cognilabz/cognibrain");
+      expect(claude).not.toContain(root);
       expect(claude).not.toContain("/ABSOLUTE/PATH/TO/cognibrain");
       expect(claude).toContain("--app");
       expect(claude).toContain("--agent");
@@ -1608,8 +1618,39 @@ describe("cognibrain CLI", () => {
       expect(Object.keys(manifest.harnesses)).toEqual(["codex", "claude", "copilot", "cursor", "vscode", "opencode", "openclaw", "langgraph", "crewai", "windsurf", "continue", "aider", "roo-cline", "goose", "hermes", "sourcegraph-amp", "devin-style"]);
       expect(manifest.harnesses.codex.repoSkill).toContain(join(".agents", "skills", "cognibrain", "SKILL.md"));
       expect(manifest.repoOwned.command).toBe("npx @cognilabz/cognibrain");
-      expect(manifest.repoOwned.files.map((file: { path: string }) => file.path)).toEqual(["AGENTS.md", ".agents/skills/cognibrain/SKILL.md"]);
+      expect(manifest.repoOwned.files.map((file: { path: string }) => file.path)).toEqual([
+        "AGENTS.md",
+        ".agents/skills/cognibrain/SKILL.md",
+        ".mcp.json",
+        ".claude/settings.json",
+        ".github/copilot-instructions.md",
+        ".github/instructions/cognibrain.instructions.md",
+        ".cursor/mcp.json",
+        ".cursor/rules/open-memory.mdc",
+        ".vscode/mcp.json",
+        ".vscode/settings.json",
+        ".vscode/cognibrain.instructions.md",
+        ".opencode/cognibrain.md",
+        ".openclaw/cognibrain.md",
+        "langgraph.cognibrain.json",
+        "langgraph-cognibrain.ts",
+        "crewai.cognibrain.json",
+        "crewai_cognibrain.py",
+        ".windsurf/rules/cognibrain.md",
+        ".continue/rules/cognibrain.md",
+        ".aider.conf.yml",
+        ".aider/cognibrain.md",
+        ".roo/mcp.json",
+        ".clinerules/cognibrain.md",
+        ".goose/config.yaml",
+        ".goose/cognibrain.md",
+        "HERMES.md",
+        ".amp/cognibrain.md",
+        ".devin/cognibrain.json",
+        ".devin/cognibrain.md"
+      ]);
       expect(manifest.repoOwned.files.every((file: { expectedHash?: string }) => typeof file.expectedHash === "string")).toBe(true);
+      expect(manifest.repoOwned.files.every((file: { ok: boolean }) => file.ok)).toBe(true);
       expect(manifest.harnesses.copilot.feedback).toContain("accepted_change");
       expect(manifest.harnesses.langgraph.feedback).toContain("tool outcome telemetry");
       expect(manifest.harnesses.crewai.feedback).toContain("tool outcome telemetry");
@@ -1620,7 +1661,8 @@ describe("cognibrain CLI", () => {
       expect(manifest.harnesses["roo-cline"].feedback).toContain("correction capture");
       expect(manifest.harnesses.hermes.protocol).toBe("mcp-plus-project-context");
       const vscodeMcp = JSON.parse(readFileSync(join(dir, ".vscode", "mcp.json"), "utf8"));
-      expect(vscodeMcp.servers.cognibrain.args.join(" ")).toContain("lightweightMcpServer.mjs");
+      expect(vscodeMcp.servers.cognibrain.command).toBe("npx");
+      expect(vscodeMcp.servers.cognibrain.args.join(" ")).toBe("@cognilabz/cognibrain mcp");
       const vscodeSettings = JSON.parse(readFileSync(join(dir, ".vscode", "settings.json"), "utf8"));
       const heavyGeneratedExcludes = [
         "**/.cognibrain/**",
@@ -1699,6 +1741,42 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 
+  it("merges Claude Cognibrain hooks without dropping existing team hooks", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cognibrain-claude-hooks-"));
+    try {
+      mkdirSync(join(dir, ".claude"), { recursive: true });
+      writeFileSync(join(dir, ".claude", "settings.json"), JSON.stringify({
+        permissions: { allow: ["Bash(npm test)"] },
+        hooks: {
+          UserPromptSubmit: [{ hooks: [{ type: "command", command: "echo team prompt hook" }] }],
+          PostToolUse: [{ matcher: "Edit", hooks: [{ type: "command", command: "echo team post hook" }] }]
+        }
+      }, null, 2));
+
+      execFileSync(process.execPath, [cli, "config", "claude"], {
+        cwd: dir,
+        env: { ...process.env, MEMORY_AUTO_DREAM: "false" },
+        encoding: "utf8"
+      });
+
+      const settings = JSON.parse(readFileSync(join(dir, ".claude", "settings.json"), "utf8"));
+      expect(settings.permissions.allow).toContain("Bash(npm test)");
+      expect(JSON.stringify(settings.hooks.UserPromptSubmit)).toContain("echo team prompt hook");
+      expect(JSON.stringify(settings.hooks.UserPromptSubmit)).toContain("npx @cognilabz/cognibrain");
+      expect(JSON.stringify(settings.hooks.PostToolUse)).toContain("echo team post hook");
+      expect(JSON.stringify(settings.hooks.PostToolUse)).toContain("npx @cognilabz/cognibrain");
+
+      const check = JSON.parse(execFileSync(process.execPath, [cli, "config", "claude", "--check", "--json"], {
+        cwd: dir,
+        env: { ...process.env, MEMORY_AUTO_DREAM: "false" },
+        encoding: "utf8"
+      }));
+      expect(check.ok).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, slowCliTimeout);
+
   it("installs the Codex skill when configuring the Codex harness", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-codex-skill-"));
     const codexHome = join(dir, ".codex");
@@ -1762,7 +1840,7 @@ describe("cognibrain CLI", () => {
     }
   }, slowCliTimeout);
 
-  it("reports repo-owned Codex harness drift in non-blocking check mode", () => {
+  it("reports repo-owned all-harness drift in non-blocking check mode", () => {
     const dir = mkdtempSync(join(tmpdir(), "cognibrain-config-check-"));
     const codexHome = join(dir, ".codex");
     try {
@@ -1773,9 +1851,10 @@ describe("cognibrain CLI", () => {
       });
       const beforeReport = JSON.parse(before);
       expect(beforeReport.ok).toBe(false);
-      expect(beforeReport.files.map((file: { issues: string[] }) => file.issues)).toEqual([["missing"], ["missing"]]);
+      expect(beforeReport.files).toHaveLength(29);
+      expect(beforeReport.files.every((file: { issues: string[] }) => file.issues.includes("missing"))).toBe(true);
 
-      execFileSync(process.execPath, [cli, "config", "codex", "--no-global-skill"], {
+      execFileSync(process.execPath, [cli, "config", "all", "--no-global-skill"], {
         cwd: dir,
         env: { ...process.env, CODEX_HOME: codexHome, MEMORY_AUTO_DREAM: "false" },
         encoding: "utf8"

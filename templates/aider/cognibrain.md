@@ -3,8 +3,8 @@
 Before starting a non-trivial Aider change, use the CLI fallback to pull coding context for the current repo, branch, test command, generated-file rules, and prior reviewer corrections.
 
 ```bash
-cognibrain context --task "<task>" --app aider --agent aider --json
-cognibrain guard --action "<command>" --json
+__COGNIBRAIN_COMMAND__ context --task "<task>" --app aider --agent aider --json
+__COGNIBRAIN_COMMAND__ guard --action "<command>" --json
 ```
 
 This is an active memory pull, not a passive reminder. Parse the returned JSON, including `data.context`, `data.sections[].evidence[]`, `data.excludedStaleRules[]`, `data.id`, and `data.evidencePackId`. If `data.context` is empty but `data.sections[].evidence[]` is non-empty, Cognibrain still delivered memories.
@@ -14,9 +14,9 @@ Treat `review_required` memories as Aider's automated review queue: inspect the 
 After the change, record tool outcomes and corrections through the CLI:
 
 ```bash
-cognibrain outcome --command "<command>" --exit-code <code> --json
-cognibrain correction --text "<review correction>" --json
-cognibrain patch-evidence --task "<task>" --json
+__COGNIBRAIN_COMMAND__ outcome --command "<command>" --exit-code <code> --json
+__COGNIBRAIN_COMMAND__ correction --text "<review correction>" --json
+__COGNIBRAIN_COMMAND__ patch-evidence --task "<task>" --json
 ```
 
 Never put API keys or local-only secrets into memory.

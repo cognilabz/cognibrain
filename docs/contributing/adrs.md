@@ -27,14 +27,14 @@ Cognibrain records significant architectural decisions as ADRs (Architecture Dec
 
 **Context:** Agent memory use should not depend on a user reminder or on a global Codex skill being selected. Harness instructions need to live where each agent host can discover them from the repository.
 
-**Decision:** `config all` will write native, commit-ready repository harness files, starting with Codex `AGENTS.md` plus `.agents/skills/cognibrain/SKILL.md`, while keeping global installation as a fallback.
+**Decision:** `config all` writes native, commit-ready repository harness files for every supported harness. Codex uses `AGENTS.md` plus `.agents/skills/cognibrain/SKILL.md`; other harnesses use their native discovery paths. Global installation remains a fallback.
 
 **Consequences:**
 
 - Repository contracts use portable commands such as `npx @cognilabz/cognibrain`
 - Managed files can be fully regenerated; advisory files are updated only through marked Cognibrain blocks
 - `.cognibrain-harness-package.json` remains the audit surface for paths, hashes, ownership mode, ignored state, and check results
-- `config all --check` reports drift by default without acting as a hard CI gate
+- `config all --check` reports drift across all supported repo-owned harness contracts by default without acting as a hard CI gate
 
 ---
 

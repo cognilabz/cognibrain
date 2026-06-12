@@ -63,8 +63,29 @@ export function createHarnessRuntime({ root, launchCwd, rawArgs, readJson, write
 const COGNIBRAIN_BLOCK_START = "<!-- cognibrain:start -->";
 const COGNIBRAIN_BLOCK_END = "<!-- cognibrain:end -->";
 const CODEX_REPO_SKILL_RELATIVE_PATH = ".agents/skills/cognibrain/SKILL.md";
+const HARNESS_TARGETS = Object.freeze([
+  "codex",
+  "claude",
+  "copilot",
+  "cursor",
+  "vscode",
+  "opencode",
+  "openclaw",
+  "langgraph",
+  "crewai",
+  "windsurf",
+  "continue",
+  "aider",
+  "roo-cline",
+  "goose",
+  "hermes",
+  "sourcegraph-amp",
+  "devin-style"
+]);
+let activeHarnessTarget = "all";
 
 function writeHarnessConfig(target) {
+  activeHarnessTarget = target;
   if (rawArgs.includes("--check")) {
     checkHarnessConfig(target);
     return;
@@ -145,6 +166,7 @@ function writeHarnessConfig(target) {
       console.error("Usage: cognibrain config <all|codex|claude|copilot|cursor|vscode|opencode|openclaw|langgraph|crewai|windsurf|continue|aider|roo-cline|goose|hermes|sourcegraph-amp|devin-style>");
       process.exit(1);
   }
+  printRepoOwnedHarnessSummary();
 }
 
 function writeCodexConfig() {
@@ -172,7 +194,6 @@ function writeCodexConfig() {
   }
   writeCodexPolicyFile();
   writeHarnessPackageManifest();
-  printRepoOwnedHarnessSummary();
 }
 
 function writeCodexSkill() {
@@ -215,13 +236,17 @@ function writeClaudeConfig() {
   json.mcpServers.cognibrain = stdioServerConfig();
   writeJson(path, json);
   console.log(`Wrote Claude MCP config: ${path}`);
-  writeTemplateFile(join(launchCwd, ".claude", "settings.json"), "templates/claude/settings.json");
+  writeClaudeSettingsFile(join(launchCwd, ".claude", "settings.json"));
   writeHarnessPackageManifest();
 }
 
 function writeCopilotConfig() {
-  writeTemplateFile(join(launchCwd, ".github", "copilot-instructions.md"), "templates/copilot/copilot-instructions.md");
-  writeTextFile(join(launchCwd, ".github", "instructions", "cognibrain.instructions.md"), generatedCopilotScopedInstructions());
+  writeAdvisoryTextBlock(
+    join(launchCwd, ".github", "copilot-instructions.md"),
+    renderRepoTemplate("templates/copilot/copilot-instructions.md"),
+    "Copilot repository instructions"
+  );
+  writeManagedTextFile(join(launchCwd, ".github", "instructions", "cognibrain.instructions.md"), generatedCopilotScopedInstructions(), "Copilot scoped instructions");
   writeHarnessPackageManifest();
 }
 
@@ -294,7 +319,7 @@ function writeContinueConfig() {
 }
 
 function writeAiderConfig() {
-  writeTextFile(join(launchCwd, ".aider.conf.yml"), generatedAiderConfig());
+  writeManagedTextFile(join(launchCwd, ".aider.conf.yml"), generatedAiderConfig(), "Aider config");
   writeTemplateFile(join(launchCwd, ".aider", "cognibrain.md"), "templates/aider/cognibrain.md");
   writeHarnessPackageManifest();
 }
@@ -310,7 +335,7 @@ function writeRooClineConfig() {
 }
 
 function writeGooseConfig() {
-  writeTextFile(join(launchCwd, ".goose", "config.yaml"), generatedGooseConfig());
+  writeManagedTextFile(join(launchCwd, ".goose", "config.yaml"), generatedGooseConfig(), "Goose config");
   writeTemplateFile(join(launchCwd, ".goose", "cognibrain.md"), "templates/goose/cognibrain.md");
   writeHarnessPackageManifest();
 }
@@ -346,7 +371,14 @@ function writeDevinStyleConfig() {
 }
 
 function writeTemplateFile(targetPath, templatePath) {
-  writeTextFile(targetPath, renderTemplate(templatePath));
+  writeManagedTextFile(targetPath, renderRepoTemplate(templatePath), "cognibrain integration file");
+}
+
+function renderRepoTemplate(templatePath) {
+  return renderTemplate(templatePath, {
+    command: portableCognibrainCommand(),
+    installScope: "repository contract"
+  });
 }
 
 function renderTemplate(templatePath, options = {}) {
@@ -403,6 +435,34 @@ function writeAdvisoryTextBlock(targetPath, content, label) {
   console.log(`${current.includes(COGNIBRAIN_BLOCK_START) ? "Refreshed" : "Appended"} ${label}: ${targetPath}`);
 }
 
+function writeClaudeSettingsFile(targetPath) {
+  const current = readJson(targetPath, {});
+  const patch = generatedClaudeSettings();
+  const next = { ...current, hooks: { ...(current.hooks ?? {}) } };
+  next.hooks.UserPromptSubmit = mergeClaudeHookArray(current.hooks?.UserPromptSubmit, patch.hooks.UserPromptSubmit);
+  next.hooks.PostToolUse = mergeClaudeHookArray(current.hooks?.PostToolUse, patch.hooks.PostToolUse);
+  writeJson(targetPath, next);
+  console.log(`Wrote Claude hook settings: ${targetPath}`);
+}
+
+function mergeClaudeHookArray(current, replacement) {
+  const existing = Array.isArray(current) ? current : [];
+  return [
+    ...existing.filter((entry) => !jsonContainsCognibrainHook(entry)),
+    ...replacement
+  ];
+}
+
+function jsonContainsCognibrainHook(value) {
+  return JSON.stringify(value).includes("@cognilabz/cognibrain")
+    || JSON.stringify(value).includes("/bin/cognibrain.mjs")
+    || JSON.stringify(value).includes("__COGNIBRAIN_COMMAND__");
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function replaceCognibrainBlock(current, replacement) {
   const start = current.indexOf(COGNIBRAIN_BLOCK_START);
   const end = current.indexOf(COGNIBRAIN_BLOCK_END, start);
@@ -413,37 +473,6 @@ function replaceCognibrainBlock(current, replacement) {
 
 function normalizeText(content) {
   return content.endsWith("\n") ? content : `${content}\n`;
-}
-
-function writeTextFile(targetPath, content) {
-  const normalized = normalizeText(content);
-  if (existsSync(targetPath)) {
-    const current = readFileSync(targetPath, "utf8");
-    if (current === normalized) {
-      console.log(`cognibrain integration file already current: ${targetPath}`);
-      return;
-    }
-    if (current.includes("cognibrain") && shouldRefreshHarnessFiles()) {
-      writeFileSync(targetPath, normalized);
-      console.log(`Refreshed cognibrain integration file: ${targetPath}`);
-      return;
-    }
-    if (current.includes("cognibrain")) {
-      const sidecar = `${targetPath}.cognibrain`;
-      mkdirSync(dirname(sidecar), { recursive: true });
-      writeFileSync(sidecar, normalized);
-      console.log(`Wrote reviewable cognibrain integration update: ${sidecar}`);
-      return;
-    }
-    const sidecar = `${targetPath}.cognibrain`;
-    mkdirSync(dirname(sidecar), { recursive: true });
-    writeFileSync(sidecar, normalized);
-    console.log(`Wrote reviewable cognibrain sidecar: ${sidecar}`);
-    return;
-  }
-  mkdirSync(dirname(targetPath), { recursive: true });
-  writeFileSync(targetPath, normalized);
-  console.log(`Wrote harness file: ${targetPath}`);
 }
 
 function shouldRefreshHarnessFiles() {
@@ -470,26 +499,57 @@ function writeGeneratedFile(targetPath, content) {
 }
 
 function generatedCopilotScopedInstructions() {
+  const command = portableCognibrainCommand();
   return `---
 applyTo: "**/*"
 ---
 
 # cognibrain scoped memory policy
 
-Use the local cognibrain runtime for durable project memory. Start it with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} start\`.
+Use the local cognibrain runtime for durable project memory. Start it with \`${command} start\`.
 
-Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks, actively query the daemon-backed CLI lifecycle: \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} context --task "<task>" --app copilot --agent copilot --json\`. Do not wait for memories to appear in the prompt. Parse the returned JSON, including \`data.context\`, \`data.sections[].evidence[]\`, \`data.excludedStaleRules[]\`, \`data.id\`, and \`data.evidencePackId\`. If \`data.context\` is empty but \`data.sections[].evidence[]\` is non-empty, Cognibrain still delivered memories; use \`review_required\` evidence as an automated review queue for targeted code/test verification. Use delivered context first: if the returned context or evidence pack already answers where to inspect, what command to avoid, or which prior decision matters, act from that evidence and avoid rediscovering it with another search. Before shell commands, dependency changes, migrations, or file edits with durable side effects, run \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} guard --action "<command>" --json\`. If this host exposes cognibrain MCP tools, they are optional native adapters for the same lifecycle contract.
+Before non-trivial coding, debugging, CI repair, benchmark, connector, or user-preference-sensitive tasks, actively query the daemon-backed CLI lifecycle: \`${command} context --task "<task>" --app copilot --agent copilot --json\`. Do not wait for memories to appear in the prompt. Parse the returned JSON, including \`data.context\`, \`data.sections[].evidence[]\`, \`data.excludedStaleRules[]\`, \`data.id\`, and \`data.evidencePackId\`. If \`data.context\` is empty but \`data.sections[].evidence[]\` is non-empty, Cognibrain still delivered memories; use \`review_required\` evidence as an automated review queue for targeted code/test verification. Use delivered context first: if the returned context or evidence pack already answers where to inspect, what command to avoid, or which prior decision matters, act from that evidence and avoid rediscovering it with another search. Before shell commands, dependency changes, migrations, or file edits with durable side effects, run \`${command} guard --action "<command>" --json\`. If this host exposes cognibrain MCP tools, they are optional native adapters for the same lifecycle contract.
 
-After durable discoveries, record source-backed facts with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory add "<fact>"\`. Finish non-trivial patches with \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} patch-evidence --task "<task>" --json\`.
+After durable discoveries, record source-backed facts with \`${command} memory add "<fact>"\`. Finish non-trivial patches with \`${command} patch-evidence --task "<task>" --json\`.
 
 For code or agent-behavior changes intended to land, complete local verification, commit, and push to \`main\` unless the user explicitly asks for another branch or no publish. After each push, ask the live ChatGPT/code-review coworker to review the pushed commit or diff. Implement actionable feedback, verify, commit, push, and repeat. Do not stop on the first \`NO_CHANGES\`/approval; ask for one explicit recheck focused on missed improvements, stop-event mistakes, regressions, and uncovered edge cases. Stop only after that recheck also returns no actionable improvements, then record the review result and recheck result.
 
 Use feedback adapters through the CLI:
 
-- accepted suggestion: \`MEMORY_CONNECTOR_FEEDBACK_KIND=accepted_change node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory feedback-injection "<query>" accepted\`
-- rejected suggestion: \`MEMORY_CONNECTOR_FEEDBACK_KIND=rejected_suggestion node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory feedback-injection "<query>" rejected\`
-- failing test: \`node ${join(root, "bin", "cognibrain.mjs")} --runtime-root ${launchCwd} memory add "A harness suggestion caused a failing test: <summary>"\`
+- accepted suggestion: \`MEMORY_CONNECTOR_FEEDBACK_KIND=accepted_change ${command} memory feedback-injection "<query>" accepted\`
+- rejected suggestion: \`MEMORY_CONNECTOR_FEEDBACK_KIND=rejected_suggestion ${command} memory feedback-injection "<query>" rejected\`
+- failing test: \`${command} memory add "A harness suggestion caused a failing test: <summary>"\`
 `;
+}
+
+function generatedClaudeSettings() {
+  const command = portableCognibrainCommand();
+  const contextHook = `${command} start >/dev/null 2>&1; node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{let p=d;try{const j=JSON.parse(d);p=j.prompt||j.userPrompt||j.message||d}catch{};const r=require('child_process').spawnSync('npx',['@cognilabz/cognibrain','context','--task',p,'--app','claude','--agent','claude','--json'],{encoding:'utf8'});process.stdout.write(r.stdout);if(r.stderr)process.stderr.write(r.stderr);try{const o=JSON.parse(r.stdout);const e=o.data?.sections?.flatMap(s=>s.evidence||[])||[];const rr=e.filter(x=>x.delivery==='review_required'||x.unsafeToInject);if(rr.length)process.stderr.write('\\\\n[cognibrain] '+rr.length+' review_required memories delivered; verify against current code/tests/artifacts before use.\\\\n')}catch{}process.exit(r.status||0)})"`;
+  return {
+    hooks: {
+      UserPromptSubmit: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: contextHook
+            }
+          ]
+        }
+      ],
+      PostToolUse: [
+        {
+          matcher: "*",
+          hooks: [
+            {
+              type: "command",
+              command: `${command} memory maintenance >&2`
+            }
+          ]
+        }
+      ]
+    }
+  };
 }
 
 function generatedAiderConfig() {
@@ -502,22 +562,23 @@ function generatedGooseConfig() {
   return `extensions:
   cognibrain:
     type: stdio
-    command: ${JSON.stringify(process.execPath)}
+    command: "npx"
     args:
-      - ${JSON.stringify(join(root, "bin", "cognibrain.mjs"))}
-      - "--runtime-root"
-      - ${JSON.stringify(launchCwd)}
+      - "@cognilabz/cognibrain"
       - "mcp"
+    env:
+      COGNIBRAIN_RUNTIME_ROOT: "."
 `;
 }
 
 function generatedHermesMcpServerEntry() {
   return `  cognibrain:
-    command: ${yamlString(process.execPath)}
+    command: "npx"
     args:
-      - ${yamlString(join(root, "bin", "lib", "lightweightMcpServer.mjs"))}
+      - "@cognilabz/cognibrain"
+      - "mcp"
     env:
-      COGNIBRAIN_RUNTIME_ROOT: ${yamlString(launchCwd)}`;
+      COGNIBRAIN_RUNTIME_ROOT: "."`;
 }
 
 function upsertYamlTopLevelMapEntry(content, topKey, entryKey, entryBlock) {
@@ -564,25 +625,24 @@ function findNextYamlMapEntry(lines, start, sectionEnd) {
 }
 
 function generatedExternalAgentContract(target) {
-  const cli = join(root, "bin", "cognibrain.mjs");
+  const command = portableCognibrainCommand();
   return {
     schemaVersion: "1.0",
     target,
-    runtimeRoot: launchCwd,
+    runtimeRoot: ".",
     protocol: "json-command",
     commands: {
-      contextPack: `${process.execPath} ${cli} --runtime-root ${launchCwd} context --task "$TASK" --app ${target} --agent ${target} --json`,
-      preToolGuard: `${process.execPath} ${cli} --runtime-root ${launchCwd} guard --action "$COMMAND" --json`,
-      recordAction: `${process.execPath} ${cli} --runtime-root ${launchCwd} outcome --command "$COMMAND" --json`,
-      recordCorrection: `${process.execPath} ${cli} --runtime-root ${launchCwd} correction --text "$CORRECTION" --json`,
-      patchEvidence: `${process.execPath} ${cli} --runtime-root ${launchCwd} patch-evidence --task "$TASK" --json`
+      contextPack: `${command} context --task "$TASK" --app ${target} --agent ${target} --json`,
+      preToolGuard: `${command} guard --action "$COMMAND" --json`,
+      recordAction: `${command} outcome --command "$COMMAND" --json`,
+      recordCorrection: `${command} correction --text "$CORRECTION" --json`,
+      patchEvidence: `${command} patch-evidence --task "$TASK" --json`
     },
     safety: {
       secrets: "do not store secret values; pass env var names or redacted refs only",
       destructiveActions: "call preToolGuard before shell/file operations with durable side effects",
       evidence: "record command, files, test outcome and sourceRefs after tool use"
-    },
-    generatedAt: new Date().toISOString()
+    }
   };
 }
 
@@ -687,10 +747,7 @@ function writeHarnessPackageManifest() {
 }
 
 function checkHarnessConfig(target) {
-  if (!["all", "codex"].includes(target)) {
-    console.warn(`Repo-owned harness check is currently implemented for Codex; requested target: ${target}`);
-  }
-  const report = repoOwnedHarnessReport();
+  const report = repoOwnedHarnessReport(target);
   if (rawArgs.includes("--json")) {
     console.log(JSON.stringify(report, null, 2));
   } else {
@@ -708,15 +765,15 @@ function checkHarnessConfig(target) {
 }
 
 function printRepoOwnedHarnessSummary() {
-  const report = repoOwnedHarnessReport();
+  const report = repoOwnedHarnessReport(activeHarnessTarget);
   console.log("Repo-owned harness files:");
   for (const file of report.files) console.log(`- ${file.path}`);
   console.log("Commit these files to make Cognibrain discoverable without user reminders.");
   for (const warning of report.warnings) console.warn(`Warning: ${warning}`);
 }
 
-function repoOwnedHarnessReport() {
-  const contracts = repoOwnedCodexContracts();
+function repoOwnedHarnessReport(target = activeHarnessTarget) {
+  const contracts = repoOwnedHarnessContracts(target);
   const git = gitState();
   const files = contracts.map((contract) => contractStatus(contract, git));
   const warnings = [];
@@ -729,6 +786,7 @@ function repoOwnedHarnessReport() {
     schemaVersion: "1.0",
     generatedByVersion: packageVersion(),
     command: portableCognibrainCommand(),
+    target,
     git,
     ok: files.every((file) => file.ok),
     files,
@@ -736,39 +794,94 @@ function repoOwnedHarnessReport() {
   };
 }
 
-function repoOwnedCodexContracts() {
+function repoOwnedHarnessContracts(target = activeHarnessTarget) {
   const contracts = [
-    {
-      harness: "codex",
-      mode: "advisory",
-      path: join(launchCwd, "AGENTS.md"),
-      template: "templates/codex/AGENTS.md",
-      expected: normalizeText(renderTemplate("templates/codex/AGENTS.md", {
-        command: portableCognibrainCommand(),
-        installScope: "repository contract"
-      })),
-      hashScope: "managed-block"
-    }
+    textContract("codex", "advisory", join(launchCwd, "AGENTS.md"), "templates/codex/AGENTS.md", "managed-block"),
+    jsonContract("claude", "advisory-json", join(launchCwd, ".mcp.json"), { mcpServers: { cognibrain: stdioServerConfig() } }),
+    jsonContract("claude", "advisory-json", join(launchCwd, ".claude", "settings.json"), generatedClaudeSettings()),
+    textContract("copilot", "advisory", join(launchCwd, ".github", "copilot-instructions.md"), "templates/copilot/copilot-instructions.md", "managed-block"),
+    generatedTextContract("copilot", "managed", join(launchCwd, ".github", "instructions", "cognibrain.instructions.md"), generatedCopilotScopedInstructions()),
+    jsonContract("cursor", "advisory-json", join(launchCwd, ".cursor", "mcp.json"), { mcpServers: { cognibrain: stdioServerConfig() } }),
+    textContract("cursor", "managed", join(launchCwd, ".cursor", "rules", "open-memory.mdc"), "templates/cursor/open-memory.mdc"),
+    jsonContract("vscode", "advisory-json", join(launchCwd, ".vscode", "mcp.json"), { servers: { cognibrain: { type: "stdio", ...stdioServerConfig() } } }),
+    jsonContract("vscode", "advisory-json", join(launchCwd, ".vscode", "settings.json"), generatedVsCodeResourceSettings()),
+    textContract("vscode", "managed", join(launchCwd, ".vscode", "cognibrain.instructions.md"), "templates/vscode/cognibrain.instructions.md"),
+    textContract("opencode", "managed", join(launchCwd, ".opencode", "cognibrain.md"), "templates/opencode/cognibrain.md"),
+    textContract("openclaw", "managed", join(launchCwd, ".openclaw", "cognibrain.md"), "templates/openclaw/cognibrain.md"),
+    textContract("langgraph", "managed", join(launchCwd, "langgraph.cognibrain.json"), "templates/langgraph/langgraph.cognibrain.json"),
+    textContract("langgraph", "managed", join(launchCwd, "langgraph-cognibrain.ts"), "templates/langgraph/langgraph-cognibrain.ts"),
+    textContract("crewai", "managed", join(launchCwd, "crewai.cognibrain.json"), "templates/crewai/crewai.cognibrain.json"),
+    textContract("crewai", "managed", join(launchCwd, "crewai_cognibrain.py"), "templates/crewai/crewai_cognibrain.py"),
+    textContract("windsurf", "managed", join(launchCwd, ".windsurf", "rules", "cognibrain.md"), "templates/windsurf/cognibrain.md"),
+    textContract("continue", "managed", join(launchCwd, ".continue", "rules", "cognibrain.md"), "templates/continue/cognibrain.md"),
+    generatedTextContract("aider", "managed", join(launchCwd, ".aider.conf.yml"), generatedAiderConfig()),
+    textContract("aider", "managed", join(launchCwd, ".aider", "cognibrain.md"), "templates/aider/cognibrain.md"),
+    jsonContract("roo-cline", "advisory-json", join(launchCwd, ".roo", "mcp.json"), { mcpServers: { cognibrain: stdioServerConfig() } }),
+    textContract("roo-cline", "managed", join(launchCwd, ".clinerules", "cognibrain.md"), "templates/roo-cline/cognibrain.md"),
+    generatedTextContract("goose", "managed", join(launchCwd, ".goose", "config.yaml"), generatedGooseConfig()),
+    textContract("goose", "managed", join(launchCwd, ".goose", "cognibrain.md"), "templates/goose/cognibrain.md"),
+    textContract("hermes", "managed", join(launchCwd, "HERMES.md"), "templates/hermes/HERMES.md"),
+    textContract("sourcegraph-amp", "managed", join(launchCwd, ".amp", "cognibrain.md"), "templates/sourcegraph-amp/cognibrain.md"),
+    jsonContract("devin-style", "managed-json", join(launchCwd, ".devin", "cognibrain.json"), generatedExternalAgentContract("devin-style")),
+    textContract("devin-style", "managed", join(launchCwd, ".devin", "cognibrain.md"), "templates/devin-style/cognibrain.md")
   ];
   if (!rawArgs.includes("--no-skill")) {
-    contracts.push({
-      harness: "codex",
-      mode: "managed",
-      path: join(launchCwd, CODEX_REPO_SKILL_RELATIVE_PATH),
-      template: "templates/codex/cognibrain-skill/SKILL.md",
-      expected: normalizeText(renderTemplate("templates/codex/cognibrain-skill/SKILL.md", {
-        command: portableCognibrainCommand(),
-        installScope: "repository contract"
-      })),
-      hashScope: "whole-file"
-    });
+    contracts.splice(1, 0, textContract("codex", "managed", join(launchCwd, CODEX_REPO_SKILL_RELATIVE_PATH), "templates/codex/cognibrain-skill/SKILL.md"));
   }
-  return contracts;
+  const selected = new Set(target === "all" ? HARNESS_TARGETS : [target]);
+  return contracts.filter((contract) => selected.has(contract.harness));
+}
+
+function textContract(harness, mode, path, template, hashScope = "whole-file") {
+  return {
+    harness,
+    mode,
+    path,
+    template,
+    expected: normalizeText(renderRepoTemplate(template)),
+    hashScope
+  };
+}
+
+function generatedTextContract(harness, mode, path, expected) {
+  return {
+    harness,
+    mode,
+    path,
+    template: null,
+    expected: normalizeText(expected),
+    hashScope: "whole-file"
+  };
+}
+
+function jsonContract(harness, mode, path, expectedJson) {
+  return {
+    harness,
+    mode,
+    path,
+    template: null,
+    expectedJson,
+    hashScope: "json-subset"
+  };
+}
+
+function generatedVsCodeResourceSettings() {
+  const excludes = Object.fromEntries(HEAVY_GENERATED_EXCLUDE_PATTERNS.map((pattern) => [pattern, true]));
+  return {
+    "files.watcherExclude": excludes,
+    "search.exclude": excludes,
+    ...VS_CODE_LOW_RESOURCE_SETTINGS
+  };
 }
 
 function contractStatus(contract, git) {
   const path = toRepoPath(contract.path);
-  const expectedHash = sha256(contract.hashScope === "managed-block" ? extractCognibrainBlock(contract.expected) ?? contract.expected : contract.expected);
+  const expectedComparable = contract.hashScope === "json-subset"
+    ? stableJson(contract.expectedJson)
+    : contract.hashScope === "managed-block"
+      ? extractCognibrainBlock(contract.expected) ?? contract.expected
+      : contract.expected;
+  const expectedHash = sha256(expectedComparable);
   const ignoredAtCheck = git.insideWorkTree ? isGitIgnored(path) : null;
   if (!existsSync(contract.path)) {
     return {
@@ -787,7 +900,7 @@ function contractStatus(contract, git) {
   }
 
   const current = readFileSync(contract.path, "utf8");
-  const currentComparable = contract.hashScope === "managed-block" ? extractCognibrainBlock(current) : current;
+  const currentComparable = currentComparableContent(contract, current);
   const currentHash = currentComparable ? sha256(normalizeText(currentComparable)) : null;
   const issues = [];
   if (!currentComparable) issues.push("missing-managed-block");
@@ -809,6 +922,39 @@ function contractStatus(contract, git) {
   };
 }
 
+function currentComparableContent(contract, current) {
+  if (contract.hashScope === "managed-block") return extractCognibrainBlock(current);
+  if (contract.hashScope !== "json-subset") return current;
+  try {
+    return stableJson(selectJsonSubset(JSON.parse(current), contract.expectedJson));
+  } catch {
+    return null;
+  }
+}
+
+function selectJsonSubset(current, expected) {
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(current)) return current;
+    return expected.map((expectedItem) => current.find((currentItem) => stableJson(currentItem) === stableJson(expectedItem)) ?? null);
+  }
+  if (Array.isArray(expected) || !isPlainObject(expected)) return current;
+  const subset = {};
+  for (const key of Object.keys(expected)) {
+    subset[key] = selectJsonSubset(current?.[key], expected[key]);
+  }
+  return subset;
+}
+
+function stableJson(value) {
+  return JSON.stringify(sortJson(value), null, 2);
+}
+
+function sortJson(value) {
+  if (Array.isArray(value)) return value.map(sortJson);
+  if (!isPlainObject(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortJson(value[key])]));
+}
+
 function extractCognibrainBlock(content) {
   const start = content.indexOf(COGNIBRAIN_BLOCK_START);
   const end = content.indexOf(COGNIBRAIN_BLOCK_END, start);
@@ -817,7 +963,11 @@ function extractCognibrainBlock(content) {
 }
 
 function containsLocalCognibrainCommand(content) {
-  return content.includes(join(root, "bin", "cognibrain.mjs")) || content.includes("/ABSOLUTE/PATH/TO/cognibrain");
+  return content.includes(join(root, "bin", "cognibrain.mjs"))
+    || content.includes("./bin/cognibrain.mjs")
+    || content.includes("__COGNIBRAIN_ROOT__")
+    || content.includes("__COGNIBRAIN_RUNTIME_ROOT__")
+    || content.includes("/ABSOLUTE/PATH/TO/cognibrain");
 }
 
 function sha256(content) {
@@ -935,19 +1085,15 @@ function connectorProofAtLeast(actual, minimum) {
 
 function stdioServerConfig() {
   return {
-    command: process.execPath,
-    args: [join(root, "bin", "lib", "lightweightMcpServer.mjs")],
+    command: "npx",
+    args: ["@cognilabz/cognibrain", "mcp"],
     env: {
-      COGNIBRAIN_RUNTIME_ROOT: launchCwd
+      COGNIBRAIN_RUNTIME_ROOT: "."
     }
   };
 }
 
 function tomlString(value) {
-  return JSON.stringify(value);
-}
-
-function yamlString(value) {
   return JSON.stringify(value);
 }
 

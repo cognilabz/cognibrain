@@ -3,8 +3,8 @@
   "name": "cognibrain-crewai",
   "runtime": {
     "apiUrl": "http://localhost:8787",
-    "startCommand": "node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs start",
-    "healthCommand": "node __COGNIBRAIN_ROOT__/bin/cognibrain.mjs doctor --publish"
+    "startCommand": "__COGNIBRAIN_COMMAND__ start",
+    "healthCommand": "__COGNIBRAIN_COMMAND__ doctor --publish"
   },
   "integration": {
     "beforeTask": "actively fetch a cognibrain coding context pack for the crew task before non-trivial work",

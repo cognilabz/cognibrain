@@ -2,410 +2,410 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/benchmarks/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0001-commercial-operator-ui-boundary/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0002-repo-owned-harness-package/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0003-harness-judgment-checkpoints/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0004-memory-operating-protocol-first/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0005-ledger-first-memory-model/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0006-authority-levels-on-ledger-events/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0007-product-defined-authority-ladder/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0008-low-authority-memory-as-candidate-evidence/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0009-explicit-promotion-into-current-memory-view/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0010-explicit-retirement-from-current-memory-view/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0011-ephemeral-working-memory/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0012-shared-working-memory/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0013-immediate-mistake-signals/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0014-predicted-signals-warn-before-they-block/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0015-record-mistake-signal-outcomes/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0016-mistake-prevention-over-feature-parity/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0017-forget-retire-erase/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0018-brain-lifecycle/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0019-notice-before-memory/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0020-save-is-not-remember/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0021-explainable-warn-lifecycle/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0022-immediate-reflect-lifecycle/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0023-dream-proposes-before-it-applies/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0024-improve-changes-future-behavior/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0025-harness-trigger-contract/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0026-fixed-harness-trigger-points/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0027-trace-backed-harness-conformance/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0028-harness-mutation-tests/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0029-certified-vs-best-effort-harness/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0030-one-time-harness-certification/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0031-certification-evidence-is-historical/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0032-unavailable-trigger-points-force-best-effort/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0033-best-effort-signals/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0034-best-effort-signals-are-warning-only/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0035-all-signals-record-outcomes/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0036-signal-noise-evidence-feeds-dream/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0037-signal-noise-threshold/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0038-single-developer-scope/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0039-solo-dev-only-docs/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0040-repo-local-signal-noise-threshold/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0041-bidirectional-signal-noise-threshold-overrides/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0042-lowered-thresholds-default-to-best-effort/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0043-certified-warning-noise-overrides-persist/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0044-signal-appeals-are-evidence-only/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0045-block-overrides-are-one-time-by-default/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0046-block-overrides-require-reasons/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0047-override-reasons-are-private-by-default/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0048-sanitized-summaries-use-harness-judgment/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0049-approved-sanitized-summaries-are-stored/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0050-sanitized-summaries-can-be-approved-automatically/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0051-sanitized-summaries-are-silent-unless-exceptional/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0052-contested-summaries-remain-usable/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0053-contested-summaries-carry-agent-visible-markers/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0054-contested-markers-mean-caution-not-prohibition/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0055-contested-risk-is-judged-through-the-harness/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0056-unavailable-contested-risk-judgment-requires-independent-support/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0057-independent-support-is-semantic/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0058-independent-support-use-records-outcomes/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0059-independent-support-outcomes-store-compact-fields/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0060-trust-first-memory/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0061-avoid-multi-dev-positioning-until-sync-exists/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0062-harness-native-operator-experience/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0063-core-market-promise/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0064-product-mistakes-are-corrected-bad-work-risks/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0065-recurrence-prevention-before-noise-reduction/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0066-product-mistake-evidence-bar/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0067-full-spectrum-mistake-surface/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/adr/0068-mistake-replay-proof-for-v1-claim/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/concepts/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/concepts/architecture/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/concepts/glossary/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/concepts/storage/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/contributing/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/contributing/adrs/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/contributing/connector-sdk/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/contributing/development-setup/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/contributing/testing/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/getting-started/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/getting-started/installation/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/getting-started/overview/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/getting-started/quickstart/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/guides/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/guides/cli-usage/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/guides/connectors/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/guides/dream-cycles/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/guides/harness-lifecycle/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/guides/mcp-integration/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/guides/memory-management/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/operations/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/operations/docker/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/operations/monitoring/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/operations/security/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/operations/self-hosting/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/reference/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/reference/cli-commands/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/reference/configuration/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/reference/http-api/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/reference/mcp-tools/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/reference/sdk-python/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
     <url>
          <loc>https://cognibrain.cognilabz.com/0.1.79/reference/sdk-typescript/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-16</lastmod>
     </url>
 </urlset>

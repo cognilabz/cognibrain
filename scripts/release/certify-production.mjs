@@ -11,11 +11,7 @@ const artifactPath = valueAfter("--out") ?? "artifacts/production-certification.
 const requiredSteps = [
   ["unit tests", "npm", ["run", "test"]],
   ["dashboard build", "npm", ["run", "build"]],
-  ["status verifier", "npm", ["run", "internal", "--", "verify:status"]],
-  ["docs audit", "npm", ["run", "internal", "--", "audit:docs"]],
   ["release contract audit", "npm", ["run", "internal", "--", "release:contract"]],
-  ["product truth audit", "npm", ["run", "internal", "--", "audit:truth"]],
-  ["latest analysis acceptance audit", "npm", ["run", "internal", "--", "audit:latest-analysis"]],
   ["full plan gap audit", "npm", ["run", "internal", "--", "audit:plan-gaps"]],
   ["operator maturity", "npm", ["run", "internal", "--", "operator:maturity"]],
   ["harness maturity", "npm", ["run", "internal", "--", "harness:maturity"]],

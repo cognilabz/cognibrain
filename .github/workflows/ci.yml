@@ -158,7 +158,6 @@ jobs:
             artifacts/cognicodebench/*.json
             artifacts/plan1_2-audit.json
             artifacts/plan1_3-audit.json
-            artifacts/status-verification.json
             artifacts/vendor-live-smoke.json
             artifacts/selfhosted-verification.json
             artifacts/benchmark-trend.json

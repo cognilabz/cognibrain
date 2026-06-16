@@ -100,7 +100,7 @@ For benchmark-related changes, also run:
 ```bash
 npm run benchmark:locomo -- --top-k 20
 npm run benchmark:arena
-npm run audit:docs
+npm run internal -- benchmark:release
 ```
 
 ## Pull Request Checklist

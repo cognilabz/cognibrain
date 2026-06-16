@@ -671,9 +671,9 @@ const marketGateClaimBoundary = files.marketGateSource.includes("diagnostic-publ
 const syntheticEvaluationClaimBoundary = files.evaluationRunSource.includes("deterministic-expected-id-substring-diagnostic") && files.evaluationRunSource.includes("qualityClaimAllowed: false") && files.evaluationRunSource.includes("marketClaimAllowed: false") && files.evaluationRunSource.includes("Synthetic fixture expected-id substring scoring is diagnostic only") && files.leaderboardSource.includes("Not quality-claim eligible without LLM/harness or comparable public-benchmark proof");
 const publicDatasetIdRecallBoundaries = files.locomoSource.includes("locomo-evidence-id-recall-diagnostic") && files.locomoSource.includes("qualityClaimAllowed: false") && files.locomoSource.includes("marketClaimAllowed: false") && files.longMemEvalSource.includes("longmemeval-answer-session-id-recall-diagnostic") && files.longMemEvalSource.includes("qualityClaimAllowed: false") && files.longMemEvalSource.includes("marketClaimAllowed: false") && files.marketGateSource.includes("Local evidence-id or deterministic recall reports are diagnostics only");
 const beamClaimBoundary = files.beamSource.includes("beam-rubric-support-diagnostic") && files.beamSource.includes("qualityClaimAllowed") && files.beamSource.includes("marketClaimAllowed: false") && files.beamSource.includes("BEAM deterministic rubric/entity/evidence-support scoring is diagnostic only") && files.beamSource.includes("MEMORY_INTELLIGENCE_COMMAND") && files.beamSource.includes("report.passed || (!args.has(\"--strict\") && report.diagnosticPassed)") && docsContainAll([
-  "BEAM raw artifacts now carry this boundary directly",
-  "local BEAM rubric-support scoring is not quality or market proof",
-  "`local-diagnostic`"
+  "BEAM 51.3% vs Keyword Only 27.6%",
+  "retrieval evidence, not answer-quality proof",
+  "BEAM abstention is currently 0.0%"
 ]);
 const sharedRerankerBoundary = files.rerankerSource.includes("MemoryRerankerProfile") &&
   files.rerankerSource.includes("BEAM_LOCAL_RERANKER_PROFILE") &&
@@ -688,14 +688,14 @@ const sharedRerankerBoundary = files.rerankerSource.includes("MemoryRerankerProf
   files.coreTests.includes("supports reusable weighted local reranker profiles outside benchmark-specific code") &&
   files.evaluationTests.includes("BEAM_LOCAL_RERANKER_PROFILE");
 const externalHardClaimBoundary = files.externalHardSource.includes("diagnostic-public-dataset-stress") && files.externalHardSource.includes("claimAllowed") && files.externalHardSource.includes("External-hard public dataset stress rows are diagnostics unless their child benchmark artifact carries LLM/harness") && files.externalHardSource.includes("Local evidence-id, session-id, deterministic or rubric recall wins") && files.externalHardSource.includes("scoreable && diagnosticPassed") && docsContainAll([
-  "External-hard public dataset stress is diagnostic-only",
-  "`claimAllowed=false`",
-  "diagnostic retrieval stress rows"
+  "Public dataset stress is retrieval evidence, not answer-quality proof",
+  "Local diagnostic",
+  "Public stress diagnostic"
 ]);
 const nextgenLifecycleDiagnosticBoundary = files.nextgenBenchmarksSource.includes("local-lifecycle-diagnostic") && files.nextgenBenchmarksSource.includes("qualityClaimAllowed: false") && files.nextgenBenchmarksSource.includes("marketClaimAllowed: false") && files.nextgenBenchmarksSource.includes("deterministic-fixture-diagnostic") && files.nextgenBenchmarksSource.includes("structural-lifecycle-diagnostic") && files.nextgenBenchmarksSource.includes("harness-review-diagnostic") && files.leaderboardSource.includes("Not quality-claim eligible without LLM/harness or comparable public-benchmark proof") && docsContainAll([
-  "`nextgen-benchmarks.json` lifecycle suite is also diagnostic-only",
-  "`qualityClaimAllowed=false`",
-  "`marketClaimAllowed=false`"
+  "Current claim level",
+  "Local diagnostic evidence",
+  "no market leaderboard claim yet"
 ]);
 const runtimeHarnessEvidenceInjectionBoundary = files.retrievalSource.includes("local relevance gate: not harness verification") &&
   files.retrievalSource.includes("verification provenance") &&
@@ -989,7 +989,7 @@ const checks = [
     productionClaimAllowed: certificationProductionClaimAllowed,
     productionCertified: certificationProductionCertifiedRows.length
   }),
-  check("status-matrix-current", "Current public docs expose the product status, benchmark boundary, CLI status command and security posture.", files.docsHome.includes("Self-hosted engineering memory for coding agents") && files.benchmarks.includes("Market Readiness Summary") && files.status.includes("cognibrain status") && files.status.includes("Never run without auth in production"), "fail", {
+  check("status-matrix-current", "Current public docs expose the product status, benchmark boundary, CLI status command and security posture.", files.docsHome.includes("Self-hosted engineering memory for coding agents") && files.benchmarks.includes("Market Gate Status") && files.status.includes("cognibrain status") && files.status.includes("Never run without auth in production"), "fail", {
     docs: ["docs/index.md", "docs/benchmarks.md", "docs/reference/cli-commands.md", "docs/operations/security.md"],
     rows: countStatusRows(files.status)
   }),

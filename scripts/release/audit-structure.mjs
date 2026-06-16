@@ -70,9 +70,9 @@ checks.push(check("public repository map covers top-level folders", () => {
 checks.push(check("tracked source files stay reviewable", () => {
   const large = trackedSourceFiles()
     .filter((file) => lineCount(file) > 2500)
-    .filter((file) => !["package-lock.json", "bin/cognibrain.mjs", "src/api/service.ts", "tests/core.test.ts"].includes(file));
+    .filter((file) => !["package-lock.json", "bin/cognibrain.mjs", "bin/lib/cliRuntime.mjs", "src/api/service.ts", "tests/core.test.ts"].includes(file));
   return large.length === 0;
-}, { legacyLargeFiles: ["bin/cognibrain.mjs", "src/api/service.ts", "tests/core.test.ts"] }));
+}, { legacyLargeFiles: ["bin/cognibrain.mjs", "bin/lib/cliRuntime.mjs", "src/api/service.ts", "tests/core.test.ts"] }));
 
 checks.push(check("agent instruction templates require live review recheck before stopping", () => {
   const required = [

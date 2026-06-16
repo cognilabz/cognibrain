@@ -47,11 +47,11 @@ const checks = [
     has(files.operations, "Self-Hosting")
   ]),
   check("proof and claim boundaries remain visible", [
-    has(files.benchmarks, "This page records the current checked benchmark artifacts"),
-    has(files.benchmarks, "claimAllowed=false"),
-    has(files.benchmarks, "No overall \"best memory solution on the market\" claim"),
+    has(files.benchmarks, "Current claim level: Local diagnostic evidence"),
+    has(files.benchmarks, "Market leaderboard | Closed"),
+    has(files.benchmarks, "No public best-product claim"),
     has(files.connectors, "Credential-blocked"),
-    has(files.connectors, "Tenant-verified"),
+    has(files.connectors, "Live-verified"),
     has(files.security, "Never run without auth in production")
   ]),
   check("generated outputs stay internal", [
